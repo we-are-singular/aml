@@ -1,0 +1,10 @@
+node_modules/
+dist/
+coverage/
+*.log
+poc/
+
+# agents
+.codex/
+.claude/
+.agents/
