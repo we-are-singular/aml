@@ -10,6 +10,22 @@ export { System, type SystemProps } from "./components/system/system.js"
 // Local and inline reusable instruction text.
 export { Skill, type SkillProps } from "./components/skill/skill.js"
 
+// Ephemeral execution scope and provider-neutral lease contracts.
+export { defineSandboxProvider } from "./components/sandbox/define-sandbox-provider.js"
+export {
+  type SandboxAccess,
+  type SandboxAcquireRequest,
+  type SandboxLease,
+  type SandboxLeaseReference,
+  type SandboxProvider,
+  type SandboxProviderReference,
+  type SandboxSession,
+} from "./components/sandbox/sandbox-provider.js"
+export {
+  Sandbox,
+  type SandboxProps,
+} from "./components/sandbox/sandbox.js"
+
 // Scoped provider-native and application-owned capabilities.
 export type {
   AgentHostTool,

@@ -9,6 +9,7 @@ import type { AgentProvider } from "./agent-provider.js"
  */
 export interface AgentProps {
   readonly children?: AmlRenderable
+  readonly cwd?: string
   readonly model?: string
   readonly provider?: AgentProvider
   readonly system?: string

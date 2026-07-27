@@ -1,3 +1,4 @@
+import type { SandboxSession } from "../sandbox/sandbox-provider.js"
 import type { AgentExecutionContext } from "./agent-execution-context.js"
 import type { AgentRequest } from "./agent-request.js"
 import type { AgentResponse } from "./agent-response.js"
@@ -15,4 +16,11 @@ export interface AgentProvider {
     request: AgentRequest,
     context: AgentExecutionContext,
   ): Promise<AgentResponse>
+
+  /**
+   * Confirms that model-controlled actions honor one effective Sandbox.
+   *
+   * A provider without this handshake cannot execute inside `<Sandbox>`.
+   */
+  supportsSandbox?(sandbox: SandboxSession): boolean
 }

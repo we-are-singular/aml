@@ -1,6 +1,11 @@
 const AML_NODE_BRAND = Symbol.for("@aml/sdk/node")
 const AML_PRIMITIVE_KIND = Symbol.for("@aml/sdk/primitive-kind")
-type AmlPrimitiveKind = "agent" | "skill" | "system" | "tool"
+type AmlPrimitiveKind =
+  | "agent"
+  | "sandbox"
+  | "skill"
+  | "system"
+  | "tool"
 
 /**
  * JSX values that intentionally contribute no AML output.
@@ -94,6 +99,7 @@ export class AmlNode<Props = Record<string, unknown>> {
     )[AML_PRIMITIVE_KIND]
 
     return kind === "agent" ||
+      kind === "sandbox" ||
       kind === "skill" ||
       kind === "system" ||
       kind === "tool"

@@ -1166,12 +1166,27 @@ interface SandboxAcquireRequest {
   cwd: string;
   evaluationId: string;
   root: string;
+  signal: AbortSignal;
 }
 
 interface SandboxLease<Handle = unknown> {
   handle: Handle;
   id: string;
   release(): Promise<void>;
+}
+
+interface SandboxSession<Handle = unknown> {
+  access: "read-only" | "read-write";
+  cwd: string;
+  lease: {
+    handle: Handle;
+    id: string;
+  };
+  nested: boolean;
+  provider: {
+    name: string;
+  };
+  root: string;
 }
 ```
 
@@ -1188,6 +1203,10 @@ AML:
 Nested Sandboxes emit their own spans but do not acquire or release another lease. If subtree evaluation and release both fail, AML rejects with an `AggregateError` that preserves both errors.
 
 `SandboxLease.handle` is deliberately opaque. Agent adapters and Sandbox-specific capabilities agree on its concrete type outside the AML language. AML does not invent a universal process, filesystem, or command API.
+
+Descendants receive only the immutable lease identity and handle shown by `SandboxSession`; they never receive `release()` or the provider's `acquire()` method. AML retains both lifecycle capabilities privately because it alone owns acquisition and exactly-once release. The captured provider name is descriptive identity, not an authority-bearing provider object.
+
+The acquisition signal belongs to the complete evaluation domain. A cooperative provider stops pending setup and rejects with `signal.reason` when it is aborted. If a provider ignores cancellation and eventually returns a valid lease, AML captures the lease and releases it before rejecting the evaluation with the caller's cancellation reason.
 
 ### 13.4 Docker provider requirements
 

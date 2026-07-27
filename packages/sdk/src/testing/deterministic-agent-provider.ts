@@ -2,6 +2,7 @@ import type { AgentExecutionContext } from "../components/agent/agent-execution-
 import type { AgentProvider } from "../components/agent/agent-provider.js"
 import type { AgentRequest } from "../components/agent/agent-request.js"
 import type { AgentResponse } from "../components/agent/agent-response.js"
+import type { SandboxSession } from "../components/sandbox/sandbox-provider.js"
 
 /**
  * Records provider calls and returns deterministic responses in tests/examples.
@@ -16,6 +17,9 @@ export class DeterministicAgentProvider implements AgentProvider {
     context: AgentExecutionContext,
     callIndex: number,
   ) => AgentResponse | PromiseLike<AgentResponse>
+  readonly #supportsSandbox:
+    | ((sandbox: SandboxSession) => boolean)
+    | undefined
   readonly name: string
 
   /**
@@ -29,6 +33,7 @@ export class DeterministicAgentProvider implements AgentProvider {
         context: AgentExecutionContext,
         callIndex: number,
       ) => AgentResponse | PromiseLike<AgentResponse>
+      readonly supportsSandbox?: (sandbox: SandboxSession) => boolean
     } = {},
   ) {
     const name = options.name ?? "deterministic"
@@ -48,6 +53,7 @@ export class DeterministicAgentProvider implements AgentProvider {
     this.name = name
     this.#respond =
       options.respond ?? ((request) => ({ text: request.prompt }))
+    this.#supportsSandbox = options.supportsSandbox
   }
 
   /**
@@ -70,5 +76,12 @@ export class DeterministicAgentProvider implements AgentProvider {
     const callIndex = this.#calls.length
     this.#calls.push(Object.freeze({ context, request }))
     return await this.#respond(request, context, callIndex)
+  }
+
+  /**
+   * Applies the configured compatibility policy to an effective Sandbox.
+   */
+  supportsSandbox(sandbox: SandboxSession): boolean {
+    return this.#supportsSandbox?.(sandbox) === true
   }
 }

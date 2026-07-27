@@ -2,3 +2,9 @@
 // pull deterministic fixtures into their production entry point.
 export { agentProviderConformance } from "./testing/agent-provider-conformance.js"
 export { DeterministicAgentProvider } from "./testing/deterministic-agent-provider.js"
+export {
+  DeterministicSandboxProvider,
+  type DeterministicSandboxHandle,
+  type DeterministicSandboxProviderOptions,
+} from "./testing/deterministic-sandbox-provider.js"
+export { sandboxProviderConformance } from "./testing/sandbox-provider-conformance.js"

@@ -165,7 +165,7 @@ The status table is the canonical implementation tracker. A slice moves to `Done
 | Slice 2 | OpenCode Agent package | Done |
 | Slice 3 | `<Tool>` and `defineTool()` | Done |
 | Slice 4 | `<Skill>` | Done |
-| Slice 5 | `<Sandbox>` contract | Pending |
+| Slice 5 | `<Sandbox>` contract | Done |
 | Slice 6 | Docker Sandbox package | Pending |
 | Slice 7 | `<Workspace>` contract | Pending |
 | Slice 8 | Local Workspace package and MVP completion | Pending |
@@ -637,10 +637,12 @@ Status: Done on 2026-07-27. The final Slice 4 deliberately supports only local f
 - add `defineSandboxProvider()`
 - add deterministic Sandbox fixtures and conformance tests
 - acquire before descendant evaluation
-- release after success or failure
+- release after success, failure, or cancellation
 - enforce restrictive nesting and Agent-provider compatibility
 
 Proof: a deterministic provider proves acquisition, restrictive nesting, failure cleanup, and one-release semantics.
+
+Status: Done on 2026-07-27. The SDK now exposes a provider-neutral Sandbox contract, `defineSandboxProvider()`, restrictive same-lease nesting, Agent-local working directories, an explicit Agent-provider compatibility handshake, deterministic fixtures, and a conformance lifecycle. AML passes only frozen provider identity and opaque lease identity/handle to descendants while privately retaining acquisition and exactly-once release authority. Acquisition receives the evaluation `AbortSignal`; cooperative cancellation preserves the caller's exact reason, late leases are released, and cancellation racing a release failure preserves both causes. Singular review found lifecycle authority leaking through the public session, normalized parent traversal, mutable provider identity rereads, unattributed hostile lease accessors, and missing cancellation at the acquisition boundary. The corrected implementation covers those cases plus success, descendant failure, malformed leases, nested restrictions, and cleanup ordering in twenty-one focused Sandbox tests. Eighty-five SDK tests, twenty-one deterministic OpenCode tests, workspace type checking, SDK and OpenCode package checks, the dist-backed Sandbox example, and diff validation pass. Final correctness, maintainability, and skeptical review lanes reported no actionable findings.
 
 #### Slice 6 — Docker Sandbox package
 
@@ -776,15 +778,15 @@ Before marking a slice `Done`:
 
 ## Immediate implementation boundary
 
-Slices 0 through 4 are complete. The next implementation gate is Slice 5 only:
+Slices 0 through 5 are complete. The next implementation gate is Slice 6 only:
 
-1. define the provider-neutral Sandbox contract and opaque lease
-2. add `defineSandboxProvider()` plus deterministic fixtures and conformance tests
-3. acquire the Sandbox before descendant evaluation and release it exactly once after success, failure, or cancellation
-4. enforce restrictive nesting and Agent-provider compatibility without implementing remote isolation policy
-5. prove lifecycle ordering, cleanup, and restrictive nesting through a deterministic provider
+1. create the independently installable `@aml/sandbox-docker` package
+2. implement a configured `dockerSandbox()` factory using the public `defineSandboxProvider()` contract
+3. keep Docker options, process execution, filesystem mounting, and cleanup inside the provider package
+4. pass the SDK Sandbox conformance lifecycle and deterministic package tests
+5. prove read-only and read-write confinement, path mapping, cancellation, and container removal against a real Docker daemon
 
-No Docker implementation, Workspace, MCP, structured output, FollowUp, Loop, CLI, website, Codex provider, or unrelated primitive belongs in Slice 5.
+No Workspace, MCP, structured output, FollowUp, Loop, CLI, website, Codex provider, or unrelated primitive belongs in Slice 6.
 
 ## Explicitly deferred
 

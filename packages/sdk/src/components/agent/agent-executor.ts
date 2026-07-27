@@ -1,6 +1,7 @@
 import type { EvaluationContext } from "../../core/evaluation-context.js"
 import { EvaluationError } from "../../core/evaluation-error.js"
 import type { AmlTraceIdentity } from "../../core/trace-identity.js"
+import type { SandboxSession } from "../sandbox/sandbox-provider.js"
 import type { AgentExecutionContext } from "./agent-execution-context.js"
 import type { AgentProps } from "./agent.js"
 import type { AgentProvider } from "./agent-provider.js"
@@ -63,6 +64,7 @@ export class AgentExecutor {
     readonly prompt: string
     readonly provider: Readonly<ValidatedAgentProvider> | undefined
     readonly props: Readonly<AgentProps>
+    readonly sandbox: Readonly<SandboxSession> | undefined
     readonly systemFragments: readonly string[]
     readonly tools: readonly import("../tool/agent-tool.js").AgentTool[]
     readonly trace: AmlTraceIdentity
@@ -71,6 +73,33 @@ export class AgentExecutor {
       throw new EvaluationError(
         `Agent ${input.trace.spanId} has no provider`,
       )
+    }
+
+    // Compatibility is an explicit fail-closed handshake. A provider that
+    // ignores the scope would otherwise run model-controlled actions on host.
+    if (input.sandbox !== undefined) {
+      let supported = false
+
+      try {
+        supported =
+          input.provider.supportsSandbox !== undefined &&
+          Reflect.apply(
+            input.provider.supportsSandbox,
+            input.provider.provider,
+            [input.sandbox],
+          ) === true
+      } catch (cause) {
+        throw new EvaluationError(
+          `Agent provider "${input.provider.name}" failed its Sandbox compatibility check`,
+          { cause },
+        )
+      }
+
+      if (!supported) {
+        throw new EvaluationError(
+          `Agent provider "${input.provider.name}" cannot run inside Sandbox provider "${input.sandbox.provider.name}"`,
+        )
+      }
     }
 
     // Fixed system text precedes asynchronously resolved <System> fragments.
@@ -96,6 +125,9 @@ export class AgentExecutor {
       trace: input.trace,
     })
     const agentContext: AgentExecutionContext = Object.freeze({
+      ...(input.sandbox === undefined
+        ? {}
+        : { sandbox: input.sandbox }),
       signal: input.context.signal,
       trace: input.trace,
     })

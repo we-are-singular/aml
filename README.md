@@ -23,6 +23,8 @@ Slice 3 adds Agent-scoped `<Tool>` grants and `defineTool()`. JavaScript Tools u
 
 Slice 4 adds `<Skill>` as local or inline instruction text. Local files are read during each evaluation, inline children resolve through ordinary AML, and both forms can be combined with optional deterministic name and description labels. It deliberately has no remote downloader, registry, cache, or provider-specific Skill API. `examples/skill` proves the built SDK reads a local Skill into an Agent prompt.
 
+Slice 5 adds provider-neutral `<Sandbox>` scopes, `defineSandboxProvider()`, opaque leases, restrictive nested policy views, and an explicit compatibility handshake for Agent providers. AML acquires one outer lease before descendant work and releases it exactly once after success, failure, or cancellation; providers remain responsible for real confinement. `examples/sandbox` proves the built SDK passes a narrowed session to an Agent and cleans up its deterministic lease.
+
 Nothing under `poc/` is part of the new package or public API.
 
 ```sh
@@ -33,6 +35,7 @@ npm run pack:check
 npm run example:basic
 npm run example:agent
 npm run example:opencode
+npm run example:sandbox
 npm run example:skill
 ```
 
