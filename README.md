@@ -31,6 +31,8 @@ Slice 7 adds provider-neutral `<Workspace>` scopes and `defineWorkspaceProvider(
 
 Slice 8 completes the MVP with the independently installable `@aml/workspace-local` adapter. Its configured `localWorkspace()` factory maps one existing directory into a direct durable materialization, canonicalizes symlinks, rejects concurrent writers through a renewable cross-process lock, and reports stale-lock compromise honestly rather than claiming fencing. `examples/workspace-local` proves filesystem changes survive separate SDK evaluations through built package exports.
 
+Slice 9 adds Agent-scoped `<Mcp>` grants and `defineMcpServer()` descriptors for provider-native names, local stdio servers, and remote Streamable HTTP servers. MCP configuration remains provider data rather than prompt text; the OpenCode adapter attaches it on a disposable host, validates shared Tool namespaces before prompting, and disconnects it during session cleanup. `examples/mcp` proves configured grants remain isolated from sibling Agents, while the opt-in OpenCode integration exercises a real configured MCP Tool call.
+
 Nothing under `poc/` is part of the new package or public API.
 
 ```sh
@@ -41,6 +43,7 @@ npm run pack:check
 npm run example:basic
 npm run example:agent
 npm run example:docker
+npm run example:mcp
 npm run example:opencode
 npm run example:sandbox
 npm run example:skill

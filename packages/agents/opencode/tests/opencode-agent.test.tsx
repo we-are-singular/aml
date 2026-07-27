@@ -3,7 +3,13 @@ import type {
   AgentRequest,
   AgentResponse,
 } from "@aml/sdk"
-import { Agent, AmlRuntime, defineTool } from "@aml/sdk"
+import {
+  Agent,
+  AmlRuntime,
+  defineMcpServer,
+  defineTool,
+  Mcp,
+} from "@aml/sdk"
 import { agentProviderConformance } from "@aml/sdk/testing"
 import { Client as McpClient } from "@modelcontextprotocol/sdk/client/index.js"
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js"
@@ -23,9 +29,9 @@ import {
   type OpenCodeSessionLocation,
   type OpenCodeSessionPromptInput,
   type OpenCodeSessionPromptResult,
-  type OpenCodeToolAttachmentInput,
+  type OpenCodeCapabilityAttachmentInput,
 } from "../src/index.js"
-import { OpenCodeToolAttachment } from "../src/opencode-tool-attachment.js"
+import { OpenCodeCapabilityAttachment } from "../src/opencode-capability-attachment.js"
 import { OpenCodeSdkClient } from "../src/opencode-sdk-client.js"
 import { OpenCodeSession } from "../src/opencode-session.js"
 
@@ -41,11 +47,11 @@ class RecordingSessionClient implements OpenCodeSessionClient {
     input: OpenCodeSessionPromptInput
     signal: AbortSignal
   }[] = []
-  readonly toolAttachmentCalls: {
-    input: OpenCodeToolAttachmentInput
+  readonly capabilityAttachmentCalls: {
+    input: OpenCodeCapabilityAttachmentInput
     signal: AbortSignal
   }[] = []
-  readonly toolAttachmentClose = vi.fn(async () => undefined)
+  readonly capabilityAttachmentClose = vi.fn(async () => undefined)
   promptResult: OpenCodeSessionPromptResult = {
     parts: [{ text: "response", type: "text" }],
   }
@@ -67,15 +73,15 @@ class RecordingSessionClient implements OpenCodeSessionClient {
     return this.promptResult
   }
 
-  async attachTools(
-    input: OpenCodeToolAttachmentInput,
+  async attachCapabilities(
+    input: OpenCodeCapabilityAttachmentInput,
     signal: AbortSignal,
-  ): Promise<OpenCodeToolAttachment> {
+  ): Promise<OpenCodeCapabilityAttachment> {
     this.events.push("attach")
-    this.toolAttachmentCalls.push({ input, signal })
-    return new OpenCodeToolAttachment(
+    this.capabilityAttachmentCalls.push({ input, signal })
+    return new OpenCodeCapabilityAttachment(
       { "*": false },
-      this.toolAttachmentClose,
+      this.capabilityAttachmentClose,
     )
   }
 
@@ -90,6 +96,7 @@ class RecordingSessionClient implements OpenCodeSessionClient {
 
 function createRequest(overrides: Partial<AgentRequest> = {}): AgentRequest {
   return Object.freeze({
+    mcpServers: Object.freeze([]),
     prompt: "prompt",
     system: "system",
     tools: Object.freeze([]),
@@ -100,6 +107,23 @@ function createRequest(overrides: Partial<AgentRequest> = {}): AgentRequest {
 function createContext(signal = new AbortController().signal) {
   const trace = Object.freeze({ runId: "run", spanId: "span-1" })
   return Object.freeze({ signal, trace }) satisfies AgentExecutionContext
+}
+
+/**
+ * Supplies the reviewed OpenCode server contract to narrow SDK-client fakes.
+ */
+function createSdkClient(
+  client: Record<string, unknown>,
+  version = "1.18.5",
+): OpenCodeSdkClient {
+  return new OpenCodeSdkClient({
+    global: {
+      health: vi.fn(async () => ({
+        data: { healthy: true, version },
+      })),
+    },
+    ...client,
+  } as never)
 }
 
 describe("opencodeAgent", () => {
@@ -196,6 +220,43 @@ describe("opencodeAgent", () => {
     await provider.close()
   })
 
+  it("keeps MCP grants scoped to their containing Agent session", async () => {
+    const client = new RecordingSessionClient()
+    const provider = opencodeAgent({ sessionClient: client })
+    const configured = defineMcpServer({
+      name: "project",
+      transport: {
+        type: "streamable-http",
+        url: "https://example.com/mcp",
+      },
+    })
+
+    await expect(
+      new AmlRuntime({ agentProvider: provider }).evaluate([
+        <Agent>
+          <Mcp name="github" />
+          <Mcp use={configured} />
+          first
+        </Agent>,
+        <Agent>second</Agent>,
+      ]),
+    ).resolves.toBe("responseresponse")
+
+    expect(
+      client.capabilityAttachmentCalls.map(({ input }) =>
+        input.mcpServers,
+      ),
+    ).toEqual([
+      [
+        { kind: "named", name: "github" },
+        { definition: configured, kind: "configured" },
+      ],
+      [],
+    ])
+    expect(client.capabilityAttachmentClose).toHaveBeenCalledTimes(2)
+    await provider.close()
+  })
+
   it("rejects invalid configuration synchronously", () => {
     expect(() => opencodeAgent({ directory: "" })).toThrow(
       "OpenCode directory must be a non-empty string",
@@ -229,7 +290,7 @@ describe("opencodeAgent", () => {
           prompt() {},
         } as never,
       }),
-    ).toThrow("OpenCode sessionClient attachTools must be a function")
+    ).toThrow("OpenCode sessionClient attachCapabilities must be a function")
   })
 
   it("starts an owned server lazily and closes it once", async () => {
@@ -276,21 +337,34 @@ describe("opencodeAgent", () => {
     ).rejects.toThrow("OpenCode Agent provider is closed")
   })
 
-  it("uses disposable owned servers for JavaScript Tool sessions", async () => {
+  it("uses disposable owned servers for dynamic capability sessions", async () => {
     const serverCloses: ReturnType<typeof vi.fn>[] = []
     let sessionIndex = 0
 
     openCodeSdk.createOpencode.mockImplementation(async () => {
       const close = vi.fn()
+      const statuses: Record<string, { status: string }> = {}
       serverCloses.push(close)
 
       return {
         client: {
+          global: {
+            health: vi.fn(async () => ({
+              data: { healthy: true, version: "1.18.5" },
+            })),
+          },
           mcp: {
             add: vi.fn(async ({ name }: { name: string }) => ({
-              data: { [name]: { status: "connected" } },
+              data: {
+                ...statuses,
+                [name]: (statuses[name] = { status: "connected" }),
+              },
             })),
-            disconnect: vi.fn(async () => ({ data: true })),
+            disconnect: vi.fn(async ({ name }: { name: string }) => {
+              statuses[name] = { status: "disabled" }
+              return { data: true }
+            }),
+            status: vi.fn(async () => ({ data: { ...statuses } })),
           },
           session: {
             abort: vi.fn(async () => ({ data: true })),
@@ -311,6 +385,13 @@ describe("opencodeAgent", () => {
         },
         server: { close },
       }
+    })
+    const projectMcp = defineMcpServer({
+      name: "project",
+      transport: {
+        type: "streamable-http",
+        url: "https://example.com/mcp",
+      },
     })
     const lookup = defineTool({
       description: "Look up one record",
@@ -338,21 +419,34 @@ describe("opencodeAgent", () => {
       { text: "tool response" },
       { text: "tool response" },
     ])
+    await expect(
+      provider.run(
+        createRequest({
+          mcpServers: [
+            { definition: projectMcp, kind: "configured" },
+          ],
+        }),
+        createContext(),
+      ),
+    ).resolves.toEqual({ text: "tool response" })
 
     expect(openCodeSdk.createOpencode.mock.calls).toEqual([
       [{}],
       [{ port: 0 }],
       [{ port: 0 }],
+      [{ port: 0 }],
     ])
-    expect(serverCloses).toHaveLength(3)
+    expect(serverCloses).toHaveLength(4)
     expect(serverCloses.map((close) => close.mock.calls.length)).toEqual([
       0,
+      1,
       1,
       1,
     ])
 
     await provider.close()
     expect(serverCloses.map((close) => close.mock.calls.length)).toEqual([
+      1,
       1,
       1,
       1,
@@ -498,10 +592,10 @@ describe("opencodeAgent", () => {
 })
 
 describe("OpenCodeSession", () => {
-  it("rejects Tool attachment before creating a session", async () => {
+  it("rejects capability attachment before creating a session", async () => {
     const attachError = new Error("attach failed")
     const client = new RecordingSessionClient()
-    client.attachTools = async () => {
+    client.attachCapabilities = async () => {
       client.events.push("attach")
       throw attachError
     }
@@ -520,7 +614,7 @@ describe("OpenCodeSession", () => {
     expect(client.deleteCalls).toHaveLength(0)
   })
 
-  it("closes a Tool attachment when session creation fails", async () => {
+  it("closes a capability attachment when session creation fails", async () => {
     const createError = new Error("create failed")
     const client = new RecordingSessionClient()
     client.create = async (input, signal) => {
@@ -538,7 +632,7 @@ describe("OpenCodeSession", () => {
       ),
     ).rejects.toBe(createError)
     expect(client.events).toEqual(["attach", "create"])
-    expect(client.toolAttachmentClose).toHaveBeenCalledTimes(1)
+    expect(client.capabilityAttachmentClose).toHaveBeenCalledTimes(1)
     expect(client.deleteCalls).toHaveLength(0)
   })
 
@@ -650,6 +744,31 @@ describe("OpenCodeSession", () => {
 })
 
 describe("OpenCodeSdkClient", () => {
+  it("rejects unreviewed OpenCode server versions before capability setup", async () => {
+    const ids = vi.fn()
+    const client = createSdkClient(
+      {
+        mcp: { status: vi.fn() },
+        tool: { ids },
+      },
+      "1.19.0",
+    )
+
+    await expect(
+      client.attachCapabilities(
+        {
+          context: createContext(),
+          mcpServers: [],
+          tools: [{ kind: "host", name: "read" }],
+        },
+        new AbortController().signal,
+      ),
+    ).rejects.toThrow(
+      "OpenCode server 1.19.0 is unsupported for capability isolation",
+    )
+    expect(ids).not.toHaveBeenCalled()
+  })
+
   it("rejects incompatible JavaScript Tools before session creation", async () => {
     const create = vi.fn()
     const scalar = defineTool({
@@ -658,7 +777,7 @@ describe("OpenCodeSdkClient", () => {
       name: "scalar",
       execute: async (value) => value,
     })
-    const client = new OpenCodeSdkClient({
+    const client = createSdkClient({
       session: { create },
     } as never)
 
@@ -673,18 +792,24 @@ describe("OpenCodeSdkClient", () => {
     expect(create).not.toHaveBeenCalled()
   })
 
-  it("maps declared host Tools and rejects unavailable capabilities", async () => {
+  it("maps exact host Tools and rejects unavailable or wildcard grants", async () => {
     const rawClient = {
+      mcp: {
+        status: vi.fn(async () => ({ data: {} })),
+      },
       tool: {
-        ids: vi.fn(async () => ({ data: ["read", "grep"] })),
+        ids: vi.fn(async () => ({
+          data: ["read", "grep", "read*", "read?"],
+        })),
       },
     }
-    const client = new OpenCodeSdkClient(rawClient as never)
+    const client = createSdkClient(rawClient as never)
     const signal = new AbortController().signal
 
-    const attachment = await client.attachTools(
+    const attachment = await client.attachCapabilities(
       {
         context: createContext(signal),
+        mcpServers: [],
         tools: [{ kind: "host", name: "read" }],
       },
       signal,
@@ -693,14 +818,501 @@ describe("OpenCodeSdkClient", () => {
     expect(attachment.tools).toEqual({ "*": false, read: true })
     await attachment.close()
     await expect(
-      client.attachTools(
+      client.attachCapabilities(
         {
           context: createContext(signal),
+          mcpServers: [],
           tools: [{ kind: "host", name: "write" }],
         },
         signal,
       ),
     ).rejects.toThrow('OpenCode host Tool "write" is unavailable')
+
+    await expect(
+      client.attachCapabilities(
+        {
+          context: createContext(signal),
+          mcpServers: [],
+          tools: [{ kind: "host", name: "read*" }],
+        },
+        signal,
+      ),
+    ).rejects.toThrow(
+      'OpenCode host Tool "read*" contains wildcard syntax',
+    )
+    await expect(
+      client.attachCapabilities(
+        {
+          context: createContext(signal),
+          mcpServers: [],
+          tools: [{ kind: "host", name: "read?" }],
+        },
+        signal,
+      ),
+    ).rejects.toThrow(
+      'OpenCode host Tool "read?" contains wildcard syntax',
+    )
+  })
+
+  it("captures provider Tool IDs once before authorizing a host Tool", async () => {
+    let reads = 0
+    const ids = ["read"]
+
+    Object.defineProperty(ids, 0, {
+      enumerable: true,
+      get() {
+        reads += 1
+        return reads === 1 ? "read" : "write"
+      },
+    })
+    const client = createSdkClient({
+      mcp: {
+        status: vi.fn(async () => ({ data: {} })),
+      },
+      tool: {
+        ids: vi.fn(async () => ({ data: ids })),
+      },
+    } as never)
+    const signal = new AbortController().signal
+
+    await expect(
+      client.attachCapabilities(
+        {
+          context: createContext(signal),
+          mcpServers: [],
+          tools: [{ kind: "host", name: "write" }],
+        },
+        signal,
+      ),
+    ).rejects.toThrow('OpenCode host Tool "write" is unavailable')
+    expect(reads).toBe(1)
+  })
+
+  it("rejects exact host Tool IDs that overlap inherited MCP namespaces", async () => {
+    const client = createSdkClient({
+      mcp: {
+        status: vi.fn(async () => ({
+          data: { github: { status: "connected" } },
+        })),
+      },
+      tool: {
+        ids: vi.fn(async () => ({ data: ["github_admin"] })),
+      },
+    } as never)
+    const signal = new AbortController().signal
+
+    await expect(
+      client.attachCapabilities(
+        {
+          context: createContext(signal),
+          mcpServers: [],
+          tools: [{ kind: "host", name: "github_admin" }],
+        },
+        signal,
+      ),
+    ).rejects.toThrow(
+      'OpenCode host Tool "github_admin" overlaps MCP server "github"',
+    )
+  })
+
+  it("rejects provider Tool IDs that OpenCode treats as equivalent patterns", async () => {
+    const client = createSdkClient({
+      mcp: {
+        status: vi.fn(async () => ({ data: {} })),
+      },
+      tool: {
+        ids: vi.fn(async () => ({
+          data: ["path\\read", "path/read"],
+        })),
+      },
+    } as never)
+    const signal = new AbortController().signal
+
+    await expect(
+      client.attachCapabilities(
+        {
+          context: createContext(signal),
+          mcpServers: [],
+          tools: [{ kind: "host", name: "path\\read" }],
+        },
+        signal,
+      ),
+    ).rejects.toThrow(
+      'OpenCode host Tool "path\\read" has permission-equivalent provider Tool IDs',
+    )
+  })
+
+  it("mirrors OpenCode case-insensitive permission matching on Windows", async () => {
+    const platform = Object.getOwnPropertyDescriptor(process, "platform")
+
+    if (!platform) {
+      throw new Error("Node process.platform descriptor is unavailable")
+    }
+
+    Object.defineProperty(process, "platform", {
+      configurable: true,
+      value: "win32",
+    })
+
+    try {
+      const signal = new AbortController().signal
+      const statuses: Record<string, { status: string }> = {
+        github: { status: "disabled" },
+        GitHub_admin: { status: "connected" },
+      }
+      const client = createSdkClient({
+        mcp: {
+          connect: vi.fn(async ({ name }: { name: string }) => {
+            statuses[name] = { status: "connected" }
+            return { data: true }
+          }),
+          disconnect: vi.fn(async () => ({ data: true })),
+          status: vi.fn(async () => ({ data: { ...statuses } })),
+        },
+        tool: {
+          ids: vi.fn(async () => ({ data: [] })),
+        },
+      } as never)
+
+      await expect(
+        client.attachCapabilities(
+          {
+            context: createContext(signal),
+            mcpServers: [{ kind: "named", name: "github" }],
+            tools: [],
+          },
+          signal,
+        ),
+      ).rejects.toThrow(
+        'OpenCode MCP server "github" overlaps undeclared server "GitHub_admin"',
+      )
+    } finally {
+      Object.defineProperty(process, "platform", platform)
+    }
+  })
+
+  it("attaches named and configured MCP servers with scoped Tool namespaces", async () => {
+    const statuses: Record<string, { status: string }> = {
+      native: { status: "disabled" },
+    }
+    const mcp = {
+      add: vi.fn(async (input: {
+        config: unknown
+        name: string
+      }) => {
+        statuses[input.name] = { status: "connected" }
+        return { data: { ...statuses } }
+      }),
+      connect: vi.fn(async (input: { name: string }) => {
+        statuses[input.name] = { status: "connected" }
+        return { data: true }
+      }),
+      disconnect: vi.fn(async (input: { name: string }) => {
+        statuses[input.name] = { status: "disabled" }
+        return { data: true }
+      }),
+      status: vi.fn(async () => ({ data: { ...statuses } })),
+    }
+    const client = createSdkClient({
+      mcp,
+      tool: {
+        ids: vi.fn(async () => ({ data: [] })),
+      },
+    } as never)
+    const signal = new AbortController().signal
+    const local = defineMcpServer({
+      name: "project-db",
+      transport: {
+        args: ["server.mjs"],
+        command: "node",
+        env: { TOKEN: "secret" },
+        type: "stdio",
+      },
+    })
+    const remote = defineMcpServer({
+      name: "remote.api",
+      transport: {
+        headers: { Authorization: "Bearer secret" },
+        type: "streamable-http",
+        url: "https://example.com/mcp",
+      },
+    })
+    const attachment = await client.attachCapabilities(
+      {
+        context: createContext(signal),
+        mcpServers: [
+          { kind: "named", name: "native" },
+          { definition: local, kind: "configured" },
+          { definition: remote, kind: "configured" },
+        ],
+        tools: [],
+      },
+      signal,
+    )
+
+    expect(mcp.connect).toHaveBeenCalledWith(
+      { name: "native" },
+      { signal, throwOnError: true },
+    )
+    expect(mcp.add.mock.calls.map(([input]) => input)).toEqual([
+      {
+        config: {
+          command: ["node", "server.mjs"],
+          enabled: true,
+          environment: { TOKEN: "secret" },
+          type: "local",
+        },
+        name: "project-db",
+      },
+      {
+        config: {
+          enabled: true,
+          headers: { Authorization: "Bearer secret" },
+          type: "remote",
+          url: "https://example.com/mcp",
+        },
+        name: "remote.api",
+      },
+    ])
+    expect(attachment.tools).toEqual({
+      "*": false,
+      "native_*": true,
+      "project-db_*": true,
+      "remote_api_*": true,
+    })
+
+    await attachment.close()
+    await attachment.close()
+    expect(
+      mcp.disconnect.mock.calls.map(([input]) => input.name),
+    ).toEqual(["remote.api", "project-db", "native"])
+  })
+
+  it("fails closed for unavailable, colliding, or unsupported MCP grants", async () => {
+    const signal = new AbortController().signal
+    const mcp = {
+      add: vi.fn(),
+      connect: vi.fn(),
+      disconnect: vi.fn(async () => ({ data: true })),
+      status: vi.fn(async () => ({ data: {} })),
+    }
+    const client = createSdkClient({ mcp } as never)
+
+    await expect(
+      client.attachCapabilities(
+        {
+          context: createContext(signal),
+          mcpServers: [{ kind: "named", name: "missing" }],
+          tools: [],
+        },
+        signal,
+      ),
+    ).rejects.toThrow(
+      'OpenCode named MCP server "missing" is unavailable',
+    )
+
+    const withCwd = defineMcpServer({
+      name: "local",
+      transport: {
+        command: "node",
+        cwd: "/different",
+        type: "stdio",
+      },
+    })
+
+    await expect(
+      client.attachCapabilities(
+        {
+          context: createContext(signal),
+          mcpServers: [
+            { definition: withCwd, kind: "configured" },
+          ],
+          tools: [],
+        },
+        signal,
+      ),
+    ).rejects.toThrow(
+      'OpenCode does not support cwd for MCP server "local"',
+    )
+
+    await expect(
+      client.attachCapabilities(
+        {
+          context: createContext(signal),
+          mcpServers: [
+            { kind: "named", name: "same.name" },
+            { kind: "named", name: "same_name" },
+          ],
+          tools: [],
+        },
+        signal,
+      ),
+    ).rejects.toThrow(
+      "OpenCode MCP server names collide after provider normalization",
+    )
+    await expect(
+      client.attachCapabilities(
+        {
+          context: createContext(signal),
+          mcpServers: [
+            { kind: "named", name: "github" },
+            { kind: "named", name: "github_admin" },
+          ],
+          tools: [],
+        },
+        signal,
+      ),
+    ).rejects.toThrow(
+      "OpenCode MCP server names overlap after provider normalization",
+    )
+    expect(mcp.add).not.toHaveBeenCalled()
+    expect(mcp.connect).not.toHaveBeenCalled()
+  })
+
+  it("rejects MCP namespace patterns that include undeclared capabilities", async () => {
+    const signal = new AbortController().signal
+    const statuses: Record<string, { status: string }> = {
+      github: { status: "disabled" },
+      github_admin: { status: "connected" },
+    }
+    const disconnect = vi.fn(async ({ name }: { name: string }) => {
+      statuses[name] = { status: "disabled" }
+      return { data: true }
+    })
+    const mcp = {
+      connect: vi.fn(async ({ name }: { name: string }) => {
+        statuses[name] = { status: "connected" }
+        return { data: true }
+      }),
+      disconnect,
+      status: vi.fn(async () => ({ data: { ...statuses } })),
+    }
+    const tool = {
+      ids: vi.fn(async () => ({ data: [] as string[] })),
+    }
+    const client = createSdkClient({ mcp, tool } as never)
+
+    await expect(
+      client.attachCapabilities(
+        {
+          context: createContext(signal),
+          mcpServers: [{ kind: "named", name: "github" }],
+          tools: [],
+        },
+        signal,
+      ),
+    ).rejects.toThrow(
+      'OpenCode MCP server "github" overlaps undeclared server "github_admin"',
+    )
+    expect(disconnect).toHaveBeenCalledWith(
+      { name: "github" },
+      { throwOnError: true },
+    )
+
+    delete statuses.github_admin
+    tool.ids.mockResolvedValueOnce({
+      data: ["github_admin"],
+    })
+    await expect(
+      client.attachCapabilities(
+        {
+          context: createContext(signal),
+          mcpServers: [{ kind: "named", name: "github" }],
+          tools: [],
+        },
+        signal,
+      ),
+    ).rejects.toThrow(
+      'OpenCode MCP server "github" overlaps undeclared host Tool "github_admin"',
+    )
+    expect(disconnect).toHaveBeenCalledTimes(2)
+
+    statuses.github = { status: "connected" }
+    statuses.github_admin = { status: "disabled" }
+    tool.ids.mockResolvedValueOnce({ data: [] })
+    await expect(
+      client.attachCapabilities(
+        {
+          context: createContext(signal),
+          mcpServers: [{ kind: "named", name: "github_admin" }],
+          tools: [],
+        },
+        signal,
+      ),
+    ).rejects.toThrow(
+      'OpenCode MCP server "github_admin" overlaps undeclared server "github"',
+    )
+    expect(disconnect).toHaveBeenCalledTimes(3)
+  })
+
+  it("cleans partial MCP attachment and preserves setup causality", async () => {
+    const signal = new AbortController().signal
+    const statuses: Record<string, { status: string }> = {}
+    const disconnect = vi.fn(async ({ name }: { name: string }) => {
+      statuses[name] = { status: "disabled" }
+      return { data: true }
+    })
+    const mcp = {
+      add: vi.fn(async ({ name }: { name: string }) => {
+        statuses[name] = { status: "connected" }
+        return { data: { ...statuses } }
+      }),
+      connect: vi.fn(),
+      disconnect,
+      status: vi.fn(async () => ({ data: { ...statuses } })),
+    }
+    const client = createSdkClient({ mcp } as never)
+    const first = defineMcpServer({
+      name: "first",
+      transport: {
+        type: "streamable-http",
+        url: "https://example.com/first",
+      },
+    })
+
+    await expect(
+      client.attachCapabilities(
+        {
+          context: createContext(signal),
+          mcpServers: [
+            { definition: first, kind: "configured" },
+            { kind: "named", name: "missing" },
+          ],
+          tools: [],
+        },
+        signal,
+      ),
+    ).rejects.toThrow(
+      'OpenCode named MCP server "missing" is unavailable',
+    )
+    expect(disconnect).toHaveBeenCalledWith(
+      { name: "first" },
+      { throwOnError: true },
+    )
+
+    const setupFailure = new Error("MCP add response failed")
+    const cleanupFailure = new Error("MCP disconnect failed")
+    delete statuses.first
+    mcp.add.mockRejectedValueOnce(setupFailure)
+    disconnect.mockRejectedValueOnce(cleanupFailure)
+    const error = await client
+      .attachCapabilities(
+        {
+          context: createContext(signal),
+          mcpServers: [
+            { definition: first, kind: "configured" },
+          ],
+          tools: [],
+        },
+        signal,
+      )
+      .catch((cause: unknown) => cause)
+
+    expect(error).toBeInstanceOf(AggregateError)
+    expect(error).toHaveProperty("errors", [
+      setupFailure,
+      cleanupFailure,
+    ])
   })
 
   it("serves JavaScript Tools through an invocation-scoped MCP bridge", async () => {
@@ -758,10 +1370,11 @@ describe("OpenCodeSdkClient", () => {
       name: "lookup_customer",
     })
     const signal = new AbortController().signal
-    const client = new OpenCodeSdkClient(rawClient as never)
-    const attachment = await client.attachTools(
+    const client = createSdkClient(rawClient as never)
+    const attachment = await client.attachCapabilities(
       {
         context: createContext(signal),
+        mcpServers: [],
         tools: [lookup],
       },
       signal,
@@ -814,8 +1427,9 @@ describe("OpenCodeSdkClient", () => {
       disconnect: vi.fn(async () => {
         throw disconnectError
       }),
+      status: vi.fn(async () => ({ data: {} })),
     }
-    const client = new OpenCodeSdkClient({
+    const client = createSdkClient({
       mcp,
       tool: {
         ids: vi.fn(async () => ({ data: [] })),
@@ -828,9 +1442,10 @@ describe("OpenCodeSdkClient", () => {
       execute: async ({ id }) => ({ id }),
     })
     const error = await client
-      .attachTools(
+      .attachCapabilities(
         {
           context: createContext(),
+          mcpServers: [],
           tools: [
             lookup,
             { kind: "host", name: "missing" },
@@ -862,7 +1477,7 @@ describe("OpenCodeSdkClient", () => {
         })),
       },
     }
-    const client = new OpenCodeSdkClient(rawClient as never)
+    const client = createSdkClient(rawClient as never)
     const model = { modelId: "model", providerId: "provider" }
 
     await expect(
@@ -933,7 +1548,7 @@ describe("OpenCodeSdkClient", () => {
         })),
       },
     }
-    const client = new OpenCodeSdkClient(rawClient as never)
+    const client = createSdkClient(rawClient as never)
     const input: OpenCodeSessionPromptInput = {
       prompt: "prompt",
       sessionId: "session-id",
@@ -967,7 +1582,7 @@ describe("OpenCodeSdkClient", () => {
         delete: vi.fn(async () => ({ data: { ok: true } })),
       },
     }
-    const client = new OpenCodeSdkClient(rawClient as never)
+    const client = createSdkClient(rawClient as never)
 
     await expect(client.abort({ sessionId: "session-id" })).rejects.toThrow(
       "OpenCode did not abort session session-id",

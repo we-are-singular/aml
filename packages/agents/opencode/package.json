@@ -16,7 +16,7 @@
   "dependencies": {
     "@aml/sdk": "*",
     "@modelcontextprotocol/sdk": "^1.29.0",
-    "@opencode-ai/sdk": "^1.18.5",
+    "@opencode-ai/sdk": "1.18.5",
     "zod": "^4.4.3"
   },
   "scripts": {

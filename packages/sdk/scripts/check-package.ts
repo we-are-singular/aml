@@ -26,6 +26,11 @@ interface BuiltSdk {
       readonly name: string
       run(
         request: {
+          readonly mcpServers: readonly {
+            readonly definition?: { readonly name: string }
+            readonly kind: string
+            readonly name?: string
+          }[]
           readonly tools: readonly {
             execute?(
               input: unknown,
@@ -43,6 +48,7 @@ interface BuiltSdk {
     evaluate(value: unknown): Promise<string>
   }
   readonly Fragment: unknown
+  readonly Mcp: unknown
   readonly Tool: unknown
   readonly Workspace: unknown
   readonly WorkspaceConflictError: {
@@ -53,6 +59,7 @@ interface BuiltSdk {
     }
   }
   defineWorkspaceProvider(provider: unknown): unknown
+  defineMcpServer(options: unknown): unknown
   defineTool(options: unknown): unknown
 }
 
@@ -161,6 +168,7 @@ for (const entry of Object.values(resolvedEntries)) {
 
 const {
   AmlRuntime,
+  defineMcpServer,
   defineWorkspaceProvider,
   Fragment: publicFragment,
   Workspace: publicWorkspace,
@@ -232,6 +240,25 @@ if (
   )
 }
 
+const definedMcpServer = defineMcpServer({
+  name: "package-check",
+  transport: {
+    type: "streamable-http",
+    url: "https://example.com/mcp",
+  },
+}) as {
+  readonly name: string
+  readonly transport: Readonly<{ readonly url: string }>
+}
+
+if (
+  !Object.isFrozen(definedMcpServer) ||
+  !Object.isFrozen(definedMcpServer.transport) ||
+  definedMcpServer.transport.url !== "https://example.com/mcp"
+) {
+  throw new Error("SDK dist defineMcpServer contract is invalid")
+}
+
 const workspaceOutput = await new AmlRuntime({
   workspaceProvider: definedWorkspaceProvider,
 }).evaluate(
@@ -292,8 +319,8 @@ try {
     join(copyFixtureDirectory, "consumer.mts"),
     [
       'import { AmlRuntime, type AmlRenderable } from "@aml/sdk-a"',
-      'import type { ToolProps } from "@aml/sdk-a"',
-      'import { defineTool } from "@aml/sdk-b"',
+      'import type { McpProps, ToolProps } from "@aml/sdk-a"',
+      'import { defineMcpServer, defineTool } from "@aml/sdk-b"',
       'import { jsx } from "@aml/sdk-b/jsx-runtime"',
       "",
       'const foreignNode = jsx(() => "cross-copy", {})',
@@ -316,6 +343,15 @@ try {
       "})",
       "const toolProps: ToolProps = { use: foreignTool }",
       "void toolProps",
+      "const foreignMcp = defineMcpServer({",
+      '  name: "cross_copy_mcp",',
+      "  transport: {",
+      '    type: "streamable-http",',
+      '    url: "https://example.com/mcp",',
+      "  },",
+      "})",
+      "const mcpProps: McpProps = { use: foreignMcp }",
+      "void mcpProps",
       "",
     ].join("\n"),
   )
@@ -413,6 +449,38 @@ try {
 
   if (toolOutput !== "42") {
     throw new Error(`Unexpected cross-copy Tool output: ${toolOutput}`)
+  }
+
+  // MCP authenticity uses the same global exact-identity pattern without
+  // exposing registration state to application code.
+  const foreignMcp = copyBPackage.defineMcpServer({
+    name: "cross_copy_mcp",
+    transport: {
+      type: "streamable-http",
+      url: "https://example.com/mcp",
+    },
+  })
+  const mcpOutput = await new copyA.AmlRuntime({
+    agentProvider: {
+      name: "cross-copy-mcp-provider",
+      async run(request) {
+        const [server] = request.mcpServers
+        const name =
+          server?.kind === "named"
+            ? server.name
+            : server?.definition?.name
+
+        return { text: name ?? "missing" }
+      },
+    },
+  }).evaluate(
+    copyB.jsx(copyBPackage.Agent, {
+      children: copyB.jsx(copyBPackage.Mcp, { use: foreignMcp }),
+    }),
+  )
+
+  if (mcpOutput !== "cross_copy_mcp") {
+    throw new Error(`Unexpected cross-copy MCP output: ${mcpOutput}`)
   }
 } finally {
   rmSync(copyFixtureDirectory, { force: true, recursive: true })

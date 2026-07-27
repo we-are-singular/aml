@@ -18,7 +18,7 @@ export interface OpenCodeServerOptions {
   readonly hostname?: string
 
   /**
-   * Fixed port for the reusable host; disposable Tool hosts always use port 0.
+   * Fixed port for the reusable host; dynamic-capability hosts use port 0.
    */
   readonly port?: number
   readonly timeout?: number
@@ -106,10 +106,11 @@ class OpenCodeAgentImplementation implements OpenCodeAgentProvider {
     context: AgentExecutionContext,
   ): Promise<AgentResponse> {
     // OpenCode disconnects dynamic MCP clients but retains their configuration.
-    // A disposable host prevents one stale registration per JavaScript Tool run.
+    // JavaScript Tools and MCP grants therefore require a disposable host.
     if (
       !this.#sessionClient &&
-      request.tools.some((tool) => tool.kind === "javascript")
+      (request.mcpServers.length > 0 ||
+        request.tools.some((tool) => tool.kind === "javascript"))
     ) {
       return await this.#runWithDisposableServer(request, context)
     }
@@ -124,7 +125,7 @@ class OpenCodeAgentImplementation implements OpenCodeAgentProvider {
   }
 
   /**
-   * Owns one temporary OpenCode server for a JavaScript Tool invocation.
+   * Owns one temporary OpenCode server for dynamic Agent capabilities.
    */
   async #runWithDisposableServer(
     request: AgentRequest,
@@ -135,7 +136,7 @@ class OpenCodeAgentImplementation implements OpenCodeAgentProvider {
     const owned = await createOpencode({
       ...(this.#serverOptions === undefined ? {} : this.#serverOptions),
       // Disposable hosts must not contend with the reusable configured port or
-      // with another concurrent JavaScript Tool invocation.
+      // with another concurrent dynamic-capability invocation.
       port: 0,
     })
     const client = new OpenCodeSdkClient(owned.client)
@@ -290,7 +291,7 @@ function validateOptions(options: OpenCodeAgentOptions): void {
     // otherwise occur only after remote provider state has been created.
     for (const method of [
       "abort",
-      "attachTools",
+      "attachCapabilities",
       "create",
       "delete",
       "prompt",

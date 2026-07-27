@@ -2,6 +2,7 @@ import type { EvaluationContext } from "../../core/evaluation-context.js"
 import { EvaluationError } from "../../core/evaluation-error.js"
 import type { AmlTraceIdentity } from "../../core/trace-identity.js"
 import type { SandboxSession } from "../sandbox/sandbox-provider.js"
+import type { AgentMcpServer } from "../mcp/aml-mcp-server.js"
 import type { AgentExecutionContext } from "./agent-execution-context.js"
 import type { AgentProps } from "./agent.js"
 import type { AgentProvider } from "./agent-provider.js"
@@ -61,6 +62,7 @@ export class AgentExecutor {
    */
   async execute(input: {
     readonly context: EvaluationContext
+    readonly mcpServers: readonly AgentMcpServer[]
     readonly prompt: string
     readonly provider: Readonly<ValidatedAgentProvider> | undefined
     readonly props: Readonly<AgentProps>
@@ -119,6 +121,7 @@ export class AgentExecutor {
       ...(input.props.model === undefined
         ? {}
         : { model: input.props.model }),
+      mcpServers: input.mcpServers,
       prompt: input.prompt.trim(),
       system: systemFragments.join("\n"),
       tools: input.tools,

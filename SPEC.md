@@ -809,21 +809,31 @@ type AmlMcpTransport =
     }
   | {
       type: "streamable-http";
-      url: string | URL;
+      url: string;
       headers?: Readonly<Record<string, string>>;
     };
 
+type DefineMcpServerOptions = {
+  name: string;
+  transport:
+    | AmlMcpTransport
+    | (Omit<Extract<AmlMcpTransport, { type: "streamable-http" }>, "url"> & {
+        url: string | URL;
+      });
+};
+
 interface AmlMcpServer {
+  readonly __amlMcpServer: true;
   readonly name: string;
   readonly transport: AmlMcpTransport;
 }
 
 type AgentMcpServer =
   | { kind: "named"; name: string }
-  | { kind: "configured"; server: AmlMcpServer };
+  | { definition: AmlMcpServer; kind: "configured" };
 ```
 
-`defineMcpServer()` is synchronous and performs no I/O. It requires a non-empty server name, requires a non-empty `stdio` command or an HTTP(S) Streamable HTTP URL, validates transport fields, and freezes the descriptor. The Agent provider remains the MCP client: it maps the descriptor to its native configuration, launches or connects to the server, performs MCP initialization, exposes supported server capabilities to the Agent session, and owns shutdown.
+`defineMcpServer()` is synchronous and performs no I/O. It requires a non-empty normalized server name, requires a non-empty normalized `stdio` command or an HTTP(S) Streamable HTTP URL, validates every transport field, snapshots arrays and string records, normalizes a URL input to its string form, and freezes the complete descriptor. `<Mcp use>` accepts only the exact identity returned by `defineMcpServer()`, including across physical SDK copies; clones and structurally similar objects are not definitions. The Agent provider remains the MCP client: it maps the descriptor to its native configuration, launches or connects to the server, performs MCP initialization, exposes supported server capabilities to the Agent session, and owns shutdown.
 
 The transport names follow the MCP specification. With `stdio`, the client launches and terminates the server process. With Streamable HTTP, the client connects to one independent HTTP endpoint. Provider-specific and custom transports are outside the portable descriptor; a provider-native named server may still use them.
 
@@ -834,6 +844,7 @@ MCP grants are Agent-wide:
 - `<Mcp>` is valid only as an Agent capability after component and Fragment expansion.
 - MCP servers are not inherited by child or parent Agents.
 - Duplicate server names in one Agent are invalid.
+- A provider must reject distinct names that collide after its required identifier normalization.
 - `<Mcp>` inside `<FollowUp>` is invalid because capabilities cannot change between turns.
 - The adapter attaches every declared server before the first Agent turn.
 - The same connections remain available through all FollowUps.
@@ -846,6 +857,8 @@ The adapter must fail closed when it cannot attach a declared server or transpor
 MCP servers may expose tools, resources, prompts, and other protocol capabilities. AML does not flatten those into `<Tool>` descriptors or claim that every Agent harness exposes every MCP capability identically. The adapter reports relevant capability differences and preserves the native harness behavior.
 
 Declared MCP servers are the portable AML grant set. If a provider harness also inherits MCP servers from host configuration and cannot disable them, the adapter must report those inherited capabilities and must not claim a clean capability profile.
+
+When a provider expresses capability grants through wildcard patterns, its adapter must prove that each generated pattern covers only the declared server. It must reject declared and inherited server names whose provider-normalized namespaces overlap in either direction. Provider-native Tool names containing wildcard syntax are also invalid as exact `<Tool name>` grants, and an exact host Tool ID must not overlap an inherited MCP namespace that can produce the same final ID. An authored exact grant must never broaden the deny-all capability profile or select a capability from another source.
 
 ### 9.2 Sandbox boundary
 
@@ -1525,7 +1538,7 @@ defineSandboxProvider(implementation);
 defineWorkspaceProvider(implementation);
 ```
 
-These helpers are the supported authoring surface for official and third-party adapters. Each helper preserves the implementation's generic types, validates stable provider identity and required lifecycle methods, and returns the corresponding public SDK contract. Provider names must already be non-empty and equal to their trimmed form; helpers reject non-normalized names instead of rewriting a runtime value behind its inferred TypeScript type. They perform no network access, client creation, resource acquisition, global registration, or vendor-option interpretation.
+These helpers are the supported authoring surface for official and third-party adapters. Each helper preserves the implementation's generic types, validates its stable identity and contract, and returns the corresponding public SDK type. Provider names must already be non-empty and equal to their trimmed form; provider helpers reject non-normalized names instead of rewriting a runtime value behind its inferred TypeScript type. Definition helpers perform no network access, client creation, resource acquisition, or vendor-option interpretation. Provider helpers perform no global registration. `defineTool()` and `defineMcpServer()` register only the weak exact identities documented below.
 
 A configured provider's identity and invocation method are captured when it enters its runtime or Agent boundary. AML does not repeatedly read those members while resolving or executing the same Agent.
 
@@ -1552,7 +1565,7 @@ export function opencodeAgent(options: OpenCodeAgentOptions): AgentProvider {
 
 The provider package's configured factory owns vendor-specific options and returns an immutable adapter. The `define*Provider()` helper owns only the shared contract boundary. In design-pattern terms this is Ports and Adapters combined with configured factories and typed definition helpers; there is no service locator or global provider registry.
 
-`defineMcpServer()` validates and freezes an MCP server identity and explicit standard transport descriptor. It does not start a process, connect to a URL, initialize an MCP client, or register global state.
+`defineMcpServer()` validates and freezes an MCP server identity and explicit standard transport descriptor. It does not start a process, connect to a URL, initialize an MCP client, or register provider configuration. Like `defineTool()`, it records only the exact object identity in a realm-global `Symbol.for()` WeakMap so separate physical SDK copies can recognize each other's definitions without accepting clones. The registry contains no credentials beyond references to the already-live definitions, is not enumerable application configuration, and does not outlive those weakly held objects.
 
 The SDK provider interfaces remain public and structurally implementable. Direct implementations are allowed, but they must satisfy the same contract and conformance suite. The provider definition helpers are the canonical path because they preserve inference and make runtime validation consistent; official packages must use them.
 
@@ -1660,7 +1673,7 @@ function opencodeAgent(
 ): OpenCodeAgentProvider;
 ```
 
-`opencodeAgent()` is synchronous and performs no I/O. When `sessionClient` is supplied, the package uses that injected provider-owned port and does not start or stop an OpenCode server; that port owns complete Tool attachment and registration cleanup. `sessionClient` and `server` are mutually exclusive. Without `sessionClient`, the first Agent call that has no JavaScript Tool lazily starts one reusable package-owned local OpenCode server using the optional server settings. An Agent with a JavaScript Tool uses a disposable package-owned OpenCode server because OpenCode can disconnect but cannot remove a dynamically added MCP configuration from a long-lived server. Every disposable server requests port `0` so it cannot collide with the reusable server or another concurrent Tool invocation; an explicit `server.port` configures only the reusable host. Other server settings still apply. The disposable server is closed after the complete Agent session and Tool cleanup settle, so registrations cannot accumulate across calls. `close()` is idempotent, rejects future calls, waits for active calls, and stops only the reusable server owned by that provider instance. Concurrent and later callers receive the same cleanup promise and therefore observe the same completion or failure. Credentials remain in the OpenCode environment and configuration; AML does not read or copy them.
+`opencodeAgent()` is synchronous and performs no I/O. When `sessionClient` is supplied, the package uses that injected provider-owned port and does not start or stop an OpenCode server; that port owns complete Tool and MCP attachment and cleanup. `sessionClient` and `server` are mutually exclusive. Without `sessionClient`, the first Agent call that has neither a JavaScript Tool nor an MCP grant lazily starts one reusable package-owned local OpenCode server using the optional server settings. An Agent with a JavaScript Tool or MCP grant uses a disposable package-owned OpenCode server because OpenCode can disconnect but cannot remove a dynamically added MCP configuration from a long-lived server and MCP connections are host-scoped rather than session-scoped. Every disposable server requests port `0` so it cannot collide with the reusable server or another concurrent capability invocation; an explicit `server.port` configures only the reusable host. Other server settings still apply. The disposable server is closed after the complete Agent session and capability cleanup settle, so registrations and connections cannot accumulate or leak into sibling Agents. Named grants connect an exact server already present in the disposable host's provider configuration. Explicit grants are added dynamically. OpenCode's per-prompt Tool map disables `"*"` and enables only declared host Tools, JavaScript Tools, and each declared MCP server's normalized `<server>_*` namespace. Capability isolation mirrors OpenCode's permission equivalence by normalizing backslashes to slashes and comparing case-insensitively on Windows. Because this adapter must mirror OpenCode server internals to secure those grants, it preflights `/global/health` and accepts only reviewed server versions `1.18.4` and `1.18.5` for any capability-bearing Agent. Its generated OpenCode SDK dependency is pinned separately at `1.18.5` for API compatibility. An upgrade must revalidate punctuation normalization, platform equivalence, namespace overlap, and both client and server versions before expanding either compatibility boundary. `close()` is idempotent, rejects future calls, waits for active calls, and stops only the reusable server owned by that provider instance. Concurrent and later callers receive the same cleanup promise and therefore observe the same completion or failure. Credentials remain in the OpenCode environment and configuration; AML does not read or copy them.
 
 `directory` selects the OpenCode working directory. `model` is the configured default and is overridden by `<Agent model>`. Explicit model identifiers use `provider/model` form and are validated before the session is created.
 

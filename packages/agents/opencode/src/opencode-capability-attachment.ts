@@ -1,10 +1,10 @@
-import type { OpenCodeToolAttachment as OpenCodeToolAttachmentContract } from "./opencode-session-client.js"
+import type { OpenCodeCapabilityAttachment as OpenCodeCapabilityAttachmentContract } from "./opencode-session-client.js"
 
 /**
  * Owns one invocation's OpenCode capability map and cleanup barrier.
  */
-export class OpenCodeToolAttachment
-  implements OpenCodeToolAttachmentContract
+export class OpenCodeCapabilityAttachment
+  implements OpenCodeCapabilityAttachmentContract
 {
   readonly #cleanup: () => Promise<void>
   #closePromise: Promise<void> | undefined

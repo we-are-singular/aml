@@ -2,6 +2,7 @@ const AML_NODE_BRAND = Symbol.for("@aml/sdk/node")
 const AML_PRIMITIVE_KIND = Symbol.for("@aml/sdk/primitive-kind")
 type AmlPrimitiveKind =
   | "agent"
+  | "mcp"
   | "sandbox"
   | "skill"
   | "system"
@@ -100,6 +101,7 @@ export class AmlNode<Props = Record<string, unknown>> {
     )[AML_PRIMITIVE_KIND]
 
     return kind === "agent" ||
+      kind === "mcp" ||
       kind === "sandbox" ||
       kind === "skill" ||
       kind === "system" ||

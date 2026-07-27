@@ -78,12 +78,13 @@ export class OpenCodeSession {
     const model = OpenCodeSession.parseModel(request.model ?? this.#model)
     // Capability incompatibility and attachment failure must happen before any
     // remote session exists. This is both a side-effect and security boundary.
-    const toolAttachment = await this.#client.attachTools(
+    const capabilityAttachment = await this.#client.attachCapabilities(
       {
         ...(this.#directory === undefined
           ? {}
           : { directory: this.#directory }),
         context,
+        mcpServers: request.mcpServers,
         tools: request.tools,
       },
       context.signal,
@@ -114,7 +115,7 @@ export class OpenCodeSession {
       const errors: unknown[] = [creationError]
 
       try {
-        await toolAttachment.close()
+        await capabilityAttachment.close()
       } catch (cleanupError) {
         errors.push(cleanupError)
       }
@@ -122,7 +123,7 @@ export class OpenCodeSession {
       if (errors.length > 1) {
         throw new AggregateError(
           errors,
-          "OpenCode session creation and Tool cleanup failed",
+          "OpenCode session creation and capability cleanup failed",
         )
       }
 
@@ -162,7 +163,7 @@ export class OpenCodeSession {
     let response: AgentResponse | undefined
 
     // Prompt execution is separate from cleanup so every failure path still
-    // closes Tool resources and deletes the acknowledged session.
+    // closes capability resources and deletes the acknowledged session.
     try {
       const result = await this.#client.prompt(
         {
@@ -170,7 +171,7 @@ export class OpenCodeSession {
           ...(model === undefined ? {} : { model }),
           prompt: request.prompt,
           system: request.system,
-          tools: toolAttachment.tools,
+          tools: capabilityAttachment.tools,
         },
         context.signal,
       )
@@ -186,14 +187,14 @@ export class OpenCodeSession {
 
     await abortPromise
 
-    let hasToolCleanupError = false
-    let toolCleanupError: unknown
+    let hasCapabilityCleanupError = false
+    let capabilityCleanupError: unknown
 
     try {
-      await toolAttachment.close()
+      await capabilityAttachment.close()
     } catch (error) {
-      hasToolCleanupError = true
-      toolCleanupError = error
+      hasCapabilityCleanupError = true
+      capabilityCleanupError = error
     }
 
     let hasCleanupError = false
@@ -218,8 +219,8 @@ export class OpenCodeSession {
       errors.push(abortError)
     }
 
-    if (hasToolCleanupError) {
-      errors.push(toolCleanupError)
+    if (hasCapabilityCleanupError) {
+      errors.push(capabilityCleanupError)
     }
 
     if (hasCleanupError) {

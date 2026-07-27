@@ -1,5 +1,6 @@
 import type {
   AgentExecutionContext,
+  AgentMcpServer,
   AgentTool,
 } from "@aml/sdk"
 
@@ -59,7 +60,7 @@ export interface OpenCodeSessionPromptResult {
 /**
  * Invocation-scoped capability map and its idempotent cleanup boundary.
  */
-export interface OpenCodeToolAttachment {
+export interface OpenCodeCapabilityAttachment {
   readonly tools: Readonly<Record<string, boolean>>
 
   /**
@@ -71,9 +72,10 @@ export interface OpenCodeToolAttachment {
 /**
  * Inputs needed to preflight and attach capabilities before session creation.
  */
-export interface OpenCodeToolAttachmentInput {
+export interface OpenCodeCapabilityAttachmentInput {
   readonly context: AgentExecutionContext
   readonly directory?: string
+  readonly mcpServers: readonly AgentMcpServer[]
   readonly tools: readonly AgentTool[]
 }
 
@@ -92,10 +94,10 @@ export interface OpenCodeSessionClient {
   /**
    * Preflights and attaches all Agent capabilities before session creation.
    */
-  attachTools(
-    input: OpenCodeToolAttachmentInput,
+  attachCapabilities(
+    input: OpenCodeCapabilityAttachmentInput,
     signal: AbortSignal,
-  ): Promise<OpenCodeToolAttachment>
+  ): Promise<OpenCodeCapabilityAttachment>
 
   /**
    * Opens one fresh provider session and returns its acknowledged identity.

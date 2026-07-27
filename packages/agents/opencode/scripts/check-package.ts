@@ -13,7 +13,7 @@ interface BuiltProviderPackage {
   opencodeAgent(options: {
     sessionClient: {
       abort(input: unknown): Promise<void>
-      attachTools(
+      attachCapabilities(
         input: unknown,
         signal: AbortSignal,
       ): Promise<{
@@ -71,7 +71,7 @@ const built = (await import(
 )) as BuiltProviderPackage
 const calls = {
   abort: 0,
-  attachTools: 0,
+  attachCapabilities: 0,
   create: 0,
   delete: 0,
   prompt: 0,
@@ -81,8 +81,8 @@ const provider = built.opencodeAgent({
     async abort() {
       calls.abort += 1
     },
-    async attachTools() {
-      calls.attachTools += 1
+    async attachCapabilities() {
+      calls.attachCapabilities += 1
       return {
         async close() {},
         tools: { "*": false },
@@ -110,7 +110,7 @@ await provider.close()
 if (
   provider.name !== "opencode" ||
   calls.create !== 1 ||
-  calls.attachTools !== 1 ||
+  calls.attachCapabilities !== 1 ||
   calls.prompt !== 1 ||
   calls.delete !== 1 ||
   calls.abort !== 0

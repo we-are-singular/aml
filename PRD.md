@@ -1,6 +1,6 @@
 # Agent Markup Language product requirements and delivery plan
 
-Status: Phase 1 — MVP complete; Slices 0–8 done; Slice 9 pending
+Status: Phase 1 — MVP complete; Slices 0–9 done; Slice 10 pending
 
 This is the living product definition, architecture plan, implementation roadmap, and progress tracker for AML. It is not a normative runtime contract. Settled behavior belongs in `SPEC.md`; this document records why AML exists, how it is organized, what is being built next, and which slices have been proven.
 
@@ -169,7 +169,7 @@ The status table is the canonical implementation tracker. A slice moves to `Done
 | Slice 6 | Docker Sandbox package | Done |
 | Slice 7 | `<Workspace>` contract | Done |
 | Slice 8 | Local Workspace package and MVP completion | Done |
-| Slice 9 | `<Mcp>` and `defineMcpServer()` | Pending |
+| Slice 9 | `<Mcp>` and `defineMcpServer()` | Done |
 | Slice 10 | `evaluate()` and structured results | Pending |
 | Slice 11 | Bounded Agent concurrency | Pending |
 | Slice 12 | `<FollowUp>` | Pending |
@@ -451,7 +451,11 @@ Each implementation file has one primary export whose name matches the filename:
 | `standard-schema-adapter.ts` | `StandardSchemaAdapter` |
 | `tool-input-error.ts`      | `ToolInputError`      |
 | `tool-output-error.ts`     | `ToolOutputError`     |
+| `mcp.tsx`                  | `Mcp`                 |
+| `aml-mcp-server.ts`        | `AmlMcpServer`        |
 | `define-mcp-server.ts`     | `defineMcpServer`     |
+| `mcp-collection.ts`        | `McpCollection`       |
+| `opencode-capability-attachment.ts` | `OpenCodeCapabilityAttachment` |
 | `docker-sandbox.ts`        | `dockerSandbox`       |
 | `local-workspace.ts`       | `localWorkspace`      |
 | `opencode-agent.ts`        | `opencodeAgent`       |
@@ -690,7 +694,9 @@ MVP is complete when Slice 8 passes. It contains exactly the five component boun
 - add allowlist, lifecycle, redaction, and failure behavior
 - extend deterministic and OpenCode conformance for attach and cleanup
 
-Proof: a declared test MCP server is available for one Agent session, survives its turns, is absent from sibling Agents, and is disposed after success and failure.
+Proof: a declared test MCP server is available for one Agent session, is absent from sibling Agents, and is disposed after success and failure. Slice 12 separately proves that the same attachment survives FollowUps.
+
+Status: Done on 2026-07-27. The SDK now exposes Agent-scoped `<Mcp>` grants and exact-identity `defineMcpServer()` descriptors for provider-native names, local stdio servers, and remote Streamable HTTP servers. Definitions snapshot and freeze transport input, survive duplicate physical SDK copies through a weak realm registry, and never perform I/O themselves. Agent requests keep MCP configuration distinct from prompt text and reject misplaced, duplicate, and disallowed grants before provider execution. The OpenCode adapter attaches explicit JavaScript Tools and MCP servers to one disposable capability host, disconnects every acquired resource in reverse order, denies undeclared host capabilities, and fails closed on normalized namespaces that overlap declared servers, inherited servers, ambient host Tools, or exact Tool grants. Because OpenCode capability authorization depends on server wildcard and identifier behavior, capability-bearing calls preflight a healthy server and accept only the reviewed `1.18.4` and `1.18.5` compatibility boundary; the generated client is pinned separately at `1.18.5`. Singular review found stateful descriptor access, missing live MCP proof, wildcard namespace leaks, provider-normalization collisions, inherited namespace overlap, platform-equivalent permissions, and an unbounded executable-version assumption. The corrected implementation snapshots hostile input, checks every capability source before creating a session, canonicalizes OpenCode permission literals, and gates version-sensitive behavior before attaching resources. Eight SDK MCP tests, thirty-one OpenCode tests, one isolated built-package example, all workspace type checks, all four dist/package checks, and two credentialed live OpenCode-Go integrations for JavaScript Tool and configured MCP invocation pass. Final correctness and skeptical review lanes reported no actionable findings; the only maintainability hint was resolved by documenting the sanitizer's authorization role.
 
 #### Slice 10 — `evaluate()` and structured results
 
@@ -719,7 +725,7 @@ Proof: two specialists run concurrently, feed one coordinator in declared result
 - return only the final turn
 - reject invalid nesting and placement
 
-Proof: a deterministic session receives three turns in authored order while retaining one capability set.
+Proof: a deterministic session receives three turns in authored order while retaining one Tool and MCP capability set.
 
 #### Slice 13 — `<Loop>`
 

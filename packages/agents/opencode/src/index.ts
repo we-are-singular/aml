@@ -15,6 +15,6 @@ export type {
   OpenCodeSessionPart,
   OpenCodeSessionPromptInput,
   OpenCodeSessionPromptResult,
-  OpenCodeToolAttachment,
-  OpenCodeToolAttachmentInput,
+  OpenCodeCapabilityAttachment,
+  OpenCodeCapabilityAttachmentInput,
 } from "./opencode-session-client.js"

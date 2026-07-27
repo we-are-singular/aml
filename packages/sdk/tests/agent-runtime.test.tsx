@@ -419,7 +419,12 @@ describe("defineAgentProvider", () => {
     expect(provider.name).toBe("stateful")
     expect(Object.isFrozen(provider)).toBe(true)
     await expect(
-      provider.run({ prompt: "prompt", system: "", tools: [] }),
+      provider.run({
+        mcpServers: [],
+        prompt: "prompt",
+        system: "",
+        tools: [],
+      }),
     ).resolves.toEqual({ text: "state:prompt" })
   })
 

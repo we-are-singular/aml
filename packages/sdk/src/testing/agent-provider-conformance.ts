@@ -17,6 +17,7 @@ export async function agentProviderConformance(
     spanId: "agent-provider-conformance",
   })
   const request: AgentRequest = Object.freeze({
+    mcpServers: Object.freeze([]),
     prompt: "agent-provider-conformance",
     system: "Follow the provider contract.",
     tools: Object.freeze([]),

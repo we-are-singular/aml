@@ -13,6 +13,7 @@
     "example:agent": "turbo run example --filter=@aml/example-agent",
     "example:basic": "turbo run example --filter=@aml/example-basic",
     "example:docker": "turbo run example --filter=@aml/example-docker",
+    "example:mcp": "turbo run example --filter=@aml/example-mcp",
     "example:opencode": "turbo run example --filter=@aml/example-opencode",
     "example:sandbox": "turbo run example --filter=@aml/example-sandbox",
     "example:skill": "turbo run example --filter=@aml/example-skill",

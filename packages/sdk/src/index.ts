@@ -7,6 +7,22 @@ export type { AgentResponse } from "./components/agent/agent-response.js"
 export { defineAgentProvider } from "./components/agent/define-agent-provider.js"
 export { System, type SystemProps } from "./components/system/system.js"
 
+// Agent-scoped provider-native and explicitly configured MCP capabilities.
+export type {
+  AgentMcpServer,
+  AmlMcpServer,
+  AmlMcpStdioTransport,
+  AmlMcpStreamableHttpTransport,
+  AmlMcpTransport,
+} from "./components/mcp/aml-mcp-server.js"
+export {
+  defineMcpServer,
+  type DefineMcpServerOptions,
+  type DefineMcpStdioTransport,
+  type DefineMcpStreamableHttpTransport,
+} from "./components/mcp/define-mcp-server.js"
+export { Mcp, type McpProps } from "./components/mcp/mcp.js"
+
 // Local and inline reusable instruction text.
 export { Skill, type SkillProps } from "./components/skill/skill.js"
 

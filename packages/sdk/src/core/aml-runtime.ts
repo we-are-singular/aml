@@ -2,6 +2,8 @@ import type { AgentProps } from "../components/agent/agent.js"
 import type { AgentProvider } from "../components/agent/agent-provider.js"
 import { AgentExecutor } from "../components/agent/agent-executor.js"
 import type { ValidatedAgentProvider } from "../components/agent/validate-agent-provider.js"
+import { McpCollection } from "../components/mcp/mcp-collection.js"
+import type { McpProps } from "../components/mcp/mcp.js"
 import {
   type SandboxEvaluationScope,
   SandboxEvaluator,
@@ -48,6 +50,7 @@ interface TextTarget {
 
 interface AgentTarget {
   readonly kind: "agent"
+  readonly mcpServers: McpCollection
   readonly parentSpanId: string
   readonly promptChunks: string[]
   readonly sandbox: Readonly<SandboxSession> | undefined
@@ -131,6 +134,11 @@ type EvaluationFrame =
  */
 export interface AmlRuntimeOptions {
   /**
+   * Optional exact-name MCP server allowlist.
+   */
+  readonly allowedMcpServers?: readonly string[]
+
+  /**
    * Optional exact-name capability allowlist.
    */
   readonly allowedTools?: readonly string[]
@@ -188,6 +196,7 @@ export interface AmlEvaluationOptions {
  */
 export class AmlRuntime {
   readonly #agentExecutor: AgentExecutor
+  readonly #allowedMcpServers: ReadonlySet<string> | undefined
   readonly #allowedTools: ReadonlySet<string> | undefined
   readonly #maxAgentCalls: number
   readonly #maxDepth: number
@@ -212,7 +221,14 @@ export class AmlRuntime {
       throw new TypeError("maxDepth must be a non-negative safe integer")
     }
 
-    this.#allowedTools = captureAllowedTools(options.allowedTools)
+    this.#allowedMcpServers = captureAllowedNames(
+      options.allowedMcpServers,
+      "allowedMcpServers",
+    )
+    this.#allowedTools = captureAllowedNames(
+      options.allowedTools,
+      "allowedTools",
+    )
     this.#agentExecutor = new AgentExecutor({
       ...(options.agentProvider === undefined
         ? {}
@@ -395,9 +411,10 @@ export class AmlRuntime {
 
         if (frame.kind === "complete-agent") {
           // A completion frame runs only after every child has contributed text,
-          // System fragments, or Tool descriptors to the Agent plan.
+          // System fragments, Tool descriptors, or MCP grants to the Agent plan.
           const response = await this.#agentExecutor.execute({
             context,
+            mcpServers: frame.plan.mcpServers.values(),
             prompt: frame.plan.promptChunks.join(""),
             provider: frame.provider,
             props: frame.props,
@@ -500,6 +517,7 @@ export class AmlRuntime {
             const trace = context.createTrace(frame.target.parentSpanId)
             const plan: AgentTarget = {
               kind: "agent",
+              mcpServers: new McpCollection(this.#allowedMcpServers),
               parentSpanId: trace.spanId,
               promptChunks: [],
               sandbox: frame.target.sandbox,
@@ -616,6 +634,22 @@ export class AmlRuntime {
               target: scopedTarget,
               value: props.children,
             })
+            continue
+          }
+
+          // <Mcp> is metadata for the nearest Agent, not prompt text.
+          if (primitiveKind === "mcp") {
+            if (frame.target.kind !== "agent") {
+              throw new EvaluationError(
+                "<Mcp> is only valid inside <Agent>",
+              )
+            }
+
+            // MCP descriptors mutate only the nearest Agent plan. Providers
+            // perform attachment later at the complete-session boundary.
+            frame.target.mcpServers.add(
+              current.props as Readonly<McpProps>,
+            )
             continue
           }
 
@@ -799,17 +833,18 @@ export class AmlRuntime {
 }
 
 /**
- * Captures a normalized exact-name Tool allowlist for one runtime.
+ * Captures one normalized exact-name capability allowlist for a runtime.
  */
-function captureAllowedTools(
+function captureAllowedNames(
   values: readonly string[] | undefined,
+  label: "allowedMcpServers" | "allowedTools",
 ): ReadonlySet<string> | undefined {
   if (values === undefined) {
     return undefined
   }
 
   if (!Array.isArray(values)) {
-    throw new TypeError("allowedTools must be an array")
+    throw new TypeError(`${label} must be an array`)
   }
 
   const result = new Set<string>()
@@ -821,7 +856,7 @@ function captureAllowedTools(
       value !== value.trim()
     ) {
       throw new TypeError(
-        "allowedTools entries must be non-empty normalized strings",
+        `${label} entries must be non-empty normalized strings`,
       )
     }
 
