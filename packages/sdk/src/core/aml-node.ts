@@ -3,6 +3,7 @@ const AML_PRIMITIVE_KIND = Symbol.for("@aml/sdk/primitive-kind")
 type AmlPrimitiveKind =
   | "agent"
   | "follow-up"
+  | "loop"
   | "mcp"
   | "sandbox"
   | "skill"
@@ -103,6 +104,7 @@ export class AmlNode<Props = Record<string, unknown>> {
 
     return kind === "agent" ||
       kind === "follow-up" ||
+      kind === "loop" ||
       kind === "mcp" ||
       kind === "sandbox" ||
       kind === "skill" ||

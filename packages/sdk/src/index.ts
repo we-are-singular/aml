@@ -11,6 +11,12 @@ export {
   FollowUp,
   type FollowUpProps,
 } from "./components/follow-up/follow-up.js"
+export {
+  type DeepReadonly,
+  Loop,
+  type LoopProps,
+  type LoopRenderContext,
+} from "./components/loop/loop.js"
 export { System, type SystemProps } from "./components/system/system.js"
 
 // Agent-scoped provider-native and explicitly configured MCP capabilities.

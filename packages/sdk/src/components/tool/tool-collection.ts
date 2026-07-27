@@ -76,6 +76,24 @@ export class ToolCollection {
   }
 
   /**
+   * Adds one runtime-owned capability without applying the author allowlist.
+   *
+   * Loop state is not an application-selected grant: `<Loop>` requires AML to
+   * provide it. It still shares the Agent namespace and therefore cannot
+   * silently replace an authored capability with the same name.
+   */
+  addRuntime(tool: AgentTool): void {
+    if (this.#names.has(tool.name)) {
+      throw new EvaluationError(
+        `Agent declares duplicate Tool "${tool.name}"`,
+      )
+    }
+
+    this.#names.add(tool.name)
+    this.#tools.push(tool)
+  }
+
+  /**
    * Captures a provider-owned Tool name after applying portable name rules.
    */
   #hostTool(name: unknown): AgentTool {

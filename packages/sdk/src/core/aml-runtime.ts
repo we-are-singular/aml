@@ -1,9 +1,14 @@
+import type { StandardSchemaV1 } from "@standard-schema/spec"
+
 import type { AgentProps } from "../components/agent/agent.js"
 import type { AgentProvider } from "../components/agent/agent-provider.js"
 import { AgentExecutor } from "../components/agent/agent-executor.js"
 import { ModelSchema } from "../components/agent/model-schema.js"
 import type { ValidatedAgentProvider } from "../components/agent/validate-agent-provider.js"
 import type { FollowUpProps } from "../components/follow-up/follow-up.js"
+import { LoopAgentSelector } from "../components/loop/loop-agent-selector.js"
+import { LoopEvaluator } from "../components/loop/loop-evaluator.js"
+import type { LoopProps } from "../components/loop/loop.js"
 import { McpCollection } from "../components/mcp/mcp-collection.js"
 import type { McpProps } from "../components/mcp/mcp.js"
 import {
@@ -21,6 +26,7 @@ import {
 } from "../components/skill/skill-evaluator.js"
 import type { SystemProps } from "../components/system/system.js"
 import { ToolCollection } from "../components/tool/tool-collection.js"
+import type { AgentJavaScriptTool } from "../components/tool/agent-tool.js"
 import type { ToolProps } from "../components/tool/tool.js"
 import {
   type WorkspaceEvaluationScope,
@@ -46,6 +52,7 @@ interface TextTarget {
   readonly parentSpanId: string | undefined
   readonly sandbox: Readonly<SandboxSession> | undefined
   readonly source: "evaluation" | "follow-up" | "skill" | "system"
+  readonly runtimeTool?: AgentJavaScriptTool
   readonly structured: StructuredEvaluation | undefined
   readonly workspace:
     | Readonly<WorkspaceMaterializationReference>
@@ -219,6 +226,11 @@ export interface AmlRuntimeOptions {
   readonly maxDepth?: number
 
   /**
+   * Maximum committed Loop transitions. Zero disables the limit.
+   */
+  readonly maxStateTransitions?: number
+
+  /**
    * Maximum authored inputs in one Agent session. Zero disables the limit.
    */
   readonly maxTurnsPerAgent?: number
@@ -259,6 +271,9 @@ export class AmlRuntime {
   readonly #maxAgentCalls: number
   readonly #maxConcurrentAgents: number
   readonly #maxDepth: number
+  readonly #maxStateTransitions: number
+  readonly #loopAgentSelector: LoopAgentSelector
+  readonly #loopEvaluator = new LoopEvaluator()
   readonly #sandboxEvaluator: SandboxEvaluator
   readonly #skillEvaluator: SkillEvaluator
   readonly #workspaceEvaluator: WorkspaceEvaluator
@@ -270,6 +285,7 @@ export class AmlRuntime {
     const maxAgentCalls = options.maxAgentCalls ?? 32
     const maxConcurrentAgents = options.maxConcurrentAgents ?? 4
     const maxDepth = options.maxDepth ?? 16
+    const maxStateTransitions = options.maxStateTransitions ?? 16
     const maxTurnsPerAgent = options.maxTurnsPerAgent ?? 16
 
     if (!Number.isSafeInteger(maxAgentCalls) || maxAgentCalls < 0) {
@@ -300,6 +316,15 @@ export class AmlRuntime {
       )
     }
 
+    if (
+      !Number.isSafeInteger(maxStateTransitions) ||
+      maxStateTransitions < 0
+    ) {
+      throw new TypeError(
+        "maxStateTransitions must be a non-negative safe integer",
+      )
+    }
+
     this.#allowedMcpServers = captureAllowedNames(
       options.allowedMcpServers,
       "allowedMcpServers",
@@ -318,6 +343,8 @@ export class AmlRuntime {
     this.#maxAgentCalls = maxAgentCalls
     this.#maxConcurrentAgents = maxConcurrentAgents
     this.#maxDepth = maxDepth
+    this.#maxStateTransitions = maxStateTransitions
+    this.#loopAgentSelector = new LoopAgentSelector(maxDepth)
     this.#sandboxEvaluator = new SandboxEvaluator(
       options.sandboxProvider,
     )
@@ -348,6 +375,7 @@ export class AmlRuntime {
       context: new EvaluationContext(
         this.#maxAgentCalls,
         this.#maxConcurrentAgents,
+        this.#maxStateTransitions,
         signal,
       ),
       workspaceDeclared: false,
@@ -382,6 +410,7 @@ export class AmlRuntime {
     scope: EvaluationScope,
     schema: ModelSchema<unknown> | undefined,
     activeAncestors: ReadonlySet<object> = new Set(),
+    runtimeTool?: AgentJavaScriptTool,
   ): Promise<unknown> {
     const context = domain.context
     // Component-local evaluate() starts a new frame stack, but it remains on
@@ -407,6 +436,7 @@ export class AmlRuntime {
       source: "evaluation",
       structured,
       workspace: scope.workspace,
+      ...(runtimeTool === undefined ? {} : { runtimeTool }),
     }
     const frames: EvaluationFrame[] = [
       { depth: scope.depth, kind: "resolve", target: output, value },
@@ -687,6 +717,13 @@ export class AmlRuntime {
               workspace: frame.target.workspace,
             }
 
+            if (
+              frame.target.kind === "text" &&
+              frame.target.runtimeTool !== undefined
+            ) {
+              plan.tools.addRuntime(frame.target.runtimeTool)
+            }
+
             // Push completion before children: the LIFO stack gives AML its
             // bottom-up execution semantics without suspending a component.
             activeValues.add(current)
@@ -712,6 +749,95 @@ export class AmlRuntime {
               target: plan,
               value: props.children,
             })
+            continue
+          }
+
+          // <Loop> owns repeated fresh Agent sessions and one staged state
+          // capability. Its render callback is selected to one outer Agent
+          // before any of that Agent's descendants execute.
+          if (primitiveKind === "loop") {
+            if (frame.target.structured !== undefined) {
+              // Structured evaluate() permits one provider call total. The
+              // collector follows the root Agent into its prompt, System, and
+              // FollowUp targets, so a Loop in any of those channels would
+              // otherwise start hidden sessions outside that contract.
+              throw new EvaluationError(
+                "Structured evaluate() must resolve to exactly one <Agent>",
+              )
+            }
+
+            const props = current.props as Readonly<
+              LoopProps<
+                StandardSchemaV1<
+                  unknown,
+                  Record<string, unknown>
+                >
+              >
+            >
+            const trace = context.createTrace(
+              frame.target.parentSpanId,
+            )
+
+            activeValues.add(current)
+            let result: string
+
+            try {
+              result = await this.#loopEvaluator.evaluate(
+                props,
+                context,
+                async (value, stateTool) => {
+                  const selection =
+                    await this.#loopAgentSelector.select(
+                      value,
+                      nodeDepth,
+                      new Set(activeValues),
+                      context.signal,
+                      async (
+                        nestedValue,
+                        nestedSchema,
+                        nestedDepth,
+                        nestedAncestors,
+                      ) => {
+                        const modelSchema =
+                          nestedSchema === undefined
+                            ? undefined
+                            : new ModelSchema(nestedSchema)
+
+                        return await this.#evaluateInDomain(
+                          nestedValue,
+                          domain,
+                          {
+                            depth: nestedDepth,
+                            parentSpanId: trace.spanId,
+                            sandbox: frame.target.sandbox,
+                            workspace: frame.target.workspace,
+                          },
+                          modelSchema,
+                          nestedAncestors,
+                        )
+                      },
+                    )
+
+                  return (await this.#evaluateInDomain(
+                    selection.agent,
+                    domain,
+                    {
+                      depth: selection.parentDepth,
+                      parentSpanId: trace.spanId,
+                      sandbox: frame.target.sandbox,
+                      workspace: frame.target.workspace,
+                    },
+                    undefined,
+                    selection.activeAncestors,
+                    stateTool,
+                  )) as string
+                },
+              )
+            } finally {
+              activeValues.delete(current)
+            }
+
+            appendText(frame.target, result)
             continue
           }
 

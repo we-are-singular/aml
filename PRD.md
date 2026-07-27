@@ -1,6 +1,6 @@
 # Agent Markup Language product requirements and delivery plan
 
-Status: Phase 1 — MVP complete; Slices 0–12 done; Slice 13 pending
+Status: Phase 1 — MVP complete; Slices 0–13 done; Slice 14 pending
 
 This is the living product definition, architecture plan, implementation roadmap, and progress tracker for AML. It is not a normative runtime contract. Settled behavior belongs in `SPEC.md`; this document records why AML exists, how it is organized, what is being built next, and which slices have been proven.
 
@@ -173,7 +173,7 @@ The status table is the canonical implementation tracker. A slice moves to `Done
 | Slice 10 | `evaluate()` and structured results | Done |
 | Slice 11 | Bounded Agent concurrency | Done |
 | Slice 12 | `<FollowUp>` | Done |
-| Slice 13 | `<Loop>` | Pending |
+| Slice 13 | `<Loop>` | Done |
 | Slice 14 | Codex Agent package | Pending |
 | Slice 15 | Observability consumers | Pending |
 | Slice 16 | Context | Pending |
@@ -330,6 +330,8 @@ packages/sdk/
 │   │   │   ├── create-context.ts
 │   │   │   └── use-context.ts
 │   │   ├── loop/
+│   │   │   ├── loop-agent-selector.ts
+│   │   │   ├── loop-evaluator.ts
 │   │   │   └── loop.tsx
 │   │   ├── sandbox/
 │   │   │   ├── sandbox.tsx
@@ -462,6 +464,9 @@ Each implementation file has one primary export whose name matches the filename:
 | `aml-mcp-server.ts`        | `AmlMcpServer`        |
 | `define-mcp-server.ts`     | `defineMcpServer`     |
 | `mcp-collection.ts`        | `McpCollection`       |
+| `loop-agent-selector.ts`   | `LoopAgentSelector`   |
+| `loop-evaluator.ts`        | `LoopEvaluator`       |
+| `loop.tsx`                 | `Loop`                |
 | `opencode-capability-attachment.ts` | `OpenCodeCapabilityAttachment` |
 | `docker-sandbox.ts`        | `dockerSandbox`       |
 | `local-workspace.ts`       | `localWorkspace`      |
@@ -750,6 +755,8 @@ Status: Done on 2026-07-27. The SDK now exposes flat static `<FollowUp>` descrip
 
 Proof: committed state appears only in the next fresh Agent iteration.
 
+Status: Done on 2026-07-27. The SDK now exposes `<Loop>` for fresh Agent sessions over immutable, schema-validated JSON state. Each iteration receives one deeply frozen snapshot and one expiring runtime-owned `aml_set_state` capability on only its selected outer Agent. Tool calls serialize in invocation order, validate complete patches atomically, reject unknown initial-state keys, remain staged through FollowUps, and cannot publish after the provider session ends. Changed state discards stale output, reserves one evaluation-wide transition, and starts a fresh session; stable state returns the current output. `maxStateTransitions` defaults to sixteen and zero is unlimited. Loop outer selection supports transparent asynchronous components, Fragments, arrays, Promises, component-local `evaluate()`, depth and cycle boundaries, and cancellation without running later wrappers. Standard Schema input and output remain distinct so self-normalizing defaults and transformations can normalize authored initial state before the first rendered snapshot. Schema-bearing `evaluate()` rejects Loops in prompt, System, Skill, and FollowUp channels so its exactly-one-Agent contract cannot be bypassed. Singular review found that structured-evaluation escape, missing selector cancellation parity, tuple widening in `DeepReadonly`, conflated and then over-broad schema input/output typing, an unused callback parameter, and stale tracker ownership. The corrected implementation has direct regressions for every code issue plus stable schema normalization and detached asynchronous Tool validation. One hundred eighty-one SDK tests, forty-four OpenCode tests, fifteen Docker Sandbox tests, twelve local Workspace tests, all seventeen workspace type-check targets, all four dist/package proofs, the dist-backed Loop example, and diff validation pass. Final intent, correctness, architecture, maintainability, security, and concurrency review lanes reported no actionable findings.
+
 #### Slice 14 — Codex Agent package
 
 - create `@aml/agent-codex`
@@ -804,15 +811,16 @@ Before marking a slice `Done`:
 
 ## Immediate implementation boundary
 
-Slices 0 through 8 and the MVP are complete. The next implementation gate is Slice 9 only:
+Slices 0 through 13 and the MVP are complete. The next implementation gate is Slice 14 only:
 
-1. settle the provider-neutral MCP descriptor and Agent grant semantics in `SPEC.md`
-2. add `<Mcp>` and `defineMcpServer()` to `@aml/sdk`
-3. keep MCP lifecycle and transport ownership inside Agent providers
-4. extend deterministic and OpenCode provider proofs for session-scoped attachment and cleanup
-5. prove a declared MCP server is available to one Agent and absent from siblings
+1. settle the Codex adapter contract and provider-owned behavior in `SPEC.md`
+2. add the independently installable `@aml/agent-codex` package
+3. expose a side-effect-free configured `codexAgent()` factory through `defineAgentProvider()`
+4. keep Codex sessions, native capabilities, MCP attachment, credentials, usage, and cleanup inside the adapter
+5. pass provider conformance, package validation, deterministic adapter tests, and an opt-in credentialed integration
+6. run the same review example by changing injected Agent provider construction only
 
-No structured output, concurrency scheduler, FollowUp, Loop, CLI, website, Codex provider, Context, or unrelated primitive belongs in Slice 9.
+No observability consumer, Context implementation, CLI, website, Sandbox expansion, Workspace expansion, or unrelated primitive belongs in Slice 14.
 
 ## Explicitly deferred
 

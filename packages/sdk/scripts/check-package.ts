@@ -55,6 +55,7 @@ interface BuiltSdk {
   }
   readonly Fragment: unknown
   readonly FollowUp: unknown
+  readonly Loop: unknown
   readonly Mcp: unknown
   readonly Tool: unknown
   readonly Workspace: unknown
@@ -182,6 +183,7 @@ const {
   evaluate: componentEvaluate,
   Fragment: publicFragment,
   FollowUp: publicFollowUp,
+  Loop: publicLoop,
   Workspace: publicWorkspace,
   WorkspaceConflictError,
 } = (await import(pathToFileURL(resolvedEntries.index).href)) as BuiltSdk
@@ -241,6 +243,76 @@ const followUpOutput = await new AmlRuntime({
 if (followUpOutput !== "final") {
   throw new Error(
     `Unexpected built SDK FollowUp output: ${followUpOutput}`,
+  )
+}
+
+const loopSchema = {
+  "~standard": {
+    validate: (value: unknown) => {
+      const status =
+        typeof value === "object" && value !== null
+          ? Reflect.get(value, "status")
+          : undefined
+
+      return status === "pending" || status === "complete"
+        ? { value: { status } }
+        : { issues: [{ message: "invalid status" }] }
+    },
+    vendor: "package-check",
+    version: 1,
+  },
+}
+const loopPrompts: string[] = []
+const loopOutput = await new AmlRuntime({
+  agentProvider: {
+    name: "loop-package-check",
+    async run(request, context) {
+      loopPrompts.push(request.prompt)
+
+      if (request.prompt === "pending") {
+        const stateTool = request.tools.find(
+          (tool) =>
+            tool.kind === "javascript" &&
+            tool.name === "aml_set_state",
+        )
+
+        if (!stateTool?.execute) {
+          throw new Error(
+            "Built SDK Loop omitted its state capability",
+          )
+        }
+
+        await stateTool.execute(
+          { updates: { status: "complete" } },
+          context,
+        )
+        return { text: "stale" }
+      }
+
+      return { text: "current" }
+    },
+  },
+}).evaluate(
+  runtimeJsx(publicLoop, {
+    initial: { status: "pending" },
+    render: ({
+      state,
+    }: {
+      state: { readonly status: string }
+    }) =>
+      runtimeJsx(publicAgent, {
+        children: state.status,
+      }),
+    schema: loopSchema,
+  }),
+)
+
+if (
+  loopOutput !== "current" ||
+  loopPrompts.join("|") !== "pending|complete"
+) {
+  throw new Error(
+    "Built SDK Loop did not commit into a fresh Agent session",
   )
 }
 
@@ -593,6 +665,62 @@ try {
 
   if (mcpOutput !== "cross_copy_mcp") {
     throw new Error(`Unexpected cross-copy MCP output: ${mcpOutput}`)
+  }
+
+  // Primitive dispatch is also realm-wide. A Loop authored by copy B must be
+  // intercepted by copy A instead of invoking its sentinel component body.
+  const crossCopyLoopPrompts: string[] = []
+  const crossCopyLoopOutput = await new copyA.AmlRuntime({
+    agentProvider: {
+      name: "cross-copy-loop-provider",
+      async run(request, context) {
+        crossCopyLoopPrompts.push(request.prompt)
+
+        if (request.prompt === "pending") {
+          const stateTool = request.tools.find(
+            (tool) =>
+              tool.kind === "javascript" &&
+              tool.name === "aml_set_state",
+          )
+
+          if (!stateTool?.execute) {
+            throw new Error(
+              "Cross-copy Loop omitted its state capability",
+            )
+          }
+
+          await stateTool.execute(
+            { updates: { status: "complete" } },
+            context,
+          )
+          return { text: "stale" }
+        }
+
+        return { text: "cross-copy-current" }
+      },
+    },
+  }).evaluate(
+    copyB.jsx(copyBPackage.Loop, {
+      initial: { status: "pending" },
+      render: ({
+        state,
+      }: {
+        state: { readonly status: string }
+      }) =>
+        copyB.jsx(copyBPackage.Agent, {
+          children: state.status,
+        }),
+      schema: loopSchema,
+    }),
+  )
+
+  if (
+    crossCopyLoopOutput !== "cross-copy-current" ||
+    crossCopyLoopPrompts.join("|") !== "pending|complete"
+  ) {
+    throw new Error(
+      "Cross-copy Loop did not retain primitive and state semantics",
+    )
   }
 } finally {
   rmSync(copyFixtureDirectory, { force: true, recursive: true })

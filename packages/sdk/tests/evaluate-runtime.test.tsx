@@ -9,7 +9,11 @@ import {
 
 import { Agent } from "../src/components/agent/agent.js"
 import type { AgentProvider } from "../src/components/agent/agent-provider.js"
+import { FollowUp } from "../src/components/follow-up/follow-up.js"
+import { Loop } from "../src/components/loop/loop.js"
 import { Sandbox } from "../src/components/sandbox/sandbox.js"
+import { Skill } from "../src/components/skill/skill.js"
+import { System } from "../src/components/system/system.js"
 import { Workspace } from "../src/components/workspace/workspace.js"
 import type { AmlRenderable } from "../src/core/aml-node.js"
 import { AmlRuntime } from "../src/core/aml-runtime.js"
@@ -467,6 +471,71 @@ describe("component-local evaluate()", () => {
     await expect(
       new AmlRuntime().evaluate(<AdjacentText />),
     ).rejects.toThrow("cannot include text outside its <Agent>")
+  })
+
+  it("rejects nested Loops in every structured Agent message channel", async () => {
+    const State = z.object({ done: z.boolean() })
+    const provider = new DeterministicAgentProvider({
+      respond: () => ({
+        structured: { risks: [], summary: "unreachable" },
+        text: "",
+      }),
+    })
+    const nestedLoops: AmlRenderable[] = [
+      <Agent provider={provider}>
+        <Loop
+          initial={{ done: false }}
+          render={() => <Agent provider={provider}>prompt</Agent>}
+          schema={State}
+        />
+      </Agent>,
+      <Agent provider={provider}>
+        <System>
+          <Loop
+            initial={{ done: false }}
+            render={() => <Agent provider={provider}>system</Agent>}
+            schema={State}
+          />
+        </System>
+        prompt
+      </Agent>,
+      <Agent provider={provider}>
+        <Skill>
+          <Loop
+            initial={{ done: false }}
+            render={() => <Agent provider={provider}>skill</Agent>}
+            schema={State}
+          />
+        </Skill>
+        prompt
+      </Agent>,
+      <Agent provider={provider}>
+        prompt
+        <FollowUp>
+          <Loop
+            initial={{ done: false }}
+            render={() => <Agent provider={provider}>follow-up</Agent>}
+            schema={State}
+          />
+        </FollowUp>
+      </Agent>,
+    ]
+
+    for (const value of nestedLoops) {
+      async function Workflow() {
+        await evaluate(value, ResearchResult)
+        return "unreachable"
+      }
+
+      await expect(
+        new AmlRuntime().evaluate(<Workflow />),
+      ).rejects.toThrow(
+        "Structured evaluate() must resolve to exactly one <Agent>",
+      )
+    }
+
+    // No provider call may escape the schema-bearing evaluate() boundary.
+    expect(provider.calls).toHaveLength(0)
   })
 
   it("returns Standard Schema transformations rather than raw provider data", async () => {

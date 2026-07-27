@@ -39,6 +39,8 @@ Slice 11 adds one bounded Agent scheduler per evaluation domain. Independent com
 
 Slice 12 adds static flat `<FollowUp>` turns inside one Agent session. AML resolves the complete turn plan before provider execution, keeps Tool and MCP capabilities attached for the whole session, applies structured output only to the final turn, returns only the final response, and bounds authored inputs with `maxTurnsPerAgent`. `examples/follow-up` proves three authored turns enter one dist-backed session plan in declaration order.
 
+Slice 13 adds `<Loop>` for schema-validated transactional state between fresh Agent sessions. Each iteration receives one deeply frozen snapshot and one expiring `aml_set_state` capability on its selected outer Agent. Valid patches remain staged through the complete session, changed state discards stale output and commits into the next iteration, and stable state returns the current output. `examples/loop` proves the built SDK commits once and starts a new provider session with the updated prompt.
+
 Nothing under `poc/` is part of the new package or public API.
 
 ```sh
@@ -51,6 +53,7 @@ npm run example:concurrency
 npm run example:agent
 npm run example:docker
 npm run example:follow-up
+npm run example:loop
 npm run example:mcp
 npm run example:opencode
 npm run example:sandbox

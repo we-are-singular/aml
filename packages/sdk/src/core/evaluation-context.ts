@@ -8,10 +8,12 @@ import { EvaluationError } from "./evaluation-error.js"
 export class EvaluationContext {
   readonly #agentScheduler: AgentScheduler
   readonly #maxAgentCalls: number
+  readonly #maxStateTransitions: number
   readonly #runId = globalThis.crypto.randomUUID()
   readonly #signal: AbortSignal
   #agentCalls = 0
   #spanSequence = 0
+  #stateTransitions = 0
 
   /**
    * Creates evaluation-owned counters around the caller's cancellation signal.
@@ -19,6 +21,7 @@ export class EvaluationContext {
   constructor(
     maxAgentCalls: number,
     maxConcurrentAgents: number,
+    maxStateTransitions: number,
     signal: AbortSignal,
   ) {
     this.#agentScheduler = new AgentScheduler(
@@ -26,6 +29,7 @@ export class EvaluationContext {
       signal,
     )
     this.#maxAgentCalls = maxAgentCalls
+    this.#maxStateTransitions = maxStateTransitions
     this.#signal = signal
   }
 
@@ -65,6 +69,24 @@ export class EvaluationContext {
     }
 
     this.#agentCalls += 1
+  }
+
+  /**
+   * Reserves one complete Loop commit across the evaluation domain.
+   */
+  reserveStateTransition(name: string, iteration: number): void {
+    this.#signal.throwIfAborted()
+
+    if (
+      this.#maxStateTransitions !== 0 &&
+      this.#stateTransitions >= this.#maxStateTransitions
+    ) {
+      throw new EvaluationError(
+        `AML evaluation exceeded maxStateTransitions ${this.#maxStateTransitions} at Loop "${name}" iteration ${iteration}`,
+      )
+    }
+
+    this.#stateTransitions += 1
   }
 
   /**

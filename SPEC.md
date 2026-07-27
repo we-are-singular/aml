@@ -901,6 +901,8 @@ const research = await evaluate(
 
 With a schema, the supplied AML must resolve to exactly one Agent, optionally through Fragments, Context Providers, or ordinary function components. Non-empty text outside that Agent is invalid because it would create a second result channel. AML generates and snapshots draft 2020-12 JSON Schema before the provider boundary, sends that portable JSON document through `AgentRequest.output.jsonSchema`, and validates the provider's returned unknown value again through the original Standard Schema. Providers never receive or invoke the application-owned schema object. The component receives Standard Schema's inferred output, including an authored transformation; only the provider-facing value and JSON Schema must remain JSON.
 
+`<Loop>` is invalid anywhere inside a schema-bearing `evaluate()` subtree, including the selected Agent's prompt, System, Skill, and FollowUp channels. A Loop may open multiple fresh Agent sessions and therefore cannot satisfy the structured call's exactly-one-Agent execution contract.
+
 With FollowUps, the schema applies only to the final turn.
 
 ### 10.1 Invocation scope
@@ -1007,16 +1009,26 @@ const ResearchState = z.object({
 Props:
 
 ```ts
-interface LoopProps<State extends Record<string, unknown>> {
-  initial: State;
+interface LoopProps<
+  Schema extends StandardSchemaV1<
+    unknown,
+    Record<string, unknown>
+  >,
+> {
+  initial: StandardSchemaV1.InferInput<Schema>;
   name?: string;
   render(context: {
     iteration: number;
-    state: DeepReadonly<State>;
+    state: DeepReadonly<StandardSchemaV1.InferOutput<Schema>>;
   }): AmlRenderable;
-  schema: StandardSchemaV1<unknown, State>;
+  schema: StandardSchemaV1.InferOutput<Schema> extends
+    StandardSchemaV1.InferInput<Schema>
+      ? Schema
+      : never;
 }
 ```
+
+`initial` uses the schema input type while `render()` receives its object output type. Stable defaults and transformations may therefore normalize the initial value before the first immutable snapshot without making authors lie about either shape. The output type must be assignable to the input type because AML validates canonical output again and feeds committed snapshots back through the same schema. For example, an input field typed `string | number` may normalize to `number`; a schema accepting only `string` cannot normalize to `number` because its own canonical output would be invalid on the next validation.
 
 The render result must resolve to exactly one Agent, optionally through a Fragment, Context Provider, or function component. AML automatically grants only that Agent an `aml_set_state` Tool:
 
@@ -1025,6 +1037,20 @@ The render result must resolve to exactly one Agent, optionally through a Fragme
   updates: Record<string, unknown>;
 }
 ```
+
+The Tool accepts exactly one non-empty `updates` object and returns:
+
+```ts
+{
+  changed: boolean;
+  updated: string[];
+  willRepeat: boolean;
+}
+```
+
+`changed` reports whether this call changed the previously staged snapshot. `willRepeat` reports whether the complete staged snapshot currently differs from the iteration's immutable input. Concurrent calls are serialized in invocation order.
+
+`aml_set_state` is a runtime-owned capability required by Loop rather than an author-selected grant, so `allowedTools` does not remove it. The name remains reserved within the selected Agent: explicitly declaring another Tool named `aml_set_state` is a duplicate-capability error. Child Agents nested inside the selected Agent do not inherit it.
 
 ### 12.1 Transactional iteration
 
@@ -1038,7 +1064,9 @@ One iteration:
 6. returns the Agent text if staged state equals the snapshot
 7. otherwise discards the Agent text, commits state atomically, and repeats
 
-Every patch key must exist in the initial state. AML merges a patch and validates the complete object once. Coupled fields should be updated in one call so schema refinements observe one atomic proposal. Invalid patches leave staged state unchanged.
+Every patch key must exist in the validated initial snapshot. AML merges a patch and validates the complete object as one atomic proposal. Coupled fields should be updated in one call so schema refinements observe one atomic proposal. Invalid patches leave staged state unchanged.
+
+AML validates schema output again after cloning it as JSON. The two normalized values must be deeply equal, which permits stable defaults, stripping, and normalization while rejecting state schemas whose transformations drift on repeated parsing.
 
 State changes never re-evaluate the currently running Agent tree. No ancestor or sibling rerenders, and AML has no dependency-subscription graph.
 
