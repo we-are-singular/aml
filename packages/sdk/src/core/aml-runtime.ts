@@ -197,6 +197,11 @@ export interface AmlRuntimeOptions {
   readonly maxAgentCalls?: number
 
   /**
+   * Maximum active Agent provider calls. Zero disables the limit.
+   */
+  readonly maxConcurrentAgents?: number
+
+  /**
    * Maximum nested JSX node depth. Zero disables the limit.
    *
    * Arrays and Promises do not add semantic depth; Fragments and components do.
@@ -237,6 +242,7 @@ export class AmlRuntime {
   readonly #allowedMcpServers: ReadonlySet<string> | undefined
   readonly #allowedTools: ReadonlySet<string> | undefined
   readonly #maxAgentCalls: number
+  readonly #maxConcurrentAgents: number
   readonly #maxDepth: number
   readonly #sandboxEvaluator: SandboxEvaluator
   readonly #skillEvaluator: SkillEvaluator
@@ -247,6 +253,7 @@ export class AmlRuntime {
    */
   constructor(options: AmlRuntimeOptions = {}) {
     const maxAgentCalls = options.maxAgentCalls ?? 32
+    const maxConcurrentAgents = options.maxConcurrentAgents ?? 4
     const maxDepth = options.maxDepth ?? 16
 
     if (!Number.isSafeInteger(maxAgentCalls) || maxAgentCalls < 0) {
@@ -257,6 +264,15 @@ export class AmlRuntime {
 
     if (!Number.isSafeInteger(maxDepth) || maxDepth < 0) {
       throw new TypeError("maxDepth must be a non-negative safe integer")
+    }
+
+    if (
+      !Number.isSafeInteger(maxConcurrentAgents) ||
+      maxConcurrentAgents < 0
+    ) {
+      throw new TypeError(
+        "maxConcurrentAgents must be a non-negative safe integer",
+      )
     }
 
     this.#allowedMcpServers = captureAllowedNames(
@@ -274,6 +290,7 @@ export class AmlRuntime {
       ...(options.system === undefined ? {} : { system: options.system }),
     })
     this.#maxAgentCalls = maxAgentCalls
+    this.#maxConcurrentAgents = maxConcurrentAgents
     this.#maxDepth = maxDepth
     this.#sandboxEvaluator = new SandboxEvaluator(
       options.sandboxProvider,
@@ -302,21 +319,29 @@ export class AmlRuntime {
     // Each evaluation owns cancellation, limits, trace allocation, and cycle
     // tracking. No mutable execution state is shared between calls.
     const domain: EvaluationDomain = {
-      context: new EvaluationContext(this.#maxAgentCalls, signal),
+      context: new EvaluationContext(
+        this.#maxAgentCalls,
+        this.#maxConcurrentAgents,
+        signal,
+      ),
       workspaceDeclared: false,
     }
 
-    return (await this.#evaluateInDomain(
-      value,
-      domain,
-      {
-        depth: 0,
-        parentSpanId: undefined,
-        sandbox: undefined,
-        workspace: undefined,
-      },
-      undefined,
-    )) as string
+    try {
+      return (await this.#evaluateInDomain(
+        value,
+        domain,
+        {
+          depth: 0,
+          parentSpanId: undefined,
+          sandbox: undefined,
+          workspace: undefined,
+        },
+        undefined,
+      )) as string
+    } finally {
+      domain.context.close()
+    }
   }
 
   /**

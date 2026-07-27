@@ -1,10 +1,12 @@
 import type { AmlTraceIdentity } from "./trace-identity.js"
+import { AgentScheduler } from "./agent-scheduler.js"
 import { EvaluationError } from "./evaluation-error.js"
 
 /**
  * Owns cancellation and correlation identity for one complete evaluation.
  */
 export class EvaluationContext {
+  readonly #agentScheduler: AgentScheduler
   readonly #maxAgentCalls: number
   readonly #runId = globalThis.crypto.randomUUID()
   readonly #signal: AbortSignal
@@ -14,7 +16,15 @@ export class EvaluationContext {
   /**
    * Creates evaluation-owned counters around the caller's cancellation signal.
    */
-  constructor(maxAgentCalls: number, signal: AbortSignal) {
+  constructor(
+    maxAgentCalls: number,
+    maxConcurrentAgents: number,
+    signal: AbortSignal,
+  ) {
+    this.#agentScheduler = new AgentScheduler(
+      maxConcurrentAgents,
+      signal,
+    )
     this.#maxAgentCalls = maxAgentCalls
     this.#signal = signal
   }
@@ -40,9 +50,11 @@ export class EvaluationContext {
   }
 
   /**
-   * Reserves one provider call before side effects begin and enforces the limit.
+   * Reserves one provider call before it enters the scheduler.
    */
   reserveAgentCall(trace: AmlTraceIdentity): void {
+    this.#signal.throwIfAborted()
+
     if (
       this.#maxAgentCalls !== 0 &&
       this.#agentCalls >= this.#maxAgentCalls
@@ -53,5 +65,21 @@ export class EvaluationContext {
     }
 
     this.#agentCalls += 1
+  }
+
+  /**
+   * Schedules one reserved provider call in this domain.
+   */
+  async scheduleAgent<Result>(
+    operation: () => PromiseLike<Result> | Result,
+  ): Promise<Result> {
+    return await this.#agentScheduler.run(operation)
+  }
+
+  /**
+   * Releases scheduler listeners after every nested evaluation has settled.
+   */
+  close(): void {
+    this.#agentScheduler.close()
   }
 }

@@ -907,6 +907,8 @@ With FollowUps, the schema applies only to the final turn.
 
 `evaluate()` is available only while its component invocation is active. Awaited asynchronous work and a returned custom thenable retain access until AML observes that returned completion value settle. Synchronous components revoke access before their queued microtasks run. For native asynchronous components, JavaScript may run microtasks queued inside the component before AML's settlement reaction; those calls remain part of the active boundary and are joined, so authors must not use them as fire-and-forget work. Calls made after AML observes component settlement throw. Before leaving the component boundary, AML joins nested evaluations that are still active; an early `Promise.all()` rejection therefore cannot release an enclosing Sandbox or Workspace underneath another branch that is still running. Physical copies of the same SDK share the active component binding within one JavaScript realm, so a component and runtime do not lose the boundary merely because a package manager installed duplicate copies.
 
+The component-local capability is masked while AML validates an explicit Agent provider, invokes that provider, captures its response, and validates structured output. Provider callbacks, provider-owned accessors and thenables, schema validation callbacks, and JavaScript Tool callbacks reached through that provider cannot call `evaluate()` re-entrantly. Such a call rejects immediately rather than queuing an Agent behind a scheduler slot held by its own parent or injecting unauthored work into the active domain. Agent-as-Tool and provider-re-entrant Agent execution remain outside the normative model.
+
 Nested calls share the root evaluation's:
 
 - depth
@@ -928,6 +930,10 @@ const [review, audit] = await Promise.all([
 ```
 
 `maxConcurrentAgents` limits active Agent sessions. `Promise.all()` preserves result array order even when Agents finish out of order.
+
+The scheduler belongs to one evaluation domain. An Agent resolves its authored children, capabilities, Sandbox view, and structured-output contract before requesting a slot. AML reserves its Agent-call budget and then queues the complete provider call in ready order. A slot is held until `AgentProvider.run()` settles, including any provider-owned session and capability cleanup performed before that Promise resolves.
+
+`maxConcurrentAgents: 0` disables the concurrency limit. A positive value is the maximum number of provider calls active in that evaluation; separate root evaluations have separate schedulers. Aborting the evaluation propagates the caller's signal to active providers, rejects queued Agents with the caller's cancellation reason, and prevents those queued providers from starting. One Agent failure does not implicitly abort independent sibling work that the application already started.
 
 Use `Promise.allSettled()` only when partial failure is an explicit application decision. AML itself does not silently convert Agent failures into partial results.
 

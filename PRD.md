@@ -1,6 +1,6 @@
 # Agent Markup Language product requirements and delivery plan
 
-Status: Phase 1 — MVP complete; Slices 0–10 done; Slice 11 pending
+Status: Phase 1 — MVP complete; Slices 0–11 done; Slice 12 pending
 
 This is the living product definition, architecture plan, implementation roadmap, and progress tracker for AML. It is not a normative runtime contract. Settled behavior belongs in `SPEC.md`; this document records why AML exists, how it is organized, what is being built next, and which slices have been proven.
 
@@ -171,7 +171,7 @@ The status table is the canonical implementation tracker. A slice moves to `Done
 | Slice 8 | Local Workspace package and MVP completion | Done |
 | Slice 9 | `<Mcp>` and `defineMcpServer()` | Done |
 | Slice 10 | `evaluate()` and structured results | Done |
-| Slice 11 | Bounded Agent concurrency | Pending |
+| Slice 11 | Bounded Agent concurrency | Done |
 | Slice 12 | `<FollowUp>` | Pending |
 | Slice 13 | `<Loop>` | Pending |
 | Slice 14 | Codex Agent package | Pending |
@@ -453,6 +453,7 @@ Each implementation file has one primary export whose name matches the filename:
 | `standard-schema-adapter.ts` | `StandardSchemaAdapter` |
 | `model-schema.ts`          | `ModelSchema`          |
 | `component-evaluation-context.ts` | `ComponentEvaluationContext` |
+| `agent-scheduler.ts`        | `AgentScheduler`        |
 | `evaluate.ts`              | `evaluate`             |
 | `tool-input-error.ts`      | `ToolInputError`      |
 | `tool-output-error.ts`     | `ToolOutputError`     |
@@ -725,6 +726,8 @@ Status: Done on 2026-07-27. The SDK now exposes ordinary asynchronous component-
 - demonstrate explicit `Promise.all()` branches
 
 Proof: two specialists run concurrently, feed one coordinator in declared result order, and never exceed the configured Agent-call limit.
+
+Status: Done on 2026-07-27. Every root evaluation now owns one `AgentScheduler` backed by `p-limit` 7.3.1. `maxConcurrentAgents` defaults to four, zero remains unlimited, complete provider calls occupy slots until their session and capability cleanup settles, ready calls queue FIFO, separate roots remain independent, and ordinary JSX siblings remain serial unless application code explicitly starts branches with `Promise.all()`. Cancellation reaches active providers through the existing signal and clears queued calls with the caller's exact reason before provider code starts. Provider validation, compatibility checks, Promise assimilation, Tool chains, response accessors, and structured validation run without the component-local `evaluate()` capability, so unsupported provider-reentrant Agent execution rejects instead of injecting unauthored work or self-deadlocking a full semaphore. Singular review found Agent-call budget errors misattributed as provider failures, missing failed-slot and root-isolation proofs, and multiple re-entrant escapes through provider callbacks, custom thenables, response values, and provider accessors. The corrected boundaries preserve AML error ownership and mask every provider-owned execution path. One hundred forty-eight SDK tests, full workspace type checking, the SDK dist/package proof, and the dist-backed concurrency example pass; the example demonstrates two active specialists completing out of order while synthesis receives authored result order. Final correctness, architecture, and skeptical security review lanes reported no actionable findings.
 
 #### Slice 12 — `<FollowUp>`
 

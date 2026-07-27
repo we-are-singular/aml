@@ -1,3 +1,4 @@
+import { ComponentEvaluationContext } from "../../core/component-evaluation-context.js"
 import type { EvaluationContext } from "../../core/evaluation-context.js"
 import { EvaluationError } from "../../core/evaluation-error.js"
 import type { AmlTraceIdentity } from "../../core/trace-identity.js"
@@ -53,9 +54,13 @@ export class AgentExecutor {
       throw new EvaluationError("<Agent> system must be a string")
     }
 
-    return props.provider === undefined
+    const explicitProvider = props.provider
+
+    return explicitProvider === undefined
       ? this.#agentProvider
-      : validateAgentProvider(props.provider)
+      : ComponentEvaluationContext.withoutAccess(() =>
+          validateAgentProvider(explicitProvider),
+        )
   }
 
   /**
@@ -79,18 +84,23 @@ export class AgentExecutor {
       )
     }
 
+    const provider = input.provider
+
     // Compatibility is an explicit fail-closed handshake. A provider that
     // ignores the scope would otherwise run model-controlled actions on host.
     if (input.sandbox !== undefined) {
       let supported = false
+      const supportsSandbox = provider.supportsSandbox
 
       try {
         supported =
-          input.provider.supportsSandbox !== undefined &&
-          Reflect.apply(
-            input.provider.supportsSandbox,
-            input.provider.provider,
-            [input.sandbox],
+          supportsSandbox !== undefined &&
+          ComponentEvaluationContext.withoutAccess(() =>
+            Reflect.apply(
+              supportsSandbox,
+              provider.provider,
+              [input.sandbox],
+            ),
           ) === true
       } catch (cause) {
         throw new EvaluationError(
@@ -145,21 +155,41 @@ export class AgentExecutor {
       trace: input.trace,
     })
 
-    // Reserve only after the complete plan exists and immediately before the
-    // provider boundary, so rejected descendants do not consume call budget.
+    // Reserve only after the complete plan exists. Limit errors belong to AML,
+    // not the provider failure boundary below.
     input.context.reserveAgentCall(input.trace)
 
+    let providerStarted = false
     let response: AgentResponse
 
     try {
-      response = await Reflect.apply(
-        input.provider.run,
-        input.provider.provider,
-        [request, agentContext],
+      // Scheduling begins only after the complete Agent plan exists. The slot
+      // covers provider-owned session and capability cleanup because run()
+      // cannot settle until the adapter has finished that lifecycle.
+      response = await input.context.scheduleAgent(
+        () => {
+          providerStarted = true
+          // The async wrapper is created inside exit(), so Promise/thenable
+          // assimilation and every provider-created continuation remain masked.
+          return ComponentEvaluationContext.withoutAccess(async () =>
+            await Reflect.apply(
+              provider.run,
+              provider.provider,
+              [request, agentContext],
+            ),
+          )
+        },
       )
     } catch (cause) {
+      if (!providerStarted && input.context.signal.aborted) {
+        throw new EvaluationError(
+          `Agent "${provider.name}" (${input.trace.spanId}) was cancelled before provider execution`,
+          { cause },
+        )
+      }
+
       throw new EvaluationError(
-        `Agent "${input.provider.name}" (${input.trace.spanId}) failed`,
+        `Agent "${provider.name}" (${input.trace.spanId}) failed`,
         { cause },
       )
     }
@@ -175,7 +205,9 @@ export class AgentExecutor {
     let text: unknown
 
     try {
-      text = (response as { readonly text?: unknown }).text
+      text = ComponentEvaluationContext.withoutAccess(
+        () => (response as { readonly text?: unknown }).text,
+      )
     } catch (cause) {
       throw new EvaluationError(
         `Agent "${input.provider.name}" (${input.trace.spanId}) returned an invalid response`,
@@ -197,8 +229,18 @@ export class AgentExecutor {
     let structured: unknown
 
     try {
-      hasStructured = Reflect.has(response, "structured")
-      structured = Reflect.get(response, "structured")
+      const captured = ComponentEvaluationContext.withoutAccess(() => {
+        const present = Reflect.has(response, "structured")
+
+        return {
+          hasStructured: present,
+          structured: present
+            ? Reflect.get(response, "structured")
+            : undefined,
+        }
+      })
+      hasStructured = captured.hasStructured
+      structured = captured.structured
     } catch (cause) {
       throw new EvaluationError(
         `Agent "${input.provider.name}" (${input.trace.spanId}) returned an invalid structured response`,
@@ -215,7 +257,14 @@ export class AgentExecutor {
     let validated: unknown
 
     try {
-      validated = await input.output.validate(structured)
+      const output = input.output
+
+      // Structured values remain provider-owned until JSON capture completes.
+      // Mask both nested accessors and custom schema thenables from re-entering
+      // the component domain while the Agent result boundary is active.
+      validated = await ComponentEvaluationContext.withoutAccess(
+        async () => await output.validate(structured),
+      )
     } catch (cause) {
       throw new EvaluationError(
         `Agent "${input.provider.name}" (${input.trace.spanId}) returned invalid structured output`,

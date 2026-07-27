@@ -35,6 +35,8 @@ Slice 9 adds Agent-scoped `<Mcp>` grants and `defineMcpServer()` descriptors for
 
 Slice 10 adds component-local `evaluate()` for ordinary awaited text or typed structured Agent results. Schema-bearing calls accept the combined Standard Schema and Standard JSON Schema contract, send only an immutable draft 2020-12 JSON document to the provider, validate the returned value at the Agent boundary, and never suspend or rerender the component. `examples/structured` passes a Zod 4 result from one specialist into a later coordinator through built package exports.
 
+Slice 11 adds one bounded Agent scheduler per evaluation domain. Independent components opt into concurrency with ordinary `Promise.all()`, ready provider calls enter a FIFO queue, cancellation rejects queued calls before their providers start, and `maxConcurrentAgents: 0` remains explicitly unlimited. `examples/concurrency` runs two specialists in parallel and preserves authored result order for their coordinator.
+
 Nothing under `poc/` is part of the new package or public API.
 
 ```sh
@@ -43,6 +45,7 @@ npm run typecheck
 npm run test
 npm run pack:check
 npm run example:basic
+npm run example:concurrency
 npm run example:agent
 npm run example:docker
 npm run example:mcp

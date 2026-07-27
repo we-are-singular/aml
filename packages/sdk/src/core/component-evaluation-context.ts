@@ -71,6 +71,17 @@ export class ComponentEvaluationContext {
   }
 
   /**
+   * Masks component-local evaluation from provider-owned callback chains.
+   *
+   * A provider that awaited another Agent while retaining its current scheduler
+   * slot could deadlock the domain. Agent-as-Tool is intentionally not part of
+   * the current execution model, so this boundary fails closed.
+   */
+  static withoutAccess<Result>(operation: () => Result): Result {
+    return ComponentEvaluationContext.#storage.exit(operation)
+  }
+
+  /**
    * Invokes one component exactly once with a scoped nested evaluator.
    */
   static async invoke(

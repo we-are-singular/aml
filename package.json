@@ -12,6 +12,7 @@
     "build": "turbo run build",
     "example:agent": "turbo run example --filter=@aml/example-agent",
     "example:basic": "turbo run example --filter=@aml/example-basic",
+    "example:concurrency": "turbo run example --filter=@aml/example-concurrency",
     "example:docker": "turbo run example --filter=@aml/example-docker",
     "example:mcp": "turbo run example --filter=@aml/example-mcp",
     "example:opencode": "turbo run example --filter=@aml/example-opencode",
