@@ -25,6 +25,8 @@ Slice 4 adds `<Skill>` as local or inline instruction text. Local files are read
 
 Slice 5 adds provider-neutral `<Sandbox>` scopes, `defineSandboxProvider()`, opaque leases, restrictive nested policy views, and an explicit compatibility handshake for Agent providers. AML acquires one outer lease before descendant work and releases it exactly once after success, failure, or cancellation; providers remain responsible for real confinement. `examples/sandbox` proves the built SDK passes a narrowed session to an Agent and cleans up its deterministic lease.
 
+Slice 6 adds the independently installable `@aml/sandbox-docker` adapter. Its Dockerode-backed factory creates one same-host container per outer Sandbox lease with a confined bind mount, no network, no Linux capabilities, a non-root numeric UID, resource limits, bounded command output, and failure-safe cleanup. `examples/docker` proves an Agent-local working directory and the primary confinement settings against a real Docker daemon.
+
 Nothing under `poc/` is part of the new package or public API.
 
 ```sh
@@ -34,9 +36,12 @@ npm run test
 npm run pack:check
 npm run example:basic
 npm run example:agent
+npm run example:docker
 npm run example:opencode
 npm run example:sandbox
 npm run example:skill
 ```
 
 `npm run example:opencode` is an explicit live model call. Set `AML_OPENCODE_MODEL` to override its default model.
+
+`npm run example:docker` requires a running same-filesystem Docker daemon, a host workspace writable during acquisition, and an `alpine:3.22` image by default. Set `AML_DOCKER_IMAGE` to use another image that provides POSIX `sh` and `sleep`.

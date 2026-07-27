@@ -1,0 +1,28 @@
+{
+  "name": "@aml/sandbox-docker",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "sideEffects": false,
+  "files": [
+    "dist"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "dependencies": {
+    "@aml/sdk": "*",
+    "@types/dockerode": "^4.0.1",
+    "dockerode": "^5.0.1"
+  },
+  "scripts": {
+    "build": "vite build && tsc --project tsconfig.build.json",
+    "pack:check": "npm run build && node scripts/check-package.ts",
+    "test": "vitest run",
+    "test:integration": "AML_DOCKER_TEST=1 vitest run tests/docker-sandbox.integration.test.tsx",
+    "typecheck": "tsc --noEmit"
+  }
+}

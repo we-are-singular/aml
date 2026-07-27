@@ -6,7 +6,7 @@
       "outputs": ["dist/**"]
     },
     "example": {
-      "dependsOn": ["@aml/sdk#build"],
+      "dependsOn": ["^build"],
       "cache": false
     },
     "test": {

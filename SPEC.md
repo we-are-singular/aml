@@ -1228,26 +1228,31 @@ await runtime.evaluate(
 );
 ```
 
-The factory requires an explicit host `workspace` and exactly one of `image` or `dockerfile`. `buildContext`, CPU, memory, PID, tmpfs, user, and injected Docker client settings are provider configuration, not AML props.
+The factory requires an explicit host `workspace` and exactly one of `image` or `dockerfile`. `buildContext`, `cpus`, `maxOutputBytes`, `memoryBytes`, `pidsLimit`, `tmpfsBytes`, `user`, and an injected Dockerode client are provider configuration, not AML props. `user` is a numeric non-zero UID with an optional numeric non-zero GID. The injected client must use a local socket, and the Docker daemon must resolve paths in the same filesystem namespace as the AML process. A local socket alone does not prove that condition, so every acquisition creates, mounts, reads, and removes a random identity beneath the exact selected root before exposing the lease. The selected host root must therefore be writable by the AML process during acquisition even when the container receives `"read-only"` access; no probe remains when descendant AML begins. Remote Docker providers require an explicit Workspace transfer or volume contract and are outside this provider.
+
+The configured image must contain POSIX `sh` and `sleep`; the provider replaces its entrypoint with a shell keepalive process for the lease lifetime. Dockerfile builds run with networking disabled. The provider uses Dockerode for Docker Engine transport, container lifecycle, exec streams, BuildKit-aware progress, and image builds; AML-specific code owns only policy translation, real-path confinement, cancellation compensation, output limits, and lease cleanup.
 
 At acquisition the provider:
 
 1. resolves the configured workspace and requested root through the host filesystem
 2. rejects roots or working directories whose real paths escape through a symlink
 3. mounts only the selected root at `/workspace`
-4. makes that bind mount read-only when AML access is `"read-only"`
-5. disables networking
-6. drops all Linux capabilities and enables `no-new-privileges`
-7. runs as a non-root UID
-8. makes the container root filesystem read-only with a bounded `/tmp`
-9. applies CPU, memory, and PID limits
-10. removes the container when the Sandbox lease releases
+4. proves the daemon sees the same workspace through an ephemeral read-only identity mount
+5. makes the workspace bind mount read-only when AML access is `"read-only"`
+6. disables networking
+7. drops all Linux capabilities and enables `no-new-privileges`
+8. runs as a non-root UID
+9. makes the container root filesystem read-only with a bounded `/tmp`
+10. applies CPU, memory, and PID limits
+11. removes the container when the Sandbox lease releases
 
-The lease handle exposes argument-array `exec()` without a host shell. A compatible Agent adapter can use it while keeping model-controlled commands inside the container.
+Container creation is not transport-aborted because an aborted HTTP request cannot prove the Engine abandoned the operation. Cancellation waits for creation to settle and then removes the returned container. If creation fails through an ambiguous transport error, the provider performs documented bounded reconciliation against its preallocated unique name. Finding the resource causes removal. Repeated absence does not prove cleanup, so exhausting reconciliation raises an aggregate cleanup error instead of reporting successful compensation.
+
+The lease handle exposes argument-array `exec()` without a host shell. Every call requires the effective `SandboxSession.cwd`; this prevents an Agent-local `cwd` from silently falling back to the outer lease directory. A compatible Agent adapter can use the handle while keeping model-controlled commands inside the container.
 
 One container cannot enforce a narrower nested filesystem root or downgrade an existing read-write bind mount to read-only merely by changing `cwd`. `supportsDockerSandbox(session)` therefore rejects effective sessions whose root or access differs from the acquired lease. Another adapter may enforce narrowing through constrained tools, an inner process sandbox, or a distinct explicit fork operation; it must not claim enforcement based on working directory alone.
 
-Docker is a useful local process/filesystem boundary, not a hostile multi-tenant security guarantee. It shares the host kernel and trusts the Docker daemon. The provider never mounts the Docker socket.
+Docker is a useful same-host process/filesystem boundary, not a hostile multi-tenant security guarantee. It shares the host kernel and trusts the local Docker daemon. The provider never mounts the Docker socket.
 
 Docker provider conformance tests must cover read-only and read-write bind behavior, non-root execution, zero effective capabilities, disabled networking, hidden host-sibling paths, read-only container root, persisted read-write changes, and container removal. Real-daemon tests must remain an explicit integration-test target.
 

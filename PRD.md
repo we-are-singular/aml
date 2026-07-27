@@ -166,7 +166,7 @@ The status table is the canonical implementation tracker. A slice moves to `Done
 | Slice 3 | `<Tool>` and `defineTool()` | Done |
 | Slice 4 | `<Skill>` | Done |
 | Slice 5 | `<Sandbox>` contract | Done |
-| Slice 6 | Docker Sandbox package | Pending |
+| Slice 6 | Docker Sandbox package | Done |
 | Slice 7 | `<Workspace>` contract | Pending |
 | Slice 8 | Local Workspace package and MVP completion | Pending |
 | Slice 9 | `<Mcp>` and `defineMcpServer()` | Pending |
@@ -652,6 +652,8 @@ Status: Done on 2026-07-27. The SDK now exposes a provider-neutral Sandbox contr
 - pass SDK conformance and explicit real-daemon integration tests
 
 Proof: the Docker package proves read-only and read-write confinement, cleanup, and packaged installation without adding Docker dependencies to `@aml/sdk`.
+
+Status: Done on 2026-07-27. `@aml/sandbox-docker` now uses Dockerode for Engine transport, lifecycle, exec demultiplexing, BuildKit-aware progress, and image builds while keeping AML-specific policy translation in the adapter. The configured factory accepts a same-filesystem local-socket client, one image or Dockerfile, an approved workspace, numeric non-root identity, resource limits, and bounded command output. Each outer Sandbox receives one container with a real-path-confined bind mount, an exact-root workspace-namespace identity check, disabled networking, zero capabilities, `no-new-privileges`, a read-only root filesystem, bounded tmpfs, and failure-safe removal. The selected host root must be writable during acquisition so AML can remove the transient identity before descendants run; container `"read-only"` access remains enforced by the bind mount. Agent adapters must pass the effective `SandboxSession.cwd` into every argument-array exec call, so Agent-local working directories cannot silently fall back to the outer lease cwd. Singular review found abort/create cleanup races, unsafe remote-daemon and mount-namespace semantics, ambiguous transport failures, root-capable user overrides, conflicting cwd sources, and an overgrown provider module; the corrected implementation waits for definitive creation before cancellation cleanup, reconciles ambiguous create failures by unique name without declaring uncertain absence safe, verifies the daemon sees a random identity beneath the exact selected source, rejects network clients and root identities, removes the stale handle cwd, and separates configuration, command output, and build-progress ownership. Thirteen deterministic tests, five real-daemon tests, eighty-five SDK tests, twenty-one OpenCode tests, workspace type checking and builds, all three dist/package checks, the built-package Docker example, and diff validation pass. Final correctness, maintainability, and skeptical review lanes reported no actionable findings.
 
 #### Slice 7 — `<Workspace>` contract
 

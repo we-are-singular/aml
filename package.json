@@ -12,10 +12,11 @@
     "build": "turbo run build",
     "example:agent": "turbo run example --filter=@aml/example-agent",
     "example:basic": "turbo run example --filter=@aml/example-basic",
+    "example:docker": "turbo run example --filter=@aml/example-docker",
     "example:opencode": "turbo run example --filter=@aml/example-opencode",
     "example:sandbox": "turbo run example --filter=@aml/example-sandbox",
     "example:skill": "turbo run example --filter=@aml/example-skill",
-    "pack:check": "npm run pack:check --workspace=@aml/sdk && npm run pack:check --workspace=@aml/agent-opencode",
+    "pack:check": "npm run pack:check --workspace=@aml/sdk && npm run pack:check --workspace=@aml/agent-opencode && npm run pack:check --workspace=@aml/sandbox-docker",
     "test": "turbo run test",
     "typecheck": "turbo run typecheck"
   },
