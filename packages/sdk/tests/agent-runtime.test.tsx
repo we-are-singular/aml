@@ -9,6 +9,7 @@ import type { AmlRenderable } from "../src/core/aml-node.js"
 import { AmlRuntime } from "../src/core/aml-runtime.js"
 import { EvaluationError } from "../src/core/evaluation-error.js"
 import { jsx } from "../src/jsx-runtime.js"
+import type { AmlTraceEvent } from "../src/observability/trace-event.js"
 import { agentProviderConformance } from "../src/testing/agent-provider-conformance.js"
 import { DeterministicAgentProvider } from "../src/testing/deterministic-agent-provider.js"
 
@@ -43,6 +44,7 @@ describe("Agent", () => {
 
   it("resolves child Agents and System subtrees before their parent", async () => {
     const events: string[] = []
+    const traceEvents: AmlTraceEvent[] = []
     const specialist = new DeterministicAgentProvider({
       name: "specialist",
       respond(request) {
@@ -96,7 +98,10 @@ describe("Agent", () => {
       provider: coordinator,
       system: " fixed system ",
     })
-    const runtime = new AmlRuntime({ system: " runtime system " })
+    const runtime = new AmlRuntime({
+      system: " runtime system ",
+      trace: (event) => traceEvents.push(event),
+    })
 
     await expect(runtime.evaluate(tree)).resolves.toBe("final answer")
     expect(events).toEqual([
@@ -108,9 +113,15 @@ describe("Agent", () => {
     ])
 
     const parentTrace = coordinator.calls[0]?.context.trace
+    const systemSpan = traceEvents.find(
+      (event) =>
+        event.type === "span.start" &&
+        event.kind === "system",
+    )
+
     expect(parentTrace).toBeDefined()
     expect(specialist.calls[0]?.context.trace.parentSpanId).toBe(
-      parentTrace?.spanId,
+      systemSpan?.spanId,
     )
     expect(specialist.calls[1]?.context.trace.parentSpanId).toBe(
       parentTrace?.spanId,
@@ -118,6 +129,22 @@ describe("Agent", () => {
     expect(specialist.calls[0]?.context.trace.runId).toBe(
       parentTrace?.runId,
     )
+
+    // Providers receive the exact identity published for their Agent span;
+    // correlation must never assign two parents to one span ID.
+    for (const call of [
+      ...specialist.calls,
+      ...coordinator.calls,
+    ]) {
+      expect(
+        traceEvents.find(
+          (event) =>
+            event.type === "span.start" &&
+            event.kind === "agent" &&
+            event.spanId === call.context.trace.spanId,
+        ),
+      ).toMatchObject(call.context.trace)
+    }
   })
 
   it("accepts System descriptors returned through components", async () => {

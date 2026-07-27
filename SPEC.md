@@ -755,7 +755,9 @@ A Tool outside an Agent is invalid. Duplicate names in one Agent are invalid. Tr
 
 ### 8.4 Transport input normalization
 
-The declared input schema remains authoritative. Every provider transport uses this exact algorithm:
+The declared input schema remains authoritative. Before schema validation, AML snapshots every non-omitted provider value once into stable JSON and uses that same snapshot whether content tracing is disabled or enabled. This prevents stateful accessors or proxies from presenting different data to tracing and validation. Invalid transport JSON throws `ToolInputError`; omitted input remains `undefined` for the schema algorithm below.
+
+Every provider transport then uses this exact algorithm:
 
 1. If the received value satisfies the schema, preserve it unchanged.
 2. If input is omitted, use `{}` only when `{}` satisfies the schema.
@@ -1653,32 +1655,87 @@ One multi-turn Agent counts as one Agent session, not one call per FollowUp. Eve
 
 ### 16.1 Trace contract
 
-The trace sink receives typed events for:
+AML publishes one immutable, provider-neutral event stream:
 
-- evaluation start, completion, and failure
-- component start, completion, and failure
-- Agent session start, completion, and failure
-- Agent turns and their ordering
-- System resolution and fragment ordering
-- Skill file/inline resolution and optional labels
-- JavaScript Tool start, completion, and failure
-- MCP attachment, initialization, capability summary, disconnection, and failure
-- committed Loop transitions
-- Sandbox acquisition, nested scope, release, and failure
-- provider-specific session and usage events
-- Workspace acquisition, materialization, save, release, and failure
+```ts
+type AmlTraceAttribute =
+  | boolean
+  | number
+  | string
+  | readonly string[];
 
-Every AML event includes `runId` and `spanId`; nested events include `parentSpanId`. Completion and failure reuse the start span.
+type AmlTraceSpanKind =
+  | "evaluation"
+  | "component"
+  | "agent"
+  | "system"
+  | "skill"
+  | "tool"
+  | "loop"
+  | "sandbox"
+  | "workspace";
 
-Agent session numbers are allocated after post-order descendants resolve, when their sessions are scheduled. FollowUps remain inside the same Agent span. Turn indices are one-based: the initial prompt is turn `1`, and the first FollowUp is turn `2`.
+type AmlTraceEvent =
+  | {
+      type: "span.start";
+      kind: AmlTraceSpanKind;
+      name: string;
+      attributes: Readonly<Record<string, AmlTraceAttribute>>;
+      runId: string;
+      spanId: string;
+      parentSpanId?: string;
+      sequence: number;
+      timestamp: number;
+    }
+  | {
+      type: "span.end";
+      kind: AmlTraceSpanKind;
+      name: string;
+      status: "ok" | "error";
+      durationMs: number;
+      attributes: Readonly<Record<string, AmlTraceAttribute>>;
+      runId: string;
+      spanId: string;
+      parentSpanId?: string;
+      sequence: number;
+      timestamp: number;
+    }
+  | {
+      type: "event";
+      name:
+        | "agent.turn"
+        | "capability.mcp"
+        | "capability.tool"
+        | "loop.transition";
+      attributes: Readonly<Record<string, AmlTraceAttribute>>;
+      runId: string;
+      spanId: string;
+      parentSpanId?: string;
+      sequence: number;
+      timestamp: number;
+    };
 
-Provider reasoning is not part of AML's stable trace contract.
+interface TraceSink {
+  (event: AmlTraceEvent): void;
+  readonly captureContent?: boolean;
+}
+```
 
-Trace sinks are synchronous and must return `void`. Their errors cannot change workflow behavior. `onTraceError(error, event)` receives failures through an isolated secondary channel; otherwise AML emits one compact stderr warning. Errors from the secondary handler are swallowed.
+The event stream covers evaluation and component execution, Agent sessions and authored turns, System and Skill resolution, JavaScript Tool calls, committed Loop transitions, and Sandbox and Workspace scope lifecycles. Tool and MCP descriptor events describe capability grants; they do not claim that a provider completed a remote attachment lifecycle AML cannot observe. `capability.tool` identifies the Tool `name` and whether its `kind` is `host` or `javascript`. `capability.mcp` identifies the server `name` and whether its `kind` is `named`, `stdio`, or `streamable-http`; it never includes transport configuration.
 
-Prompts, Skill contents, Tool input/output, MCP configuration, filesystem paths, and model output may be sensitive.
+Every event includes `runId`, `spanId`, a monotonically increasing evaluation-local `sequence`, and a Unix-millisecond `timestamp`. Nested events include `parentSpanId`. `span.end` reuses its `span.start` identity and reports non-negative elapsed milliseconds. An evaluation span is the root ancestor of every other span, including component-local `evaluate()` calls and concurrently scheduled Agents. Each lexical execution boundary is the direct parent of the subtree it evaluates: a component returning an Agent owns that Agent span, and Workspace, Sandbox, Loop, System, and Skill descendants remain beneath their corresponding spans.
 
-`createConsoleTracer()` provides human-readable output. `createOpenTelemetryTraceSink()` maps the same event tree to OpenTelemetry spans. Content is omitted by default; `captureContent: true` explicitly opts into sensitive prompt and output attributes.
+Agent spans begin when the runtime enters the authored Agent, before Agent-specific prop and Sandbox preflight, and include post-order request assembly plus the provider session. The runtime closes a successful Agent span only after its result enters the parent AML output channel. FollowUps remain inside that Agent span. `agent.turn` events are emitted in authored order at the provider handoff: the initial prompt is turn `1`, and the first FollowUp is turn `2`. Provider-internal reasoning, retries, tool loops, token accounting, and usage records are not part of the stable Slice 15 contract because the portable provider interface cannot observe them consistently.
+
+Trace sinks are captured by `AmlRuntime` and each evaluation creates its own dispatcher, ordering counter, root span, and failure-warning state. A sink receives deeply immutable snapshots rather than request, response, Tool, provider, lease, or component objects. It runs outside component-local `evaluate()` access and cannot mutate workflow inputs or results through the trace API.
+
+Trace sinks are synchronous and should return `void`. A thrown error or returned thenable cannot change workflow behavior. Returned thenables are contract failures because AML never awaits observers; their later rejection is still consumed and reported. `onTraceError(error, event)` receives failures through an isolated secondary channel; otherwise AML emits at most one compact stderr warning per evaluation. Errors and asynchronous rejections from the secondary handler are swallowed.
+
+Prompts, System and Skill contents, Tool input/output, MCP configuration, filesystem paths, and model output may be sensitive. These values are omitted by default. A sink with `captureContent: true` explicitly opts into the content fields the stable runtime owns. JavaScript Tool spans serialize the already captured transport input as `input` on `span.start` and the stable Tool result as `output` on a successful `span.end`. Serialization failure for unusually deep JSON omits optional content without replacing Tool validation or execution. Credential-bearing MCP configuration and provider-private diagnostics are never copied into AML events.
+
+`createConsoleTracer()` renders the same event tree with indentation, span status, elapsed time, safe attributes, and optional captured content. A custom writer remains subject to the synchronous sink contract; throws and returned thenables are isolated and reported through the runtime trace-error channel. OpenTelemetry remains a possible consumer package after the event contract is proven; Slice 15 does not export `createOpenTelemetryTraceSink()` or add an OpenTelemetry dependency.
+
+Hookable is not the internal dispatcher. Its awaitable sequential hooks and rejecting error semantics require an isolation wrapper that would be larger than the evaluation-owned synchronous dispatcher and would invite unrelated plugin lifecycle into the runtime. This decision may be revisited only if AML approves multiple asynchronous lifecycle subscribers whose work is intentionally awaited.
 
 ### 16.2 Agent adapter requirements
 
@@ -1724,7 +1781,6 @@ The OpenCode adapter:
 - supports native structured output where available
 - uses a JSON-only prompt fallback for `opencode-go`
 - filters private reasoning from AML traces
-- records session events, visible response parts, tokens, and cost
 
 In the text-only delivery slice, all tools are disabled and no capability is enabled. The returned AML text concatenates only visible OpenCode text parts in response order; synthetic, ignored, tool, reasoning, and lifecycle parts do not contribute.
 
@@ -1780,7 +1836,7 @@ The Codex adapter:
 
 Configured stdio and Streamable HTTP MCP descriptors map directly to Codex `mcp_servers` configuration. Named grants enable an existing Codex MCP server by exact name. Factory-supplied `config.mcp_servers` entries can be retained directly, but their absence does not prove that a name is missing from ambient repository or user configuration. The adapter therefore sends an enabled, required exact-name overlay and delegates late-bound resolution or fail-closed rejection to the real Codex CLI. Injected `CodexClientFactory` implementations must preserve that contract. Codex-compatible MCP names use letters, digits, `_`, and `-`; the adapter rejects names that cannot be represented safely through the SDK's dotted configuration override interface. Duplicate names reject before any bridge or thread starts.
 
-Codex configuration still inherits the selected host's normal configuration sources. This can include `AGENTS.md`, repository and user skills, plugins, rules, and MCP servers not authored in the AML tree. Invocation overrides for developer instructions, safety settings, declared MCP servers, and shell availability take precedence, but AML does not claim that the resulting Codex profile is empty or capability-isolated. Provider-neutral traces must identify this profile as inherited once the observability slice is active. A future strict capability mode may use an isolated `CODEX_HOME`; it is not implied by this adapter.
+Codex configuration still inherits the selected host's normal configuration sources. This can include `AGENTS.md`, repository and user skills, plugins, rules, and MCP servers not authored in the AML tree. Invocation overrides for developer instructions, safety settings, declared MCP servers, and shell availability take precedence, but AML does not claim that the resulting Codex profile is empty or capability-isolated. Provider-neutral traces identify the adapter by name but do not claim to inventory its ambient profile. A future strict capability mode may use an isolated `CODEX_HOME`; it is not implied by this adapter.
 
 The adapter does not implement `supportsSandbox()`. Codex's own read-only sandbox is a provider policy, not proof that model-controlled actions use an active AML Sandbox lease.
 

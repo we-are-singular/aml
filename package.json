@@ -18,6 +18,8 @@
     "example:follow-up": "turbo run example --filter=@aml/example-follow-up",
     "example:loop": "turbo run example --filter=@aml/example-loop",
     "example:mcp": "turbo run example --filter=@aml/example-mcp",
+    "example:observability": "turbo run example --filter=@aml/example-observability",
+    "example:observability:codex": "AML_OBSERVABILITY_PROVIDER=codex turbo run example --filter=@aml/example-observability",
     "example:opencode": "turbo run example --filter=@aml/example-opencode",
     "example:review": "turbo run example --filter=@aml/example-review",
     "example:review:opencode": "AML_REVIEW_PROVIDER=opencode turbo run example --filter=@aml/example-review",

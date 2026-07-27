@@ -1,6 +1,6 @@
 # Agent Markup Language product requirements and delivery plan
 
-Status: Phase 1 — MVP complete; Slices 0–14 done; Slice 15 pending
+Status: Phase 1 — MVP complete; Slices 0–15 done; Slice 16 pending
 
 This is the living product definition, architecture plan, implementation roadmap, and progress tracker for AML. It is not a normative runtime contract. Settled behavior belongs in `SPEC.md`; this document records why AML exists, how it is organized, what is being built next, and which slices have been proven.
 
@@ -175,7 +175,7 @@ The status table is the canonical implementation tracker. A slice moves to `Done
 | Slice 12 | `<FollowUp>` | Done |
 | Slice 13 | `<Loop>` | Done |
 | Slice 14 | Codex Agent package | Done |
-| Slice 15 | Observability consumers | Pending |
+| Slice 15 | Observability consumers | Done |
 | Slice 16 | Context | Pending |
 
 Allowed statuses are `Pending`, `In progress`, `Blocked`, and `Done`. A blocked slice includes its blocker directly in the status cell.
@@ -359,7 +359,7 @@ This tree is a target map. Each slice creates only the files it implements.
 
 `components/<name>/` owns one public AML concept: its component or public function, descriptors, feature-local contracts, validation, errors, and behavior tests.
 
-`observability/` owns provider-neutral trace contracts. Concrete console and OpenTelemetry consumers may move to focused packages if their dependencies justify it.
+`observability/` owns provider-neutral trace contracts, the evaluation-scoped dispatcher, and the dependency-free console consumer. OpenTelemetry may become a focused consumer package only after the stable event stream proves that dependency is useful.
 
 `testing/` is exported as `@aml/sdk/testing`. It provides deterministic fixtures and reusable conformance suites without adding production-provider dependencies to the SDK.
 
@@ -786,12 +786,18 @@ Twenty deterministic Codex tests, fifty deterministic OpenCode tests, all worksp
 
 - stabilize provider-neutral trace events
 - add console trace presentation
-- evaluate whether OpenTelemetry deserves its own package
-- evaluate Hookable as an internal typed lifecycle-event dispatcher for trace consumers, span setup, inspection, and extraction
+- defer OpenTelemetry to a consumer package until the stable event contract proves the dependency
+- use a direct evaluation-owned dispatcher instead of Hookable because trace delivery is synchronous, non-awaitable, and failure-isolated
 - keep hooks scoped to one evaluation and prevent observers from mutating requests or results
 - keep trace-sink failure reporting out of workflow semantics
 
 Proof: one deterministic run and one live-provider run produce attributable spans without exposing prompt content by default.
+
+Dependency decision: Hookable remains out of the runtime. Its current `callHook()` contract awaits handlers sequentially and rejects when one fails, while AML traces must neither delay nor fail evaluation. Adapting Hookable would require the same isolation and Promise policing as a direct dispatcher while adding registration lifecycle and plugin semantics Slice 15 does not need. OpenTelemetry also remains out: the stable event stream is the integration boundary, and an eventual exporter can live in its own optional package without adding telemetry dependencies to `@aml/sdk`.
+
+Status: Done on 2026-07-27. The SDK now exposes immutable evaluation-local span and point-event contracts, one failure-isolated synchronous trace sink, an optional sensitive-content boundary, and a dependency-free tree console. Evaluation, component, Agent, System, Skill, JavaScript Tool, Loop, Sandbox, and Workspace lifecycles use canonical parent identities; providers receive the exact Agent identity published to observers. Capability events identify Tool kind and MCP provenance without copying transport credentials. JavaScript Tool transport input is captured once into stable JSON regardless of tracing, so opt-in content serialization cannot change validation or execution. Returned observer thenables, custom getters, asynchronous writers, hostile thrown values, concurrent evaluations, provider-owned Tool cancellation, resource cleanup failures, and invalid Tool transport calls remain isolated and attributable.
+
+Singular review found component authority escaping through custom thenables, flattened lexical hierarchy, console-writer rejection leaks, split Agent span ownership and identity, provider cancellation replacement, missing MCP provenance, untraced Agent and Tool preflight failures, and content tracing that could change stateful Tool input. The corrected design gives each span one runtime owner and one canonical identity, preserves provider signals, snapshots transport input independently of tracing, and reports observer failures only out of band. One hundred ninety-nine SDK tests, fifty OpenCode tests, twenty Codex tests, fifteen Docker tests, twelve Local Workspace tests, all workspace type checks and builds, SDK package validation, the dist-backed deterministic example, and a credentialed `gpt-5.3-codex-spark` observability run pass. Final correctness, skeptical intent, and maintainability review lanes reported no actionable findings.
 
 ### Phase D — Late dependency scope
 
@@ -827,16 +833,15 @@ Before marking a slice `Done`:
 
 ## Immediate implementation boundary
 
-Slices 0 through 14 and the MVP are complete. The next implementation gate is Slice 15 only:
+Slices 0 through 15 and the MVP are complete. The next implementation gate is Slice 16 only:
 
-1. settle the provider-neutral trace-event and observer contract in `SPEC.md`
-2. expose one evaluation-scoped observer attachment surface without permitting request or result mutation
-3. add a console presentation that makes tree, Agent, Tool, capability, and lifecycle progress visible without exposing prompt content by default
-4. report observer failures out of band without changing workflow semantics
-5. evaluate Hookable as an internal typed event dispatcher and record the dependency decision
-6. prove one deterministic run and one live-provider run produce attributable parent/child spans
+1. settle the immutable Context contract in `SPEC.md`
+2. expose `createContext()` and `useContext()` without reactive state or rerender semantics
+3. provide one downward-scoped provider component with nested shadowing
+4. preserve branch and concurrent-evaluation isolation
+5. prove a session repository reaches a JavaScript Tool through closure capture without entering prompt text or trace content
 
-No Context implementation, CLI, website, Sandbox expansion, Workspace expansion, OpenTelemetry package, or unrelated primitive belongs in Slice 15 unless its need is proven by the trace contract itself.
+No CLI, website, Sandbox expansion, Workspace expansion, OpenTelemetry package, mutable state, or unrelated primitive belongs in Slice 16.
 
 ## Explicitly deferred
 

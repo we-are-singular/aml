@@ -6,6 +6,7 @@ import type { AmlJsonValue } from "../../core/aml-json-value.js"
 import type { AmlRenderable } from "../../core/aml-node.js"
 import type { EvaluationContext } from "../../core/evaluation-context.js"
 import { EvaluationError } from "../../core/evaluation-error.js"
+import type { AmlTraceIdentity } from "../../core/trace-identity.js"
 import type {
   AgentJavaScriptTool,
   AgentToolExecutionContext,
@@ -50,6 +51,7 @@ export class LoopEvaluator {
   >(
     props: Readonly<LoopProps<Schema>>,
     context: EvaluationContext,
+    trace: AmlTraceIdentity,
     executeAgent: (
       value: AmlRenderable,
       stateTool: AgentJavaScriptTool,
@@ -127,7 +129,7 @@ export class LoopEvaluator {
 
       // The evaluation-wide budget is reserved immediately before the commit;
       // rejected transitions therefore never become observable Loop state.
-      context.reserveStateTransition(name, iteration)
+      context.reserveStateTransition(name, iteration, trace)
       snapshot = staged
     }
   }

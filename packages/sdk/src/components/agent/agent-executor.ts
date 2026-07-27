@@ -1,9 +1,17 @@
 import { ComponentEvaluationContext } from "../../core/component-evaluation-context.js"
+import type { AmlJsonValue } from "../../core/aml-json-value.js"
 import type { EvaluationContext } from "../../core/evaluation-context.js"
 import { EvaluationError } from "../../core/evaluation-error.js"
 import type { AmlTraceIdentity } from "../../core/trace-identity.js"
+import type { AmlTraceAttribute } from "../../observability/trace-event.js"
 import type { SandboxSession } from "../sandbox/sandbox-provider.js"
 import type { AgentMcpServer } from "../mcp/aml-mcp-server.js"
+import type {
+  AgentTool,
+  AgentToolExecutionContext,
+} from "../tool/agent-tool.js"
+import { JsonSnapshot } from "../tool/json-snapshot.js"
+import { ToolInputError } from "../tool/tool-input-error.js"
 import type { AgentExecutionContext } from "./agent-execution-context.js"
 import type { ModelSchema } from "./model-schema.js"
 import type { AgentProps } from "./agent.js"
@@ -14,6 +22,22 @@ import {
   type ValidatedAgentProvider,
   validateAgentProvider,
 } from "./validate-agent-provider.js"
+
+type TraceAttributes = Readonly<
+  Record<string, AmlTraceAttribute>
+>
+
+/**
+ * Provider result plus the metadata needed by the runtime-owned Agent span.
+ *
+ * AgentExecutor assembles the facts, but AmlRuntime closes the span only after
+ * it has committed the result into the parent resolution target.
+ */
+interface AgentExecutionResult {
+  readonly response: Readonly<AgentResponse>
+  readonly traceAttributes: TraceAttributes
+  readonly traceContent: TraceAttributes
+}
 
 /**
  * Owns Agent-specific validation, request assembly, and provider execution.
@@ -81,7 +105,7 @@ export class AgentExecutor {
     readonly systemFragments: readonly string[]
     readonly tools: readonly import("../tool/agent-tool.js").AgentTool[]
     readonly trace: AmlTraceIdentity
-  }): Promise<AgentResponse> {
+  }): Promise<Readonly<AgentExecutionResult>> {
     if (!input.provider) {
       throw new EvaluationError(
         `Agent ${input.trace.spanId} has no provider`,
@@ -156,6 +180,11 @@ export class AgentExecutor {
       )
     }
 
+    const tools = instrumentTools(
+      input.tools,
+      input.context,
+      input.trace,
+    )
     const request: AgentRequest = Object.freeze({
       ...(followUps.length === 0
         ? {}
@@ -174,7 +203,7 @@ export class AgentExecutor {
           }),
       prompt,
       system: systemFragments.join("\n"),
-      tools: input.tools,
+      tools,
       trace: input.trace,
     })
     const agentContext: AgentExecutionContext = Object.freeze({
@@ -184,6 +213,26 @@ export class AgentExecutor {
       signal: input.context.signal,
       trace: input.trace,
     })
+
+    for (const tool of tools) {
+      input.context.traceEvent(input.trace, "capability.tool", {
+        kind: tool.kind,
+        name: tool.name,
+      })
+    }
+
+    for (const server of input.mcpServers) {
+      input.context.traceEvent(input.trace, "capability.mcp", {
+        kind:
+          server.kind === "named"
+            ? "named"
+            : server.definition.transport.type,
+        name:
+          server.kind === "named"
+            ? server.name
+            : server.definition.name,
+      })
+    }
 
     // Reserve only after the complete plan exists. Limit errors belong to AML,
     // not the provider failure boundary below.
@@ -199,6 +248,24 @@ export class AgentExecutor {
       response = await input.context.scheduleAgent(
         () => {
           providerStarted = true
+
+          // AML cannot observe provider-internal per-turn timing, so publish
+          // the complete authored order at the exact provider handoff.
+          for (const [index, turn] of [
+            prompt,
+            ...followUps,
+          ].entries()) {
+            input.context.traceEvent(
+              input.trace,
+              "agent.turn",
+              {
+                index: index + 1,
+                kind: index === 0 ? "initial" : "follow-up",
+              },
+              { content: turn },
+            )
+          }
+
           // The async wrapper is created inside exit(), so Promise/thenable
           // assimilation and every provider-created continuation remain masked.
           return ComponentEvaluationContext.withoutAccess(async () =>
@@ -252,7 +319,16 @@ export class AgentExecutor {
     }
 
     if (input.output === undefined) {
-      return Object.freeze({ text })
+      return createExecutionResult(
+        Object.freeze({ text }),
+        provider,
+        request.model,
+        input.mcpServers.length,
+        tools.length,
+        turnCount,
+        prompt,
+        request.system,
+      )
     }
 
     let hasStructured: boolean
@@ -302,6 +378,178 @@ export class AgentExecutor {
       )
     }
 
-    return Object.freeze({ structured: validated, text })
+    return createExecutionResult(
+      Object.freeze({ structured: validated, text }),
+      provider,
+      request.model,
+      input.mcpServers.length,
+      tools.length,
+      turnCount,
+      prompt,
+      request.system,
+    )
+  }
+}
+
+/**
+ * Wraps JavaScript Tools with invocation spans while preserving host grants.
+ */
+function instrumentTools(
+  tools: readonly AgentTool[],
+  context: EvaluationContext,
+  parent: AmlTraceIdentity,
+): readonly AgentTool[] {
+  return Object.freeze(
+    tools.map((tool): AgentTool => {
+      if (tool.kind === "host") {
+        return tool
+      }
+
+      return Object.freeze({
+        description: tool.description,
+        async execute(
+          input: unknown,
+          executionContext: AgentToolExecutionContext,
+        ) {
+          const trace = context.createObservationTrace(parent.spanId)
+          // Provider input is a JSON transport value. Snapshot it on every call
+          // so tracing on/off never changes getter reads or validation input.
+          let capturedInput: AmlJsonValue | undefined
+
+          try {
+            capturedInput = captureToolInput(input, tool.name)
+          } catch (error) {
+            // Invalid transport data still represents an attempted Tool call.
+            // Emit a complete redacted failure span before preserving the
+            // authoritative ToolInputError.
+            const failedSpan = context.startTraceSpan(
+              trace,
+              "tool",
+              tool.name,
+            )
+
+            context.failTraceSpan(failedSpan, error)
+            throw error
+          }
+
+          const serializedInput = context.capturesTraceContent
+            ? serializeTraceJson(capturedInput)
+            : undefined
+          const span = context.startTraceSpan(
+            trace,
+            "tool",
+            tool.name,
+            {},
+            serializedInput === undefined
+              ? {}
+              : { input: serializedInput },
+          )
+
+          try {
+            const output = await Reflect.apply(tool.execute, tool, [
+              capturedInput,
+              Object.freeze({
+                // Providers may use a narrower per-call cancellation signal.
+                // Preserve it while replacing only the trace with this Tool span.
+                signal: executionContext.signal,
+                trace,
+              }),
+            ])
+            const serializedOutput = context.capturesTraceContent
+              ? serializeTraceJson(output)
+              : undefined
+
+            context.endTraceSpan(
+              span,
+              "ok",
+              {},
+              serializedOutput === undefined
+                ? {}
+                : { output: serializedOutput },
+            )
+            return output
+          } catch (error) {
+            context.failTraceSpan(span, error)
+            throw error
+          }
+        },
+        inputSchema: tool.inputSchema,
+        kind: tool.kind,
+        name: tool.name,
+      })
+    }),
+  )
+}
+
+/**
+ * Freezes one Agent result and the terminal metadata committed by AmlRuntime.
+ */
+function createExecutionResult(
+  response: Readonly<AgentResponse>,
+  provider: Readonly<ValidatedAgentProvider>,
+  model: string | undefined,
+  mcpServers: number,
+  tools: number,
+  turns: number,
+  prompt: string,
+  system: string,
+): Readonly<AgentExecutionResult> {
+  return Object.freeze({
+    response,
+    traceAttributes: Object.freeze({
+      mcpServers,
+      ...(model === undefined ? {} : { model }),
+      provider: provider.name,
+      tools,
+      turns,
+    }),
+    traceContent: Object.freeze({
+      output: response.text,
+      prompt,
+      system,
+    }),
+  })
+}
+
+/**
+ * Captures provider input once before both Tool validation and trace encoding.
+ */
+function captureToolInput(
+  value: unknown,
+  name: string,
+): AmlJsonValue | undefined {
+  if (value === undefined) {
+    return undefined
+  }
+
+  try {
+    return JsonSnapshot.capture(
+      value,
+      `Tool "${name}" transport input`,
+    )
+  } catch (cause) {
+    throw new ToolInputError(
+      `Tool "${name}" input is not valid JSON`,
+      { cause },
+    )
+  }
+}
+
+/**
+ * Serializes an already captured JSON value without touching provider input.
+ */
+function serializeTraceJson(
+  value: AmlJsonValue | undefined,
+): string | undefined {
+  if (value === undefined) {
+    return undefined
+  }
+
+  try {
+    return JSON.stringify(value)
+  } catch {
+    // Deep JSON can exceed the native serializer stack. Content telemetry is
+    // optional and must not replace a successful Tool call in that case.
+    return undefined
   }
 }

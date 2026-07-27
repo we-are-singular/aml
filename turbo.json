@@ -7,13 +7,14 @@
     },
     "example": {
       "dependsOn": ["^build"],
-      "cache": false
+      "cache": false,
+      "passThroughEnv": ["AML_*"]
     },
     "test": {
       "outputs": []
     },
     "typecheck": {
-      "dependsOn": ["@aml/sdk#build"],
+      "dependsOn": ["^build"],
       "outputs": []
     }
   }

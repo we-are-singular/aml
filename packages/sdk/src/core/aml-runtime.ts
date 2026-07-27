@@ -42,6 +42,11 @@ import { ComponentEvaluationContext } from "./component-evaluation-context.js"
 import { EvaluationContext } from "./evaluation-context.js"
 import { EvaluationError } from "./evaluation-error.js"
 import type { AmlTraceIdentity } from "./trace-identity.js"
+import type { TraceSpan } from "../observability/trace-dispatcher.js"
+import type {
+  TraceErrorHandler,
+  TraceSink,
+} from "../observability/trace-sink.js"
 
 // Resolution targets keep prompt assembly separate from ordinary text output.
 // That distinction lets descriptors such as <Tool> and <System> mutate only the
@@ -140,6 +145,7 @@ interface CompleteAgentFrame {
   readonly provider: Readonly<ValidatedAgentProvider> | undefined
   readonly schema: ModelSchema<unknown> | undefined
   readonly sandbox: Readonly<SandboxSession> | undefined
+  readonly span: TraceSpan
   readonly target: ResolutionTarget
   readonly trace: AmlTraceIdentity
 }
@@ -153,29 +159,39 @@ interface CompleteFollowUpFrame {
 interface CompleteSandboxFrame {
   readonly kind: "complete-sandbox"
   readonly scope: Readonly<SandboxEvaluationScope>
+  readonly span: TraceSpan
 }
 
 interface CompleteWorkspaceFrame {
   readonly kind: "complete-workspace"
   readonly scope: Readonly<WorkspaceEvaluationScope>
+  readonly span: TraceSpan
 }
 
 interface CompleteSystemFrame {
   readonly kind: "complete-system"
   readonly parent: AgentTarget
+  readonly span: TraceSpan
   readonly target: TextTarget
 }
 
 interface CompleteSkillFrame {
   readonly kind: "complete-skill"
   readonly plan: SkillEvaluation
+  readonly span: TraceSpan
   readonly target: ResolutionTarget
   readonly text: TextTarget
+}
+
+interface CompleteComponentFrame {
+  readonly kind: "complete-component"
+  readonly span: TraceSpan
 }
 
 type EvaluationFrame =
   | ArrayFrame
   | CompleteAgentFrame
+  | CompleteComponentFrame
   | CompleteFollowUpFrame
   | CompleteSandboxFrame
   | CompleteSkillFrame
@@ -236,6 +252,11 @@ export interface AmlRuntimeOptions {
   readonly maxTurnsPerAgent?: number
 
   /**
+   * Reports trace-consumer failures without changing workflow behavior.
+   */
+  readonly onTraceError?: TraceErrorHandler
+
+  /**
    * Default provider for outer Sandboxes without an explicit provider prop.
    */
   readonly sandboxProvider?: SandboxProvider
@@ -244,6 +265,11 @@ export interface AmlRuntimeOptions {
    * First system fragment supplied to every Agent in this runtime.
    */
   readonly system?: string
+
+  /**
+   * Receives immutable execution events for each evaluation.
+   */
+  readonly trace?: TraceSink
 
   /**
    * Default provider for the one top-level Workspace in an evaluation.
@@ -272,6 +298,9 @@ export class AmlRuntime {
   readonly #maxConcurrentAgents: number
   readonly #maxDepth: number
   readonly #maxStateTransitions: number
+  readonly #onTraceError: TraceErrorHandler | undefined
+  readonly #traceCaptureContent: boolean
+  readonly #traceSink: TraceSink | undefined
   readonly #loopAgentSelector: LoopAgentSelector
   readonly #loopEvaluator = new LoopEvaluator()
   readonly #sandboxEvaluator: SandboxEvaluator
@@ -287,6 +316,10 @@ export class AmlRuntime {
     const maxDepth = options.maxDepth ?? 16
     const maxStateTransitions = options.maxStateTransitions ?? 16
     const maxTurnsPerAgent = options.maxTurnsPerAgent ?? 16
+    const trace = captureTraceOptions(
+      options.trace,
+      options.onTraceError,
+    )
 
     if (!Number.isSafeInteger(maxAgentCalls) || maxAgentCalls < 0) {
       throw new TypeError(
@@ -344,6 +377,9 @@ export class AmlRuntime {
     this.#maxConcurrentAgents = maxConcurrentAgents
     this.#maxDepth = maxDepth
     this.#maxStateTransitions = maxStateTransitions
+    this.#onTraceError = trace.onError
+    this.#traceCaptureContent = trace.captureContent
+    this.#traceSink = trace.sink
     this.#loopAgentSelector = new LoopAgentSelector(maxDepth)
     this.#sandboxEvaluator = new SandboxEvaluator(
       options.sandboxProvider,
@@ -377,9 +413,17 @@ export class AmlRuntime {
         this.#maxConcurrentAgents,
         this.#maxStateTransitions,
         signal,
+        {
+          captureContent: this.#traceCaptureContent,
+          onError: this.#onTraceError,
+          sink: this.#traceSink,
+        },
       ),
       workspaceDeclared: false,
     }
+
+    let evaluationError: unknown
+    let evaluationFailed = false
 
     try {
       return (await this.#evaluateInDomain(
@@ -387,14 +431,18 @@ export class AmlRuntime {
         domain,
         {
           depth: 0,
-          parentSpanId: undefined,
+          parentSpanId: domain.context.rootTrace.spanId,
           sandbox: undefined,
           workspace: undefined,
         },
         undefined,
       )) as string
+    } catch (error) {
+      evaluationFailed = true
+      evaluationError = error
+      throw error
     } finally {
-      domain.context.close()
+      domain.context.close(evaluationFailed, evaluationError)
     }
   }
 
@@ -418,6 +466,7 @@ export class AmlRuntime {
     // detection while keeping concurrent nested calls independent.
     const activeValues = new Set(activeAncestors)
     const activeSandboxScopes: SandboxEvaluationScope[] = []
+    const activeTraceSpans: TraceSpan[] = []
     let activeWorkspaceScope: WorkspaceEvaluationScope | undefined
     const structured: StructuredEvaluation | undefined =
       schema === undefined
@@ -463,20 +512,34 @@ export class AmlRuntime {
           continue
         }
 
-        if (frame.kind === "complete-sandbox") {
-          // Remove ownership before awaiting release. A release failure must not
-          // make the outer cleanup path invoke the provider a second time.
-          const scope = activeSandboxScopes.pop()
+        if (frame.kind === "complete-component") {
+          removeActiveTraceSpan(activeTraceSpans, frame.span)
+          context.endTraceSpan(frame.span, "ok")
+          continue
+        }
 
-          if (scope !== frame.scope) {
-            throw new EvaluationError(
-              "Sandbox scopes completed out of lifecycle order",
-            )
+        if (frame.kind === "complete-sandbox") {
+          removeActiveTraceSpan(activeTraceSpans, frame.span)
+
+          if (frame.scope.ownsLease) {
+            // Remove ownership before awaiting release. A release failure must
+            // not make the outer cleanup path invoke the provider twice.
+            const scope = activeSandboxScopes.pop()
+
+            if (scope !== frame.scope) {
+              const error = new EvaluationError(
+                "Sandbox scopes completed out of lifecycle order",
+              )
+              context.failTraceSpan(frame.span, error)
+              throw error
+            }
           }
 
           try {
             await frame.scope.release()
           } catch (releaseError) {
+            context.failTraceSpan(frame.span, releaseError)
+
             // Cancellation can arrive after this frame removes ownership but
             // while provider cleanup is pending. Preserve both causes instead
             // of letting the later release failure mask caller control flow.
@@ -490,15 +553,25 @@ export class AmlRuntime {
             throw releaseError
           }
 
-          context.signal.throwIfAborted()
+          if (context.signal.aborted) {
+            const cancellation = context.signal.reason
+            context.failTraceSpan(frame.span, cancellation)
+            context.signal.throwIfAborted()
+          }
+
+          context.endTraceSpan(frame.span, "ok")
           continue
         }
 
         if (frame.kind === "complete-workspace") {
+          removeActiveTraceSpan(activeTraceSpans, frame.span)
+
           if (activeWorkspaceScope !== frame.scope) {
-            throw new EvaluationError(
+            const error = new EvaluationError(
               "Workspace scopes completed out of lifecycle order",
             )
+            context.failTraceSpan(frame.span, error)
+            throw error
           }
 
           // Remove ownership before completion so a save or release failure is
@@ -508,6 +581,8 @@ export class AmlRuntime {
           try {
             await frame.scope.complete()
           } catch (completionError) {
+            context.failTraceSpan(frame.span, completionError)
+
             if (context.signal.aborted) {
               throw new AggregateError(
                 [context.signal.reason, completionError],
@@ -518,7 +593,13 @@ export class AmlRuntime {
             throw completionError
           }
 
-          context.signal.throwIfAborted()
+          if (context.signal.aborted) {
+            const cancellation = context.signal.reason
+            context.failTraceSpan(frame.span, cancellation)
+            context.signal.throwIfAborted()
+          }
+
+          context.endTraceSpan(frame.span, "ok")
           continue
         }
 
@@ -543,15 +624,31 @@ export class AmlRuntime {
         // Completion frames run post-order, after their child targets contain the
         // complete text or Agent execution plan.
         if (frame.kind === "complete-system") {
-          const text = frame.target.chunks.join("").trim()
+          let text: string
 
-          if (text.length === 0) {
-            throw new EvaluationError(
-              "<System> must resolve to non-empty text",
-            )
+          try {
+            text = frame.target.chunks.join("").trim()
+
+            if (text.length === 0) {
+              throw new EvaluationError(
+                "<System> must resolve to non-empty text",
+              )
+            }
+
+            frame.parent.systemFragments.push(text)
+          } catch (error) {
+            removeActiveTraceSpan(activeTraceSpans, frame.span)
+            context.failTraceSpan(frame.span, error)
+            throw error
           }
 
-          frame.parent.systemFragments.push(text)
+          removeActiveTraceSpan(activeTraceSpans, frame.span)
+          context.endTraceSpan(
+            frame.span,
+            "ok",
+            {},
+            { content: text },
+          )
           continue
         }
 
@@ -569,21 +666,35 @@ export class AmlRuntime {
         }
 
         if (frame.kind === "complete-skill") {
-          const content = await this.#skillEvaluator.complete(
-            frame.plan,
-            frame.text.chunks.join(""),
-            context.signal,
+          let content: string
+
+          try {
+            content = await this.#skillEvaluator.complete(
+              frame.plan,
+              frame.text.chunks.join(""),
+              context.signal,
+            )
+            appendText(frame.target, content)
+          } catch (error) {
+            removeActiveTraceSpan(activeTraceSpans, frame.span)
+            context.failTraceSpan(frame.span, error)
+            throw error
+          }
+
+          removeActiveTraceSpan(activeTraceSpans, frame.span)
+          context.endTraceSpan(
+            frame.span,
+            "ok",
+            {},
+            { content },
           )
-
-          appendText(frame.target, content)
-
           continue
         }
 
         if (frame.kind === "complete-agent") {
           // A completion frame runs only after every child has contributed text,
           // System fragments, Tool descriptors, or MCP grants to the Agent plan.
-          const response = await this.#agentExecutor.execute({
+          const execution = await this.#agentExecutor.execute({
             context,
             followUps: frame.plan.followUps,
             mcpServers: frame.plan.mcpServers.values(),
@@ -598,6 +709,7 @@ export class AmlRuntime {
             tools: frame.plan.tools.values(),
             trace: frame.trace,
           })
+          const response = execution.response
 
           if (frame.schema !== undefined) {
             const collector = frame.target.structured
@@ -616,6 +728,15 @@ export class AmlRuntime {
             appendText(frame.target, response.text)
           }
 
+          // Runtime owns the terminal span because successful provider output
+          // is not complete until it has entered the parent AML result channel.
+          removeActiveTraceSpan(activeTraceSpans, frame.span)
+          context.endTraceSpan(
+            frame.span,
+            "ok",
+            execution.traceAttributes,
+            execution.traceContent,
+          )
           continue
         }
 
@@ -696,13 +817,30 @@ export class AmlRuntime {
             }
 
             const props = current.props as Readonly<AgentProps>
-            const provider = this.#agentExecutor.validateProps(props)
-            const sandbox = this.#sandboxEvaluator.forAgent(
-              frame.target.sandbox,
-              props.cwd,
+            const trace = context.createTrace(
+              frame.target.parentSpanId,
             )
+            const span = context.startTraceSpan(
+              trace,
+              "agent",
+              "Agent",
+            )
+            let provider:
+              | Readonly<ValidatedAgentProvider>
+              | undefined
+            let sandbox: Readonly<SandboxSession> | undefined
 
-            const trace = context.createTrace(frame.target.parentSpanId)
+            try {
+              provider = this.#agentExecutor.validateProps(props)
+              sandbox = this.#sandboxEvaluator.forAgent(
+                frame.target.sandbox,
+                props.cwd,
+              )
+            } catch (error) {
+              context.failTraceSpan(span, error)
+              throw error
+            }
+
             const plan: AgentTarget = {
               acceptsMessageDescriptors: true,
               followUps: [],
@@ -727,6 +865,7 @@ export class AmlRuntime {
             // Push completion before children: the LIFO stack gives AML its
             // bottom-up execution semantics without suspending a component.
             activeValues.add(current)
+            activeTraceSpans.push(span)
             frames.push({ kind: "release", value: current })
             frames.push({
               kind: "complete-agent",
@@ -740,6 +879,7 @@ export class AmlRuntime {
                   ? collector.schema
                   : undefined,
               sandbox,
+              span,
               target: frame.target,
               trace,
             })
@@ -777,6 +917,11 @@ export class AmlRuntime {
             const trace = context.createTrace(
               frame.target.parentSpanId,
             )
+            const span = context.startTraceSpan(
+              trace,
+              "loop",
+              "Loop",
+            )
 
             activeValues.add(current)
             let result: string
@@ -785,6 +930,7 @@ export class AmlRuntime {
               result = await this.#loopEvaluator.evaluate(
                 props,
                 context,
+                span.identity,
                 async (value, stateTool) => {
                   const selection =
                     await this.#loopAgentSelector.select(
@@ -833,6 +979,10 @@ export class AmlRuntime {
                   )) as string
                 },
               )
+              context.endTraceSpan(span, "ok")
+            } catch (error) {
+              context.failTraceSpan(span, error)
+              throw error
             } finally {
               activeValues.delete(current)
             }
@@ -890,13 +1040,29 @@ export class AmlRuntime {
           if (primitiveKind === "sandbox") {
             const props = current.props as Readonly<SandboxProps>
             const trace = context.createTrace(frame.target.parentSpanId)
-            const scope = await this.#sandboxEvaluator.enter(
-              props,
-              frame.target.sandbox,
-              frame.target.workspace,
-              trace.runId,
-              context.signal,
+            const span = context.startTraceSpan(
+              trace,
+              "sandbox",
+              "Sandbox",
+              {
+                nested: frame.target.sandbox !== undefined,
+              },
             )
+            let scope: Readonly<SandboxEvaluationScope>
+
+            try {
+              scope = await this.#sandboxEvaluator.enter(
+                props,
+                frame.target.sandbox,
+                frame.target.workspace,
+                trace.runId,
+                context.signal,
+              )
+            } catch (error) {
+              context.failTraceSpan(span, error)
+              throw error
+            }
+
             const scopedTarget: ResolutionTarget = {
               ...frame.target,
               // A lexical resource primitive remains visible after component
@@ -910,15 +1076,16 @@ export class AmlRuntime {
             }
 
             activeValues.add(current)
+            activeTraceSpans.push(span)
             frames.push({ kind: "release", value: current })
 
             if (scope.ownsLease) {
               // Root scopes are tracked separately so cancellation or any
               // descendant failure still reaches provider cleanup.
               activeSandboxScopes.push(scope)
-              frames.push({ kind: "complete-sandbox", scope })
             }
 
+            frames.push({ kind: "complete-sandbox", scope, span })
             frames.push({
               depth: nodeDepth,
               kind: "resolve",
@@ -953,11 +1120,24 @@ export class AmlRuntime {
             const trace = context.createTrace(
               frame.target.parentSpanId,
             )
-            const scope = await this.#workspaceEvaluator.enter(
-              props,
-              trace.runId,
-              context.signal,
+            const span = context.startTraceSpan(
+              trace,
+              "workspace",
+              "Workspace",
             )
+            let scope: Readonly<WorkspaceEvaluationScope>
+
+            try {
+              scope = await this.#workspaceEvaluator.enter(
+                props,
+                trace.runId,
+                context.signal,
+              )
+            } catch (error) {
+              context.failTraceSpan(span, error)
+              throw error
+            }
+
             const scopedTarget: TextTarget = {
               ...frame.target,
               parentSpanId: trace.spanId,
@@ -966,10 +1146,12 @@ export class AmlRuntime {
 
             activeWorkspaceScope = scope
             activeValues.add(current)
+            activeTraceSpans.push(span)
             frames.push({ kind: "release", value: current })
             frames.push({
               kind: "complete-workspace",
               scope,
+              span,
             })
             frames.push({
               depth: nodeDepth,
@@ -1028,11 +1210,31 @@ export class AmlRuntime {
           // They remain prompt text rather than a provider-specific capability.
           if (primitiveKind === "skill") {
             const plan = this.#skillEvaluator.prepare(current.props)
+            const trace = context.createObservationTrace(
+              frame.target.parentSpanId,
+            )
+            const span = context.startTraceSpan(
+              trace,
+              "skill",
+              plan.name ?? "Skill",
+              {
+                hasInlineContent: plan.hasChildren,
+                hasSource: plan.source !== undefined,
+              },
+              {
+                ...(plan.description === undefined
+                  ? {}
+                  : { description: plan.description }),
+                ...(plan.source === undefined
+                  ? {}
+                  : { source: plan.source }),
+              },
+            )
 
             const skillTarget: TextTarget = {
               chunks: [],
               kind: "text",
-              parentSpanId: frame.target.parentSpanId,
+              parentSpanId: trace.spanId,
               sandbox: frame.target.sandbox,
               source: "skill",
               structured: frame.target.structured,
@@ -1040,10 +1242,12 @@ export class AmlRuntime {
             }
 
             activeValues.add(current)
+            activeTraceSpans.push(span)
             frames.push({ kind: "release", value: current })
             frames.push({
               kind: "complete-skill",
               plan,
+              span,
               target: frame.target,
               text: skillTarget,
             })
@@ -1074,10 +1278,19 @@ export class AmlRuntime {
             }
 
             const props = current.props as Readonly<SystemProps>
+            const trace = context.createObservationTrace(
+              frame.target.parentSpanId,
+            )
+            const span = context.startTraceSpan(
+              trace,
+              "system",
+              "System",
+              { index: frame.target.systemFragments.length + 1 },
+            )
             const systemTarget: TextTarget = {
               chunks: [],
               kind: "text",
-              parentSpanId: frame.target.parentSpanId,
+              parentSpanId: trace.spanId,
               sandbox: frame.target.sandbox,
               source: "system",
               structured: frame.target.structured,
@@ -1085,10 +1298,12 @@ export class AmlRuntime {
             }
 
             activeValues.add(current)
+            activeTraceSpans.push(span)
             frames.push({ kind: "release", value: current })
             frames.push({
               kind: "complete-system",
               parent: frame.target,
+              span,
               target: systemTarget,
             })
             frames.push({
@@ -1102,10 +1317,20 @@ export class AmlRuntime {
 
           // User components are ordinary async factories. Invocation happens only
           // now so authoring JSX remains inert and evaluation owns all side effects.
+          const trace = context.createObservationTrace(
+            frame.target.parentSpanId,
+          )
+          const span = context.startTraceSpan(
+            trace,
+            "component",
+            traceComponentName(current.type),
+          )
           activeValues.add(current)
           frames.push({ kind: "release", value: current })
-          const componentOutput =
-            await ComponentEvaluationContext.invoke(
+          let componentOutput: unknown
+
+          try {
+            componentOutput = await ComponentEvaluationContext.invoke(
               () => current.type(current.props),
               async (nestedValue, nestedSchema) => {
                 context.signal.throwIfAborted()
@@ -1123,7 +1348,7 @@ export class AmlRuntime {
                   domain,
                   {
                     depth: nodeDepth,
-                    parentSpanId: frame.target.parentSpanId,
+                    parentSpanId: trace.spanId,
                     sandbox: frame.target.sandbox,
                     workspace: frame.target.workspace,
                   },
@@ -1132,12 +1357,21 @@ export class AmlRuntime {
                 )
               },
             )
+          } catch (error) {
+            context.failTraceSpan(span, error)
+            throw error
+          }
 
+          activeTraceSpans.push(span)
           context.signal.throwIfAborted()
+          frames.push({ kind: "complete-component", span })
           frames.push({
             depth: nodeDepth,
             kind: "resolve",
-            target: frame.target,
+            target: {
+              ...frame.target,
+              parentSpanId: trace.spanId,
+            },
             value: componentOutput as AmlRenderable,
           })
           continue
@@ -1205,14 +1439,28 @@ export class AmlRuntime {
         }
       }
 
-      if (releaseErrors.length > 0) {
-        throw new AggregateError(
+      const terminalError =
+        releaseErrors.length > 0
+          ? new AggregateError(
           [error, ...releaseErrors],
           "AML evaluation and resource cleanup both failed",
-        )
+            )
+          : error
+
+      // Spans still on this invocation's stack represent boundaries skipped by
+      // failure unwinding. End them only after resource cleanup so Sandbox and
+      // Workspace durations include their failure-safe release work.
+      while (activeTraceSpans.length > 0) {
+        const span = activeTraceSpans.pop()
+
+        if (span === undefined) {
+          break
+        }
+
+        context.failTraceSpan(span, terminalError)
       }
 
-      throw error
+      throw terminalError
     }
 
     if (structured !== undefined) {
@@ -1297,4 +1545,87 @@ function captureAllowedNames(
   }
 
   return result
+}
+
+/**
+ * Captures the runtime-wide observer boundary exactly once.
+ */
+function captureTraceOptions(
+  trace: TraceSink | undefined,
+  onError: TraceErrorHandler | undefined,
+): Readonly<{
+  captureContent: boolean
+  onError: TraceErrorHandler | undefined
+  sink: TraceSink | undefined
+}> {
+  if (trace !== undefined && typeof trace !== "function") {
+    throw new TypeError("trace must be a function")
+  }
+
+  if (onError !== undefined && typeof onError !== "function") {
+    throw new TypeError("onTraceError must be a function")
+  }
+
+  let captureContent: unknown
+
+  try {
+    captureContent =
+      trace === undefined
+        ? undefined
+        : Reflect.get(trace, "captureContent")
+  } catch (cause) {
+    throw new TypeError(
+      "trace captureContent could not be read",
+      { cause },
+    )
+  }
+
+  if (
+    captureContent !== undefined &&
+    typeof captureContent !== "boolean"
+  ) {
+    throw new TypeError(
+      "trace captureContent must be a boolean",
+    )
+  }
+
+  return Object.freeze({
+    captureContent: captureContent ?? false,
+    onError,
+    sink: trace,
+  })
+}
+
+/**
+ * Removes one post-order span and rejects impossible lifecycle ordering.
+ */
+function removeActiveTraceSpan(
+  active: TraceSpan[],
+  expected: TraceSpan,
+): void {
+  const span = active.pop()
+
+  if (span !== expected) {
+    throw new EvaluationError(
+      "AML trace spans completed out of lifecycle order",
+    )
+  }
+}
+
+/**
+ * Reads a component's diagnostic name without letting an exotic function
+ * wrapper turn optional instrumentation into a workflow failure.
+ */
+function traceComponentName(component: Function): string {
+  try {
+    const name = ComponentEvaluationContext.withoutAccess(() =>
+      Reflect.get(component, "name"),
+    )
+
+    return typeof name === "string" && name.length > 0
+      ? name
+      : "AnonymousComponent"
+  } catch {
+    return "AnonymousComponent"
+  }
 }

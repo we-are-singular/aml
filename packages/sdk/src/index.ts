@@ -97,4 +97,24 @@ export {
 export { EvaluationError } from "./core/evaluation-error.js"
 export { evaluate } from "./core/evaluate.js"
 export type { AmlTraceIdentity } from "./core/trace-identity.js"
+
+// Provider-neutral observability contracts and the dependency-free console view.
+export {
+  createConsoleTracer,
+  type ConsoleTracerOptions,
+} from "./observability/create-console-tracer.js"
+export type {
+  AmlTraceAttribute,
+  AmlTraceEvent,
+  AmlTraceEventBase,
+  AmlTraceEventName,
+  AmlTracePointEvent,
+  AmlTraceSpanEndEvent,
+  AmlTraceSpanKind,
+  AmlTraceSpanStartEvent,
+} from "./observability/trace-event.js"
+export type {
+  TraceErrorHandler,
+  TraceSink,
+} from "./observability/trace-sink.js"
 export { Fragment } from "./jsx-runtime.js"
