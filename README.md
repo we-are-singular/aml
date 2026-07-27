@@ -1,75 +1,218 @@
 # Agent Markup Language
 
-Agent Markup Language (AML) is a TypeScript and JSX runtime for composing provider-agnostic agent workflows.
+Agent Markup Language (AML) is an asynchronous TypeScript and JSX runtime for composing provider-agnostic agent workflows.
 
-The project is being rebuilt from the Phase 0 proof of concept:
+AML lets you describe agents, prompts, capabilities, execution environments, durable workspaces, and multi-step control flow as one executable tree. The runtime resolves that tree from the leaves upward, manages provider and resource lifecycles, and returns the final Agent output as text or validated structured data.
 
-- [SPEC.md](./SPEC.md) defines required AML behavior.
-- [PRD.md](./PRD.md) defines the product, architecture, implementation roadmap, and delivery status.
-- [`poc/`](./poc/) preserves disposable prototype code and research.
+> AML is under active development. The packages in this repository are private and have not been published to npm.
 
-The Phase 1 rebuild is organized as reviewed implementation slices:
+## Why AML
 
-- `@aml/sdk` exports the automatic JSX runtime and `AmlRuntime`.
-- Components are invoked once per evaluated occurrence.
-- Arrays, Fragments, Promises, empty values, strings, and numbers resolve deterministically into one string.
-- `examples/` is one private workspace of grouped, single-file AML trees. Every example returns JSX directly, `examples/run.ts` supplies shared tracing and evaluation, and Vitest snapshots deterministic output under `examples/test`.
+Agent SDKs are good at running one provider session. Real workflows usually need more: parallel specialists, ordered synthesis, shared context, custom JavaScript tools, model-specific adapters, sandbox boundaries, durable files, follow-up turns, stateful loops, and useful traces.
 
-Slice 1 adds provider-neutral `<Agent>` and `<System>` boundaries, `defineAgentProvider()`, deterministic fixtures under `@aml/sdk/testing`, Agent-call budgets, and cross-package primitive identity. `examples/src/core/agent` demonstrates a child Agent generating system text for its parent.
+Without a shared runtime, those concerns become orchestration code tied to one provider. AML keeps the workflow declarative while leaving each Agent provider responsible for its own model sessions and native capabilities.
 
-Slice 2 adds the independently installable `@aml/agent-opencode` adapter. It starts OpenCode lazily with private ephemeral databases for package-owned hosts, creates and cleans up one session per Agent, propagates cancellation, disables undeclared tools, and exposes a narrow injected session-client port for deterministic tests.
-
-Slice 3 adds Agent-scoped `<Tool>` grants and `defineTool()`. JavaScript Tools use Standard Schema for runtime validation and Standard JSON Schema for model declarations, retain exact cross-copy identity, and return immutable JSON. The OpenCode adapter exposes them through authenticated invocation-scoped MCP bridges on disposable OpenCode hosts so dynamic registrations cannot accumulate. `examples/src/integrations/opencode` proves a credentialed `opencode-go/minimax-m3` model can call a process-local async function through built package exports.
-
-Slice 4 adds `<Skill>` as local or inline instruction text. Local files are read during each evaluation, inline children resolve through ordinary AML, and both forms can be combined with optional deterministic name and description labels. It deliberately has no remote downloader, registry, cache, or provider-specific Skill API. `examples/src/capabilities/skill` proves the built SDK reads a local Skill into an Agent prompt.
-
-Slice 5 adds provider-neutral `<Sandbox>` scopes, `defineSandboxProvider()`, opaque leases, restrictive nested policy views, and an explicit compatibility handshake for Agent providers. AML acquires one outer lease before descendant work and releases it exactly once after success, failure, or cancellation; providers remain responsible for real confinement. `examples/src/resources/sandbox` proves the built SDK passes a narrowed session to an Agent and cleans up its deterministic lease.
-
-Slice 6 adds the independently installable `@aml/sandbox-docker` adapter. Its Dockerode-backed factory creates one same-host container per outer Sandbox lease with a confined bind mount, no network, no Linux capabilities, a non-root numeric UID, resource limits, bounded command output, and failure-safe cleanup. `examples/src/integrations/docker` proves an Agent-local working directory and the primary confinement settings against a real Docker daemon.
-
-Slice 7 adds provider-neutral `<Workspace>` scopes and `defineWorkspaceProvider()`. One top-level Workspace acquires an exclusive durable materialization, passes its immutable reference to sequential outer Sandboxes, saves partial work after success or failure, and releases exactly once. `examples/src/resources/workspace` proves two disposable Sandboxes sharing one materialization through built SDK exports.
-
-Slice 8 completes the MVP with the independently installable `@aml/workspace-local` adapter. Its configured `localWorkspace()` factory maps one existing directory into a direct durable materialization, canonicalizes symlinks, rejects concurrent writers through a renewable cross-process lock, and reports stale-lock compromise honestly rather than claiming fencing. `examples/src/integrations/workspace-local` proves filesystem changes survive disposable Sandbox runs through built package exports.
-
-Slice 9 adds Agent-scoped `<Mcp>` grants and `defineMcpServer()` descriptors for provider-native names, local stdio servers, and remote Streamable HTTP servers. MCP configuration remains provider data rather than prompt text; the OpenCode adapter attaches it on a disposable host, validates shared Tool namespaces before prompting, and disconnects it during session cleanup. `examples/src/capabilities/mcp` proves configured grants remain isolated from sibling Agents, while the opt-in OpenCode integration exercises a real configured MCP Tool call.
-
-Slice 10 adds component-local `evaluate()` for ordinary awaited text or typed structured Agent results. Schema-bearing calls accept the combined Standard Schema and Standard JSON Schema contract, send only an immutable draft 2020-12 JSON document to the provider, validate the returned value at the Agent boundary, and never suspend or rerender the component. `examples/src/core/structured` passes a Zod 4 result from one specialist into a later coordinator through built package exports.
-
-Slice 11 adds one bounded Agent scheduler per evaluation domain. Independent components opt into concurrency with ordinary `Promise.all()`, ready provider calls enter a FIFO queue, cancellation rejects queued calls before their providers start, and `maxConcurrentAgents: 0` remains explicitly unlimited. `examples/src/core/concurrency` runs two specialists in parallel and preserves authored result order for their coordinator.
-
-Slice 12 adds static flat `<FollowUp>` turns inside one Agent session. AML resolves the complete turn plan before provider execution, keeps Tool and MCP capabilities attached for the whole session, applies structured output only to the final turn, returns only the final response, and bounds authored inputs with `maxTurnsPerAgent`. `examples/src/core/follow-up` proves three authored turns enter one dist-backed session plan in declaration order.
-
-Slice 13 adds `<Loop>` for schema-validated transactional state between fresh Agent sessions. Each iteration receives one deeply frozen snapshot and one expiring `aml_set_state` capability on its selected outer Agent. Valid patches remain staged through the complete session, changed state discards stale output and commits into the next iteration, and stable state returns the current output. `examples/src/core/loop` proves the built SDK commits once and starts a new provider session with the updated prompt.
-
-Slice 14 adds the independently installable `@aml/agent-codex` adapter. It creates one fresh Codex thread per Agent, preserves FollowUps in that thread, applies read-only provider defaults, attaches authored JavaScript Tools and MCP servers, supports strict structured output, and inherits normal host Codex configuration without claiming capability isolation. `examples/src/integrations/review` runs the same two-specialist parallel review and synthesis workflow through deterministic, OpenCode, or Codex harnesses by changing only provider construction.
-
-Slice 15 adds a runtime-owned Hookable event layer. Applications subscribe with `runtime.on()` or `runtime.once()`, and providers receive an independent subscriber-only registry scoped to their evaluation through `AgentExecutionContext.events`. Immutable provider-neutral trace events, per-listener content redaction, and the dependency-free console tree use that same layer; one failed observer cannot suppress another, and the shared example runner attaches `createConsoleTracer()` to every example.
-
-Slice 16 adds exact-identity immutable Context with `createContext()`, `<Context.Provider>`, and synchronous `useContext()`. Nested and concurrent branches receive persistent lexical scopes without setters, subscriptions, suspension, or rerenders. `examples/src/core/context` captures a session repository in a JavaScript Tool closure without adding that dependency to Agent prompt text.
-
-Nothing under `poc/` is part of the new package or public API.
-
-```sh
-npm run build
-npm run typecheck
-npm run test
-npm run pack:check
-npm run example -- basic
-npm run example -- concurrency
-npm run example -- context
-npm run example -- agent
-npm run example -- follow-up
-npm run example -- loop
-npm run example -- mcp
-npm run example -- sandbox
-npm run example -- skill
-npm run example -- structured
-npm run example -- workspace
-npm run example -- workspace-local
+```text
+AML tree
+  ├─ resolve components and context
+  ├─ acquire Workspace and Sandbox resources
+  ├─ run independent Agents through injected providers
+  ├─ carry their results into parent prompts
+  └─ release resources and return the final output
 ```
 
-`npm run example -- opencode` is an explicit live model call. Set `AML_OPENCODE_MODEL` to override its default model.
+Ordinary JSX children resolve in authored order. Independent work becomes concurrent only when the component explicitly starts it with JavaScript primitives such as `Promise.all()`.
 
-`AML_REVIEW_PROVIDER=codex npm run example -- review` runs the review workflow through the installed Codex SDK and CLI. Set `AML_CODEX_MODEL` to override its default `gpt-5.3-codex-spark` model. Use `AML_REVIEW_PROVIDER=opencode` for the OpenCode harness.
+## Example
 
-`npm run example -- docker` requires a running same-filesystem Docker daemon, a host workspace writable during acquisition, and an `alpine:3.22` image by default. Set `AML_DOCKER_IMAGE` to use another image that provides POSIX `sh` and `sleep`.
+Configure TypeScript to use AML's automatic JSX runtime:
+
+```json
+{
+  "compilerOptions": {
+    "jsx": "react-jsx",
+    "jsxImportSource": "@aml/sdk"
+  }
+}
+```
+
+Then compose ordinary async components, Agents, and typed JavaScript Tools:
+
+```tsx
+import { readFile } from "node:fs/promises"
+
+import { opencodeAgent } from "@aml/agent-opencode"
+import {
+  Agent,
+  AmlRuntime,
+  createConsoleTracer,
+  defineTool,
+  evaluate,
+  Tool,
+} from "@aml/sdk"
+import { z } from "zod"
+
+const OpenCode = opencodeAgent({})
+
+const ReadSource = defineTool({
+  name: "read_source",
+  description: "Read one source file from the current project",
+  input: z.object({ path: z.string() }),
+  execute: async ({ path }) => await readFile(path, "utf8"),
+})
+
+async function Review() {
+  const [correctness, maintainability] = await Promise.all([
+    evaluate(
+      <Agent provider={OpenCode} system="Find concrete correctness defects.">
+        <Tool use={ReadSource} />
+        Review src/index.ts.
+      </Agent>,
+    ),
+    evaluate(
+      <Agent provider={OpenCode} system="Find proportionate maintainability improvements.">
+        <Tool use={ReadSource} />
+        Review src/index.ts.
+      </Agent>,
+    ),
+  ])
+
+  return (
+    <Agent provider={OpenCode} system="Synthesize evidence without inventing findings.">
+      Correctness:
+      {correctness}
+
+      Maintainability:
+      {maintainability}
+    </Agent>
+  )
+}
+
+const runtime = new AmlRuntime()
+runtime.on("trace", createConsoleTracer())
+
+console.log(await runtime.evaluate(<Review />))
+```
+
+The workflow stays the same when the provider changes. Replace `OpenCode` with a Codex provider or another `AgentProvider` implementation without rewriting the AML tree.
+
+## Primitives
+
+| Primitive | Purpose |
+| --- | --- |
+| `<Agent>` | Runs one provider-owned Agent session after its prompt, System content, capabilities, and child Agent results have resolved. |
+| `<System>` | Adds resolved content to the owning Agent's system prompt. Multiple System blocks are joined in authored order. |
+| `<Tool>` | Grants the owning Agent a provider-native Tool by name or a JavaScript Tool created with `defineTool()`. |
+| `<Skill>` | Adds reusable inline or local-file instructions to the owning Agent. |
+| `<Mcp>` | Grants the owning Agent a provider-native MCP server by name or an explicit server created with `defineMcpServer()`. |
+| `<FollowUp>` | Adds a later turn to the same Agent session. FollowUps are flat, ordered, and resolved before the session starts. |
+| `<Loop>` | Repeats fresh Agent sessions over immutable, schema-validated state until an iteration stops changing that state. |
+| `<Sandbox>` | Acquires an ephemeral execution environment and scopes a narrowed filesystem policy to descendant Agents. |
+| `<Workspace>` | Materializes durable files that can survive and be shared across disposable Sandbox leases. |
+| `<Context.Provider>` | Provides an immutable application dependency to descendant components without rendering it into Agent prompts. |
+| `<>...</>` | Groups AML values without adding prompt text or another runtime boundary. |
+
+## Core APIs
+
+| API | Purpose |
+| --- | --- |
+| `AmlRuntime` | Evaluates a complete AML tree, owns budgets and lifecycle events, and returns the final text output. |
+| `evaluate()` | Evaluates AML from inside an active component and returns text or schema-validated structured data. |
+| `defineTool()` | Turns a JavaScript function into a model-callable capability with validated input and optional validated output. |
+| `defineMcpServer()` | Creates an immutable provider-neutral MCP descriptor for a local stdio process or remote Streamable HTTP server. |
+| `createContext()` / `useContext()` | Defines and reads immutable dependencies scoped through the AML tree. |
+| `defineAgentProvider()` | Defines an Agent harness adapter implementing AML's provider contract. |
+| `defineSandboxProvider()` | Defines an ephemeral execution provider. |
+| `defineWorkspaceProvider()` | Defines a durable filesystem materialization provider. |
+| `runtime.on()` / `runtime.once()` | Subscribes to evaluation lifecycle and trace events. |
+
+## Providers
+
+AML's core runtime defines provider contracts and does not import concrete implementations.
+
+| Role | Package | Factory | Notes |
+| --- | --- | --- | --- |
+| Agent | [`@aml/agent-opencode`](./packages/agents/opencode) | `opencodeAgent()` | Runs OpenCode sessions with model overrides, JavaScript Tools, MCP grants, FollowUps, cancellation, and structured output. |
+| Agent | [`@aml/agent-codex`](./packages/agents/codex) | `codexAgent()` | Runs Codex SDK threads with model overrides, read-only host Tools, JavaScript Tools, MCP grants, FollowUps, and structured output. |
+| Sandbox | [`@aml/sandbox-docker`](./packages/sandboxes/docker) | `dockerSandbox()` | Provides confined Docker container leases to compatible Agent providers with explicit filesystem, network, identity, capability, and resource policies. |
+| Workspace | [`@aml/workspace-local`](./packages/workspaces/local) | `localWorkspace()` | Uses an existing local directory as a durable Workspace with cross-process writer locking. |
+| Testing | [`@aml/sdk/testing`](./sdk/src/testing.ts) | Deterministic providers | Supplies deterministic Agent, Sandbox, and Workspace providers plus reusable conformance suites. |
+
+`<System>`, `<Skill>`, `<FollowUp>`, `<Loop>`, Context, and tree evaluation are runtime-owned and work independently of the selected Agent provider. JavaScript Tool and MCP execution ultimately depend on the Agent provider; both bundled Agent adapters implement those capability bridges.
+
+## Examples
+
+Every example is one self-contained AML component. Run one with `npm run example -- <name>`.
+
+| Example | Description |
+| --- | --- |
+| [`basic`](./examples/src/core/basic.tsx) | Resolves ordinary synchronous and asynchronous JSX components from the leaves upward. |
+| [`agent`](./examples/src/core/agent.tsx) | Uses a child Agent to generate System content for its parent. |
+| [`concurrency`](./examples/src/core/concurrency.tsx) | Runs two specialists concurrently and preserves authored result order for synthesis. |
+| [`structured`](./examples/src/core/structured.tsx) | Passes schema-validated Agent data into a later text-producing Agent. |
+| [`context`](./examples/src/core/context.tsx) | Injects a session repository and captures it inside a JavaScript Tool without adding it to the prompt. |
+| [`follow-up`](./examples/src/core/follow-up.tsx) | Authors several turns inside one provider-owned Agent session. |
+| [`loop`](./examples/src/core/loop.tsx) | Advances immutable, validated state between fresh Agent sessions. |
+| [`skill`](./examples/src/capabilities/skill.tsx) | Adds reusable inline instructions to an Agent. |
+| [`mcp`](./examples/src/capabilities/mcp.tsx) | Grants one Agent an MCP server while proving sibling capability isolation. |
+| [`sandbox`](./examples/src/resources/sandbox.tsx) | Narrows nested Sandbox access while sharing one deterministic outer lease. |
+| [`workspace`](./examples/src/resources/workspace.tsx) | Shares one durable materialization across disposable Sandbox leases. |
+| [`opencode`](./examples/src/integrations/opencode.tsx) | Uses a credentialed OpenCode model to call a process-local JavaScript Tool. |
+| [`review`](./examples/src/integrations/review.tsx) | Runs a parallel multi-agent code review through deterministic, OpenCode, or Codex providers. |
+| [`docker`](./examples/src/integrations/docker.tsx) | Inspects a real Docker Sandbox's working directory and confinement settings. |
+| [`workspace-local`](./examples/src/integrations/workspace-local.tsx) | Persists a file across disposable Sandbox runs through the local Workspace provider. |
+
+The deterministic examples are snapshot-tested. Live model, Docker, and filesystem integrations are opt-in.
+
+## Repository layout
+
+```text
+sdk/        @aml/sdk, the AML runtime and public API
+packages/   optional Agent, Sandbox, and Workspace providers
+apps/       runnable products built on AML (reserved for future apps)
+examples/   human-readable client workflows
+poc/        archived Phase 0 experiments and research
+```
+
+[`SPEC.md`](./SPEC.md) is the normative behavior contract. [`PRD.md`](./PRD.md) records product decisions, architecture, and delivery status.
+
+## Development
+
+Requirements:
+
+- Node.js 26 or newer
+- npm 11 or newer
+- Docker only for Docker integration tests and examples
+- Configured OpenCode or Codex credentials only for live Agent examples
+
+Install dependencies:
+
+```sh
+npm install
+```
+
+Common commands:
+
+| Command | Purpose |
+| --- | --- |
+| `npm run test` | Run deterministic tests across every workspace. |
+| `npm run typecheck` | Type-check the SDK, providers, and examples. |
+| `npm run build` | Build every distributable package. |
+| `npm run pack:check` | Validate built exports, packed files, and provider conformance. |
+| `npm run example -- basic` | Run one example through built package exports. |
+| `npm run example -- review` | Run the review workflow with its deterministic provider. |
+| `AML_REVIEW_PROVIDER=opencode npm run example -- review` | Run the review workflow through OpenCode. |
+| `AML_REVIEW_PROVIDER=codex npm run example -- review` | Run the review workflow through Codex. |
+| `npm run example -- docker` | Run the real Docker Sandbox example. |
+
+Package-specific integration suites are available through their workspace scripts:
+
+```sh
+npm run test:integration --workspace=@aml/agent-opencode
+npm run test:integration --workspace=@aml/agent-codex
+npm run test:integration --workspace=@aml/sandbox-docker
+```
+
+## License
+
+This repository does not currently include a license. No permission to use, modify, or redistribute the project is granted until a license is added.
