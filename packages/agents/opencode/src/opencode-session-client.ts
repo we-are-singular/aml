@@ -61,6 +61,10 @@ export interface OpenCodeSessionPromptResult {
  */
 export interface OpenCodeToolAttachment {
   readonly tools: Readonly<Record<string, boolean>>
+
+  /**
+   * Idempotently detaches provider capabilities and invocation-owned resources.
+   */
   close(): Promise<void>
 }
 

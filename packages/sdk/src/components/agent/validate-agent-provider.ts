@@ -1,5 +1,8 @@
 import type { AgentProvider } from "./agent-provider.js"
 
+/**
+ * Captured provider members used without rereading mutable public properties.
+ */
 export interface ValidatedAgentProvider {
   readonly name: string
   readonly provider: AgentProvider

@@ -53,6 +53,10 @@ export interface AgentHostTool {
  */
 export interface AgentJavaScriptTool {
   readonly description: string
+
+  /**
+   * Executes the capability with provider-supplied input and evaluation context.
+   */
   execute(
     input: unknown,
     context: AgentToolExecutionContext,
@@ -103,6 +107,9 @@ export function registeredAmlTool(
     : undefined
 }
 
+/**
+ * Creates or recovers the cross-package exact-identity registry for this realm.
+ */
 function toolRegistry(): WeakMap<object, AgentJavaScriptTool> {
   const amlGlobal = globalThis as typeof globalThis & AmlToolGlobal
   const existing = amlGlobal[AML_TOOL_REGISTRY]

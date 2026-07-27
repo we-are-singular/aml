@@ -58,6 +58,9 @@ class OpenCodeAgentImplementation implements OpenCodeAgentProvider {
   #ownedServer: { close(): void } | undefined
   readonly name = "opencode" as const
 
+  /**
+   * Captures adapter configuration without creating an OpenCode server.
+   */
   constructor(options: OpenCodeAgentOptions) {
     this.#directory = options.directory
     this.#model = options.model
@@ -95,6 +98,9 @@ class OpenCodeAgentImplementation implements OpenCodeAgentProvider {
     return this.#closePromise
   }
 
+  /**
+   * Selects a reusable or invocation-scoped host from the requested capabilities.
+   */
   async #run(
     request: AgentRequest,
     context: AgentExecutionContext,
@@ -117,6 +123,9 @@ class OpenCodeAgentImplementation implements OpenCodeAgentProvider {
     }).run(request, context)
   }
 
+  /**
+   * Owns one temporary OpenCode server for a JavaScript Tool invocation.
+   */
   async #runWithDisposableServer(
     request: AgentRequest,
     context: AgentExecutionContext,
@@ -180,6 +189,9 @@ class OpenCodeAgentImplementation implements OpenCodeAgentProvider {
     return response
   }
 
+  /**
+   * Returns the injected client or one lazily shared package-owned client.
+   */
   async #getClient(): Promise<OpenCodeSessionClient> {
     // An injected port owns its own OpenCode host and attachment semantics.
     if (this.#sessionClient) {
@@ -196,6 +208,9 @@ class OpenCodeAgentImplementation implements OpenCodeAgentProvider {
     return await this.#clientPromise
   }
 
+  /**
+   * Starts the reusable OpenCode host and records package ownership for close().
+   */
   async #createClient(): Promise<OpenCodeSessionClient> {
     const owned = await createOpencode(
       this.#serverOptions === undefined ? {} : { ...this.#serverOptions },
@@ -204,6 +219,9 @@ class OpenCodeAgentImplementation implements OpenCodeAgentProvider {
     return new OpenCodeSdkClient(owned.client)
   }
 
+  /**
+   * Waits for invocation cleanup before releasing the reusable host.
+   */
   async #close(): Promise<void> {
     // Active calls include their invocation-scoped cleanup. Closing the shared
     // server earlier could strand their session deletion requests.
@@ -238,6 +256,9 @@ export function opencodeAgent(
   )
 }
 
+/**
+ * Validates adapter configuration before any lazy provider resources can start.
+ */
 function validateOptions(options: OpenCodeAgentOptions): void {
   // Portable model parsing happens synchronously so invalid configured
   // identities never reach server or session creation.

@@ -18,6 +18,9 @@ export class DeterministicAgentProvider implements AgentProvider {
   ) => AgentResponse | PromiseLike<AgentResponse>
   readonly name: string
 
+  /**
+   * Captures a deterministic response strategy without starting any resources.
+   */
   constructor(
     options: {
       readonly name?: string
@@ -47,6 +50,9 @@ export class DeterministicAgentProvider implements AgentProvider {
       options.respond ?? ((request) => ({ text: request.prompt }))
   }
 
+  /**
+   * Returns recorded calls in provider execution order for behavioral assertions.
+   */
   get calls(): readonly Readonly<{
     context: AgentExecutionContext
     request: AgentRequest
@@ -54,6 +60,9 @@ export class DeterministicAgentProvider implements AgentProvider {
     return this.#calls
   }
 
+  /**
+   * Records one immutable call snapshot before invoking the response strategy.
+   */
   async run(
     request: AgentRequest,
     context: AgentExecutionContext,

@@ -260,6 +260,9 @@ export class OpenCodeToolBridge {
     }
   }
 
+  /**
+   * Authenticates and adapts one Node HTTP request into the MCP transport.
+   */
   async #handleRequest(
     request: Parameters<StreamableHTTPServerTransport["handleRequest"]>[0],
     response: Parameters<StreamableHTTPServerTransport["handleRequest"]>[1],
@@ -287,6 +290,9 @@ export class OpenCodeToolBridge {
     }
   }
 
+  /**
+   * Converts already-snapshotted Tool output into MCP text content.
+   */
   static #resultText(result: AmlJsonValue): string {
     // MCP content is textual. Preserve authored strings exactly and serialize
     // all other already-snapshotted JSON deterministically.

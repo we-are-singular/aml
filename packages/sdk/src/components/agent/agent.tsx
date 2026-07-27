@@ -4,6 +4,9 @@ import {
 } from "../../core/aml-node.js"
 import type { AgentProvider } from "./agent-provider.js"
 
+/**
+ * Provider selection, prompt children, and optional Agent-level overrides.
+ */
 export interface AgentProps {
   readonly children?: AmlRenderable
   readonly model?: string

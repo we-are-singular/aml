@@ -75,11 +75,17 @@ export class ToolCollection {
     return Object.freeze([...this.#tools])
   }
 
+  /**
+   * Captures a provider-owned Tool name after applying portable name rules.
+   */
   #hostTool(name: unknown): AgentTool {
     validateName(name)
     return Object.freeze({ kind: "host", name })
   }
 
+  /**
+   * Recovers the immutable SDK-owned port for one exact defineTool() identity.
+   */
   #javaScriptTool(value: unknown): AgentTool {
     const registered = registeredAmlTool(value)
 
@@ -151,6 +157,9 @@ export class ToolCollection {
   }
 }
 
+/**
+ * Enforces the shared normalized capability-name contract.
+ */
 function validateName(value: unknown): asserts value is string {
   if (
     typeof value !== "string" ||

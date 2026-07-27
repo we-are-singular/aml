@@ -362,6 +362,9 @@ export class OpenCodeSdkClient implements OpenCodeSessionClient {
     }
   }
 
+  /**
+   * Reads and validates the provider-native Tool registry for one directory.
+   */
   async #toolIds(
     directory: string | undefined,
     signal: AbortSignal,
@@ -383,6 +386,9 @@ export class OpenCodeSdkClient implements OpenCodeSessionClient {
     return new Set(data)
   }
 
+  /**
+   * Mirrors OpenCode's MCP identifier normalization for collision detection.
+   */
   static #sanitizeToolName(value: string): string {
     // This mirrors OpenCode v1.18.4's MCP Tool ID normalization. Collisions are
     // rejected before registration rather than silently shadowing a Tool.

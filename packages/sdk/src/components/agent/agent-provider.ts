@@ -7,6 +7,10 @@ import type { AgentResponse } from "./agent-response.js"
  */
 export interface AgentProvider {
   readonly name: string
+
+  /**
+   * Executes one isolated provider session for a fully assembled AML request.
+   */
   run(
     request: AgentRequest,
     context: AgentExecutionContext,

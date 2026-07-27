@@ -29,8 +29,14 @@ export function jsx<Props>(
   )
 }
 
+/**
+ * Multi-child transform alias required by TypeScript's automatic JSX runtime.
+ */
 export const jsxs = jsx
 
+/**
+ * TypeScript JSX contracts exposed by the AML production transform.
+ */
 export namespace JSX {
   export type Element = AmlNode
   export type ElementType = AmlComponent<any>

@@ -11,15 +11,24 @@ export class EvaluationContext {
   #agentCalls = 0
   #spanSequence = 0
 
+  /**
+   * Creates evaluation-owned counters around the caller's cancellation signal.
+   */
   constructor(maxAgentCalls: number, signal: AbortSignal) {
     this.#maxAgentCalls = maxAgentCalls
     this.#signal = signal
   }
 
+  /**
+   * Exposes the one cancellation boundary shared by every nested operation.
+   */
   get signal(): AbortSignal {
     return this.#signal
   }
 
+  /**
+   * Allocates a stable parent-aware identity for one Agent invocation.
+   */
   createTrace(parentSpanId?: string): AmlTraceIdentity {
     this.#spanSequence += 1
 
@@ -30,6 +39,9 @@ export class EvaluationContext {
     })
   }
 
+  /**
+   * Reserves one provider call before side effects begin and enforces the limit.
+   */
   reserveAgentCall(trace: AmlTraceIdentity): void {
     if (
       this.#maxAgentCalls !== 0 &&

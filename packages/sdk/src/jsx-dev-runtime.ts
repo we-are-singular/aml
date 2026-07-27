@@ -24,6 +24,9 @@ export function jsxDEV<Props>(
 
 export { Fragment }
 
+/**
+ * TypeScript JSX contracts exposed by the AML development transform.
+ */
 export namespace JSX {
   export type Element = AmlNode
   export type ElementType = AmlComponent<any>

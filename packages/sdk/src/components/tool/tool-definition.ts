@@ -235,6 +235,9 @@ export class ToolDefinition implements AmlTool {
   }
 }
 
+/**
+ * Rejects whitespace-normalized configuration before a Tool is registered.
+ */
 function validateNormalizedText(value: unknown, label: string): void {
   if (
     typeof value !== "string" ||
