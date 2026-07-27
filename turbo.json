@@ -1,6 +1,6 @@
 {
   "$schema": "https://turborepo.com/schema.json",
-  "globalDependencies": ["tsconfig.json"],
+  "globalDependencies": ["config/**", "tsconfig.json"],
   "tasks": {
     "build": {
       "outputs": ["dist/**"]
@@ -9,6 +9,10 @@
       "dependsOn": ["^build"],
       "cache": false,
       "passThroughEnv": ["AML_*"]
+    },
+    "package:check": {
+      "dependsOn": ["build", "^build"],
+      "outputs": []
     },
     "test": {
       "dependsOn": ["^build"],

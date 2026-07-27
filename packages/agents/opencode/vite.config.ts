@@ -1,30 +1,10 @@
-import { resolve } from "node:path"
-import { defineConfig } from "vitest/config"
+import { createViteLibraryConfig } from "../../../config/create-vite-library-config.js"
 
-export default defineConfig({
-  build: {
-    emptyOutDir: true,
-    lib: {
-      entry: resolve(import.meta.dirname, "src/index.ts"),
-      fileName: () => "index.js",
-      formats: ["es"],
-    },
-    rolldownOptions: {
-      external: [
-        /^node:/,
-        /^@aml\/sdk(?:\/.*)?$/,
-        /^@modelcontextprotocol\/sdk(?:\/.*)?$/,
-        /^@opencode-ai\/sdk(?:\/.*)?$/,
-        /^execa$/,
-      ],
-      output: {
-        minifyInternalExports: false,
-      },
-    },
-    sourcemap: true,
-    target: "es2022",
-  },
-  test: {
-    include: ["tests/**/*.test.ts", "tests/**/*.test.tsx"],
-  },
+export default createViteLibraryConfig({
+  directory: import.meta.dirname,
+  external: [
+    /^@modelcontextprotocol\/sdk(?:\/.*)?$/,
+    /^@opencode-ai\/sdk(?:\/.*)?$/,
+    /^execa$/,
+  ],
 })

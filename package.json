@@ -11,7 +11,7 @@
   "scripts": {
     "build": "turbo run build",
     "example": "turbo run example --filter=@aml/examples --",
-    "pack:check": "npm run pack:check --workspace=@aml/sdk && npm run pack:check --workspace=@aml/agent-opencode && npm run pack:check --workspace=@aml/agent-codex && npm run pack:check --workspace=@aml/sandbox-docker && npm run pack:check --workspace=@aml/workspace-local",
+    "pack:check": "turbo run package:check",
     "test": "turbo run test",
     "typecheck": "turbo run typecheck"
   },

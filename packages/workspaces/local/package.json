@@ -22,7 +22,7 @@
   },
   "scripts": {
     "build": "vite build && tsc --project tsconfig.build.json",
-    "pack:check": "npm run build && node scripts/check-package.ts",
+    "package:check": "node scripts/check-package.ts",
     "test": "vitest run",
     "typecheck": "tsc --noEmit"
   }

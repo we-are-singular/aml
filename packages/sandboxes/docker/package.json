@@ -20,7 +20,7 @@
   },
   "scripts": {
     "build": "vite build && tsc --project tsconfig.build.json",
-    "pack:check": "npm run build && node scripts/check-package.ts",
+    "package:check": "node scripts/check-package.ts",
     "test": "vitest run",
     "test:integration": "AML_DOCKER_TEST=1 vitest run tests/docker-sandbox.integration.test.tsx",
     "typecheck": "tsc --noEmit"
