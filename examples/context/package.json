@@ -1,0 +1,13 @@
+{
+  "name": "@aml/example-context",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@aml/sdk": "*",
+    "zod": "^4.4.3"
+  },
+  "scripts": {
+    "example": "vite-node main.tsx",
+    "typecheck": "tsc --noEmit"
+  }
+}

@@ -14,6 +14,7 @@
     "example:basic": "turbo run example --filter=@aml/example-basic",
     "example:codex": "AML_REVIEW_PROVIDER=codex turbo run example --filter=@aml/example-review",
     "example:concurrency": "turbo run example --filter=@aml/example-concurrency",
+    "example:context": "turbo run example --filter=@aml/example-context",
     "example:docker": "turbo run example --filter=@aml/example-docker",
     "example:follow-up": "turbo run example --filter=@aml/example-follow-up",
     "example:loop": "turbo run example --filter=@aml/example-loop",

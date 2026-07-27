@@ -1,5 +1,7 @@
 import type { AmlModelSchema } from "../agent/aml-model-schema.js"
 import type { AgentProps } from "../agent/agent.js"
+import { ContextRegistry } from "../context/context-registry.js"
+import { ContextScope } from "../context/context-scope.js"
 import {
   AmlNode,
   type AmlRenderable,
@@ -8,12 +10,14 @@ import { ComponentEvaluationContext } from "../../core/component-evaluation-cont
 import { EvaluationError } from "../../core/evaluation-error.js"
 
 interface ResolveFrame {
+  readonly contextScope: ContextScope
   readonly depth: number
   readonly kind: "resolve"
   readonly value: AmlRenderable
 }
 
 interface ArrayFrame {
+  readonly contextScope: ContextScope
   readonly depth: number
   readonly index: number
   readonly kind: "array"
@@ -33,6 +37,7 @@ type SelectionFrame = ArrayFrame | ReleaseFrame | ResolveFrame
 interface LoopAgentSelection {
   readonly activeAncestors: ReadonlySet<object>
   readonly agent: AmlNode<AgentProps>
+  readonly contextScope: ContextScope
   readonly parentDepth: number
 }
 
@@ -53,23 +58,30 @@ export class LoopAgentSelector {
   }
 
   /**
-   * Unwraps arrays, Fragments, Promises, and ordinary components to one Agent.
+   * Unwraps transparent Context and component shapes to one outer Agent.
    */
   async select(
     value: AmlRenderable,
     initialDepth: number,
     activeAncestors: ReadonlySet<object>,
+    initialContextScope: ContextScope,
     signal: AbortSignal,
     evaluateNested: (
       value: AmlRenderable,
       schema: AmlModelSchema<unknown, unknown> | undefined,
       depth: number,
       activeAncestors: ReadonlySet<object>,
+      contextScope: ContextScope,
     ) => Promise<unknown>,
   ): Promise<LoopAgentSelection> {
     const activeValues = new Set(activeAncestors)
     const frames: SelectionFrame[] = [
-      { depth: initialDepth, kind: "resolve", value },
+      {
+        contextScope: initialContextScope,
+        depth: initialDepth,
+        kind: "resolve",
+        value,
+      },
     ]
     let selection: LoopAgentSelection | undefined
 
@@ -96,6 +108,7 @@ export class LoopAgentSelector {
         const child = frame.value[frame.index]
         frames.push({ ...frame, index: frame.index + 1 })
         frames.push({
+          contextScope: frame.contextScope,
           depth: frame.depth,
           kind: "resolve",
           value: child,
@@ -123,6 +136,7 @@ export class LoopAgentSelector {
         activeValues.add(current)
         frames.push({ kind: "release", value: current })
         frames.push({
+          contextScope: frame.contextScope,
           depth: frame.depth,
           index: 0,
           kind: "array",
@@ -169,13 +183,36 @@ export class LoopAgentSelector {
           selection = Object.freeze({
             activeAncestors: new Set(activeValues),
             agent: current as AmlNode<AgentProps>,
+            contextScope: frame.contextScope,
             parentDepth: frame.depth,
           })
           continue
         }
 
-        // Every built-in primitive except Agent owns runtime behavior rather
-        // than transparent composition and is therefore invalid as a wrapper.
+        // Context Provider is the only built-in wrapper that can be selected
+        // without executing Agent children or acquiring a runtime resource.
+        if (primitiveKind === "context") {
+          const binding = ContextRegistry.captureProvider(
+            current.type,
+            current.props,
+          )
+
+          activeValues.add(current)
+          frames.push({ kind: "release", value: current })
+          frames.push({
+            contextScope: frame.contextScope.provide(
+              binding.definition,
+              binding.value,
+            ),
+            depth: nodeDepth,
+            kind: "resolve",
+            value: binding.children,
+          })
+          continue
+        }
+
+        // Every other built-in primitive owns execution behavior rather than
+        // transparent composition and is invalid around a Loop's outer Agent.
         if (primitiveKind !== undefined) {
           throw new EvaluationError(
             "<Loop> render must resolve to exactly one <Agent>",
@@ -194,11 +231,14 @@ export class LoopAgentSelector {
                 nestedSchema,
                 nodeDepth,
                 new Set(activeValues),
+                frame.contextScope,
               ),
+            frame.contextScope,
           )
 
         signal.throwIfAborted()
         frames.push({
+          contextScope: frame.contextScope,
           depth: nodeDepth,
           kind: "resolve",
           value: componentOutput as AmlRenderable,
@@ -225,6 +265,7 @@ export class LoopAgentSelector {
 
           signal.throwIfAborted()
           frames.push({
+            contextScope: frame.contextScope,
             depth: frame.depth,
             kind: "resolve",
             value: resolved as AmlRenderable,

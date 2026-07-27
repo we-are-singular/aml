@@ -1,6 +1,8 @@
 import { AsyncLocalStorage } from "node:async_hooks"
 
 import type { AmlModelSchema } from "../components/agent/aml-model-schema.js"
+import type { RegisteredContext } from "../components/context/context-registry.js"
+import { ContextScope } from "../components/context/context-scope.js"
 import type { AmlRenderable } from "./aml-node.js"
 import { EvaluationError } from "./evaluation-error.js"
 
@@ -11,6 +13,7 @@ type NestedEvaluator = (
 
 interface ComponentEvaluationBinding {
   active: boolean
+  contextScope: ContextScope | undefined
   evaluate: NestedEvaluator | undefined
   readonly pending: Set<Promise<unknown>>
 }
@@ -24,7 +27,7 @@ interface AmlEvaluationGlobal {
 }
 
 /**
- * Propagates one component-local evaluation capability through awaited work.
+ * Propagates component-local evaluation and Context access through awaited work.
  *
  * AsyncLocalStorage preserves the binding across `await`, while the explicit
  * active flag closes the capability as soon as the component settles. The flag
@@ -71,7 +74,41 @@ export class ComponentEvaluationContext {
   }
 
   /**
-   * Masks component-local evaluation from provider-owned callback chains.
+   * Reads one Context through the currently active component binding.
+   */
+  static readContext<Value>(
+    definition: RegisteredContext,
+  ): Value {
+    const binding = ComponentEvaluationContext.#storage.getStore()
+    const contextScope = binding?.contextScope
+
+    if (
+      binding === undefined ||
+      !binding.active ||
+      contextScope === undefined
+    ) {
+      throw new EvaluationError(
+        "useContext() is only available while an AML component is active",
+      )
+    }
+
+    const lookup = contextScope.lookup(definition)
+
+    if (lookup.found) {
+      return lookup.value as Value
+    }
+
+    if (definition.hasDefault) {
+      return definition.defaultValue as Value
+    }
+
+    throw new EvaluationError(
+      `Context "${definition.name}" has no Provider or default value`,
+    )
+  }
+
+  /**
+   * Masks component-local evaluation and Context from provider callbacks.
    *
    * A provider that awaited another Agent while retaining its current scheduler
    * slot could deadlock the domain. Agent-as-Tool is intentionally not part of
@@ -87,9 +124,11 @@ export class ComponentEvaluationContext {
   static async invoke(
     component: () => unknown,
     evaluateNested: NestedEvaluator,
+    contextScope: ContextScope,
   ): Promise<unknown> {
     const binding: ComponentEvaluationBinding = {
       active: true,
+      contextScope,
       evaluate: evaluateNested,
       pending: new Set(),
     }
@@ -144,6 +183,7 @@ export class ComponentEvaluationContext {
       // Dropping the closure also prevents a detached timer from retaining the
       // complete runtime and evaluation domain after access has been revoked.
       binding.active = false
+      binding.contextScope = undefined
       binding.evaluate = undefined
     }
 

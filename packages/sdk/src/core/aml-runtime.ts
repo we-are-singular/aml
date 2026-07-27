@@ -6,6 +6,8 @@ import { AgentExecutor } from "../components/agent/agent-executor.js"
 import { ModelSchema } from "../components/agent/model-schema.js"
 import type { ValidatedAgentProvider } from "../components/agent/validate-agent-provider.js"
 import type { FollowUpProps } from "../components/follow-up/follow-up.js"
+import { ContextRegistry } from "../components/context/context-registry.js"
+import { ContextScope } from "../components/context/context-scope.js"
 import { LoopAgentSelector } from "../components/loop/loop-agent-selector.js"
 import { LoopEvaluator } from "../components/loop/loop-evaluator.js"
 import type { LoopProps } from "../components/loop/loop.js"
@@ -53,6 +55,7 @@ import type {
 // nearest Agent plan while ordinary values preserve their authored position.
 interface TextTarget {
   readonly chunks: string[]
+  readonly contextScope: ContextScope
   readonly kind: "text"
   readonly parentSpanId: string | undefined
   readonly sandbox: Readonly<SandboxSession> | undefined
@@ -66,6 +69,7 @@ interface TextTarget {
 
 interface AgentTarget {
   readonly acceptsMessageDescriptors: boolean
+  readonly contextScope: ContextScope
   readonly followUps: string[]
   readonly kind: "agent"
   readonly mcpServers: McpCollection
@@ -104,9 +108,10 @@ interface EvaluationDomain {
 }
 
 /**
- * Lexical execution state inherited by a component-local evaluation.
+ * Lexical Context and resource state inherited by component-local evaluation.
  */
 interface EvaluationScope {
+  readonly contextScope: ContextScope
   readonly depth: number
   readonly parentSpanId: string | undefined
   readonly sandbox: Readonly<SandboxSession> | undefined
@@ -430,6 +435,7 @@ export class AmlRuntime {
         value,
         domain,
         {
+          contextScope: ContextScope.empty,
           depth: 0,
           parentSpanId: domain.context.rootTrace.spanId,
           sandbox: undefined,
@@ -450,7 +456,8 @@ export class AmlRuntime {
    * Resolves one root or component-local subtree inside an existing domain.
    *
    * Each invocation owns resources it acquires, but inherits the caller's
-   * lexical Sandbox, Workspace, depth, trace parent, budgets, and cancellation.
+   * lexical Context, Sandbox, Workspace, depth, trace parent, budgets, and
+   * cancellation.
    */
   async #evaluateInDomain(
     value: AmlRenderable,
@@ -479,6 +486,7 @@ export class AmlRuntime {
           }
     const output: TextTarget = {
       chunks: [],
+      contextScope: scope.contextScope,
       kind: "text",
       parentSpanId: scope.parentSpanId,
       sandbox: scope.sandbox,
@@ -843,6 +851,7 @@ export class AmlRuntime {
 
             const plan: AgentTarget = {
               acceptsMessageDescriptors: true,
+              contextScope: frame.target.contextScope,
               followUps: [],
               kind: "agent",
               mcpServers: new McpCollection(this.#allowedMcpServers),
@@ -892,6 +901,33 @@ export class AmlRuntime {
             continue
           }
 
+          // Context Provider is a transparent lexical wrapper. It changes only
+          // the binding map inherited by descendants and preserves the current
+          // text or Agent descriptor channel exactly.
+          if (primitiveKind === "context") {
+            const binding = ContextRegistry.captureProvider(
+              current.type,
+              current.props,
+            )
+            const scopedTarget: ResolutionTarget = {
+              ...frame.target,
+              contextScope: frame.target.contextScope.provide(
+                binding.definition,
+                binding.value,
+              ),
+            }
+
+            activeValues.add(current)
+            frames.push({ kind: "release", value: current })
+            frames.push({
+              depth: nodeDepth,
+              kind: "resolve",
+              target: scopedTarget,
+              value: binding.children,
+            })
+            continue
+          }
+
           // <Loop> owns repeated fresh Agent sessions and one staged state
           // capability. Its render callback is selected to one outer Agent
           // before any of that Agent's descendants execute.
@@ -937,12 +973,14 @@ export class AmlRuntime {
                       value,
                       nodeDepth,
                       new Set(activeValues),
+                      frame.target.contextScope,
                       context.signal,
                       async (
                         nestedValue,
                         nestedSchema,
                         nestedDepth,
                         nestedAncestors,
+                        nestedContextScope,
                       ) => {
                         const modelSchema =
                           nestedSchema === undefined
@@ -953,6 +991,7 @@ export class AmlRuntime {
                           nestedValue,
                           domain,
                           {
+                            contextScope: nestedContextScope,
                             depth: nestedDepth,
                             parentSpanId: trace.spanId,
                             sandbox: frame.target.sandbox,
@@ -968,6 +1007,7 @@ export class AmlRuntime {
                     selection.agent,
                     domain,
                     {
+                      contextScope: selection.contextScope,
                       depth: selection.parentDepth,
                       parentSpanId: trace.spanId,
                       sandbox: frame.target.sandbox,
@@ -1011,6 +1051,7 @@ export class AmlRuntime {
             const props = current.props as Readonly<FollowUpProps>
             const followUpTarget: TextTarget = {
               chunks: [],
+              contextScope: frame.target.contextScope,
               kind: "text",
               parentSpanId: frame.target.parentSpanId,
               sandbox: frame.target.sandbox,
@@ -1233,6 +1274,7 @@ export class AmlRuntime {
 
             const skillTarget: TextTarget = {
               chunks: [],
+              contextScope: frame.target.contextScope,
               kind: "text",
               parentSpanId: trace.spanId,
               sandbox: frame.target.sandbox,
@@ -1289,6 +1331,7 @@ export class AmlRuntime {
             )
             const systemTarget: TextTarget = {
               chunks: [],
+              contextScope: frame.target.contextScope,
               kind: "text",
               parentSpanId: trace.spanId,
               sandbox: frame.target.sandbox,
@@ -1347,6 +1390,7 @@ export class AmlRuntime {
                   nestedValue,
                   domain,
                   {
+                    contextScope: frame.target.contextScope,
                     depth: nodeDepth,
                     parentSpanId: trace.spanId,
                     sandbox: frame.target.sandbox,
@@ -1356,6 +1400,7 @@ export class AmlRuntime {
                   new Set(activeValues),
                 )
               },
+              frame.target.contextScope,
             )
           } catch (error) {
             context.failTraceSpan(span, error)

@@ -19,6 +19,14 @@ export {
 } from "./components/loop/loop.js"
 export { System, type SystemProps } from "./components/system/system.js"
 
+// Immutable downward-scoped application dependencies.
+export type {
+  AmlContext,
+  ContextProviderProps,
+} from "./components/context/aml-context.js"
+export { createContext } from "./components/context/create-context.js"
+export { useContext } from "./components/context/use-context.js"
+
 // Agent-scoped provider-native and explicitly configured MCP capabilities.
 export type {
   AgentMcpServer,

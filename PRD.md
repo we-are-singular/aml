@@ -1,6 +1,6 @@
 # Agent Markup Language product requirements and delivery plan
 
-Status: Phase 1 — MVP complete; Slices 0–15 done; Slice 16 pending
+Status: Phase 1 — planned Slices 0–16 complete
 
 This is the living product definition, architecture plan, implementation roadmap, and progress tracker for AML. It is not a normative runtime contract. Settled behavior belongs in `SPEC.md`; this document records why AML exists, how it is organized, what is being built next, and which slices have been proven.
 
@@ -176,7 +176,7 @@ The status table is the canonical implementation tracker. A slice moves to `Done
 | Slice 13 | `<Loop>` | Done |
 | Slice 14 | Codex Agent package | Done |
 | Slice 15 | Observability consumers | Done |
-| Slice 16 | Context | Pending |
+| Slice 16 | Context | Done |
 
 Allowed statuses are `Pending`, `In progress`, `Blocked`, and `Done`. A blocked slice includes its blocker directly in the status cell.
 
@@ -327,6 +327,9 @@ packages/sdk/
 │   │   │   ├── skill.tsx
 │   │   │   └── skill-evaluator.ts
 │   │   ├── context/
+│   │   │   ├── aml-context.ts
+│   │   │   ├── context-registry.ts
+│   │   │   ├── context-scope.ts
 │   │   │   ├── create-context.ts
 │   │   │   └── use-context.ts
 │   │   ├── loop/
@@ -810,6 +813,10 @@ Singular review found component authority escaping through custom thenables, fla
 
 Proof: a session repository is captured by a Tool without entering prompt text.
 
+Status: Done on 2026-07-27. `createContext()` now defines an exact-identity required or explicitly defaulted dependency, `<Context.Provider>` transparently creates one persistent lexical binding, and synchronous `useContext()` reads that binding only during an active ordinary component invocation. Nested Providers shadow only their subtree; component-local `evaluate()`, structured Agent selection, Loop outer-Agent selection, concurrent branches, concurrent root evaluations, and compatible physical SDK copies preserve the correct immutable scope. Values are retained by identity without evaluation, cloning, freezing, prompt insertion, or trace serialization. Provider callbacks and detached component work cannot retain ambient Context authority.
+
+The deterministic proof captures a session repository in a JavaScript Tool closure and verifies that neither the repository nor its private data enters Agent prompt or trace content. Singular review found duplicated Provider validation and a stateful-accessor ordering regression introduced while centralizing it. The corrected `ContextRegistry.captureProvider()` owns exact registration, missing-value validation, and one-time value-before-children capture for both evaluator paths. Two hundred fourteen SDK tests, all workspace type checks, all package builds and tests, SDK package and cross-copy validation, the dist-backed Context example, and diff validation pass. Final correctness, skeptical intent, and maintainability review lanes reported no actionable findings.
+
 Claude, Daytona, Cloudflare, S3, the CLI, and the website receive separate slices only when their requirements are approved. Their target directories document intended ownership, not committed implementation.
 
 ## Definition of done
@@ -833,15 +840,7 @@ Before marking a slice `Done`:
 
 ## Immediate implementation boundary
 
-Slices 0 through 15 and the MVP are complete. The next implementation gate is Slice 16 only:
-
-1. settle the immutable Context contract in `SPEC.md`
-2. expose `createContext()` and `useContext()` without reactive state or rerender semantics
-3. provide one downward-scoped provider component with nested shadowing
-4. preserve branch and concurrent-evaluation isolation
-5. prove a session repository reaches a JavaScript Tool through closure capture without entering prompt text or trace content
-
-No CLI, website, Sandbox expansion, Workspace expansion, OpenTelemetry package, mutable state, or unrelated primitive belongs in Slice 16.
+Slices 0 through 16 and the approved Phase 1 plan are complete. No next implementation slice is currently approved. A new primitive, provider, CLI, website, Sandbox or Workspace expansion, OpenTelemetry exporter, or mutable-state design must begin as an explicit SPEC and PRD change rather than leaking into the completed runtime.
 
 ## Explicitly deferred
 

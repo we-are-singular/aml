@@ -66,10 +66,18 @@ interface BuiltSdk {
       readonly workspaceId: string
     }
   }
+  createContext<Value>(
+    name: string,
+    defaultValue?: Value,
+  ): {
+    readonly name: string
+    readonly Provider: unknown
+  }
   defineWorkspaceProvider(provider: unknown): unknown
   defineMcpServer(options: unknown): unknown
   defineTool(options: unknown): unknown
   evaluate(value: unknown, schema?: unknown): Promise<unknown>
+  useContext<Value>(context: unknown): Value
 }
 
 interface BuiltJsxRuntime {
@@ -488,6 +496,7 @@ try {
       'import { AmlRuntime, type AmlRenderable } from "@aml/sdk-a"',
       'import type { McpProps, ToolProps } from "@aml/sdk-a"',
       'import { defineMcpServer, defineTool, evaluate } from "@aml/sdk-b"',
+      'import { createContext, useContext } from "@aml/sdk-b"',
       'import { jsx } from "@aml/sdk-b/jsx-runtime"',
       "",
       'const foreignNode = jsx(() => "cross-copy", {})',
@@ -495,6 +504,13 @@ try {
       "await new AmlRuntime().evaluate(renderable)",
       "await new AmlRuntime().evaluate(",
       '  jsx(async () => `nested:${await evaluate("data")}`, {}),',
+      ")",
+      'const CrossCopyContext = createContext<string>("CrossCopy")',
+      "await new AmlRuntime().evaluate(",
+      "  jsx(CrossCopyContext.Provider, {",
+      '    value: "cross-copy-context",',
+      "    children: jsx(() => useContext(CrossCopyContext), {}),",
+      "  }),",
       ")",
       "",
       "const schema = {",
@@ -577,6 +593,29 @@ try {
   if (crossCopyNestedOutput !== "nested:data") {
     throw new Error(
       `Unexpected cross-copy nested output: ${crossCopyNestedOutput}`,
+    )
+  }
+
+  // Context uses the same realm-wide exact-identity contract as AML nodes.
+  // The Provider and useContext() may come from copy B while copy A owns the
+  // evaluator and active component invocation.
+  const crossCopyContext =
+    copyBPackage.createContext<string>("CrossCopy")
+  const crossCopyContextOutput =
+    await new copyA.AmlRuntime().evaluate(
+      copyB.jsx(crossCopyContext.Provider, {
+        children: copyB.jsx(
+          () =>
+            copyBPackage.useContext<string>(crossCopyContext),
+          {},
+        ),
+        value: "cross-copy-context",
+      }),
+    )
+
+  if (crossCopyContextOutput !== "cross-copy-context") {
+    throw new Error(
+      `Unexpected cross-copy Context output: ${crossCopyContextOutput}`,
     )
   }
 

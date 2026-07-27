@@ -965,16 +965,46 @@ await runtime.evaluate(
 );
 ```
 
+The public contract is:
+
+```ts
+interface AmlContext<Value> {
+  readonly name: string;
+  readonly Provider: AmlComponent<ContextProviderProps<Value>>;
+}
+
+interface ContextProviderProps<Value> {
+  readonly children?: AmlRenderable;
+  readonly value: Value;
+}
+
+function createContext<Value>(name: string): AmlContext<Value>;
+function createContext<Value>(
+  name: string,
+  defaultValue: Value,
+): AmlContext<Value>;
+
+function useContext<Value>(context: AmlContext<Value>): Value;
+```
+
+The context name must be a non-empty normalized string and appears in diagnostics. Omitting the second `createContext()` argument creates a required context. Passing a second argument creates a defaulted context, including when that argument is explicitly `undefined`.
+
 Context obeys lexical scope:
 
 - descendants read the nearest matching Provider
 - nested Providers shadow only their own subtree
 - parallel branches receive isolated context maps
 - an optional default value supplies a fallback
-- missing required context throws a named error
+- missing required context throws an `EvaluationError` that names the context
 - values are never rendered or serialized implicitly
 
-Context is not reactive state. It has no setter, subscription, invalidation, or re-render behavior. Use it for request identity, repositories, policy objects, sandbox handles, configuration, and trace baggage.
+`<Context.Provider>` is a transparent lexical wrapper. It preserves the surrounding text or Agent descriptor channel while changing the binding visible to descendant function components. Its required `value` prop is application data, not AML: the runtime captures the value by identity and does not evaluate, clone, freeze, serialize, trace, or append it. “Immutable” describes the binding, not the provided object. AML exposes no operation that replaces a binding after the Provider is entered; application-owned repositories and clients may still have their own internal mutable state.
+
+`useContext()` is synchronous and valid only while AML is invoking an ordinary function component. It reads the nearest binding active at that component occurrence. Calling it outside component invocation, from provider-owned callbacks, or from detached work after a component settles fails closed. A component-local `evaluate()` inherits the binding map active at the calling component, while Providers created inside that nested tree remain local to that tree.
+
+Context identity is the exact object returned by `createContext()`, not its name. Two contexts with the same name do not share values. Compatible physical copies of `@aml/sdk` in one JavaScript realm share the context-definition registry and component invocation storage, so a Context authored through one copy can be provided, consumed, and evaluated through another.
+
+Context is not reactive state. It has no setter, subscription, invalidation, re-render, or implicit propagation into later unrelated evaluations. Use it for request identity, repositories, policy objects, configuration, and trace baggage. Sandbox handles remain available through `AgentExecutionContext`; putting one in Context does not change Sandbox ownership or confinement.
 
 Tools should capture scoped dependencies while the component is active. This provides session-based tools without mutable globals.
 

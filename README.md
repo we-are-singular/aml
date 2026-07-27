@@ -8,7 +8,7 @@ The project is being rebuilt from the Phase 0 proof of concept:
 - [PRD.md](./PRD.md) defines the product, architecture, implementation roadmap, and delivery status.
 - [`poc/`](./poc/) preserves disposable prototype code and research.
 
-Phase 1 Slice 0 implements the fresh evaluation foundation:
+The Phase 1 rebuild is organized as reviewed implementation slices:
 
 - `@aml/sdk` exports the automatic JSX runtime and `AmlRuntime`.
 - Components are invoked once per evaluated occurrence.
@@ -43,6 +43,10 @@ Slice 13 adds `<Loop>` for schema-validated transactional state between fresh Ag
 
 Slice 14 adds the independently installable `@aml/agent-codex` adapter. It creates one fresh Codex thread per Agent, preserves FollowUps in that thread, applies read-only provider defaults, attaches authored JavaScript Tools and MCP servers, supports strict structured output, and inherits normal host Codex configuration without claiming capability isolation. `examples/review` runs the same two-specialist parallel review and synthesis workflow through deterministic, OpenCode, or Codex harnesses by changing only provider construction.
 
+Slice 15 adds evaluation-local observability with immutable provider-neutral spans and point events, content redaction by default, failure-isolated sinks, and a dependency-free console tree. Provider calls, components, resource scopes, Tools, capabilities, turns, and Loop transitions share one attributable trace hierarchy. `examples/observability` demonstrates deterministic tracing and an optional live Codex run.
+
+Slice 16 adds exact-identity immutable Context with `createContext()`, `<Context.Provider>`, and synchronous `useContext()`. Nested and concurrent branches receive persistent lexical scopes without setters, subscriptions, suspension, or rerenders. `examples/context` captures a session repository in a JavaScript Tool closure without adding that dependency to Agent prompt text.
+
 Nothing under `poc/` is part of the new package or public API.
 
 ```sh
@@ -52,12 +56,14 @@ npm run test
 npm run pack:check
 npm run example:basic
 npm run example:concurrency
+npm run example:context
 AML_CODEX_MODEL=gpt-5.3-codex-spark npm run example:codex
 npm run example:agent
 npm run example:docker
 npm run example:follow-up
 npm run example:loop
 npm run example:mcp
+npm run example:observability
 npm run example:opencode
 npm run example:review
 npm run example:review:opencode
