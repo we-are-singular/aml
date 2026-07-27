@@ -20,6 +20,7 @@ import {
  */
 export class AgentExecutor {
   readonly #agentProvider: Readonly<ValidatedAgentProvider> | undefined
+  readonly #maxTurnsPerAgent: number
   readonly #system: string
 
   /**
@@ -27,6 +28,7 @@ export class AgentExecutor {
    */
   constructor(options: {
     readonly agentProvider?: AgentProvider
+    readonly maxTurnsPerAgent: number
     readonly system?: string
   }) {
     if (options.system !== undefined && typeof options.system !== "string") {
@@ -37,6 +39,7 @@ export class AgentExecutor {
       options.agentProvider === undefined
         ? undefined
         : validateAgentProvider(options.agentProvider)
+    this.#maxTurnsPerAgent = options.maxTurnsPerAgent
     this.#system = options.system ?? ""
   }
 
@@ -68,6 +71,7 @@ export class AgentExecutor {
    */
   async execute(input: {
     readonly context: EvaluationContext
+    readonly followUps: readonly string[]
     readonly mcpServers: readonly AgentMcpServer[]
     readonly output?: ModelSchema<unknown>
     readonly prompt: string
@@ -129,7 +133,33 @@ export class AgentExecutor {
 
     systemFragments.push(...input.systemFragments)
 
+    const prompt = input.prompt.trim()
+    const followUps = input.followUps.map((followUp) => {
+      const text = followUp.trim()
+
+      if (text.length === 0) {
+        throw new EvaluationError(
+          "<FollowUp> must resolve to non-empty text",
+        )
+      }
+
+      return text
+    })
+    const turnCount = 1 + followUps.length
+
+    if (
+      this.#maxTurnsPerAgent !== 0 &&
+      turnCount > this.#maxTurnsPerAgent
+    ) {
+      throw new EvaluationError(
+        `Agent ${input.trace.spanId} exceeded maxTurnsPerAgent ${this.#maxTurnsPerAgent}`,
+      )
+    }
+
     const request: AgentRequest = Object.freeze({
+      ...(followUps.length === 0
+        ? {}
+        : { followUps: Object.freeze(followUps) }),
       ...(input.props.model === undefined
         ? {}
         : { model: input.props.model }),
@@ -142,7 +172,7 @@ export class AgentExecutor {
               type: "json" as const,
             }),
           }),
-      prompt: input.prompt.trim(),
+      prompt,
       system: systemFragments.join("\n"),
       tools: input.tools,
       trace: input.trace,

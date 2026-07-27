@@ -6,6 +6,7 @@ import {
   defineMcpServer,
   defineTool,
   evaluate,
+  FollowUp,
   Mcp,
   Tool,
 } from "@aml/sdk"
@@ -17,6 +18,36 @@ import { OpenCodeToolBridge } from "../src/opencode-tool-bridge.js"
 
 const liveTest =
   process.env.AML_OPENCODE_LIVE === "1" ? it : it.skip
+
+liveTest(
+  "retains conversation history across real OpenCode FollowUps",
+  async () => {
+    const secret = randomUUID()
+    const provider = opencodeAgent({
+      model:
+        process.env.AML_OPENCODE_MODEL ?? "opencode-go/minimax-m3",
+      server: { port: 0, timeout: 15_000 },
+    })
+
+    try {
+      const output = await new AmlRuntime({
+        agentProvider: provider,
+      }).evaluate(
+        <Agent>
+          Remember the exact token "{secret}". Reply only with acknowledged.
+          <FollowUp>
+            Return only the exact token from the preceding message.
+          </FollowUp>
+        </Agent>,
+      )
+
+      expect(output.trim()).toBe(secret)
+    } finally {
+      await provider.close()
+    }
+  },
+  120_000,
+)
 
 liveTest(
   "runs one credentialed opencode-go Agent with a JavaScript Tool",

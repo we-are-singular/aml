@@ -26,6 +26,7 @@ interface BuiltSdk {
       readonly name: string
       run(
         request: {
+          readonly followUps?: readonly string[]
           readonly mcpServers: readonly {
             readonly definition?: { readonly name: string }
             readonly kind: string
@@ -35,6 +36,7 @@ interface BuiltSdk {
             readonly jsonSchema: Readonly<Record<string, unknown>>
             readonly type: "json"
           }
+          readonly prompt: string
           readonly tools: readonly {
             execute?(
               input: unknown,
@@ -52,6 +54,7 @@ interface BuiltSdk {
     evaluate(value: unknown): Promise<string>
   }
   readonly Fragment: unknown
+  readonly FollowUp: unknown
   readonly Mcp: unknown
   readonly Tool: unknown
   readonly Workspace: unknown
@@ -178,6 +181,7 @@ const {
   defineWorkspaceProvider,
   evaluate: componentEvaluate,
   Fragment: publicFragment,
+  FollowUp: publicFollowUp,
   Workspace: publicWorkspace,
   WorkspaceConflictError,
 } = (await import(pathToFileURL(resolvedEntries.index).href)) as BuiltSdk
@@ -208,6 +212,36 @@ const builtOutput = await new AmlRuntime().evaluate(
 
 if (builtOutput !== "built runtime") {
   throw new Error(`Unexpected built SDK output: ${builtOutput}`)
+}
+
+const followUpOutput = await new AmlRuntime({
+  agentProvider: {
+    name: "follow-up-package-check",
+    async run(request) {
+      if (
+        !Array.isArray(request.followUps) ||
+        request.followUps.join("|") !== "challenge|final"
+      ) {
+        throw new Error("Built SDK omitted its FollowUp turn plan")
+      }
+
+      return { text: request.followUps.at(-1) ?? request.prompt }
+    },
+  },
+}).evaluate(
+  runtimeJsx(publicAgent, {
+    children: [
+      "initial",
+      runtimeJsx(publicFollowUp, { children: "challenge" }),
+      runtimeJsx(publicFollowUp, { children: "final" }),
+    ],
+  }),
+)
+
+if (followUpOutput !== "final") {
+  throw new Error(
+    `Unexpected built SDK FollowUp output: ${followUpOutput}`,
+  )
 }
 
 const modelSchema = {

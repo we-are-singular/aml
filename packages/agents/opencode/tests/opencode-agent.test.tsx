@@ -9,6 +9,7 @@ import {
   defineMcpServer,
   defineTool,
   evaluate,
+  FollowUp,
   Mcp,
   Tool,
 } from "@aml/sdk"
@@ -251,7 +252,10 @@ describe("opencodeAgent", () => {
 
     async function Workflow() {
       const result = await evaluate(
-        <Agent provider={provider}>Count findings.</Agent>,
+        <Agent provider={provider}>
+          Count findings.
+          <FollowUp>Return the final structured count.</FollowUp>
+        </Agent>,
         Result,
       )
       return `count:${result.count}`
@@ -260,7 +264,9 @@ describe("opencodeAgent", () => {
     await expect(new AmlRuntime().evaluate(<Workflow />)).resolves.toBe(
       "count:3",
     )
-    expect(client.promptCalls[0]?.input.output).toMatchObject({
+    expect(client.promptCalls).toHaveLength(2)
+    expect(client.promptCalls[0]?.input.output).toBeUndefined()
+    expect(client.promptCalls[1]?.input.output).toMatchObject({
       jsonSchema: {
         properties: { count: { type: "number" } },
         type: "object",
@@ -268,6 +274,9 @@ describe("opencodeAgent", () => {
       type: "json",
     })
     expect(client.promptCalls[0]?.input.tools).toEqual({
+      "*": false,
+    })
+    expect(client.promptCalls[1]?.input.tools).toEqual({
       "*": false,
       StructuredOutput: true,
     })
@@ -343,6 +352,82 @@ describe("opencodeAgent", () => {
       [],
     ])
     expect(client.capabilityAttachmentClose).toHaveBeenCalledTimes(2)
+    await provider.close()
+  })
+
+  it("reuses one session and one capability attachment across FollowUps", async () => {
+    const client = new RecordingSessionClient()
+    client.prompt = async (input, signal) => {
+      client.promptCalls.push({ input, signal })
+      return {
+        parts: [
+          {
+            text: `response-${client.promptCalls.length}`,
+            type: "text",
+          },
+        ],
+      }
+    }
+    const provider = opencodeAgent({ sessionClient: client })
+    const configured = defineMcpServer({
+      name: "project",
+      transport: {
+        type: "streamable-http",
+        url: "https://example.com/mcp",
+      },
+    })
+
+    await expect(
+      new AmlRuntime({ agentProvider: provider }).evaluate(
+        <Agent>
+          <Tool name="read" />
+          <Mcp use={configured} />
+          investigate
+          <FollowUp>challenge</FollowUp>
+          <FollowUp>finalize</FollowUp>
+        </Agent>,
+      ),
+    ).resolves.toBe("response-3")
+
+    expect(client.capabilityAttachmentCalls).toHaveLength(1)
+    expect(client.createCalls).toHaveLength(1)
+    expect(
+      client.promptCalls.map(({ input }) => ({
+        output: input.output,
+        prompt: input.prompt,
+        sessionId: input.sessionId,
+        tools: input.tools,
+      })),
+    ).toEqual([
+      {
+        output: undefined,
+        prompt: "investigate",
+        sessionId: "session-1",
+        tools: { "*": false },
+      },
+      {
+        output: undefined,
+        prompt: "challenge",
+        sessionId: "session-1",
+        tools: { "*": false },
+      },
+      {
+        output: undefined,
+        prompt: "finalize",
+        sessionId: "session-1",
+        tools: { "*": false },
+      },
+    ])
+    expect(
+      client.capabilityAttachmentCalls[0]?.input.mcpServers,
+    ).toEqual([
+      { definition: configured, kind: "configured" },
+    ])
+    expect(
+      client.capabilityAttachmentCalls[0]?.input.tools,
+    ).toEqual([{ kind: "host", name: "read" }])
+    expect(client.capabilityAttachmentClose).toHaveBeenCalledOnce()
+    expect(client.deleteCalls).toEqual([{ sessionId: "session-1" }])
     await provider.close()
   })
 
@@ -681,6 +766,107 @@ describe("opencodeAgent", () => {
 })
 
 describe("OpenCodeSession", () => {
+  it("rejects malformed FollowUps before attaching capabilities", async () => {
+    const client = new RecordingSessionClient()
+
+    await expect(
+      new OpenCodeSession(client, {}).run(
+        createRequest({ followUps: "invalid" as never }),
+        createContext(),
+      ),
+    ).rejects.toThrow("OpenCode followUps must be an array")
+    await expect(
+      new OpenCodeSession(client, {}).run(
+        createRequest({ followUps: [""] }),
+        createContext(),
+      ),
+    ).rejects.toThrow(
+      "OpenCode followUps must contain non-empty strings",
+    )
+    expect(client.capabilityAttachmentCalls).toHaveLength(0)
+    expect(client.createCalls).toHaveLength(0)
+  })
+
+  it("closes a live capability attachment when Tool-map capture fails", async () => {
+    const toolsError = new Error("tools getter failed")
+    const close = vi.fn(async () => undefined)
+    const client = new RecordingSessionClient()
+    client.attachCapabilities = async () =>
+      ({
+        close,
+        get tools() {
+          throw toolsError
+        },
+      }) as never
+
+    await expect(
+      new OpenCodeSession(client, {}).run(
+        createRequest(),
+        createContext(),
+      ),
+    ).rejects.toBe(toolsError)
+    expect(close).toHaveBeenCalledOnce()
+    expect(client.createCalls).toHaveLength(0)
+  })
+
+  it("snapshots a fail-closed capability map once for every turn", async () => {
+    let toolReads = 0
+    const close = vi.fn(async () => undefined)
+    const tools = Object.defineProperty(
+      { "*": false },
+      "read",
+      {
+        enumerable: true,
+        get() {
+          toolReads += 1
+          return toolReads === 1
+        },
+      },
+    )
+    const client = new RecordingSessionClient()
+    client.attachCapabilities = async () =>
+      ({ close, tools }) as never
+
+    await expect(
+      new OpenCodeSession(client, {}).run(
+        createRequest({ followUps: ["second"] }),
+        createContext(),
+      ),
+    ).resolves.toEqual({ text: "response" })
+    expect(toolReads).toBe(1)
+    expect(client.promptCalls).toHaveLength(2)
+    expect(client.promptCalls[0]?.input.tools).toEqual({
+      "*": false,
+      read: true,
+    })
+    expect(client.promptCalls[1]?.input.tools).toEqual({
+      "*": false,
+      read: true,
+    })
+    expect(client.promptCalls[0]?.input.tools).toBe(
+      client.promptCalls[1]?.input.tools,
+    )
+    expect(close).toHaveBeenCalledOnce()
+  })
+
+  it("closes capability attachments that do not deny ambient Tools", async () => {
+    const close = vi.fn(async () => undefined)
+    const client = new RecordingSessionClient()
+    client.attachCapabilities = async () =>
+      ({ close, tools: {} }) as never
+
+    await expect(
+      new OpenCodeSession(client, {}).run(
+        createRequest(),
+        createContext(),
+      ),
+    ).rejects.toThrow(
+      'OpenCode capability attachment must disable the "*" Tool wildcard',
+    )
+    expect(close).toHaveBeenCalledOnce()
+    expect(client.createCalls).toHaveLength(0)
+  })
+
   it("rejects capability attachment before creating a session", async () => {
     const attachError = new Error("attach failed")
     const client = new RecordingSessionClient()
@@ -743,6 +929,62 @@ describe("OpenCodeSession", () => {
 
     expect(error).toBeInstanceOf(AggregateError)
     expect(error).toHaveProperty("errors", [promptError, cleanupError])
+    expect(client.deleteCalls).toEqual([{ sessionId: "session-1" }])
+  })
+
+  it("stops after a failed FollowUp and still cleans up the session", async () => {
+    const promptError = new Error("second turn failed")
+    const client = new RecordingSessionClient()
+    client.prompt = async (input, signal) => {
+      client.promptCalls.push({ input, signal })
+
+      if (client.promptCalls.length === 2) {
+        throw promptError
+      }
+
+      return {
+        parts: [{ text: input.prompt, type: "text" }],
+      }
+    }
+
+    await expect(
+      new OpenCodeSession(client, {}).run(
+        createRequest({
+          followUps: ["second", "must not run"],
+        }),
+        createContext(),
+      ),
+    ).rejects.toBe(promptError)
+    expect(
+      client.promptCalls.map(({ input }) => input.prompt),
+    ).toEqual(["prompt", "second"])
+    expect(client.capabilityAttachmentClose).toHaveBeenCalledOnce()
+    expect(client.deleteCalls).toEqual([{ sessionId: "session-1" }])
+  })
+
+  it("does not admit another FollowUp after cancellation", async () => {
+    const controller = new AbortController()
+    const cancellation = new Error("cancel between turns")
+    const client = new RecordingSessionClient()
+    client.prompt = async (input, signal) => {
+      client.promptCalls.push({ input, signal })
+      controller.abort(cancellation)
+      return {
+        parts: [{ text: "first response", type: "text" }],
+      }
+    }
+
+    await expect(
+      new OpenCodeSession(client, {}).run(
+        createRequest({ followUps: ["must not run"] }),
+        createContext(controller.signal),
+      ),
+    ).rejects.toBe(cancellation)
+    expect(
+      client.promptCalls.map(({ input }) => input.prompt),
+    ).toEqual(["prompt"])
+    expect(client.abortCalls).toEqual([{ sessionId: "session-1" }])
+    expect(client.capabilityAttachmentClose).toHaveBeenCalledOnce()
     expect(client.deleteCalls).toEqual([{ sessionId: "session-1" }])
   })
 

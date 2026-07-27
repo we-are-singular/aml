@@ -468,6 +468,12 @@ describe("agentProviderConformance", () => {
     expect(provider.calls[0]?.request.prompt).toBe(
       "agent-provider-conformance",
     )
+    expect(provider.calls[0]?.request.followUps).toEqual([
+      "agent-provider-conformance-final",
+    ])
+    expect(Object.isFrozen(provider.calls[0]?.request.followUps)).toBe(
+      true,
+    )
     expect(Object.isFrozen(provider.calls[0]?.request)).toBe(true)
     expect(Object.isFrozen(provider.calls[0]?.context)).toBe(true)
 

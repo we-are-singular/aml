@@ -37,6 +37,8 @@ Slice 10 adds component-local `evaluate()` for ordinary awaited text or typed st
 
 Slice 11 adds one bounded Agent scheduler per evaluation domain. Independent components opt into concurrency with ordinary `Promise.all()`, ready provider calls enter a FIFO queue, cancellation rejects queued calls before their providers start, and `maxConcurrentAgents: 0` remains explicitly unlimited. `examples/concurrency` runs two specialists in parallel and preserves authored result order for their coordinator.
 
+Slice 12 adds static flat `<FollowUp>` turns inside one Agent session. AML resolves the complete turn plan before provider execution, keeps Tool and MCP capabilities attached for the whole session, applies structured output only to the final turn, returns only the final response, and bounds authored inputs with `maxTurnsPerAgent`. `examples/follow-up` proves three authored turns enter one dist-backed session plan in declaration order.
+
 Nothing under `poc/` is part of the new package or public API.
 
 ```sh
@@ -48,6 +50,7 @@ npm run example:basic
 npm run example:concurrency
 npm run example:agent
 npm run example:docker
+npm run example:follow-up
 npm run example:mcp
 npm run example:opencode
 npm run example:sandbox

@@ -7,6 +7,10 @@ import type { AgentOutputRequest } from "./agent-output-request.js"
  * Provider-neutral input for one Agent session.
  */
 export interface AgentRequest {
+  /**
+   * Ordered later user inputs executed in the same provider session.
+   */
+  readonly followUps?: readonly string[]
   readonly mcpServers: readonly AgentMcpServer[]
   readonly model?: string
   readonly output?: AgentOutputRequest

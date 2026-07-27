@@ -14,6 +14,7 @@
     "example:basic": "turbo run example --filter=@aml/example-basic",
     "example:concurrency": "turbo run example --filter=@aml/example-concurrency",
     "example:docker": "turbo run example --filter=@aml/example-docker",
+    "example:follow-up": "turbo run example --filter=@aml/example-follow-up",
     "example:mcp": "turbo run example --filter=@aml/example-mcp",
     "example:opencode": "turbo run example --filter=@aml/example-opencode",
     "example:sandbox": "turbo run example --filter=@aml/example-sandbox",

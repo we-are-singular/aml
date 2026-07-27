@@ -1,6 +1,6 @@
 # Agent Markup Language product requirements and delivery plan
 
-Status: Phase 1 — MVP complete; Slices 0–11 done; Slice 12 pending
+Status: Phase 1 — MVP complete; Slices 0–12 done; Slice 13 pending
 
 This is the living product definition, architecture plan, implementation roadmap, and progress tracker for AML. It is not a normative runtime contract. Settled behavior belongs in `SPEC.md`; this document records why AML exists, how it is organized, what is being built next, and which slices have been proven.
 
@@ -172,7 +172,7 @@ The status table is the canonical implementation tracker. A slice moves to `Done
 | Slice 9 | `<Mcp>` and `defineMcpServer()` | Done |
 | Slice 10 | `evaluate()` and structured results | Done |
 | Slice 11 | Bounded Agent concurrency | Done |
-| Slice 12 | `<FollowUp>` | Pending |
+| Slice 12 | `<FollowUp>` | Done |
 | Slice 13 | `<Loop>` | Pending |
 | Slice 14 | Codex Agent package | Pending |
 | Slice 15 | Observability consumers | Pending |
@@ -442,6 +442,7 @@ Each implementation file has one primary export whose name matches the filename:
 | `aml-model-schema.ts`      | `AmlModelSchema`      |
 | `validate-agent-provider.ts` | `validateAgentProvider` |
 | `system.tsx`               | `System`              |
+| `follow-up.tsx`            | `FollowUp`            |
 | `skill.tsx`                | `Skill`               |
 | `skill-evaluator.ts`       | `SkillEvaluator`      |
 | `tool.tsx`                 | `Tool`                |
@@ -737,6 +738,8 @@ Status: Done on 2026-07-27. Every root evaluation now owns one `AgentScheduler` 
 - reject invalid nesting and placement
 
 Proof: a deterministic session receives three turns in authored order while retaining one Tool and MCP capability set.
+
+Status: Done on 2026-07-27. The SDK now exposes flat static `<FollowUp>` descriptors that resolve completely before their containing Agent opens one provider session. Components and Fragments may expand to sibling FollowUps, while nesting, empty turns, turn-specific Tool or MCP grants, non-whitespace trailing prompt text, placement outside Agent, and descriptors hidden beneath a lexical Sandbox fail before the parent provider runs. `maxTurnsPerAgent` defaults to sixteen authored inputs, zero is unlimited, and a multi-turn session still consumes one Agent-call reservation and one scheduler slot for its complete lifetime. `AgentRequest.followUps` is an optional frozen ordered plan, and the public provider conformance now exercises two turns. The OpenCode adapter attaches capabilities and creates a session once, sends every turn sequentially through that session, retains its system/model/Tool/MCP configuration, applies JSON Schema and the provider-owned `StructuredOutput` grant only to the final turn, returns only that final response, and stops later turns after failure or cancellation. It snapshots a fail-closed capability map and cleanup method immediately after attachment so hostile accessors cannot change grants between turns or strand live MCP and Tool resources. Singular review found an intervening Sandbox placement escape, an intermediate structured-output grant, and a post-attachment getter leak; the corrected boundaries have direct regression coverage. One hundred fifty-nine SDK tests, forty-four deterministic OpenCode tests, all eighteen workspace type-check targets, all four dist/package proofs, the dist-backed FollowUp example, and diff validation pass. One credentialed `opencode-go/minimax-m3` integration also proved that the real provider session retained a random token across the FollowUp boundary. Final correctness, architecture, and skeptical security review lanes reported no actionable findings.
 
 #### Slice 13 — `<Loop>`
 

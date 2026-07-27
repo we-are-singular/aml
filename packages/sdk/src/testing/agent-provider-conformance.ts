@@ -17,6 +17,9 @@ export async function agentProviderConformance(
     spanId: "agent-provider-conformance",
   })
   const request: AgentRequest = Object.freeze({
+    // FollowUp is part of the stable session contract, so every provider
+    // conformance run exercises more than one authored input.
+    followUps: Object.freeze(["agent-provider-conformance-final"]),
     mcpServers: Object.freeze([]),
     prompt: "agent-provider-conformance",
     system: "Follow the provider contract.",

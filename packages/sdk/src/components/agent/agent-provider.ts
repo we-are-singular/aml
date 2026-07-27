@@ -10,7 +10,10 @@ export interface AgentProvider {
   readonly name: string
 
   /**
-   * Executes one isolated provider session for a fully assembled AML request.
+   * Executes one isolated provider session for the complete authored turn plan.
+   *
+   * The initial prompt and every request FollowUp share provider history and
+   * session-wide capabilities; only the final response is returned to AML.
    */
   run(
     request: AgentRequest,

@@ -76,6 +76,24 @@ export class OpenCodeSession {
     context.signal.throwIfAborted()
 
     const model = OpenCodeSession.parseModel(request.model ?? this.#model)
+    const followUps = request.followUps
+
+    if (followUps !== undefined && !Array.isArray(followUps)) {
+      throw new TypeError("OpenCode followUps must be an array")
+    }
+
+    const prompts = [request.prompt]
+
+    for (const followUp of followUps ?? []) {
+      if (typeof followUp !== "string" || followUp.length === 0) {
+        throw new TypeError(
+          "OpenCode followUps must contain non-empty strings",
+        )
+      }
+
+      prompts.push(followUp)
+    }
+
     // Capability incompatibility and attachment failure must happen before any
     // remote session exists. This is both a side-effect and security boundary.
     const capabilityAttachment = await this.#client.attachCapabilities(
@@ -90,6 +108,110 @@ export class OpenCodeSession {
       },
       context.signal,
     )
+    let closeCapabilityAttachment:
+      | (() => Promise<void>)
+      | undefined
+    let capabilityTools: Readonly<Record<string, boolean>>
+
+    // Attachment can already own live MCP and Tool resources. Capture its
+    // cleanup capability before reading any other provider-owned accessor so a
+    // malformed Tool map can still be compensated without leaking resources.
+    try {
+      if (
+        typeof capabilityAttachment !== "object" ||
+        capabilityAttachment === null
+      ) {
+        throw new TypeError(
+          "OpenCode session client returned an invalid capability attachment",
+        )
+      }
+
+      const close = capabilityAttachment.close
+
+      if (typeof close !== "function") {
+        throw new TypeError(
+          "OpenCode capability attachment close must be a function",
+        )
+      }
+
+      closeCapabilityAttachment = async () => {
+        await Reflect.apply(close, capabilityAttachment, [])
+      }
+
+      const tools = capabilityAttachment.tools
+
+      if (
+        typeof tools !== "object" ||
+        tools === null ||
+        Array.isArray(tools)
+      ) {
+        throw new TypeError(
+          "OpenCode capability attachment tools must be an object",
+        )
+      }
+
+      const entries = Object.entries(tools)
+
+      if (entries.some(([, enabled]) => typeof enabled !== "boolean")) {
+        throw new TypeError(
+          "OpenCode capability attachment tools must contain booleans",
+        )
+      }
+
+      capabilityTools = Object.freeze(Object.fromEntries(entries))
+
+      // Every prompt must fail closed against OpenCode's ambient capability
+      // registry before exact authored grants are added.
+      if (capabilityTools["*"] !== false) {
+        throw new TypeError(
+          'OpenCode capability attachment must disable the "*" Tool wildcard',
+        )
+      }
+
+      if (
+        request.output !== undefined &&
+        capabilityTools.StructuredOutput !== true
+      ) {
+        throw new TypeError(
+          "OpenCode structured requests require the StructuredOutput Tool grant",
+        )
+      }
+
+      if (
+        request.output === undefined &&
+        capabilityTools.StructuredOutput === true
+      ) {
+        throw new TypeError(
+          "OpenCode text requests cannot grant the StructuredOutput Tool",
+        )
+      }
+    } catch (attachmentError) {
+      if (closeCapabilityAttachment === undefined) {
+        throw attachmentError
+      }
+
+      try {
+        await closeCapabilityAttachment()
+      } catch (cleanupError) {
+        throw new AggregateError(
+          [attachmentError, cleanupError],
+          "OpenCode capability validation and cleanup failed",
+        )
+      }
+
+      throw attachmentError
+    }
+
+    const textTurnTools =
+      request.output === undefined
+        ? capabilityTools
+        : Object.freeze(
+            Object.fromEntries(
+              Object.entries(capabilityTools).filter(
+                ([name]) => name !== "StructuredOutput",
+              ),
+            ),
+          )
     let sessionId: string
 
     // A created attachment is already a live resource, so session-creation
@@ -116,7 +238,7 @@ export class OpenCodeSession {
       const errors: unknown[] = [creationError]
 
       try {
-        await capabilityAttachment.close()
+        await closeCapabilityAttachment()
       } catch (cleanupError) {
         errors.push(cleanupError)
       }
@@ -163,30 +285,47 @@ export class OpenCodeSession {
     let executionError: unknown
     let response: AgentResponse | undefined
 
-    // Prompt execution is separate from cleanup so every failure path still
+    // Turn execution is separate from cleanup so every failure path still
     // closes capability resources and deletes the acknowledged session.
     try {
-      const result = await this.#client.prompt(
-        {
-          ...location,
-          ...(model === undefined ? {} : { model }),
-          ...(request.output === undefined
-            ? {}
-            : { output: request.output }),
-          prompt: request.prompt,
-          system: request.system,
-          tools: capabilityAttachment.tools,
-        },
-        context.signal,
-      )
+      for (const [index, prompt] of prompts.entries()) {
+        // Cancellation between authored turns must not admit another user
+        // message into the retained provider session.
+        context.signal.throwIfAborted()
+        const isFinalTurn = index === prompts.length - 1
+        const result = await this.#client.prompt(
+          {
+            ...location,
+            ...(model === undefined ? {} : { model }),
+            // Intermediate turns remain ordinary text. The schema constrains
+            // only the final response that escapes the Agent boundary.
+            ...(isFinalTurn && request.output !== undefined
+              ? { output: request.output }
+              : {}),
+            prompt,
+            system: request.system,
+            // Capability attachment is session-wide, but OpenCode's internal
+            // StructuredOutput Tool is granted only with the final schema turn.
+            tools:
+              isFinalTurn && request.output !== undefined
+                ? capabilityTools
+                : textTurnTools,
+          },
+          context.signal,
+        )
 
-      context.signal.throwIfAborted()
-      response = Object.freeze({
-        ...(Reflect.has(result, "structured")
-          ? { structured: result.structured }
-          : {}),
-        text: OpenCodeSession.visibleText(result),
-      })
+        context.signal.throwIfAborted()
+        const text = OpenCodeSession.visibleText(result)
+
+        if (isFinalTurn) {
+          response = Object.freeze({
+            ...(Reflect.has(result, "structured")
+              ? { structured: result.structured }
+              : {}),
+            text,
+          })
+        }
+      }
     } catch (error) {
       hasExecutionError = true
       executionError = error
@@ -200,7 +339,7 @@ export class OpenCodeSession {
     let capabilityCleanupError: unknown
 
     try {
-      await capabilityAttachment.close()
+      await closeCapabilityAttachment()
     } catch (error) {
       hasCapabilityCleanupError = true
       capabilityCleanupError = error

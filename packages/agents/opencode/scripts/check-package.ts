@@ -111,7 +111,7 @@ if (
   provider.name !== "opencode" ||
   calls.create !== 1 ||
   calls.attachCapabilities !== 1 ||
-  calls.prompt !== 1 ||
+  calls.prompt !== 2 ||
   calls.delete !== 1 ||
   calls.abort !== 0
 ) {

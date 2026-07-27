@@ -31,7 +31,7 @@ export interface OpenCodeSessionCreateInput {
 }
 
 /**
- * Complete initial prompt and capability map for one OpenCode session.
+ * One authored Agent turn sent through an existing OpenCode session.
  */
 export interface OpenCodeSessionPromptInput extends OpenCodeSessionLocation {
   readonly model?: OpenCodeModel
@@ -121,7 +121,7 @@ export interface OpenCodeSessionClient {
   delete(input: OpenCodeSessionLocation): Promise<void>
 
   /**
-   * Sends the complete initial Agent request into the created session.
+   * Sends one turn into the created session and waits for its response.
    */
   prompt(
     input: OpenCodeSessionPromptInput,

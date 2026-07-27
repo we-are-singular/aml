@@ -624,7 +624,7 @@ export class OpenCodeSdkClient implements OpenCodeSessionClient {
   }
 
   /**
-   * Sends the initial Agent request through the generated SDK.
+   * Sends one Agent turn through the generated SDK.
    */
   async prompt(
     input: OpenCodeSessionPromptInput,

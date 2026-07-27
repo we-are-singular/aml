@@ -3,6 +3,7 @@ import type { AgentProvider } from "../components/agent/agent-provider.js"
 import { AgentExecutor } from "../components/agent/agent-executor.js"
 import { ModelSchema } from "../components/agent/model-schema.js"
 import type { ValidatedAgentProvider } from "../components/agent/validate-agent-provider.js"
+import type { FollowUpProps } from "../components/follow-up/follow-up.js"
 import { McpCollection } from "../components/mcp/mcp-collection.js"
 import type { McpProps } from "../components/mcp/mcp.js"
 import {
@@ -44,7 +45,7 @@ interface TextTarget {
   readonly kind: "text"
   readonly parentSpanId: string | undefined
   readonly sandbox: Readonly<SandboxSession> | undefined
-  readonly source: "evaluation" | "skill" | "system"
+  readonly source: "evaluation" | "follow-up" | "skill" | "system"
   readonly structured: StructuredEvaluation | undefined
   readonly workspace:
     | Readonly<WorkspaceMaterializationReference>
@@ -52,6 +53,8 @@ interface TextTarget {
 }
 
 interface AgentTarget {
+  readonly acceptsMessageDescriptors: boolean
+  readonly followUps: string[]
   readonly kind: "agent"
   readonly mcpServers: McpCollection
   readonly parentSpanId: string
@@ -134,6 +137,12 @@ interface CompleteAgentFrame {
   readonly trace: AmlTraceIdentity
 }
 
+interface CompleteFollowUpFrame {
+  readonly kind: "complete-follow-up"
+  readonly parent: AgentTarget
+  readonly target: TextTarget
+}
+
 interface CompleteSandboxFrame {
   readonly kind: "complete-sandbox"
   readonly scope: Readonly<SandboxEvaluationScope>
@@ -160,6 +169,7 @@ interface CompleteSkillFrame {
 type EvaluationFrame =
   | ArrayFrame
   | CompleteAgentFrame
+  | CompleteFollowUpFrame
   | CompleteSandboxFrame
   | CompleteSkillFrame
   | CompleteSystemFrame
@@ -209,6 +219,11 @@ export interface AmlRuntimeOptions {
   readonly maxDepth?: number
 
   /**
+   * Maximum authored inputs in one Agent session. Zero disables the limit.
+   */
+  readonly maxTurnsPerAgent?: number
+
+  /**
    * Default provider for outer Sandboxes without an explicit provider prop.
    */
   readonly sandboxProvider?: SandboxProvider
@@ -255,6 +270,7 @@ export class AmlRuntime {
     const maxAgentCalls = options.maxAgentCalls ?? 32
     const maxConcurrentAgents = options.maxConcurrentAgents ?? 4
     const maxDepth = options.maxDepth ?? 16
+    const maxTurnsPerAgent = options.maxTurnsPerAgent ?? 16
 
     if (!Number.isSafeInteger(maxAgentCalls) || maxAgentCalls < 0) {
       throw new TypeError(
@@ -275,6 +291,15 @@ export class AmlRuntime {
       )
     }
 
+    if (
+      !Number.isSafeInteger(maxTurnsPerAgent) ||
+      maxTurnsPerAgent < 0
+    ) {
+      throw new TypeError(
+        "maxTurnsPerAgent must be a non-negative safe integer",
+      )
+    }
+
     this.#allowedMcpServers = captureAllowedNames(
       options.allowedMcpServers,
       "allowedMcpServers",
@@ -287,6 +312,7 @@ export class AmlRuntime {
       ...(options.agentProvider === undefined
         ? {}
         : { agentProvider: options.agentProvider }),
+      maxTurnsPerAgent,
       ...(options.system === undefined ? {} : { system: options.system }),
     })
     this.#maxAgentCalls = maxAgentCalls
@@ -499,6 +525,19 @@ export class AmlRuntime {
           continue
         }
 
+        if (frame.kind === "complete-follow-up") {
+          const text = frame.target.chunks.join("").trim()
+
+          if (text.length === 0) {
+            throw new EvaluationError(
+              "<FollowUp> must resolve to non-empty text",
+            )
+          }
+
+          frame.parent.followUps.push(text)
+          continue
+        }
+
         if (frame.kind === "complete-skill") {
           const content = await this.#skillEvaluator.complete(
             frame.plan,
@@ -516,6 +555,7 @@ export class AmlRuntime {
           // System fragments, Tool descriptors, or MCP grants to the Agent plan.
           const response = await this.#agentExecutor.execute({
             context,
+            followUps: frame.plan.followUps,
             mcpServers: frame.plan.mcpServers.values(),
             ...(frame.schema === undefined
               ? {}
@@ -634,6 +674,8 @@ export class AmlRuntime {
 
             const trace = context.createTrace(frame.target.parentSpanId)
             const plan: AgentTarget = {
+              acceptsMessageDescriptors: true,
+              followUps: [],
               kind: "agent",
               mcpServers: new McpCollection(this.#allowedMcpServers),
               parentSpanId: trace.spanId,
@@ -673,6 +715,50 @@ export class AmlRuntime {
             continue
           }
 
+          // <FollowUp> redirects its children into one later user-message
+          // channel while the containing Agent still resolves post-order.
+          if (primitiveKind === "follow-up") {
+            if (
+              frame.target.kind !== "agent" ||
+              !frame.target.acceptsMessageDescriptors
+            ) {
+              const placement =
+                frame.target.kind === "text" &&
+                frame.target.source === "follow-up"
+                  ? "nested <FollowUp> descriptors are invalid"
+                  : frame.target.kind === "agent"
+                    ? "<FollowUp> must be an immediate message descriptor of <Agent>"
+                    : "<FollowUp> is only valid inside <Agent>"
+              throw new EvaluationError(placement)
+            }
+
+            const props = current.props as Readonly<FollowUpProps>
+            const followUpTarget: TextTarget = {
+              chunks: [],
+              kind: "text",
+              parentSpanId: frame.target.parentSpanId,
+              sandbox: frame.target.sandbox,
+              source: "follow-up",
+              structured: frame.target.structured,
+              workspace: frame.target.workspace,
+            }
+
+            activeValues.add(current)
+            frames.push({ kind: "release", value: current })
+            frames.push({
+              kind: "complete-follow-up",
+              parent: frame.target,
+              target: followUpTarget,
+            })
+            frames.push({
+              depth: nodeDepth,
+              kind: "resolve",
+              target: followUpTarget,
+              value: props.children,
+            })
+            continue
+          }
+
           // <Sandbox> is a lexical execution scope: the outer node acquires a
           // lease before children, while nested nodes only restrict that lease.
           if (primitiveKind === "sandbox") {
@@ -687,6 +773,12 @@ export class AmlRuntime {
             )
             const scopedTarget: ResolutionTarget = {
               ...frame.target,
+              // A lexical resource primitive remains visible after component
+              // expansion, so descriptors beneath it are not immediate Agent
+              // messages. A nested Agent creates its own direct message scope.
+              ...(frame.target.kind === "agent"
+                ? { acceptsMessageDescriptors: false }
+                : {}),
               parentSpanId: trace.spanId,
               sandbox: scope.session,
             }
@@ -765,6 +857,12 @@ export class AmlRuntime {
           // <Mcp> is metadata for the nearest Agent, not prompt text.
           if (primitiveKind === "mcp") {
             if (frame.target.kind !== "agent") {
+              if (frame.target.source === "follow-up") {
+                throw new EvaluationError(
+                  "<Mcp> is invalid inside <FollowUp>",
+                )
+              }
+
               throw new EvaluationError(
                 "<Mcp> is only valid inside <Agent>",
               )
@@ -781,6 +879,12 @@ export class AmlRuntime {
           // <Tool> is metadata for the nearest Agent, not prompt text.
           if (primitiveKind === "tool") {
             if (frame.target.kind !== "agent") {
+              if (frame.target.source === "follow-up") {
+                throw new EvaluationError(
+                  "<Tool> is invalid inside <FollowUp>",
+                )
+              }
+
               throw new EvaluationError(
                 "<Tool> is only valid inside <Agent>",
               )
@@ -1004,6 +1108,18 @@ export class AmlRuntime {
  */
 function appendText(target: ResolutionTarget, value: string): void {
   if (target.kind === "agent") {
+    // FollowUps are a trailing message section. Formatting whitespace between
+    // descriptors is harmless, but later initial-prompt text is ambiguous.
+    if (target.followUps.length > 0) {
+      if (value.trim().length > 0) {
+        throw new EvaluationError(
+          "non-whitespace Agent text cannot follow <FollowUp>",
+        )
+      }
+
+      return
+    }
+
     target.promptChunks.push(value)
     return
   }
