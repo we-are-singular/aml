@@ -583,71 +583,44 @@ Structured output applies to the final authored input. Intermediate responses ar
 
 ## 7. `<Skill>`
 
-`<Skill>` resolves reusable instruction text before its containing execution boundary begins:
+`<Skill>` contributes reusable instruction text at its authored position:
 
 ```tsx
 <Agent>
-  <Skill src="./skills/review/SKILL.md" />
+  <Skill src="./skills/review.md" />
   Review the change.
 </Agent>
 ```
 
-### 7.1 Source resolution
+### 7.1 Content
 
-For a string `src`, the resolver applies these rules in order:
-
-1. If `src` identifies an existing file or directory relative to the resolver's working directory, load it locally.
-2. If `src` begins with `/`, treat it as an absolute local path.
-3. If `src` is a slash-delimited `namespace/name` identifier, resolve it through the skills.sh detail API.
-4. If `src` begins with `http://` or `https://`, fetch it as plain text.
-5. Otherwise throw `SkillResolutionError`.
+Skill content comes from a local file, inline AML children, or both:
 
 ```tsx
 <Skill src="./skills/reviewer.md" />
-<Skill src="/opt/company/skills/reviewer/SKILL.md" />
-<Skill src="mintlify.com/mintlify" />
-<Skill src="vercel-labs/skills/find-skills" />
-<Skill src="https://example.com/reviewer.md" />
-<Skill>Always verify claims against code.</Skill>
+
+<Skill name="evidence" description="Prefer implementation evidence.">
+  Verify each claim against code and tests.
+</Skill>
+
+<Skill src="./skills/base.md" name="generated-review">
+  Add this dynamically generated guidance: <GuidanceAgent />
+</Skill>
 ```
 
-An existing relative path wins even if its text resembles a skills.sh identifier. A local directory resolves to its `SKILL.md`.
+Rules:
 
-The skills.sh API requires a Vercel OIDC token. `SkillResolver` reads `VERCEL_OIDC_TOKEN` by default or accepts `skillsShToken`. AML loads only the returned `SKILL.md` snapshot.
-
-GitHub `/blob/` file URLs normalize to raw content. GitHub `/tree/` directory URLs resolve to `SKILL.md` in that directory.
-
-`URL` objects are accepted. A `file:` URL loads locally, an HTTP(S) URL is fetched, and every other protocol fails closed.
-
-Inline children bypass source resolution:
-
-```tsx
-<Skill>Prefer evidence over speculation.</Skill>
-```
-
-### 7.2 Trust and caching
-
-- Resolution is cached by authored locator for the life of `SkillResolver`.
-- A Skill is limited to 250,000 characters.
-- Remote supporting files and scripts are not installed or executed.
-- Resolved data records content, source kind, final locator, and a skills.sh content hash when provided.
-- Provenance includes `trust: "inline" | "local" | "remote"`.
-- `skill.resolved` traces include that provenance.
-- `allowedSkillHosts` optionally restricts remote resolution by exact hostname.
-- Remote Skill text is untrusted prompt input.
-
-```tsx
-const skillResolver = new SkillResolver({
-  allowedSkillHosts: ["github.com", "skills.sh"],
-  cwd: applicationDirectory,
-  skillsShToken: process.env.VERCEL_OIDC_TOKEN,
-});
-
-const runtime = new AmlRuntime({
-  agentProvider: provider,
-  skillResolver,
-});
-```
+- At least one of `src` or children is required.
+- `src` is a non-empty local filesystem path. Relative paths resolve from `AmlRuntimeOptions.cwd`, which defaults to `process.cwd()`. Absolute paths remain absolute.
+- The file is read during evaluation. AML does not embed Skill files at build time, cache their contents, fetch remote URLs, resolve registries, install supporting files, or execute scripts.
+- Inline children use ordinary post-order AML evaluation. A child Agent may therefore generate part or all of a Skill.
+- When both `src` and children exist, inline children resolve first, the file is read during the Skill completion step, and the final content is `fileContent + "\n" + childContent`.
+- The combined content must contain non-whitespace text.
+- `name` and `description` are optional non-empty strings without leading or trailing whitespace.
+- Metadata decorates the combined content deterministically. Present metadata lines are emitted in `Skill: {name}`, then `Description: {description}` order, followed by one blank line and the combined content.
+- Without metadata, the combined content is contributed unchanged.
+- Filesystem failures are attributed to `<Skill>`. Cancellation preserves the caller's `AbortSignal.reason`.
+- Local Skill access is not confinement. The future Sandbox and Workspace scopes define which filesystem paths an evaluation may access.
 
 ## 8. Tools
 
@@ -1515,6 +1488,7 @@ const runtime = new AmlRuntime({
   agentProvider: provider,
   allowedMcpServers: ["github", "project"],
   allowedTools: ["read", "lookup_customer"],
+  cwd: import.meta.dirname,
   maxAgentCalls: 32,
   maxConcurrentAgents: 4,
   maxDepth: 16,
@@ -1523,7 +1497,6 @@ const runtime = new AmlRuntime({
   onTraceError(error, event) {
     console.error("Trace sink failed", event.type, error);
   },
-  skillResolver,
   system: "Global application instructions.",
   trace,
 });
@@ -1542,8 +1515,8 @@ Defaults:
 | `onTraceError` | stderr once | Out-of-band trace failure handler |
 | `allowedMcpServers` | unrestricted | Optional MCP-server-name allowlist |
 | `allowedTools` | unrestricted | Optional Tool-name allowlist |
+| `cwd` | `process.cwd()` | Base directory for relative local Skill files |
 | `system` | empty | First system fragment for every Agent |
-| `skillResolver` | default resolver | Skill resolution and caching |
 | `trace` | none | Synchronous execution-event callback |
 
 For every `max*` option, `0` means unlimited. Supplied values must be non-negative safe integers.
@@ -1561,7 +1534,7 @@ The trace sink receives typed events for:
 - Agent session start, completion, and failure
 - Agent turns and their ordering
 - System resolution and fragment ordering
-- Skill resolution and provenance
+- Skill file/inline resolution and optional labels
 - JavaScript Tool start, completion, and failure
 - MCP attachment, initialization, capability summary, disconnection, and failure
 - committed Loop transitions

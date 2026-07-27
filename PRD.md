@@ -1,6 +1,6 @@
 # Agent Markup Language product requirements and delivery plan
 
-Status: Phase 1 — Slices 0–3 done; Slice 4 pending
+Status: Phase 1 — Slices 0–4 done; Slice 5 pending
 
 This is the living product definition, architecture plan, implementation roadmap, and progress tracker for AML. It is not a normative runtime contract. Settled behavior belongs in `SPEC.md`; this document records why AML exists, how it is organized, what is being built next, and which slices have been proven.
 
@@ -164,7 +164,7 @@ The status table is the canonical implementation tracker. A slice moves to `Done
 | Slice 1 | `<Agent>`, `<System>`, and provider authorship | Done |
 | Slice 2 | OpenCode Agent package | Done |
 | Slice 3 | `<Tool>` and `defineTool()` | Done |
-| Slice 4 | `<Skill>` | Pending |
+| Slice 4 | `<Skill>` | Done |
 | Slice 5 | `<Sandbox>` contract | Pending |
 | Slice 6 | Docker Sandbox package | Pending |
 | Slice 7 | `<Workspace>` contract | Pending |
@@ -325,7 +325,7 @@ packages/sdk/
 │   │   │   └── define-mcp-server.ts
 │   │   ├── skill/
 │   │   │   ├── skill.tsx
-│   │   │   └── skill-resolver.ts
+│   │   │   └── skill-evaluator.ts
 │   │   ├── context/
 │   │   │   ├── create-context.ts
 │   │   │   └── use-context.ts
@@ -440,6 +440,8 @@ Each implementation file has one primary export whose name matches the filename:
 | `agent-executor.ts`        | `AgentExecutor`       |
 | `validate-agent-provider.ts` | `validateAgentProvider` |
 | `system.tsx`               | `System`              |
+| `skill.tsx`                | `Skill`               |
+| `skill-evaluator.ts`       | `SkillEvaluator`      |
 | `tool.tsx`                 | `Tool`                |
 | `agent-tool.ts`            | `AgentTool`           |
 | `define-tool.ts`           | `defineTool`          |
@@ -466,6 +468,8 @@ Exceptions:
 - a schema may export its inferred type when the schema is the canonical contract source.
 
 Use kebab-case filenames. Avoid internal barrels. A package's root `index.ts` may expose its intentionally small public surface.
+
+Every exported type, class, function, and public method has a contract docblock. Long or non-obvious functions use local section comments, and branches that encode ordering, trust, ownership, cleanup, or compatibility decisions explain why that decision exists. Comments must describe current behavior accurately rather than narrating obvious syntax.
 
 ### Examples and built-package proof
 
@@ -618,12 +622,14 @@ Status: Done on 2026-07-27. The implementation adds exact Agent-local host and J
 
 #### Slice 4 — `<Skill>`
 
-- support inline and resolved text
-- implement deterministic locator precedence
-- record provenance and trust metadata
-- fail closed for unknown locators
+- support local file content, inline AML content, and their deterministic combination
+- resolve relative paths from the runtime working directory
+- decorate content with optional deterministic name and description metadata
+- preserve cancellation and attribute local filesystem failures
 
-Proof: a valid local Skill contributes text and a typo rejects.
+Proof: local, inline, and generated Skill content contributes text in authored order; combined content follows the specified separator and metadata format; a missing local file rejects before the containing Agent executes.
+
+Status: Done on 2026-07-27. The final Slice 4 deliberately supports only local files and inline AML, including deterministic file-plus-children composition and optional name/description labels. An overbuilt remote resolver, registry client, authentication path, downloader policy, cache, and public provenance surface were removed before release. Singular review then found that file reads occurred before inline child effects and that Skill behavior was accumulating in the core evaluator. The corrected implementation uses one internal `SkillEvaluator`, keeps `AmlRuntime` responsible only for scheduling and routing, and reads the local file in the completion frame after child AML resolves. Ten focused Skill tests cover local, inline, combined, labeled, System-routed, Agent-generated, reload, failure, validation, and in-flight cancellation behavior. Sixty-four SDK tests, twenty-one deterministic OpenCode tests, workspace type checking, SDK build, both package checks, the dist-backed Skill example, and diff validation pass. Final correctness, maintainability, and skeptical review lanes reported no actionable findings.
 
 #### Slice 5 — `<Sandbox>` contract
 
@@ -766,18 +772,19 @@ Before marking a slice `Done`:
 - provider packages pass their SDK conformance suite
 - examples consume package exports from `dist`
 - the resulting public API is reviewed before the next slice starts
+- exported boundaries, non-obvious functions, and meaningful branch decisions satisfy the comment contract in the file and export rules
 
 ## Immediate implementation boundary
 
-Slices 0 through 3 are complete. The next implementation gate is Slice 4 only:
+Slices 0 through 4 are complete. The next implementation gate is Slice 5 only:
 
-1. add `<Skill>` as Agent system-instruction content without introducing a second execution language
-2. support inline Skill text and deterministic source resolution using the precedence in `SPEC.md`
-3. capture local, network, and registry provenance with an explicit remote trust boundary
-4. fail closed for missing paths, unknown registry locators, disallowed hosts, fetch failures, and empty resolved content
-5. prove one valid local Skill contributes instructions and one typo rejects before the containing Agent executes
+1. define the provider-neutral Sandbox contract and opaque lease
+2. add `defineSandboxProvider()` plus deterministic fixtures and conformance tests
+3. acquire the Sandbox before descendant evaluation and release it exactly once after success, failure, or cancellation
+4. enforce restrictive nesting and Agent-provider compatibility without implementing remote isolation policy
+5. prove lifecycle ordering, cleanup, and restrictive nesting through a deterministic provider
 
-No Sandbox, Workspace, MCP, structured output, FollowUp, Loop, CLI, website, Codex provider, or unrelated primitive belongs in Slice 4.
+No Docker implementation, Workspace, MCP, structured output, FollowUp, Loop, CLI, website, Codex provider, or unrelated primitive belongs in Slice 5.
 
 ## Explicitly deferred
 
@@ -807,7 +814,6 @@ These remain product questions until resolved into `SPEC.md`:
 - Should observability hooks be synchronous, awaited and isolated, or buffered behind a flush boundary?
 - What is the first useful artifact contract for large data?
 - Where should retries and schema repair live?
-- How should remote Skills be pinned and trusted?
 - Which Sandbox providers are worth supporting after Docker?
 - Which Workspace backend proves the abstraction beyond local disk?
 - What should an Agent provider expose about inherited host configuration?

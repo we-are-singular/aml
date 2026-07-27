@@ -1,3 +1,4 @@
+// Agent authoring and provider-neutral execution contracts.
 export { Agent, type AgentProps } from "./components/agent/agent.js"
 export type { AgentExecutionContext } from "./components/agent/agent-execution-context.js"
 export type { AgentProvider } from "./components/agent/agent-provider.js"
@@ -5,6 +6,11 @@ export type { AgentRequest } from "./components/agent/agent-request.js"
 export type { AgentResponse } from "./components/agent/agent-response.js"
 export { defineAgentProvider } from "./components/agent/define-agent-provider.js"
 export { System, type SystemProps } from "./components/system/system.js"
+
+// Local and inline reusable instruction text.
+export { Skill, type SkillProps } from "./components/skill/skill.js"
+
+// Scoped provider-native and application-owned capabilities.
 export type {
   AgentHostTool,
   AgentJavaScriptTool,
@@ -21,6 +27,8 @@ export {
 export { Tool, type ToolProps } from "./components/tool/tool.js"
 export { ToolInputError } from "./components/tool/tool-input-error.js"
 export { ToolOutputError } from "./components/tool/tool-output-error.js"
+
+// Evaluator, JSX value, and trace contracts.
 export type { AmlRenderable } from "./core/aml-node.js"
 export {
   AmlRuntime,

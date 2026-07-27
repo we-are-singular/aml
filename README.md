@@ -21,6 +21,8 @@ Slice 2 adds the independently installable `@aml/agent-opencode` adapter. It sta
 
 Slice 3 adds Agent-scoped `<Tool>` grants and `defineTool()`. JavaScript Tools use Standard Schema for runtime validation and Standard JSON Schema for model declarations, retain exact cross-copy identity, and return immutable JSON. The OpenCode adapter exposes them through authenticated invocation-scoped MCP bridges on disposable OpenCode hosts so dynamic registrations cannot accumulate. `examples/opencode` proves a credentialed `opencode-go/minimax-m3` model can call a process-local async function through built package exports.
 
+Slice 4 adds `<Skill>` as local or inline instruction text. Local files are read during each evaluation, inline children resolve through ordinary AML, and both forms can be combined with optional deterministic name and description labels. It deliberately has no remote downloader, registry, cache, or provider-specific Skill API. `examples/skill` proves the built SDK reads a local Skill into an Agent prompt.
+
 Nothing under `poc/` is part of the new package or public API.
 
 ```sh
@@ -31,6 +33,7 @@ npm run pack:check
 npm run example:basic
 npm run example:agent
 npm run example:opencode
+npm run example:skill
 ```
 
 `npm run example:opencode` is an explicit live model call. Set `AML_OPENCODE_MODEL` to override its default model.

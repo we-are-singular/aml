@@ -2,6 +2,10 @@ import type { AgentProps } from "../components/agent/agent.js"
 import type { AgentProvider } from "../components/agent/agent-provider.js"
 import { AgentExecutor } from "../components/agent/agent-executor.js"
 import type { ValidatedAgentProvider } from "../components/agent/validate-agent-provider.js"
+import {
+  type SkillEvaluation,
+  SkillEvaluator,
+} from "../components/skill/skill-evaluator.js"
 import type { SystemProps } from "../components/system/system.js"
 import { ToolCollection } from "../components/tool/tool-collection.js"
 import type { ToolProps } from "../components/tool/tool.js"
@@ -10,11 +14,14 @@ import { EvaluationContext } from "./evaluation-context.js"
 import { EvaluationError } from "./evaluation-error.js"
 import type { AmlTraceIdentity } from "./trace-identity.js"
 
+// Resolution targets keep prompt assembly separate from ordinary text output.
+// That distinction lets descriptors such as <Tool> and <System> mutate only the
+// nearest Agent plan while ordinary values preserve their authored position.
 interface TextTarget {
   readonly chunks: string[]
   readonly kind: "text"
   readonly parentSpanId: string | undefined
-  readonly source: "evaluation" | "system"
+  readonly source: "evaluation" | "skill" | "system"
 }
 
 interface AgentTarget {
@@ -27,6 +34,9 @@ interface AgentTarget {
 
 type ResolutionTarget = AgentTarget | TextTarget
 
+// Evaluation frames encode the recursive AML algorithm as an explicit stack.
+// Completion frames are pushed before their children and therefore run after
+// those children have fully resolved.
 interface ResolveFrame {
   readonly depth: number
   readonly kind: "resolve"
@@ -62,13 +72,24 @@ interface CompleteSystemFrame {
   readonly target: TextTarget
 }
 
+interface CompleteSkillFrame {
+  readonly kind: "complete-skill"
+  readonly plan: SkillEvaluation
+  readonly target: ResolutionTarget
+  readonly text: TextTarget
+}
+
 type EvaluationFrame =
   | ArrayFrame
   | CompleteAgentFrame
+  | CompleteSkillFrame
   | CompleteSystemFrame
   | ReleaseFrame
   | ResolveFrame
 
+/**
+ * Immutable provider defaults, capability policy, and safety limits for a runtime.
+ */
 export interface AmlRuntimeOptions {
   /**
    * Optional exact-name capability allowlist.
@@ -79,6 +100,11 @@ export interface AmlRuntimeOptions {
    * Default provider for Agents without an explicit provider prop.
    */
   readonly agentProvider?: AgentProvider
+
+  /**
+   * Base directory for relative local Skill files.
+   */
+  readonly cwd?: string
 
   /**
    * Maximum provider-backed Agent sessions. Zero disables the limit.
@@ -98,6 +124,9 @@ export interface AmlRuntimeOptions {
   readonly system?: string
 }
 
+/**
+ * Per-call controls that must not leak between concurrent evaluations.
+ */
 export interface AmlEvaluationOptions {
   /**
    * Caller-owned cancellation signal for this complete evaluation.
@@ -113,6 +142,7 @@ export class AmlRuntime {
   readonly #allowedTools: ReadonlySet<string> | undefined
   readonly #maxAgentCalls: number
   readonly #maxDepth: number
+  readonly #skillEvaluator: SkillEvaluator
 
   /**
    * Captures one immutable set of runtime limits and Agent defaults.
@@ -140,6 +170,9 @@ export class AmlRuntime {
     })
     this.#maxAgentCalls = maxAgentCalls
     this.#maxDepth = maxDepth
+    this.#skillEvaluator = new SkillEvaluator(
+      options.cwd ?? process.cwd(),
+    )
   }
 
   /**
@@ -169,15 +202,21 @@ export class AmlRuntime {
       { depth: 0, kind: "resolve", target: output, value },
     ]
 
+    // The loop has two phases. Structural frames finish work scheduled by a
+    // parent node; resolve frames classify and expand one AML value.
     while (frames.length > 0) {
       context.signal.throwIfAborted()
 
       const frame = frames.pop()
 
       if (!frame) {
+        // The length guard proves a value exists at runtime, but Array.pop()
+        // still exposes undefined in its TypeScript contract.
         break
       }
 
+      // Release frames delimit cycle detection to the currently active branch.
+      // Reusing an immutable node in two sequential branches remains valid.
       if (frame.kind === "release") {
         activeValues.delete(frame.value)
         continue
@@ -201,6 +240,8 @@ export class AmlRuntime {
         continue
       }
 
+      // Completion frames run post-order, after their child targets contain the
+      // complete text or Agent execution plan.
       if (frame.kind === "complete-system") {
         const text = frame.target.chunks.join("").trim()
 
@@ -211,6 +252,22 @@ export class AmlRuntime {
         }
 
         frame.parent.systemFragments.push(text)
+        continue
+      }
+
+      if (frame.kind === "complete-skill") {
+        const content = await this.#skillEvaluator.complete(
+          frame.plan,
+          frame.text.chunks.join(""),
+          context.signal,
+        )
+
+        if (frame.target.kind === "agent") {
+          frame.target.promptChunks.push(content)
+        } else {
+          frame.target.chunks.push(content)
+        }
+
         continue
       }
 
@@ -236,6 +293,8 @@ export class AmlRuntime {
         continue
       }
 
+      // Everything below handles a resolve frame. Scalars append immediately;
+      // containers and nodes schedule more frames instead of recursing.
       const current = frame.value
 
       if (typeof current === "string") {
@@ -305,6 +364,8 @@ export class AmlRuntime {
 
         const primitiveKind = AmlNode.primitiveKind(current.type)
 
+        // <Agent> creates a new capability and prompt scope. Its completion is
+        // deliberately scheduled before its children on the LIFO stack.
         if (primitiveKind === "agent") {
           const props = current.props as Readonly<AgentProps>
           const provider = this.#agentExecutor.validateProps(props)
@@ -339,6 +400,7 @@ export class AmlRuntime {
           continue
         }
 
+        // <Tool> is metadata for the nearest Agent, not prompt text.
         if (primitiveKind === "tool") {
           if (frame.target.kind !== "agent") {
             throw new EvaluationError(
@@ -354,6 +416,43 @@ export class AmlRuntime {
           continue
         }
 
+        // Skills combine an optional local file with post-order child text.
+        // They remain prompt text rather than a provider-specific capability.
+        if (primitiveKind === "skill") {
+          const plan = this.#skillEvaluator.prepare(current.props)
+
+          const skillTarget: TextTarget = {
+            chunks: [],
+            kind: "text",
+            parentSpanId: frame.target.parentSpanId,
+            source: "skill",
+          }
+
+          activeValues.add(current)
+          frames.push({ kind: "release", value: current })
+          frames.push({
+            kind: "complete-skill",
+            plan,
+            target: frame.target,
+            text: skillTarget,
+          })
+
+          // Source-only Skills complete immediately; inline AML still follows
+          // the evaluator's ordinary post-order and cycle semantics.
+          if (plan.hasChildren) {
+            frames.push({
+              depth: nodeDepth,
+              kind: "resolve",
+              target: skillTarget,
+              value: plan.children,
+            })
+          }
+
+          continue
+        }
+
+        // <System> redirects its children into the nearest Agent's system
+        // channel. Nested System scopes are ambiguous and rejected.
         if (primitiveKind === "system") {
           if (frame.target.kind !== "agent") {
             const placement =
@@ -387,6 +486,8 @@ export class AmlRuntime {
           continue
         }
 
+        // User components are ordinary async factories. Invocation happens only
+        // now so authoring JSX remains inert and evaluation owns all side effects.
         activeValues.add(current)
         frames.push({ kind: "release", value: current })
         frames.push({
@@ -424,6 +525,8 @@ export class AmlRuntime {
         }
       }
 
+      // Objects are not stringified implicitly: accepting them would make
+      // prompts depend on JavaScript's lossy "[object Object]" coercion.
       throw new EvaluationError(
         `AML cannot render a value of type ${typeof current}`,
       )
@@ -433,6 +536,9 @@ export class AmlRuntime {
   }
 }
 
+/**
+ * Captures a normalized exact-name Tool allowlist for one runtime.
+ */
 function captureAllowedTools(
   values: readonly string[] | undefined,
 ): ReadonlySet<string> | undefined {

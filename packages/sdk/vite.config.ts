@@ -29,6 +29,9 @@ export default defineConfig({
       formats: ["es"],
     },
     rolldownOptions: {
+      // AmlRuntime's local Skill imports remain Node runtime boundaries;
+      // bundling shims would obscure the SDK's actual platform requirement.
+      external: [/^node:/],
       output: {
         minifyInternalExports: false,
       },

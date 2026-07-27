@@ -13,6 +13,7 @@
     "example:agent": "turbo run example --filter=@aml/example-agent",
     "example:basic": "turbo run example --filter=@aml/example-basic",
     "example:opencode": "turbo run example --filter=@aml/example-opencode",
+    "example:skill": "turbo run example --filter=@aml/example-skill",
     "pack:check": "npm run pack:check --workspace=@aml/sdk && npm run pack:check --workspace=@aml/agent-opencode",
     "test": "turbo run test",
     "typecheck": "turbo run typecheck"
