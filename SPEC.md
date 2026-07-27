@@ -1721,15 +1721,20 @@ interface AmlEvaluationFinishEvent {
   readonly signal: AbortSignal;
   readonly status: "error" | "ok";
 }
+
+type AmlEventListener<Name extends AmlEventName> =
+  Name extends "trace"
+    ? TraceSink
+    : (event: AmlEventMap[Name]) => Promise<void> | void;
 ```
 
 `on()` returns an unsubscribe function. `once()` removes its listener before the first matching call. Context listeners receive events only from their evaluation and are removed when it finishes; runtime listeners may observe every evaluation executed by that runtime.
 
-The SDK uses Hookable as the typed registration and dispatch substrate instead of maintaining separate observer and lifecycle registries. Hookable remains internal: subscribers can register and unregister listeners but cannot publish events.
+The SDK uses Hookable as the typed registration and dispatch substrate instead of maintaining separate observer and lifecycle registries. Hookable remains internal: subscribers can register and unregister listeners but cannot publish events. Every evaluation owns an independent scoped Hookable registry rather than registering run-filtering wrappers on the runtime-wide registry.
 
-`start` listeners are awaited before AML begins evaluating the authored tree. `finish` listeners are awaited after the tree, Agent scheduler, Sandbox leases, and Workspace lease have settled. Every finish listener is given a chance to run; multiple failures are preserved. The root evaluation trace closes only after finish listeners settle, so cleanup failure is visible in both the returned error and trace status.
+`start` listeners are awaited sequentially before AML begins evaluating the authored tree and fail fast: after one rejects, later setup listeners do not run. `finish` listeners are awaited after the tree, Agent scheduler, Sandbox leases, and Workspace lease have settled. Every finish listener is given a chance to run; multiple failures are preserved. The `status` and optional `error` fields describe execution as it enters the finish phase; a finish-listener failure can still reject an evaluation whose finish event reported `status: "ok"`. The root evaluation trace closes only after finish listeners settle, so cleanup failure is visible in both the returned error and trace status.
 
-`trace` is the common observability event. Trace listeners begin synchronously but are never awaited by AML. Hookable consumes asynchronous results, and thrown errors or rejections are reported through the isolated trace-error channel without delaying or failing the workflow. `createConsoleTracer()`, test inspectors, visual tree consumers, and future telemetry exporters subscribe through this event rather than a separate dispatcher API.
+`trace` is the common observability event. Every trace listener begins synchronously and is isolated from every other listener; one synchronous throw cannot suppress listeners registered after it. Trace listeners may return a Promise, but AML never awaits it. Every throw or rejection is reported independently through the isolated trace-error channel without delaying or failing the workflow. `createConsoleTracer()`, test inspectors, visual tree consumers, and future telemetry exporters subscribe through this event rather than a separate dispatcher API.
 
 ### 16.2 Trace contract
 
@@ -1794,7 +1799,7 @@ type AmlTraceEvent =
     };
 
 interface TraceSink {
-  (event: AmlTraceEvent): void;
+  (event: AmlTraceEvent): unknown;
   readonly captureContent?: boolean;
 }
 ```
@@ -1807,11 +1812,11 @@ Agent spans begin when the runtime enters the authored Agent, before Agent-speci
 
 Trace sinks supplied through the compatibility `trace` runtime option are registered as `trace` event listeners. Each evaluation still owns its ordering counter, root span, and failure-warning state. A listener receives deeply immutable snapshots rather than request, response, Tool, provider, lease, or component objects. It runs outside component-local `evaluate()` access and cannot mutate workflow inputs or results through the event API.
 
-Compatibility trace sinks are synchronous and should return `void`. A thrown error or returned thenable cannot change workflow behavior. Hookable consumes asynchronous results without making them part of evaluation completion. `onTraceError(error, event)` receives failures through an isolated secondary channel; otherwise AML emits at most one compact stderr warning per evaluation. Errors and asynchronous rejections from the secondary handler are swallowed.
+Compatibility trace sinks and listeners registered through `runtime.on("trace", ...)` share the same contract. A thrown error or returned Promise cannot change workflow behavior or suppress another listener. `onTraceError(error, event)` receives every listener failure through an isolated secondary channel; otherwise AML emits at most one compact stderr warning per evaluation. Errors and asynchronous rejections from the secondary handler are swallowed.
 
-Prompts, System and Skill contents, Tool input/output, MCP configuration, filesystem paths, and model output may be sensitive. These values are omitted by default. A sink with `captureContent: true` explicitly opts into the content fields the stable runtime owns. JavaScript Tool spans serialize the already captured transport input as `input` on `span.start` and the stable Tool result as `output` on a successful `span.end`. Serialization failure for unusually deep JSON omits optional content without replacing Tool validation or execution. Credential-bearing MCP configuration and provider-private diagnostics are never copied into AML events.
+Prompts, System and Skill contents, Tool input/output, MCP configuration, filesystem paths, and model output may be sensitive. These values are omitted by default. A sink with `captureContent: true` opts only that listener into the content fields the stable runtime owns. For an event with sensitive content, the runtime constructs separate deeply immutable redacted and content-bearing snapshots and selects between them per listener. One opted-in listener never exposes content to another listener. JavaScript Tool spans serialize the already captured transport input as `input` on `span.start` and the stable Tool result as `output` on a successful `span.end` only while the evaluation has at least one content listener. Serialization failure for unusually deep JSON omits optional content without replacing Tool validation or execution. Credential-bearing MCP configuration and provider-private diagnostics are never copied into AML events.
 
-`createConsoleTracer()` renders the same event tree with indentation, span status, elapsed time, safe attributes, and optional captured content. A custom writer remains subject to the synchronous trace-listener contract; throws and returned thenables are isolated and reported through the runtime trace-error channel. OpenTelemetry remains a possible consumer package after the event contract is proven; this phase does not export `createOpenTelemetryTraceSink()` or add an OpenTelemetry dependency.
+`createConsoleTracer()` renders the same event tree with indentation, span status, elapsed time, safe attributes, and optional captured content. A custom writer may be synchronous or asynchronous; throws and rejections are isolated and reported through the runtime trace-error channel. OpenTelemetry remains a possible consumer package after the event contract is proven; this phase does not export `createOpenTelemetryTraceSink()` or add an OpenTelemetry dependency.
 
 ### 16.3 Agent adapter requirements
 

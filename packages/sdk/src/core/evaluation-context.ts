@@ -1,5 +1,6 @@
 import type { AmlTraceIdentity } from "./trace-identity.js"
 import { AmlEventBus } from "./aml-event-bus.js"
+import { AmlEventScope } from "./aml-event-scope.js"
 import type { AmlEventSubscriber } from "./aml-event-subscriber.js"
 import { AgentScheduler } from "./agent-scheduler.js"
 import { EvaluationError } from "./evaluation-error.js"
@@ -25,9 +26,7 @@ type TraceAttributes = Readonly<
  */
 export class EvaluationContext {
   readonly #agentScheduler: AgentScheduler
-  readonly #captureTraceContent: boolean
-  readonly #eventScope: ReturnType<AmlEventBus["scope"]>
-  readonly #events: AmlEventBus
+  readonly #eventScope: AmlEventScope
   readonly #maxAgentCalls: number
   readonly #maxStateTransitions: number
   readonly #runId = globalThis.crypto.randomUUID()
@@ -49,7 +48,6 @@ export class EvaluationContext {
     signal: AbortSignal,
     events: AmlEventBus,
     trace: {
-      readonly captureContent: boolean
       readonly onError: TraceErrorHandler | undefined
     },
   ) {
@@ -60,12 +58,9 @@ export class EvaluationContext {
     this.#maxAgentCalls = maxAgentCalls
     this.#maxStateTransitions = maxStateTransitions
     this.#signal = signal
-    this.#events = events
-    this.#eventScope = events.scope(this.#runId)
-    this.#captureTraceContent = trace.captureContent
+    this.#eventScope = new AmlEventScope(events)
     this.#traceDispatcher = new TraceDispatcher(
-      events,
-      trace.captureContent,
+      this.#eventScope,
       trace.onError,
     )
   }
@@ -85,13 +80,13 @@ export class EvaluationContext {
   }
 
   /**
-   * Reports whether the configured sink explicitly accepts sensitive content.
+   * Reports whether an observer of this evaluation accepts sensitive content.
    *
    * Producers use this before snapshotting Tool input or output so disabled
    * content tracing adds neither object traversal nor serialization work.
    */
   get capturesTraceContent(): boolean {
-    return this.#captureTraceContent
+    return this.#eventScope.capturesTraceContent
   }
 
   /**
@@ -109,7 +104,7 @@ export class EvaluationContext {
    * Runs runtime-wide setup before AML enters the authored tree.
    */
   async start(): Promise<void> {
-    await this.#events.start(
+    await this.#eventScope.start(
       Object.freeze({
         runId: this.#runId,
         signal: this.#signal,
@@ -273,7 +268,7 @@ export class EvaluationContext {
     let finishFailed = false
 
     try {
-      await this.#events.finish(
+      await this.#eventScope.finish(
         Object.freeze({
           ...(failed ? { error } : {}),
           runId: this.#runId,

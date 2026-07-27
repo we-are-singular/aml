@@ -1,6 +1,4 @@
 import type {
-  AgentExecutionContext,
-  AmlEventSubscriber,
   AgentRequest,
   AgentResponse,
 } from "@aml/sdk"
@@ -14,7 +12,10 @@ import {
   Mcp,
   Tool,
 } from "@aml/sdk"
-import { agentProviderConformance } from "@aml/sdk/testing"
+import {
+  agentProviderConformance,
+  createAgentExecutionContext,
+} from "@aml/sdk/testing"
 import { Client as McpClient } from "@modelcontextprotocol/sdk/client/index.js"
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js"
 import { z } from "zod"
@@ -41,11 +42,6 @@ import {
 import { OpenCodeCapabilityAttachment } from "../src/opencode-capability-attachment.js"
 import { OpenCodeSdkClient } from "../src/opencode-sdk-client.js"
 import { OpenCodeSession } from "../src/opencode-session.js"
-
-const TestEvents: AmlEventSubscriber = Object.freeze({
-  on: () => () => undefined,
-  once: () => () => undefined,
-})
 
 class RecordingSessionClient implements OpenCodeSessionClient {
   readonly abortCalls: OpenCodeSessionLocation[] = []
@@ -135,12 +131,10 @@ function createRequest(overrides: Partial<AgentRequest> = {}): AgentRequest {
 }
 
 function createContext(signal = new AbortController().signal) {
-  const trace = Object.freeze({ runId: "run", spanId: "span-1" })
-  return Object.freeze({
-    events: TestEvents,
+  return createAgentExecutionContext({
     signal,
-    trace,
-  }) satisfies AgentExecutionContext
+    trace: { runId: "run", spanId: "span-1" },
+  })
 }
 
 /**

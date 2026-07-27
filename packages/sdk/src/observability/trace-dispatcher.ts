@@ -1,4 +1,4 @@
-import type { AmlEventBus } from "../core/aml-event-bus.js"
+import type { AmlEventScope } from "../core/aml-event-scope.js"
 import { ComponentEvaluationContext } from "../core/component-evaluation-context.js"
 import type { AmlTraceIdentity } from "../core/trace-identity.js"
 import type {
@@ -29,8 +29,7 @@ export interface TraceSpan {
  * Delivers one evaluation's immutable events without affecting its semantics.
  */
 export class TraceDispatcher {
-  readonly #captureContent: boolean
-  readonly #events: AmlEventBus
+  readonly #events: AmlEventScope
   readonly #onError: TraceErrorHandler | undefined
   readonly #activeSpans = new Set<string>()
   #closed = false
@@ -41,12 +40,10 @@ export class TraceDispatcher {
    * Captures the consumer boundary once for one isolated evaluation.
    */
   constructor(
-    events: AmlEventBus,
-    captureContent: boolean,
+    events: AmlEventScope,
     onError: TraceErrorHandler | undefined,
   ) {
     this.#events = events
-    this.#captureContent = captureContent
     this.#onError = onError
   }
 
@@ -65,16 +62,13 @@ export class TraceDispatcher {
 
     this.#emit({
       ...identity,
-      attributes: this.#attributes(
-        attributes,
-        sensitiveAttributes,
-      ),
+      attributes: snapshotAttributes(attributes),
       kind,
       name,
       sequence: this.#nextSequence(),
       timestamp: Date.now(),
       type: "span.start",
-    })
+    }, sensitiveAttributes)
 
     return Object.freeze({
       identity,
@@ -99,10 +93,7 @@ export class TraceDispatcher {
 
     this.#emit({
       ...span.identity,
-      attributes: this.#attributes(
-        attributes,
-        sensitiveAttributes,
-      ),
+      attributes: snapshotAttributes(attributes),
       durationMs: Math.max(0, performance.now() - span.startedAt),
       kind: span.kind,
       name: span.name,
@@ -110,7 +101,7 @@ export class TraceDispatcher {
       status,
       timestamp: Date.now(),
       type: "span.end",
-    })
+    }, sensitiveAttributes)
   }
 
   /**
@@ -142,15 +133,12 @@ export class TraceDispatcher {
 
     this.#emit({
       ...identity,
-      attributes: this.#attributes(
-        attributes,
-        sensitiveAttributes,
-      ),
+      attributes: snapshotAttributes(attributes),
       name,
       sequence: this.#nextSequence(),
       timestamp: Date.now(),
       type: "event",
-    })
+    }, sensitiveAttributes)
   }
 
   /**
@@ -162,39 +150,32 @@ export class TraceDispatcher {
   }
 
   /**
-   * Builds a frozen attribute snapshot, adding content only by explicit opt-in.
+   * Publishes redacted and content-bearing snapshots for per-listener consent.
    */
-  #attributes(
-    attributes: TraceAttributes,
-    sensitiveAttributes: TraceAttributes,
-  ): TraceAttributes {
-    const result: Record<string, AmlTraceAttribute> =
-      Object.create(null) as Record<string, AmlTraceAttribute>
-
-    for (const source of this.#captureContent
-      ? [attributes, sensitiveAttributes]
-      : [attributes]) {
-      for (const [key, value] of Object.entries(source)) {
-        result[key] = Array.isArray(value)
-          ? Object.freeze([...value])
-          : value
-      }
-    }
-
-    return Object.freeze(result)
-  }
-
-  /**
-   * Invokes a consumer outside component-local evaluate() authority.
-   */
-  #emit(event: AmlTraceEvent): void {
+  #emit(
+    event: AmlTraceEvent,
+    sensitiveAttributes: TraceAttributes = {},
+  ): void {
     if (this.#closed) {
       return
     }
 
-    const immutableEvent = Object.freeze(event)
+    const redacted = Object.freeze(event)
+    const content =
+      this.#events.capturesTraceContent &&
+      Object.keys(sensitiveAttributes).length > 0
+        ? Object.freeze({
+            ...event,
+            attributes: snapshotAttributes(
+              event.attributes,
+              sensitiveAttributes,
+            ),
+          }) as AmlTraceEvent
+        : redacted
+
     this.#events.trace(
-      immutableEvent,
+      redacted,
+      content,
       (error, traceEvent) => this.#report(error, traceEvent),
     )
   }
@@ -246,6 +227,26 @@ export class TraceDispatcher {
     this.#sequence += 1
     return this.#sequence
   }
+}
+
+/**
+ * Copies trace attributes so observers cannot mutate runtime-owned arrays.
+ */
+function snapshotAttributes(
+  ...sources: readonly TraceAttributes[]
+): TraceAttributes {
+  const result: Record<string, AmlTraceAttribute> =
+    Object.create(null) as Record<string, AmlTraceAttribute>
+
+  for (const source of sources) {
+    for (const [key, value] of Object.entries(source)) {
+      result[key] = Array.isArray(value)
+        ? Object.freeze([...value])
+        : value
+    }
+  }
+
+  return Object.freeze(result)
 }
 
 /**

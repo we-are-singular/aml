@@ -3,7 +3,6 @@ import { randomUUID } from "node:crypto"
 import {
   Agent,
   AmlRuntime,
-  type AmlEventSubscriber,
   defineMcpServer,
   defineTool,
   evaluate,
@@ -11,6 +10,7 @@ import {
   Mcp,
   Tool,
 } from "@aml/sdk"
+import { createAgentExecutionContext } from "@aml/sdk/testing"
 import { expect, it } from "vitest"
 import { z } from "zod"
 
@@ -19,11 +19,6 @@ import { OpenCodeToolBridge } from "../src/opencode-tool-bridge.js"
 
 const liveTest =
   process.env.AML_OPENCODE_LIVE === "1" ? it : it.skip
-
-const TestEvents: AmlEventSubscriber = Object.freeze({
-  on: () => () => undefined,
-  once: () => () => undefined,
-})
 
 liveTest(
   "retains conversation history across real OpenCode FollowUps",
@@ -153,13 +148,12 @@ liveTest(
     // The Agent receives only its portable <Mcp> descriptor, not the AML Tool.
     const bridge = new OpenCodeToolBridge(
       [lookupLabel],
-      Object.freeze({
-        events: TestEvents,
+      createAgentExecutionContext({
         signal: controller.signal,
-        trace: Object.freeze({
+        trace: {
           runId: "mcp-live",
           spanId: "mcp-live-1",
-        }),
+        },
       }),
     )
     const connection = await bridge.start(controller.signal)

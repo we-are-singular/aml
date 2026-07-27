@@ -11,6 +11,7 @@ import { EvaluationError } from "../src/core/evaluation-error.js"
 import { jsx } from "../src/jsx-runtime.js"
 import type { AmlTraceEvent } from "../src/observability/trace-event.js"
 import { agentProviderConformance } from "../src/testing/agent-provider-conformance.js"
+import { createAgentExecutionContext } from "../src/testing/create-agent-execution-context.js"
 import { DeterministicAgentProvider } from "../src/testing/deterministic-agent-provider.js"
 
 describe("Agent", () => {
@@ -486,6 +487,23 @@ describe("defineAgentProvider", () => {
 })
 
 describe("agentProviderConformance", () => {
+  it("preserves nested trace identity in the shared provider fixture", () => {
+    const context = createAgentExecutionContext({
+      trace: {
+        parentSpanId: "parent",
+        runId: "run",
+        spanId: "agent",
+      },
+    })
+
+    expect(context.trace).toEqual({
+      parentSpanId: "parent",
+      runId: "run",
+      spanId: "agent",
+    })
+    expect(Object.isFrozen(context.trace)).toBe(true)
+  })
+
   it("exercises a deterministic provider through frozen public contracts", async () => {
     const provider = new DeterministicAgentProvider()
 

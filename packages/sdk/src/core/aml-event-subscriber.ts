@@ -1,4 +1,5 @@
 import type { AmlTraceEvent } from "../observability/trace-event.js"
+import type { TraceSink } from "../observability/trace-sink.js"
 
 /**
  * Announces that one runtime evaluation is ready to execute its AML tree.
@@ -32,12 +33,12 @@ export type AmlEventName = keyof AmlEventMap
 /**
  * Defines the return contract for each runtime event.
  *
- * Trace observers are not awaited by AML. Lifecycle listeners are awaited
- * because setup and cleanup are workflow boundaries.
+ * TraceSink carries the per-listener content policy. Awaiting remains a
+ * dispatch decision: lifecycle listeners are awaited, while traces are not.
  */
 export type AmlEventListener<Name extends AmlEventName> =
   Name extends "trace"
-    ? (event: AmlEventMap[Name]) => void
+    ? TraceSink
     : (event: AmlEventMap[Name]) => Promise<void> | void
 
 /**

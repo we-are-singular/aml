@@ -1,239 +1,227 @@
-import {
-  createHooks,
-  type HookCallback,
-} from "hookable"
+import { createHooks } from "hookable"
 
 import { ComponentEvaluationContext } from "./component-evaluation-context.js"
 import type {
   AmlEventListener,
-  AmlEventMap,
   AmlEventName,
   AmlEventSubscriber,
   AmlEvaluationFinishEvent,
   AmlEvaluationStartEvent,
 } from "./aml-event-subscriber.js"
 import type { AmlTraceEvent } from "../observability/trace-event.js"
+import type {
+  TraceErrorHandler,
+  TraceSink,
+} from "../observability/trace-sink.js"
+
+interface AmlTraceEnvelope {
+  readonly content: AmlTraceEvent
+  readonly redacted: AmlTraceEvent
+}
 
 interface AmlHookMap {
   finish: AmlEventListener<"finish">
   start: AmlEventListener<"start">
-  trace: AmlEventListener<"trace">
+  trace: (events: AmlTraceEnvelope) => Promise<void> | void
 }
 
-type TraceListenerErrorHandler = (
-  error: unknown,
-  event: AmlTraceEvent,
-) => void
-
 /**
- * Runtime-owned publisher for lifecycle and observability events.
+ * Owns one Hookable registry and AML's event dispatch policies.
  *
- * Hookable owns registration. This class owns AML's dispatch policies:
- * lifecycle listeners are awaited, while trace listeners begin immediately
- * and settle outside workflow control flow.
+ * A runtime and each active evaluation use separate instances. This keeps
+ * evaluation-scoped subscribers out of unrelated concurrent dispatches.
  */
 export class AmlEventBus implements AmlEventSubscriber {
   readonly #hooks = createHooks<AmlHookMap>()
+  readonly #contentTraceListeners = new Set<symbol>()
 
   /**
-   * Registers one runtime-wide listener.
+   * Reports whether this registry has a trace listener that accepts content.
+   */
+  get capturesTraceContent(): boolean {
+    return this.#contentTraceListeners.size > 0
+  }
+
+  /**
+   * Registers one listener until its returned unsubscribe function is called.
    */
   on<Name extends AmlEventName>(
     name: Name,
     listener: AmlEventListener<Name>,
   ): () => void {
-    // Hookable cannot preserve the correlation between a generic event name
-    // and its conditional listener type. The public signature enforces it.
-    return this.#hooks.hook(name, listener as never)
+    return this.#register(name, listener, false)
   }
 
   /**
-   * Registers one runtime-wide listener that removes itself before execution.
+   * Registers one listener that removes itself before its first invocation.
    */
   once<Name extends AmlEventName>(
     name: Name,
     listener: AmlEventListener<Name>,
   ): () => void {
-    return this.#hooks.hookOnce(name, listener as never)
+    return this.#register(name, listener, true)
   }
 
   /**
-   * Creates a subscriber that can observe only one evaluation.
-   */
-  scope(runId: string): AmlEventScope {
-    return new AmlEventScope(this, runId)
-  }
-
-  /**
-   * Awaits every start listener before evaluation enters user code.
+   * Runs setup listeners serially and stops at the first failure.
    */
   async start(event: AmlEvaluationStartEvent): Promise<void> {
-    await this.#hooks.callHookWith(
-      async (listeners) =>
-        await this.#callLifecycle(listeners, event, "start"),
-      "start",
-      [event],
+    await ComponentEvaluationContext.withoutAccess(
+      async () => await this.#hooks.callHook("start", event),
     )
   }
 
   /**
-   * Awaits every finish listener so all registered cleanup gets a chance.
+   * Runs every cleanup listener and returns each failure in call order.
    */
-  async finish(event: AmlEvaluationFinishEvent): Promise<void> {
-    await this.#hooks.callHookWith(
-      async (listeners) =>
-        await this.#callLifecycle(listeners, event, "finish"),
+  async finish(
+    event: AmlEvaluationFinishEvent,
+  ): Promise<readonly unknown[]> {
+    return await this.#hooks.callHookWith(
+      async (listeners) => {
+        const errors: unknown[] = []
+
+        for (const listener of listeners) {
+          try {
+            await ComponentEvaluationContext.withoutAccess(
+              async () =>
+                await Reflect.apply(listener, undefined, [event]),
+            )
+          } catch (error) {
+            errors.push(error)
+          }
+        }
+
+        return errors
+      },
       "finish",
       [event],
     )
   }
 
   /**
-   * Publishes one trace event without allowing observers to affect execution.
+   * Starts every trace listener without awaiting or coupling their failures.
    */
   trace(
-    event: AmlTraceEvent,
-    onError: TraceListenerErrorHandler,
+    redacted: AmlTraceEvent,
+    content: AmlTraceEvent,
+    onError: TraceErrorHandler,
   ): void {
-    try {
-      const pending = ComponentEvaluationContext.withoutAccess(() =>
-        this.#hooks.callHookParallel("trace", event),
-      )
+    const envelope = Object.freeze({ content, redacted })
 
-      // Observers begin synchronously, but AML never waits for their results.
-      // Hookable consumes asynchronous handlers and reports rejection through
-      // the existing out-of-band trace error channel.
-      if (pending !== undefined) {
-        void pending.catch((error: unknown) => {
-          onError(error, event)
-        })
-      }
-    } catch (error) {
-      onError(error, event)
-    }
+    this.#hooks.callHookWith(
+      (listeners) => {
+        for (const listener of listeners) {
+          let result: unknown
+
+          try {
+            // Invoke each observer separately so a synchronous throw cannot
+            // abort Hookable's listener traversal.
+            result = ComponentEvaluationContext.withoutAccess(() =>
+              Reflect.apply(listener, undefined, [envelope]),
+            )
+          } catch (error) {
+            onError(error, redacted)
+            continue
+          }
+
+          // Promise.resolve also adopts custom thenables. AML deliberately
+          // observes rejection without joining it to workflow completion.
+          void Promise.resolve(result).catch((error: unknown) => {
+            onError(error, redacted)
+          })
+        }
+      },
+      "trace",
+      [envelope],
+    )
   }
 
   /**
-   * Calls awaited lifecycle listeners while preserving every failure.
+   * Removes every listener owned by this registry.
    */
-  async #callLifecycle(
-    listeners: HookCallback[],
-    event: AmlEvaluationFinishEvent | AmlEvaluationStartEvent,
-    name: "finish" | "start",
-  ): Promise<void> {
-    const errors: unknown[] = []
+  close(): void {
+    this.#contentTraceListeners.clear()
+    this.#hooks.removeAllHooks()
+  }
 
-    for (const listener of listeners) {
-      try {
-        await ComponentEvaluationContext.withoutAccess(
-          async () =>
-            await Reflect.apply(listener, undefined, [event]),
-        )
-      } catch (error) {
-        errors.push(error)
+  /**
+   * Routes public listeners into Hookable's internal payload contracts.
+   */
+  #register<Name extends AmlEventName>(
+    name: Name,
+    listener: AmlEventListener<Name>,
+    once: boolean,
+  ): () => void {
+    if (name === "trace") {
+      return this.#registerTrace(listener as TraceSink, once)
+    }
+
+    return once
+      ? this.#hooks.hookOnce(name, listener as never)
+      : this.#hooks.hook(name, listener as never)
+  }
+
+  /**
+   * Captures one trace listener's content policy for its full registration.
+   */
+  #registerTrace(listener: TraceSink, once: boolean): () => void {
+    const captureContent = captureTraceContent(listener)
+    const contentRegistration = captureContent
+      ? Symbol("trace-content-listener")
+      : undefined
+    const releaseContent = () =>
+      contentRegistration === undefined
+        ? undefined
+        : this.#contentTraceListeners.delete(contentRegistration)
+    const invoke = (events: AmlTraceEnvelope) => {
+      if (once) {
+        releaseContent()
       }
+
+      // Public observers may return any ignored value. Normalize it into one
+      // completion Promise so rejected thenables still reach trace reporting.
+      return Promise.resolve(
+        Reflect.apply(listener, undefined, [
+          captureContent ? events.content : events.redacted,
+        ]),
+      ).then(() => undefined)
+    }
+    const removeHook = once
+      ? this.#hooks.hookOnce("trace", invoke)
+      : this.#hooks.hook("trace", invoke)
+
+    if (contentRegistration !== undefined) {
+      this.#contentTraceListeners.add(contentRegistration)
     }
 
-    if (errors.length === 1) {
-      throw errors[0]
-    }
-
-    if (errors.length > 1) {
-      throw new AggregateError(
-        errors,
-        `AML ${name} listeners failed`,
-      )
+    return () => {
+      releaseContent()
+      removeHook()
     }
   }
 }
 
 /**
- * Filters subscriptions to one run and releases them together at finish.
+ * Reads one optional listener policy once at the registration boundary.
  */
-class AmlEventScope implements AmlEventSubscriber {
-  readonly #bus: AmlEventBus
-  readonly #listeners = new Set<() => void>()
-  readonly #runId: string
-  #closed = false
+function captureTraceContent(listener: TraceSink): boolean {
+  let value: unknown
 
-  constructor(bus: AmlEventBus, runId: string) {
-    this.#bus = bus
-    this.#runId = runId
+  try {
+    value = Reflect.get(listener, "captureContent")
+  } catch (cause) {
+    throw new TypeError(
+      "trace listener captureContent could not be read",
+      { cause },
+    )
   }
 
-  on<Name extends AmlEventName>(
-    name: Name,
-    listener: AmlEventListener<Name>,
-  ): () => void {
-    if (this.#closed) {
-      throw new Error("AML evaluation event scope is closed")
-    }
-
-    const remove = this.#bus.on(name, ((event: AmlEventMap[Name]) => {
-      if (event.runId === this.#runId) {
-        return Reflect.apply(listener, undefined, [event])
-      }
-    }) as AmlEventListener<Name>)
-
-    return this.#track(remove)
+  if (value !== undefined && typeof value !== "boolean") {
+    throw new TypeError(
+      "trace listener captureContent must be a boolean",
+    )
   }
 
-  once<Name extends AmlEventName>(
-    name: Name,
-    listener: AmlEventListener<Name>,
-  ): () => void {
-    if (this.#closed) {
-      throw new Error("AML evaluation event scope is closed")
-    }
-
-    let remove: () => void = () => undefined
-    const removeListener = this.#bus.on(name, ((event: AmlEventMap[Name]) => {
-      if (event.runId !== this.#runId) {
-        return
-      }
-
-      remove()
-      return Reflect.apply(listener, undefined, [event])
-    }) as AmlEventListener<Name>)
-
-    remove = this.#track(removeListener)
-    return remove
-  }
-
-  /**
-   * Removes every listener retained by the completed evaluation.
-   */
-  close(): void {
-    if (this.#closed) {
-      return
-    }
-
-    this.#closed = true
-
-    for (const remove of [...this.#listeners]) {
-      remove()
-    }
-
-    this.#listeners.clear()
-  }
-
-  /**
-   * Makes one Hookable unregister callback idempotent within this scope.
-   */
-  #track(removeListener: () => void): () => void {
-    let active = true
-
-    const remove = () => {
-      if (!active) {
-        return
-      }
-
-      active = false
-      this.#listeners.delete(remove)
-      removeListener()
-    }
-
-    this.#listeners.add(remove)
-    return remove
-  }
+  return value ?? false
 }

@@ -8,12 +8,11 @@ import {
   Mcp,
   Tool,
 } from "@aml/sdk"
-import type {
-  AgentExecutionContext,
-  AmlEventSubscriber,
-  AgentRequest,
-} from "@aml/sdk"
-import { agentProviderConformance } from "@aml/sdk/testing"
+import type { AgentRequest } from "@aml/sdk"
+import {
+  agentProviderConformance,
+  createAgentExecutionContext,
+} from "@aml/sdk/testing"
 import { Client as McpClient } from "@modelcontextprotocol/sdk/client/index.js"
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js"
 import { z } from "zod"
@@ -35,11 +34,6 @@ interface RecordedTurn {
   readonly prompt: string
   readonly threadIndex: number
 }
-
-const TestEvents: AmlEventSubscriber = Object.freeze({
-  on: () => () => undefined,
-  once: () => () => undefined,
-})
 
 /**
  * Deterministic Codex construction port used by adapter boundary tests.
@@ -100,14 +94,13 @@ function createRequest(
 
 function createContext(
   signal = new AbortController().signal,
-): AgentExecutionContext {
-  return Object.freeze({
-    events: TestEvents,
+): ReturnType<typeof createAgentExecutionContext> {
+  return createAgentExecutionContext({
     signal,
-    trace: Object.freeze({
+    trace: {
       runId: "run",
       spanId: "span-1",
-    }),
+    },
   })
 }
 

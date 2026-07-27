@@ -265,6 +265,38 @@ describe("observability", () => {
     expect(captureReads).toBe(1)
   })
 
+  it("applies content consent independently to runtime trace listeners", async () => {
+    const redactedEvents: AmlTraceEvent[] = []
+    const visibleLines: string[] = []
+    const runtime = new AmlRuntime({
+      agentProvider: new DeterministicAgentProvider({
+        respond: () => ({ text: "PRIVATE_OUTPUT" }),
+      }),
+    })
+
+    runtime.on("trace", (event) => redactedEvents.push(event))
+    runtime.on(
+      "trace",
+      createConsoleTracer({
+        captureContent: true,
+        write: (line) => visibleLines.push(line),
+      }),
+    )
+
+    await runtime.evaluate(
+      <Agent system="PRIVATE_SYSTEM">PRIVATE_PROMPT</Agent>,
+    )
+
+    const visible = visibleLines.join("\n")
+    const redacted = JSON.stringify(redactedEvents)
+
+    expect(visible).toContain("PRIVATE_PROMPT")
+    expect(visible).toContain("PRIVATE_OUTPUT")
+    expect(redacted).not.toContain("PRIVATE_PROMPT")
+    expect(redacted).not.toContain("PRIVATE_SYSTEM")
+    expect(redacted).not.toContain("PRIVATE_OUTPUT")
+  })
+
   it("captures Tool input and output only after explicit content opt-in", async () => {
     const hiddenEvents: AmlTraceEvent[] = []
     const visibleEvents: AmlTraceEvent[] = []

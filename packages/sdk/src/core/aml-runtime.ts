@@ -310,7 +310,6 @@ export class AmlRuntime {
   readonly #maxDepth: number
   readonly #maxStateTransitions: number
   readonly #onTraceError: TraceErrorHandler | undefined
-  readonly #traceCaptureContent: boolean
   readonly #loopAgentSelector: LoopAgentSelector
   readonly #loopEvaluator = new LoopEvaluator()
   readonly #sandboxEvaluator: SandboxEvaluator
@@ -388,7 +387,6 @@ export class AmlRuntime {
     this.#maxDepth = maxDepth
     this.#maxStateTransitions = maxStateTransitions
     this.#onTraceError = trace.onError
-    this.#traceCaptureContent = trace.captureContent
 
     if (trace.sink !== undefined) {
       this.#events.on("trace", trace.sink)
@@ -448,7 +446,6 @@ export class AmlRuntime {
         signal,
         this.#events,
         {
-          captureContent: this.#traceCaptureContent,
           onError: this.#onTraceError,
         },
       ),
@@ -1629,7 +1626,6 @@ function captureTraceOptions(
   trace: TraceSink | undefined,
   onError: TraceErrorHandler | undefined,
 ): Readonly<{
-  captureContent: boolean
   onError: TraceErrorHandler | undefined
   sink: TraceSink | undefined
 }> {
@@ -1641,31 +1637,7 @@ function captureTraceOptions(
     throw new TypeError("onTraceError must be a function")
   }
 
-  let captureContent: unknown
-
-  try {
-    captureContent =
-      trace === undefined
-        ? undefined
-        : Reflect.get(trace, "captureContent")
-  } catch (cause) {
-    throw new TypeError(
-      "trace captureContent could not be read",
-      { cause },
-    )
-  }
-
-  if (
-    captureContent !== undefined &&
-    typeof captureContent !== "boolean"
-  ) {
-    throw new TypeError(
-      "trace captureContent must be a boolean",
-    )
-  }
-
   return Object.freeze({
-    captureContent: captureContent ?? false,
     onError,
     sink: trace,
   })

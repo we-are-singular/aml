@@ -3,11 +3,11 @@ import type { AmlTraceEvent } from "./trace-event.js"
 /**
  * Receives immutable execution events without participating in workflow flow.
  *
- * A sink must return synchronously. Setting `captureContent` opts this consumer
- * into sensitive text fields owned by the portable AML runtime.
+ * AML never awaits a returned Promise. Setting `captureContent` opts only this
+ * consumer into sensitive text fields owned by the portable AML runtime.
  */
 export interface TraceSink {
-  (event: AmlTraceEvent): void
+  (event: AmlTraceEvent): unknown
   readonly captureContent?: boolean
 }
 

@@ -16,7 +16,7 @@ export interface ConsoleTracerOptions {
   /**
    * Replaces console.log for deterministic tests and custom terminals.
    */
-  readonly write?: (line: string) => void
+  readonly write?: (line: string) => unknown
 }
 
 /**
@@ -78,12 +78,12 @@ export function createConsoleTracer(
       }
     }
 
-    // Forward a non-void writer result so the evaluation dispatcher applies
-    // the same synchronous-consumer contract and rejection handling.
+    // Forward the writer result so the event layer can report a rejected
+    // Promise without joining observability to workflow completion.
     return result
   }) as TraceSink
 
-  // The dispatcher captures this flag once when AmlRuntime is constructed.
+  // The event registry captures this policy once when the sink is registered.
   Object.defineProperty(sink, "captureContent", {
     configurable: false,
     enumerable: true,
