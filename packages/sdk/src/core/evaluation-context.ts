@@ -6,17 +6,18 @@ import { EvaluationError } from "./evaluation-error.js"
  */
 export class EvaluationContext {
   readonly #maxAgentCalls: number
-  readonly #controller = new AbortController()
   readonly #runId = globalThis.crypto.randomUUID()
+  readonly #signal: AbortSignal
   #agentCalls = 0
   #spanSequence = 0
 
-  constructor(maxAgentCalls: number) {
+  constructor(maxAgentCalls: number, signal: AbortSignal) {
     this.#maxAgentCalls = maxAgentCalls
+    this.#signal = signal
   }
 
   get signal(): AbortSignal {
-    return this.#controller.signal
+    return this.#signal
   }
 
   createTrace(parentSpanId?: string): AmlTraceIdentity {

@@ -1,0 +1,27 @@
+{
+  "name": "@aml/agent-opencode",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "sideEffects": false,
+  "files": [
+    "dist"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "dependencies": {
+    "@aml/sdk": "*",
+    "@opencode-ai/sdk": "^1.18.5"
+  },
+  "scripts": {
+    "build": "vite build && tsc --project tsconfig.build.json",
+    "pack:check": "npm run build && node scripts/check-package.ts",
+    "test": "vitest run",
+    "test:integration": "vitest run tests/opencode-agent.integration.test.tsx",
+    "typecheck": "tsc --noEmit"
+  }
+}

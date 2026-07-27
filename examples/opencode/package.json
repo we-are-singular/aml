@@ -1,0 +1,13 @@
+{
+  "name": "@aml/example-opencode",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@aml/agent-opencode": "*",
+    "@aml/sdk": "*"
+  },
+  "scripts": {
+    "example": "vite-node main.tsx",
+    "typecheck": "tsc --noEmit"
+  }
+}

@@ -93,7 +93,7 @@ AML is developed as an npm workspace monorepo. Its provider-neutral runtime is d
 
 The SDK exports both `@aml/sdk/jsx-runtime` and `@aml/sdk/jsx-dev-runtime` for TypeScript and Vite's automatic production and development JSX transforms.
 
-Each distributable package owns one leaf build over its complete source import graph. Workspace source dependencies do not need intermediate `dist` directories before that build runs. A build must not pull a dependency across the package boundaries above: in particular, `@aml/sdk` never bundles a concrete provider, and a concrete provider treats `@aml/sdk` as its public runtime dependency rather than embedding another SDK copy.
+Each distributable package owns one leaf build over its complete source import graph. Neutral workspace source may be compiled directly when it is not a public package boundary. A concrete provider build consumes the built public `@aml/sdk` contract first and keeps it external rather than embedding another SDK copy. A build must not reverse the package boundaries above: in particular, `@aml/sdk` never imports or bundles a concrete provider.
 
 Examples and applications consume built package exports for every distributable package under proof. They must not bypass those exports through source paths or TypeScript aliases.
 
@@ -183,6 +183,18 @@ One root `runtime.evaluate()` call creates one evaluation domain containing:
 - one trace tree
 
 Component-local `evaluate()` calls remain in the same domain. They share its budgets, cancellation, context, and traces.
+
+The root evaluation accepts a caller-owned cancellation signal:
+
+```ts
+interface AmlEvaluationOptions {
+  signal?: AbortSignal;
+}
+
+runtime.evaluate(tree, { signal });
+```
+
+An already-aborted signal rejects before evaluation begins. A signal aborted during evaluation is propagated to active provider calls and prevents the runtime from advancing to another AML frame. AML cannot forcibly interrupt arbitrary component Promises or reverse effects that already completed; components and providers must cooperate with cancellation at their own boundaries.
 
 ### 2.3 Errors and effects
 
@@ -1534,9 +1546,38 @@ Prompts, Skill contents, Tool input/output, MCP configuration, filesystem paths,
 
 #### OpenCode
 
+The package exports:
+
+```ts
+interface OpenCodeAgentOptions {
+  directory?: string;
+  model?: string;
+  server?: {
+    hostname?: string;
+    port?: number;
+    timeout?: number;
+  };
+  sessionClient?: OpenCodeSessionClient;
+}
+
+interface OpenCodeAgentProvider extends AgentProvider {
+  close(): Promise<void>;
+}
+
+function opencodeAgent(
+  options?: OpenCodeAgentOptions,
+): OpenCodeAgentProvider;
+```
+
+`opencodeAgent()` is synchronous and performs no I/O. When `sessionClient` is supplied, the package uses that injected provider-owned port and does not start or stop an OpenCode server. `sessionClient` and `server` are mutually exclusive. Without `sessionClient`, the first Agent call lazily starts one package-owned local OpenCode server using the optional server settings. `close()` is idempotent, rejects future calls, and stops only a server owned by that provider instance. Concurrent and later callers receive the same cleanup promise and therefore observe the same completion or failure. Credentials remain in the OpenCode environment and configuration; AML does not read or copy them.
+
+`directory` selects the OpenCode working directory. `model` is the configured default and is overridden by `<Agent model>`. Explicit model identifiers use `provider/model` form and are validated before the session is created.
+
 The OpenCode adapter:
 
 - creates one fresh OpenCode session per Agent
+- deletes the invocation session after success, failure, or cancellation whenever session creation returned its identifier
+- forwards the evaluation `AbortSignal` to session creation and prompting and requests session abort when it fires
 - disables all tools before enabling declared Tools
 - maps named Tools to host capabilities
 - exposes JavaScript Tools through one invocation-scoped localhost MCP bridge
@@ -1545,6 +1586,10 @@ The OpenCode adapter:
 - uses a JSON-only prompt fallback for `opencode-go`
 - filters private reasoning from AML traces
 - records session events, visible response parts, tokens, and cost
+
+In the text-only delivery slice, all tools are disabled and no capability is enabled. The returned AML text concatenates only visible OpenCode text parts in response order; synthetic, ignored, tool, reasoning, and lifecycle parts do not contribute.
+
+OpenCode assigns session identifiers server-side. If session creation commits remotely but the request is cancelled before its response returns, the adapter has no identifier with which to abort or delete that unacknowledged session. This is an OpenCode API boundary rather than a recoverable local cleanup path.
 
 OpenCode owns its internal tool loop.
 

@@ -8,6 +8,7 @@ export { System, type SystemProps } from "./components/system/system.js"
 export type { AmlRenderable } from "./core/aml-node.js"
 export {
   AmlRuntime,
+  type AmlEvaluationOptions,
   type AmlRuntimeOptions,
 } from "./core/aml-runtime.js"
 export { EvaluationError } from "./core/evaluation-error.js"

@@ -90,6 +90,13 @@ export interface AmlRuntimeOptions {
   readonly system?: string
 }
 
+export interface AmlEvaluationOptions {
+  /**
+   * Caller-owned cancellation signal for this complete evaluation.
+   */
+  readonly signal?: AbortSignal
+}
+
 /**
  * Evaluates one authored AML tree into its final text.
  */
@@ -122,8 +129,14 @@ export class AmlRuntime {
     this.#maxDepth = maxDepth
   }
 
-  async evaluate(value: AmlRenderable): Promise<string> {
-    const context = new EvaluationContext(this.#maxAgentCalls)
+  async evaluate(
+    value: AmlRenderable,
+    options: AmlEvaluationOptions = {},
+  ): Promise<string> {
+    const signal = options.signal ?? new AbortController().signal
+    signal.throwIfAborted()
+
+    const context = new EvaluationContext(this.#maxAgentCalls, signal)
     const activeValues = new Set<object>()
     const output: TextTarget = {
       chunks: [],
@@ -136,6 +149,8 @@ export class AmlRuntime {
     ]
 
     while (frames.length > 0) {
+      context.signal.throwIfAborted()
+
       const frame = frames.pop()
 
       if (!frame) {

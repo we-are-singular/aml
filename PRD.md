@@ -1,6 +1,6 @@
 # Agent Markup Language product requirements and delivery plan
 
-Status: Phase 1 — Slices 0–1 done; Slice 2 pending
+Status: Phase 1 — Slices 0–2 done; Slice 3 next
 
 This is the living product definition, architecture plan, implementation roadmap, and progress tracker for AML. It is not a normative runtime contract. Settled behavior belongs in `SPEC.md`; this document records why AML exists, how it is organized, what is being built next, and which slices have been proven.
 
@@ -162,7 +162,7 @@ The status table is the canonical implementation tracker. A slice moves to `Done
 | Phase 0 | Proof of concept preserved under `poc/` | Done and archived |
 | Slice 0 | Monorepo and evaluation foundation | Done |
 | Slice 1 | `<Agent>`, `<System>`, and provider authorship | Done |
-| Slice 2 | OpenCode Agent package | Pending |
+| Slice 2 | OpenCode Agent package | Done |
 | Slice 3 | `<Tool>` and `defineTool()` | Pending |
 | Slice 4 | `<Skill>` | Pending |
 | Slice 5 | `<Sandbox>` contract | Pending |
@@ -205,7 +205,9 @@ Phase 1 starts as an npm 11 workspace managed by Turborepo:
 │   ├── cli/
 │   └── website/
 ├── examples/
+│   ├── agent/
 │   ├── basic/
+│   ├── opencode/
 │   ├── parallel-agents/
 │   └── review/
 ├── packages/
@@ -243,7 +245,7 @@ The root owns orchestration scripts and shared development policy. It does not p
 
 Slice 0 has one formal build target: `@aml/sdk`. The SDK owns `packages/sdk/vite.config.ts`, and its Vite build follows the SDK's complete source import graph, including neutral workspace source outside `packages/sdk` when such a boundary eventually exists. Workspace dependencies do not need intermediate builds or `dist` directories. The SDK must not import or bundle concrete providers.
 
-Turborepo runs the SDK build before the built-package example, but there is no recursive `^build` chain. Examples and applications do not gain build pipelines merely to participate in the workspace. A future independently distributed provider may own its own leaf build when its implementation slice requires an artifact; that build compiles its source closure directly and treats `@aml/sdk` as an external public dependency rather than depending on an SDK build task.
+Turborepo runs the SDK build before the built-package examples, but there is no recursive `^build` chain. Examples and applications do not gain build pipelines merely to participate in the workspace. Each independently distributed provider owns its own leaf build and package-level Turbo configuration. Because `@aml/sdk` is its public package dependency, that provider build and its consumer proof depend explicitly on `@aml/sdk#build`; the provider keeps the SDK external rather than embedding another copy.
 
 ### Package identities
 
@@ -368,16 +370,21 @@ Every concrete adapter is a self-contained package:
 ```text
 packages/agents/opencode/
 ├── package.json
+├── turbo.json
 ├── tsconfig.build.json
 ├── tsconfig.json
 ├── vite.config.ts
+├── scripts/
+│   └── check-package.ts
 ├── src/
 │   ├── index.ts
 │   ├── opencode-agent.ts
+│   ├── opencode-sdk-client.ts
+│   ├── opencode-session-client.ts
 │   └── opencode-session.ts
 └── tests/
-    ├── opencode-agent.test.ts
-    └── opencode-agent.integration.test.ts
+    ├── opencode-agent.test.tsx
+    └── opencode-agent.integration.test.tsx
 ```
 
 Its public factory owns provider-specific configuration:
@@ -468,7 +475,7 @@ Every example is a private npm workspace with explicit dependencies. A provider-
 
 `examples/basic` declares only `@aml/sdk`.
 
-The SDK package exports `.`, `./jsx-runtime`, and `./jsx-dev-runtime` exclusively from `dist/`, declares `"files": ["dist"]`, and has no TypeScript path alias that can redirect `@aml/sdk` to source. Examples import only the public package name. Their `vite-node` task depends explicitly on `@aml/sdk#build`, so a successful example run proves packaged output rather than an accidental source-only setup while the example itself remains unbuilt.
+The SDK package exports `.`, `./jsx-runtime`, and `./jsx-dev-runtime` exclusively from `dist/`, declares `"files": ["dist"]`, and has no TypeScript path alias that can redirect `@aml/sdk` to source. Examples import only public package names. Each `vite-node` task depends explicitly on the build boundary it exercises: SDK-only examples depend on `@aml/sdk#build`, while provider examples depend on that provider's build and the provider build depends on the SDK build. A successful example run therefore proves packaged output rather than an accidental source-only setup while the example itself remains unbuilt.
 
 SDK-owned TSX uses the private `#aml` package-import namespace with an `aml-source` condition during TypeScript analysis. Vite's SDK-local Oxc transform uses the same source runtime directly because its development dependency optimizer resolves injected automatic-runtime imports after normal alias resolution. Neither mechanism is visible to applications or examples, and the package-import defaults still point to the built runtime.
 
@@ -575,13 +582,18 @@ Status: Done on 2026-07-27. Singular review found and verified response accessor
 - create `@aml/agent-opencode`
 - implement its configured `opencodeAgent()` factory with `defineAgentProvider()`
 - keep OpenCode sessions, credentials, and usage data inside the adapter
+- expose a provider-neutral narrow session-client port for deterministic dependency injection without leaking OpenCode SDK types
+- start an owned OpenCode server lazily and expose idempotent provider cleanup
 - create one fresh OpenCode session per Agent request and propagate cancellation
+- disable all OpenCode tools in the text-only slice and return only visible response text
 - inject the OpenCode client boundary so deterministic tests never start a real server
 - pass SDK conformance and opt-in credentialed integration tests
 
 Proof: a packaged single-Agent example runs through OpenCode without importing provider source files.
 
 This provider slice does not introduce a component and therefore does not interrupt the MVP component order. Later capability slices extend its conformance requirements.
+
+Status: Done on 2026-07-27. Singular review found that cancellation existed below the public runtime boundary but could not be requested by an AML consumer, concurrent provider cleanup callers did not share one completion barrier, and several raw OpenCode response fields were read repeatedly or accepted with truthy rather than exact validated shapes. The corrected implementation adds caller-owned evaluation cancellation, shares one cleanup promise and failure across all `close()` callers, captures external values once, rejects malformed response metadata and cleanup acknowledgements, and documents OpenCode's unavoidable unacknowledged-session ambiguity during cancelled creation. Forced build and typecheck pass; forty-three SDK tests and fourteen deterministic OpenCode tests pass; both package checks and all deterministic examples pass; and a fresh credentialed `opencode-go/minimax-m3` example returned `AML_OPENCODE_OK`. Final correctness, maintainability, and skeptical review lanes reported no unresolved findings.
 
 #### Slice 3 — `<Tool>` and `defineTool()`
 
@@ -744,17 +756,17 @@ Before marking a slice `Done`:
 - examples consume package exports from `dist`
 - the resulting public API is reviewed before the next slice starts
 
-## Immediate approval boundary
+## Immediate implementation boundary
 
-Slices 0 and 1 are complete. The next implementation approval authorizes Slice 2 only:
+Slices 0 through 2 are complete. The next implementation gate is Slice 3 only:
 
-1. create the independently installable `@aml/agent-opencode` package
-2. implement its configured provider factory with `defineAgentProvider()`
-3. keep OpenCode SDK types, sessions, credentials, and usage handling inside the adapter
-4. pass the public Agent-provider conformance suite with deterministic dependencies
-5. add one opt-in credentialed integration proof and one built-package example
+1. add the `<Tool>` capability descriptor without contributing prompt text
+2. add `defineTool()` for named host Tools and validated async JavaScript Tools
+3. scope declared Tools to their containing Agent and enforce runtime allowlists
+4. validate JavaScript Tool input and optional output at the execution boundary
+5. extend deterministic and OpenCode conformance with one declared Tool call and one undeclared-Tool rejection
 
-No Tool, Skill, Sandbox, Workspace, MCP, structured output, FollowUp, Loop, CLI, website, Codex provider, or unrelated primitive belongs in Slice 2.
+No Skill, Sandbox, Workspace, MCP, structured output, FollowUp, Loop, CLI, website, Codex provider, or unrelated primitive belongs in Slice 3.
 
 ## Explicitly deferred
 

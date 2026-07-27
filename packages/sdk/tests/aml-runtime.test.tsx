@@ -23,6 +23,51 @@ describe("AmlRuntime", () => {
     await expect(runtime.evaluate(tree)).resolves.toBe("alpha42betagamma")
   })
 
+  it("rejects an already-cancelled evaluation before rendering", async () => {
+    const controller = new AbortController()
+    const reason = new Error("cancelled before evaluation")
+    let rendered = false
+
+    function Component() {
+      rendered = true
+      return "unreachable"
+    }
+
+    controller.abort(reason)
+
+    await expect(
+      new AmlRuntime().evaluate(jsx(Component, {}), {
+        signal: controller.signal,
+      }),
+    ).rejects.toBe(reason)
+    expect(rendered).toBe(false)
+  })
+
+  it("does not advance to another AML frame after cancellation", async () => {
+    const controller = new AbortController()
+    const reason = new Error("cancelled during evaluation")
+    let secondRendered = false
+
+    async function First() {
+      await Promise.resolve()
+      controller.abort(reason)
+      return "first"
+    }
+
+    function Second() {
+      secondRendered = true
+      return "second"
+    }
+
+    await expect(
+      new AmlRuntime().evaluate(
+        [jsx(First, {}), jsx(Second, {})],
+        { signal: controller.signal },
+      ),
+    ).rejects.toBe(reason)
+    expect(secondRendered).toBe(false)
+  })
+
   it("supports named and shorthand Fragment syntax", async () => {
     const runtime = new AmlRuntime()
     const tree = (
