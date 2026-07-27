@@ -1,8 +1,8 @@
 import { EvaluationError } from "../../core/evaluation-error.js"
+import type { AmlJsonValue } from "../../core/aml-json-value.js"
 import type {
   AgentTool,
   AgentToolExecutionContext,
-  AmlJsonValue,
 } from "./agent-tool.js"
 import { registeredAmlTool } from "./agent-tool.js"
 import { JsonSnapshot } from "./json-snapshot.js"

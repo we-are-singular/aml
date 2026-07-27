@@ -4,6 +4,7 @@ import type { AmlTraceIdentity } from "../../core/trace-identity.js"
 import type { SandboxSession } from "../sandbox/sandbox-provider.js"
 import type { AgentMcpServer } from "../mcp/aml-mcp-server.js"
 import type { AgentExecutionContext } from "./agent-execution-context.js"
+import type { ModelSchema } from "./model-schema.js"
 import type { AgentProps } from "./agent.js"
 import type { AgentProvider } from "./agent-provider.js"
 import type { AgentRequest } from "./agent-request.js"
@@ -63,6 +64,7 @@ export class AgentExecutor {
   async execute(input: {
     readonly context: EvaluationContext
     readonly mcpServers: readonly AgentMcpServer[]
+    readonly output?: ModelSchema<unknown>
     readonly prompt: string
     readonly provider: Readonly<ValidatedAgentProvider> | undefined
     readonly props: Readonly<AgentProps>
@@ -70,7 +72,7 @@ export class AgentExecutor {
     readonly systemFragments: readonly string[]
     readonly tools: readonly import("../tool/agent-tool.js").AgentTool[]
     readonly trace: AmlTraceIdentity
-  }): Promise<string> {
+  }): Promise<AgentResponse> {
     if (!input.provider) {
       throw new EvaluationError(
         `Agent ${input.trace.spanId} has no provider`,
@@ -122,6 +124,14 @@ export class AgentExecutor {
         ? {}
         : { model: input.props.model }),
       mcpServers: input.mcpServers,
+      ...(input.output === undefined
+        ? {}
+        : {
+            output: Object.freeze({
+              jsonSchema: input.output.jsonSchema,
+              type: "json" as const,
+            }),
+          }),
       prompt: input.prompt.trim(),
       system: systemFragments.join("\n"),
       tools: input.tools,
@@ -160,8 +170,8 @@ export class AgentExecutor {
       )
     }
 
-    // Provider objects are external values: read response text once so getters
-    // cannot return a different value after validation.
+    // Provider objects are external values: read each result field once so
+    // stateful getters cannot change a value after boundary validation.
     let text: unknown
 
     try {
@@ -179,6 +189,40 @@ export class AgentExecutor {
       )
     }
 
-    return text
+    if (input.output === undefined) {
+      return Object.freeze({ text })
+    }
+
+    let hasStructured: boolean
+    let structured: unknown
+
+    try {
+      hasStructured = Reflect.has(response, "structured")
+      structured = Reflect.get(response, "structured")
+    } catch (cause) {
+      throw new EvaluationError(
+        `Agent "${input.provider.name}" (${input.trace.spanId}) returned an invalid structured response`,
+        { cause },
+      )
+    }
+
+    if (!hasStructured) {
+      throw new EvaluationError(
+        `Agent "${input.provider.name}" (${input.trace.spanId}) omitted structured output`,
+      )
+    }
+
+    let validated: unknown
+
+    try {
+      validated = await input.output.validate(structured)
+    } catch (cause) {
+      throw new EvaluationError(
+        `Agent "${input.provider.name}" (${input.trace.spanId}) returned invalid structured output`,
+        { cause },
+      )
+    }
+
+    return Object.freeze({ structured: validated, text })
   }
 }

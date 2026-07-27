@@ -1,6 +1,6 @@
 # Agent Markup Language product requirements and delivery plan
 
-Status: Phase 1 — MVP complete; Slices 0–9 done; Slice 10 pending
+Status: Phase 1 — MVP complete; Slices 0–10 done; Slice 11 pending
 
 This is the living product definition, architecture plan, implementation roadmap, and progress tracker for AML. It is not a normative runtime contract. Settled behavior belongs in `SPEC.md`; this document records why AML exists, how it is organized, what is being built next, and which slices have been proven.
 
@@ -170,7 +170,7 @@ The status table is the canonical implementation tracker. A slice moves to `Done
 | Slice 7 | `<Workspace>` contract | Done |
 | Slice 8 | Local Workspace package and MVP completion | Done |
 | Slice 9 | `<Mcp>` and `defineMcpServer()` | Done |
-| Slice 10 | `evaluate()` and structured results | Pending |
+| Slice 10 | `evaluate()` and structured results | Done |
 | Slice 11 | Bounded Agent concurrency | Pending |
 | Slice 12 | `<FollowUp>` | Pending |
 | Slice 13 | `<Loop>` | Pending |
@@ -438,6 +438,8 @@ Each implementation file has one primary export whose name matches the filename:
 | `agent-response.ts`        | `AgentResponse`       |
 | `define-agent-provider.ts` | `defineAgentProvider` |
 | `agent-executor.ts`        | `AgentExecutor`       |
+| `agent-output-request.ts`  | `AgentOutputRequest`  |
+| `aml-model-schema.ts`      | `AmlModelSchema`      |
 | `validate-agent-provider.ts` | `validateAgentProvider` |
 | `system.tsx`               | `System`              |
 | `skill.tsx`                | `Skill`               |
@@ -449,6 +451,9 @@ Each implementation file has one primary export whose name matches the filename:
 | `tool-collection.ts`       | `ToolCollection`      |
 | `json-snapshot.ts`         | `JsonSnapshot`        |
 | `standard-schema-adapter.ts` | `StandardSchemaAdapter` |
+| `model-schema.ts`          | `ModelSchema`          |
+| `component-evaluation-context.ts` | `ComponentEvaluationContext` |
+| `evaluate.ts`              | `evaluate`             |
 | `tool-input-error.ts`      | `ToolInputError`      |
 | `tool-output-error.ts`     | `ToolOutputError`     |
 | `mcp.tsx`                  | `Mcp`                 |
@@ -460,6 +465,7 @@ Each implementation file has one primary export whose name matches the filename:
 | `local-workspace.ts`       | `localWorkspace`      |
 | `opencode-agent.ts`        | `opencodeAgent`       |
 | `trace-sink.ts`            | `TraceSink`           |
+| `aml-json-value.ts`        | `AmlJsonValue`        |
 
 Private helpers and private types stay in the owning file. A supporting export gets its own file only when another module consumes it as an independent contract.
 
@@ -702,11 +708,13 @@ Status: Done on 2026-07-27. The SDK now exposes Agent-scoped `<Mcp>` grants and 
 
 - allow component-local awaited evaluation
 - keep evaluation inside the current domain
-- reject detached use after component completion
+- reject detached use after AML observes component completion, while joining same-turn asynchronous work that JavaScript schedules before the native Promise settlement reaction
 - accept a Standard Schema and Standard JSON Schema compatible contract
 - validate provider structured output and return typed data
 
 Proof: valid Zod 4 output reaches its consumer, invalid output fails at the Agent boundary, and no component suspends or rerenders.
+
+Status: Done on 2026-07-27. The SDK now exposes ordinary asynchronous component-local `evaluate()` for text and typed structured results without suspension or rerendering. Nested calls share one evaluation domain, including Agent-call and depth budgets, cancellation, trace allocation, active Sandbox and Workspace scopes, cross-copy component bindings, cycle ancestry, and cleanup barriers for concurrent work. Schema-bearing calls accept one combined Standard Schema and Standard JSON Schema contract, snapshot only portable draft 2020-12 JSON Schema for providers, require exactly one Agent and no adjacent result text, reject non-JSON provider values before application validation, and return Standard Schema transformations. The OpenCode adapter maps that contract to native `json_schema` output and grants its internal `StructuredOutput` Tool only after the same reviewed-version and ambient-collision preflight as every other capability. Singular review found missing JSON transport enforcement, a structured-only capability preflight bypass, cross-boundary cycle loss, synchronous and custom-thenable AsyncLocalStorage gaps, an inherited structured-result mismatch, and misplaced duplicate boundary contracts. The corrected implementation closes each boundary and gives `AmlJsonValue`, `AmlModelSchema`, and `AgentOutputRequest` independent owners. One hundred thirty-four SDK tests, thirty-seven OpenCode tests, all workspace type checks, all four dist/package checks, the dist-backed structured example, and three credentialed live OpenCode-Go integrations for JavaScript Tool, configured MCP, and structured output pass. Final correctness, architecture, and skeptical security review lanes reported no actionable findings.
 
 #### Slice 11 — Bounded Agent concurrency
 

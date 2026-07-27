@@ -1,6 +1,7 @@
 import type {
   AgentExecutionContext,
   AgentMcpServer,
+  AgentOutputRequest,
   AgentTool,
 } from "@aml/sdk"
 
@@ -34,6 +35,7 @@ export interface OpenCodeSessionCreateInput {
  */
 export interface OpenCodeSessionPromptInput extends OpenCodeSessionLocation {
   readonly model?: OpenCodeModel
+  readonly output?: AgentOutputRequest
   readonly prompt: string
   readonly system: string
   readonly tools: Readonly<Record<string, boolean>>
@@ -55,6 +57,7 @@ export interface OpenCodeSessionPart {
 export interface OpenCodeSessionPromptResult {
   readonly error?: unknown
   readonly parts: readonly OpenCodeSessionPart[]
+  readonly structured?: unknown
 }
 
 /**
@@ -76,6 +79,11 @@ export interface OpenCodeCapabilityAttachmentInput {
   readonly context: AgentExecutionContext
   readonly directory?: string
   readonly mcpServers: readonly AgentMcpServer[]
+  /**
+   * Grants OpenCode's provider-owned structured-output Tool after the same
+   * compatibility and collision preflight as every other capability.
+   */
+  readonly structuredOutput: boolean
   readonly tools: readonly AgentTool[]
 }
 

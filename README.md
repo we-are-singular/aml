@@ -33,6 +33,8 @@ Slice 8 completes the MVP with the independently installable `@aml/workspace-loc
 
 Slice 9 adds Agent-scoped `<Mcp>` grants and `defineMcpServer()` descriptors for provider-native names, local stdio servers, and remote Streamable HTTP servers. MCP configuration remains provider data rather than prompt text; the OpenCode adapter attaches it on a disposable host, validates shared Tool namespaces before prompting, and disconnects it during session cleanup. `examples/mcp` proves configured grants remain isolated from sibling Agents, while the opt-in OpenCode integration exercises a real configured MCP Tool call.
 
+Slice 10 adds component-local `evaluate()` for ordinary awaited text or typed structured Agent results. Schema-bearing calls accept the combined Standard Schema and Standard JSON Schema contract, send only an immutable draft 2020-12 JSON document to the provider, validate the returned value at the Agent boundary, and never suspend or rerender the component. `examples/structured` passes a Zod 4 result from one specialist into a later coordinator through built package exports.
+
 Nothing under `poc/` is part of the new package or public API.
 
 ```sh
@@ -47,6 +49,7 @@ npm run example:mcp
 npm run example:opencode
 npm run example:sandbox
 npm run example:skill
+npm run example:structured
 npm run example:workspace
 npm run example:workspace-local
 ```

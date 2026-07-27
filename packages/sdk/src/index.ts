@@ -1,6 +1,8 @@
 // Agent authoring and provider-neutral execution contracts.
 export { Agent, type AgentProps } from "./components/agent/agent.js"
 export type { AgentExecutionContext } from "./components/agent/agent-execution-context.js"
+export type { AmlModelSchema } from "./components/agent/aml-model-schema.js"
+export type { AgentOutputRequest } from "./components/agent/agent-output-request.js"
 export type { AgentProvider } from "./components/agent/agent-provider.js"
 export type { AgentRequest } from "./components/agent/agent-request.js"
 export type { AgentResponse } from "./components/agent/agent-response.js"
@@ -63,7 +65,6 @@ export type {
   AgentJavaScriptTool,
   AgentTool,
   AgentToolExecutionContext,
-  AmlJsonValue,
   AmlTool,
   AmlToolSchema,
 } from "./components/tool/agent-tool.js"
@@ -76,6 +77,7 @@ export { ToolInputError } from "./components/tool/tool-input-error.js"
 export { ToolOutputError } from "./components/tool/tool-output-error.js"
 
 // Evaluator, JSX value, and trace contracts.
+export type { AmlJsonValue } from "./core/aml-json-value.js"
 export type { AmlRenderable } from "./core/aml-node.js"
 export {
   AmlRuntime,
@@ -83,5 +85,6 @@ export {
   type AmlRuntimeOptions,
 } from "./core/aml-runtime.js"
 export { EvaluationError } from "./core/evaluation-error.js"
+export { evaluate } from "./core/evaluate.js"
 export type { AmlTraceIdentity } from "./core/trace-identity.js"
 export { Fragment } from "./jsx-runtime.js"

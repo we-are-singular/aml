@@ -2,9 +2,9 @@ import type {
   StandardSchemaV1,
 } from "@standard-schema/spec"
 
+import type { AmlJsonValue } from "../../core/aml-json-value.js"
 import type {
   AgentToolExecutionContext,
-  AmlJsonValue,
   AmlTool,
   AmlToolSchema,
 } from "./agent-tool.js"

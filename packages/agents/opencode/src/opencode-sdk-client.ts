@@ -40,7 +40,11 @@ export class OpenCodeSdkClient implements OpenCodeSessionClient {
     // enabling only capabilities declared by the nearest AML Agent.
     const enabled: Record<string, boolean> = { "*": false }
 
-    if (input.tools.length === 0 && input.mcpServers.length === 0) {
+    if (
+      input.tools.length === 0 &&
+      input.mcpServers.length === 0 &&
+      !input.structuredOutput
+    ) {
       return new OpenCodeCapabilityAttachment(
         enabled,
         async () => undefined,
@@ -206,9 +210,38 @@ export class OpenCodeSdkClient implements OpenCodeSessionClient {
       }
 
       const availableHostTools =
-        input.mcpServers.length > 0 || hostTools.length > 0
+        input.mcpServers.length > 0 ||
+        hostTools.length > 0 ||
+        input.structuredOutput
           ? await this.#toolIds(input.directory, signal)
           : new Set<string>()
+
+      if (input.structuredOutput) {
+        const reservedName = OpenCodeSdkClient.#permissionCanonical(
+          "StructuredOutput",
+        )
+        const declaredCollision = hostTools.find(
+          (tool) =>
+            OpenCodeSdkClient.#permissionCanonical(tool.name) ===
+            reservedName,
+        )
+        const ambientCollision = [...availableHostTools].find(
+          (toolId) =>
+            OpenCodeSdkClient.#permissionCanonical(toolId) ===
+            reservedName,
+        )
+
+        // Structured output is implemented by a provider-injected Tool. A host
+        // Tool with the same platform-equivalent ID would make the exact grant
+        // ambiguous, so reject before creating any OpenCode session.
+        if (declaredCollision || ambientCollision) {
+          throw new TypeError(
+            'OpenCode host Tool "StructuredOutput" is reserved by structured requests',
+          )
+        }
+
+        enabled.StructuredOutput = true
+      }
 
       if (input.mcpServers.length > 0 || hostTools.length > 0) {
         await this.#assertCapabilityNamespaceIsolation(
@@ -610,6 +643,14 @@ export class OpenCodeSdkClient implements OpenCodeSessionClient {
                 providerID: input.model.providerId,
               },
             }),
+        ...(input.output === undefined
+          ? {}
+          : {
+              format: {
+                schema: { ...input.output.jsonSchema },
+                type: "json_schema" as const,
+              },
+            }),
         parts: [{ text: input.prompt, type: "text" }],
         sessionID: input.sessionId,
         system: input.system,
@@ -634,6 +675,10 @@ export class OpenCodeSdkClient implements OpenCodeSessionClient {
 
     const error = (info as { readonly error?: unknown }).error
     const parts = (rawData as { readonly parts?: unknown }).parts
+    const hasStructured = Reflect.has(info, "structured")
+    const structured = hasStructured
+      ? Reflect.get(info, "structured")
+      : undefined
 
     if (!Array.isArray(parts)) {
       throw new TypeError("OpenCode returned invalid prompt parts")
@@ -642,6 +687,7 @@ export class OpenCodeSdkClient implements OpenCodeSessionClient {
     return Object.freeze({
       ...(error === undefined ? {} : { error }),
       parts: Object.freeze([...parts]),
+      ...(hasStructured ? { structured } : {}),
     })
   }
 

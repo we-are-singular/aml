@@ -3,6 +3,7 @@ import type {
   StandardSchemaV1,
 } from "@standard-schema/spec"
 
+import type { AmlJsonValue } from "../../core/aml-json-value.js"
 import type { AmlTraceIdentity } from "../../core/trace-identity.js"
 
 const AML_TOOL_REGISTRY = Symbol.for("@aml/sdk/tool-registry")
@@ -10,17 +11,6 @@ const AML_TOOL_REGISTRY = Symbol.for("@aml/sdk/tool-registry")
 interface AmlToolGlobal {
   [AML_TOOL_REGISTRY]?: WeakMap<object, AgentJavaScriptTool>
 }
-
-/**
- * Data that can cross from trusted application code to an Agent provider.
- */
-export type AmlJsonValue =
-  | boolean
-  | null
-  | number
-  | string
-  | readonly AmlJsonValue[]
-  | { readonly [key: string]: AmlJsonValue }
 
 /**
  * Input schema contract required by defineTool().

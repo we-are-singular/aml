@@ -1,6 +1,7 @@
 import type { AgentProps } from "../components/agent/agent.js"
 import type { AgentProvider } from "../components/agent/agent-provider.js"
 import { AgentExecutor } from "../components/agent/agent-executor.js"
+import { ModelSchema } from "../components/agent/model-schema.js"
 import type { ValidatedAgentProvider } from "../components/agent/validate-agent-provider.js"
 import { McpCollection } from "../components/mcp/mcp-collection.js"
 import type { McpProps } from "../components/mcp/mcp.js"
@@ -30,6 +31,7 @@ import type {
 } from "../components/workspace/workspace-provider.js"
 import type { WorkspaceProps } from "../components/workspace/workspace.js"
 import { AmlNode, type AmlRenderable } from "./aml-node.js"
+import { ComponentEvaluationContext } from "./component-evaluation-context.js"
 import { EvaluationContext } from "./evaluation-context.js"
 import { EvaluationError } from "./evaluation-error.js"
 import type { AmlTraceIdentity } from "./trace-identity.js"
@@ -43,6 +45,7 @@ interface TextTarget {
   readonly parentSpanId: string | undefined
   readonly sandbox: Readonly<SandboxSession> | undefined
   readonly source: "evaluation" | "skill" | "system"
+  readonly structured: StructuredEvaluation | undefined
   readonly workspace:
     | Readonly<WorkspaceMaterializationReference>
     | undefined
@@ -54,6 +57,7 @@ interface AgentTarget {
   readonly parentSpanId: string
   readonly promptChunks: string[]
   readonly sandbox: Readonly<SandboxSession> | undefined
+  readonly structured: StructuredEvaluation | undefined
   readonly systemFragments: string[]
   readonly tools: ToolCollection
   readonly workspace:
@@ -62,6 +66,39 @@ interface AgentTarget {
 }
 
 type ResolutionTarget = AgentTarget | TextTarget
+
+/**
+ * Mutable result slot owned by one schema-bearing evaluate() call.
+ *
+ * The collector travels through wrapper components solely to count Agents. Only
+ * the Agent whose result targets the evaluation root receives the schema.
+ */
+interface StructuredEvaluation {
+  agentCount: number
+  hasResult: boolean
+  result: unknown
+  readonly schema: ModelSchema<unknown>
+}
+
+/**
+ * State shared by every component-local evaluation in one root domain.
+ */
+interface EvaluationDomain {
+  readonly context: EvaluationContext
+  workspaceDeclared: boolean
+}
+
+/**
+ * Lexical execution state inherited by a component-local evaluation.
+ */
+interface EvaluationScope {
+  readonly depth: number
+  readonly parentSpanId: string | undefined
+  readonly sandbox: Readonly<SandboxSession> | undefined
+  readonly workspace:
+    | Readonly<WorkspaceMaterializationReference>
+    | undefined
+}
 
 // Evaluation frames encode the recursive AML algorithm as an explicit stack.
 // Completion frames are pushed before their children and therefore run after
@@ -91,6 +128,7 @@ interface CompleteAgentFrame {
   readonly plan: AgentTarget
   readonly props: Readonly<AgentProps>
   readonly provider: Readonly<ValidatedAgentProvider> | undefined
+  readonly schema: ModelSchema<unknown> | undefined
   readonly sandbox: Readonly<SandboxSession> | undefined
   readonly target: ResolutionTarget
   readonly trace: AmlTraceIdentity
@@ -263,21 +301,64 @@ export class AmlRuntime {
 
     // Each evaluation owns cancellation, limits, trace allocation, and cycle
     // tracking. No mutable execution state is shared between calls.
-    const context = new EvaluationContext(this.#maxAgentCalls, signal)
-    const activeValues = new Set<object>()
+    const domain: EvaluationDomain = {
+      context: new EvaluationContext(this.#maxAgentCalls, signal),
+      workspaceDeclared: false,
+    }
+
+    return (await this.#evaluateInDomain(
+      value,
+      domain,
+      {
+        depth: 0,
+        parentSpanId: undefined,
+        sandbox: undefined,
+        workspace: undefined,
+      },
+      undefined,
+    )) as string
+  }
+
+  /**
+   * Resolves one root or component-local subtree inside an existing domain.
+   *
+   * Each invocation owns resources it acquires, but inherits the caller's
+   * lexical Sandbox, Workspace, depth, trace parent, budgets, and cancellation.
+   */
+  async #evaluateInDomain(
+    value: AmlRenderable,
+    domain: EvaluationDomain,
+    scope: EvaluationScope,
+    schema: ModelSchema<unknown> | undefined,
+    activeAncestors: ReadonlySet<object> = new Set(),
+  ): Promise<unknown> {
+    const context = domain.context
+    // Component-local evaluate() starts a new frame stack, but it remains on
+    // the caller's logical branch. Copying its ancestry preserves cycle
+    // detection while keeping concurrent nested calls independent.
+    const activeValues = new Set(activeAncestors)
     const activeSandboxScopes: SandboxEvaluationScope[] = []
     let activeWorkspaceScope: WorkspaceEvaluationScope | undefined
-    let workspaceDeclared = false
+    const structured: StructuredEvaluation | undefined =
+      schema === undefined
+        ? undefined
+        : {
+            agentCount: 0,
+            hasResult: false,
+            result: undefined,
+            schema,
+          }
     const output: TextTarget = {
       chunks: [],
       kind: "text",
-      parentSpanId: undefined,
-      sandbox: undefined,
+      parentSpanId: scope.parentSpanId,
+      sandbox: scope.sandbox,
       source: "evaluation",
-      workspace: undefined,
+      structured,
+      workspace: scope.workspace,
     }
     const frames: EvaluationFrame[] = [
-      { depth: 0, kind: "resolve", target: output, value },
+      { depth: scope.depth, kind: "resolve", target: output, value },
     ]
 
     try {
@@ -400,11 +481,7 @@ export class AmlRuntime {
             context.signal,
           )
 
-          if (frame.target.kind === "agent") {
-            frame.target.promptChunks.push(content)
-          } else {
-            frame.target.chunks.push(content)
-          }
+          appendText(frame.target, content)
 
           continue
         }
@@ -415,6 +492,9 @@ export class AmlRuntime {
           const response = await this.#agentExecutor.execute({
             context,
             mcpServers: frame.plan.mcpServers.values(),
+            ...(frame.schema === undefined
+              ? {}
+              : { output: frame.schema }),
             prompt: frame.plan.promptChunks.join(""),
             provider: frame.provider,
             props: frame.props,
@@ -424,10 +504,21 @@ export class AmlRuntime {
             trace: frame.trace,
           })
 
-          if (frame.target.kind === "agent") {
-            frame.target.promptChunks.push(response)
+          if (frame.schema !== undefined) {
+            const collector = frame.target.structured
+
+            if (collector === undefined) {
+              throw new EvaluationError(
+                "Structured Agent completed without an evaluation collector",
+              )
+            }
+
+            // AgentExecutor requires and validates this field whenever it
+            // receives a ModelSchema, including transformed undefined output.
+            collector.hasResult = true
+            collector.result = response.structured
           } else {
-            frame.target.chunks.push(response)
+            appendText(frame.target, response.text)
           }
 
           continue
@@ -438,22 +529,12 @@ export class AmlRuntime {
         const current = frame.value
 
         if (typeof current === "string") {
-          if (frame.target.kind === "agent") {
-            frame.target.promptChunks.push(current)
-          } else {
-            frame.target.chunks.push(current)
-          }
-
+          appendText(frame.target, current)
           continue
         }
 
         if (typeof current === "number") {
-          if (frame.target.kind === "agent") {
-            frame.target.promptChunks.push(String(current))
-          } else {
-            frame.target.chunks.push(String(current))
-          }
-
+          appendText(frame.target, String(current))
           continue
         }
 
@@ -507,6 +588,18 @@ export class AmlRuntime {
           // <Agent> creates a new capability and prompt scope. Its completion is
           // deliberately scheduled before its children on the LIFO stack.
           if (primitiveKind === "agent") {
+            const collector = frame.target.structured
+
+            if (collector !== undefined) {
+              collector.agentCount += 1
+
+              if (collector.agentCount > 1) {
+                throw new EvaluationError(
+                  "Structured evaluate() must resolve to exactly one <Agent>",
+                )
+              }
+            }
+
             const props = current.props as Readonly<AgentProps>
             const provider = this.#agentExecutor.validateProps(props)
             const sandbox = this.#sandboxEvaluator.forAgent(
@@ -521,6 +614,7 @@ export class AmlRuntime {
               parentSpanId: trace.spanId,
               promptChunks: [],
               sandbox: frame.target.sandbox,
+              structured: frame.target.structured,
               systemFragments: [],
               tools: new ToolCollection(this.#allowedTools),
               workspace: frame.target.workspace,
@@ -535,6 +629,12 @@ export class AmlRuntime {
               plan,
               props,
               provider,
+              schema:
+                collector !== undefined &&
+                frame.target.kind === "text" &&
+                frame.target.source === "evaluation"
+                  ? collector.schema
+                  : undefined,
               sandbox,
               target: frame.target,
               trace,
@@ -588,7 +688,7 @@ export class AmlRuntime {
           // <Workspace> is the one top-level durable resource boundary. It
           // cannot hide inside prompt assembly or another resource scope.
           if (primitiveKind === "workspace") {
-            if (workspaceDeclared) {
+            if (domain.workspaceDeclared) {
               throw new EvaluationError(
                 "An AML evaluation may contain at most one <Workspace>",
               )
@@ -605,7 +705,7 @@ export class AmlRuntime {
               )
             }
 
-            workspaceDeclared = true
+            domain.workspaceDeclared = true
             const props = current.props as Readonly<WorkspaceProps>
             const trace = context.createTrace(
               frame.target.parentSpanId,
@@ -680,6 +780,7 @@ export class AmlRuntime {
               parentSpanId: frame.target.parentSpanId,
               sandbox: frame.target.sandbox,
               source: "skill",
+              structured: frame.target.structured,
               workspace: frame.target.workspace,
             }
 
@@ -724,6 +825,7 @@ export class AmlRuntime {
               parentSpanId: frame.target.parentSpanId,
               sandbox: frame.target.sandbox,
               source: "system",
+              structured: frame.target.structured,
               workspace: frame.target.workspace,
             }
 
@@ -747,11 +849,41 @@ export class AmlRuntime {
           // now so authoring JSX remains inert and evaluation owns all side effects.
           activeValues.add(current)
           frames.push({ kind: "release", value: current })
+          const componentOutput =
+            await ComponentEvaluationContext.invoke(
+              () => current.type(current.props),
+              async (nestedValue, nestedSchema) => {
+                context.signal.throwIfAborted()
+
+                // A nested schema is captured before its provider boundary.
+                // Both calls remain in this domain and inherit only lexical
+                // execution resources, never the parent Agent's capabilities.
+                const modelSchema =
+                  nestedSchema === undefined
+                    ? undefined
+                    : new ModelSchema(nestedSchema)
+
+                return await this.#evaluateInDomain(
+                  nestedValue,
+                  domain,
+                  {
+                    depth: nodeDepth,
+                    parentSpanId: frame.target.parentSpanId,
+                    sandbox: frame.target.sandbox,
+                    workspace: frame.target.workspace,
+                  },
+                  modelSchema,
+                  new Set(activeValues),
+                )
+              },
+            )
+
+          context.signal.throwIfAborted()
           frames.push({
             depth: nodeDepth,
             kind: "resolve",
             target: frame.target,
-            value: current.type(current.props),
+            value: componentOutput as AmlRenderable,
           })
           continue
         }
@@ -828,8 +960,42 @@ export class AmlRuntime {
       throw error
     }
 
+    if (structured !== undefined) {
+      if (structured.agentCount !== 1 || !structured.hasResult) {
+        throw new EvaluationError(
+          "Structured evaluate() must resolve to exactly one <Agent>",
+        )
+      }
+
+      return structured.result
+    }
+
     return output.chunks.join("")
   }
+}
+
+/**
+ * Appends text through the channel selected by one resolution target.
+ */
+function appendText(target: ResolutionTarget, value: string): void {
+  if (target.kind === "agent") {
+    target.promptChunks.push(value)
+    return
+  }
+
+  // Structured evaluation returns an Agent's typed value, so adjacent rendered
+  // text would create a second incompatible result channel.
+  if (
+    target.structured !== undefined &&
+    target.source === "evaluation" &&
+    value.length > 0
+  ) {
+    throw new EvaluationError(
+      "Structured evaluate() cannot include text outside its <Agent>",
+    )
+  }
+
+  target.chunks.push(value)
 }
 
 /**

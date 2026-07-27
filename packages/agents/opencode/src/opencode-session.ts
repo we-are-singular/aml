@@ -85,6 +85,7 @@ export class OpenCodeSession {
           : { directory: this.#directory }),
         context,
         mcpServers: request.mcpServers,
+        structuredOutput: request.output !== undefined,
         tools: request.tools,
       },
       context.signal,
@@ -169,6 +170,9 @@ export class OpenCodeSession {
         {
           ...location,
           ...(model === undefined ? {} : { model }),
+          ...(request.output === undefined
+            ? {}
+            : { output: request.output }),
           prompt: request.prompt,
           system: request.system,
           tools: capabilityAttachment.tools,
@@ -177,7 +181,12 @@ export class OpenCodeSession {
       )
 
       context.signal.throwIfAborted()
-      response = Object.freeze({ text: OpenCodeSession.visibleText(result) })
+      response = Object.freeze({
+        ...(Reflect.has(result, "structured")
+          ? { structured: result.structured }
+          : {}),
+        text: OpenCodeSession.visibleText(result),
+      })
     } catch (error) {
       hasExecutionError = true
       executionError = error

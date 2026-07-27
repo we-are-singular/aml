@@ -5,6 +5,7 @@ import {
   AmlRuntime,
   defineMcpServer,
   defineTool,
+  evaluate,
   Mcp,
   Tool,
 } from "@aml/sdk"
@@ -20,15 +21,15 @@ const liveTest =
 liveTest(
   "runs one credentialed opencode-go Agent with a JavaScript Tool",
   async () => {
-    const secret = randomUUID()
+    const expectedLabel = "javascript-tool-ready"
     let calls = 0
-    const revealProof = defineTool({
-      description: "Return the private AML integration proof value",
+    const lookupLabel = defineTool({
+      description: "Look up the current JavaScript Tool fixture label",
       input: z.object({}),
-      name: "reveal_aml_proof",
+      name: "lookup_aml_fixture_label",
       async execute() {
         calls += 1
-        return secret
+        return expectedLabel
       },
     })
     const provider = opencodeAgent({
@@ -42,14 +43,53 @@ liveTest(
         agentProvider: provider,
       }).evaluate(
         <Agent>
-          <Tool use={revealProof} />
-          Call the reveal_aml_proof tool. Reply with exactly the value
-          returned by the tool and no other text.
+          <Tool use={lookupLabel} />
+          Use lookup_aml_fixture_label to read the current integration
+          fixture label. Return only that label.
         </Agent>,
       )
 
-      expect(output.trim()).toBe(secret)
+      expect(output.trim()).toBe(expectedLabel)
       expect(calls).toBe(1)
+    } finally {
+      await provider.close()
+    }
+  },
+  120_000,
+)
+
+liveTest(
+  "returns schema-validated structured output from a real OpenCode Agent",
+  async () => {
+    const secret = randomUUID()
+    const Result = z.object({
+      count: z.number().int(),
+      proof: z.string(),
+    })
+    const provider = opencodeAgent({
+      model:
+        process.env.AML_OPENCODE_MODEL ?? "opencode-go/minimax-m3",
+      server: { port: 0, timeout: 15_000 },
+    })
+
+    async function StructuredProof() {
+      const result = await evaluate(
+        <Agent>
+          Return proof "{secret}" and count 7 as the requested structured
+          result.
+        </Agent>,
+        Result,
+      )
+
+      return `${result.proof}:${result.count}`
+    }
+
+    try {
+      await expect(
+        new AmlRuntime({ agentProvider: provider }).evaluate(
+          <StructuredProof />,
+        ),
+      ).resolves.toBe(`${secret}:7`)
     } finally {
       await provider.close()
     }
@@ -60,22 +100,22 @@ liveTest(
 liveTest(
   "attaches a configured Streamable HTTP MCP server to a real OpenCode Agent",
   async () => {
-    const secret = randomUUID()
+    const expectedLabel = "configured-mcp-ready"
     let calls = 0
     const controller = new AbortController()
-    const revealProof = defineTool({
-      description: "Return the private configured-MCP proof value",
+    const lookupLabel = defineTool({
+      description: "Look up the current AML integration fixture label",
       input: z.object({}),
-      name: "reveal_configured_mcp_proof",
+      name: "lookup_configured_mcp_label",
       async execute() {
         calls += 1
-        return secret
+        return expectedLabel
       },
     })
     // This application-owned bridge behaves as an ordinary remote MCP server.
     // The Agent receives only its portable <Mcp> descriptor, not the AML Tool.
     const bridge = new OpenCodeToolBridge(
-      [revealProof],
+      [lookupLabel],
       Object.freeze({
         signal: controller.signal,
         trace: Object.freeze({
@@ -105,13 +145,13 @@ liveTest(
       }).evaluate(
         <Agent>
           <Mcp use={server} />
-          Call the reveal_configured_mcp_proof tool from the aml-proof MCP
-          server. Reply with exactly the value returned by the tool and no
-          other text.
+          Use the lookup_configured_mcp_label tool from the aml-proof MCP
+          server to read the current integration fixture label. Return only
+          that label.
         </Agent>,
       )
 
-      expect(output.trim()).toBe(secret)
+      expect(output.trim()).toBe(expectedLabel)
       expect(calls).toBe(1)
     } finally {
       // The OpenCode adapter owns its MCP client connection; the application

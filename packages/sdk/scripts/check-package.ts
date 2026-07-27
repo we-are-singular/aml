@@ -31,6 +31,10 @@ interface BuiltSdk {
             readonly kind: string
             readonly name?: string
           }[]
+          readonly output?: {
+            readonly jsonSchema: Readonly<Record<string, unknown>>
+            readonly type: "json"
+          }
           readonly tools: readonly {
             execute?(
               input: unknown,
@@ -41,7 +45,7 @@ interface BuiltSdk {
           }[]
         },
         context: unknown,
-      ): Promise<{ text: string }>
+      ): Promise<{ structured?: unknown; text: string }>
     }
     workspaceProvider?: unknown
   }) => {
@@ -61,6 +65,7 @@ interface BuiltSdk {
   defineWorkspaceProvider(provider: unknown): unknown
   defineMcpServer(options: unknown): unknown
   defineTool(options: unknown): unknown
+  evaluate(value: unknown, schema?: unknown): Promise<unknown>
 }
 
 interface BuiltJsxRuntime {
@@ -167,9 +172,11 @@ for (const entry of Object.values(resolvedEntries)) {
 }
 
 const {
+  Agent: publicAgent,
   AmlRuntime,
   defineMcpServer,
   defineWorkspaceProvider,
+  evaluate: componentEvaluate,
   Fragment: publicFragment,
   Workspace: publicWorkspace,
   WorkspaceConflictError,
@@ -201,6 +208,60 @@ const builtOutput = await new AmlRuntime().evaluate(
 
 if (builtOutput !== "built runtime") {
   throw new Error(`Unexpected built SDK output: ${builtOutput}`)
+}
+
+const modelSchema = {
+  "~standard": {
+    jsonSchema: {
+      input: () => ({
+        properties: { answer: { type: "number" } },
+        required: ["answer"],
+        type: "object",
+      }),
+    },
+    validate: (value: unknown) =>
+      typeof value === "object" &&
+      value !== null &&
+      typeof Reflect.get(value, "answer") === "number"
+        ? { value: Reflect.get(value, "answer") }
+        : { issues: [{ message: "answer must be a number" }] },
+    vendor: "package-check",
+    version: 1,
+  },
+}
+const structuredOutput = await new AmlRuntime({
+  agentProvider: {
+    name: "structured-package-check",
+    async run(request) {
+      if (
+        request.output?.type !== "json" ||
+        Reflect.get(
+          request.output.jsonSchema,
+          "type",
+        ) !== "object"
+      ) {
+        throw new Error(
+          "Built SDK omitted its structured output declaration",
+        )
+      }
+
+      return { structured: { answer: 42 }, text: "" }
+    },
+  },
+}).evaluate(
+  runtimeJsx(async () => {
+    const answer = await componentEvaluate(
+      runtimeJsx(publicAgent, { children: "Return an answer." }),
+      modelSchema,
+    )
+    return `answer:${String(answer)}`
+  }, {}),
+)
+
+if (structuredOutput !== "answer:42") {
+  throw new Error(
+    `Unexpected built SDK structured output: ${structuredOutput}`,
+  )
 }
 
 const deterministicProvider = new DeterministicAgentProvider()
@@ -320,12 +381,15 @@ try {
     [
       'import { AmlRuntime, type AmlRenderable } from "@aml/sdk-a"',
       'import type { McpProps, ToolProps } from "@aml/sdk-a"',
-      'import { defineMcpServer, defineTool } from "@aml/sdk-b"',
+      'import { defineMcpServer, defineTool, evaluate } from "@aml/sdk-b"',
       'import { jsx } from "@aml/sdk-b/jsx-runtime"',
       "",
       'const foreignNode = jsx(() => "cross-copy", {})',
       "const renderable: AmlRenderable = foreignNode",
       "await new AmlRuntime().evaluate(renderable)",
+      "await new AmlRuntime().evaluate(",
+      '  jsx(async () => `nested:${await evaluate("data")}`, {}),',
+      ")",
       "",
       "const schema = {",
       '  "~standard": {',
@@ -394,6 +458,20 @@ try {
 
   if (crossCopyOutput !== "cross-copy") {
     throw new Error(`Unexpected cross-copy output: ${crossCopyOutput}`)
+  }
+
+  const crossCopyNestedOutput = await new copyA.AmlRuntime().evaluate(
+    copyB.jsx(
+      async () =>
+        `nested:${String(await copyBPackage.evaluate("data"))}`,
+      {},
+    ),
+  )
+
+  if (crossCopyNestedOutput !== "nested:data") {
+    throw new Error(
+      `Unexpected cross-copy nested output: ${crossCopyNestedOutput}`,
+    )
   }
 
   // Tool authenticity uses a global exact-identity registry. Prove a Tool

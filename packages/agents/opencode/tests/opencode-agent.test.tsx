@@ -8,7 +8,9 @@ import {
   AmlRuntime,
   defineMcpServer,
   defineTool,
+  evaluate,
   Mcp,
+  Tool,
 } from "@aml/sdk"
 import { agentProviderConformance } from "@aml/sdk/testing"
 import { Client as McpClient } from "@modelcontextprotocol/sdk/client/index.js"
@@ -79,8 +81,26 @@ class RecordingSessionClient implements OpenCodeSessionClient {
   ): Promise<OpenCodeCapabilityAttachment> {
     this.events.push("attach")
     this.capabilityAttachmentCalls.push({ input, signal })
+
+    if (
+      input.structuredOutput &&
+      input.tools.some(
+        (tool) =>
+          tool.kind === "host" &&
+          (process.platform === "win32"
+            ? tool.name.toLowerCase() === "structuredoutput"
+            : tool.name === "StructuredOutput"),
+      )
+    ) {
+      throw new TypeError(
+        'OpenCode host Tool "StructuredOutput" is reserved by structured requests',
+      )
+    }
+
     return new OpenCodeCapabilityAttachment(
-      { "*": false },
+      input.structuredOutput
+        ? { "*": false, StructuredOutput: true }
+        : { "*": false },
       this.capabilityAttachmentClose,
     )
   }
@@ -217,6 +237,75 @@ describe("opencodeAgent", () => {
       { directory: "/workspace", sessionId: "session-2" },
     ])
 
+    await provider.close()
+  })
+
+  it("returns provider-native structured output through component-local evaluate()", async () => {
+    const client = new RecordingSessionClient()
+    client.promptResult = {
+      parts: [],
+      structured: { count: 3 },
+    }
+    const provider = opencodeAgent({ sessionClient: client })
+    const Result = z.object({ count: z.number() })
+
+    async function Workflow() {
+      const result = await evaluate(
+        <Agent provider={provider}>Count findings.</Agent>,
+        Result,
+      )
+      return `count:${result.count}`
+    }
+
+    await expect(new AmlRuntime().evaluate(<Workflow />)).resolves.toBe(
+      "count:3",
+    )
+    expect(client.promptCalls[0]?.input.output).toMatchObject({
+      jsonSchema: {
+        properties: { count: { type: "number" } },
+        type: "object",
+      },
+      type: "json",
+    })
+    expect(client.promptCalls[0]?.input.tools).toEqual({
+      "*": false,
+      StructuredOutput: true,
+    })
+    await provider.close()
+  })
+
+  it("reserves OpenCode's internal structured-output Tool name", async () => {
+    const client = new RecordingSessionClient()
+    const provider = opencodeAgent({ sessionClient: client })
+    const Result = z.object({ count: z.number() })
+
+    async function Workflow() {
+      await evaluate(
+        <Agent provider={provider}>
+          <Tool name="StructuredOutput" />
+          Count findings.
+        </Agent>,
+        Result,
+      )
+      return "unreachable"
+    }
+
+    const error = await new AmlRuntime()
+      .evaluate(<Workflow />)
+      .catch((cause: unknown) => cause)
+
+    expect(error).toMatchObject({
+      cause: {
+        message:
+          'OpenCode host Tool "StructuredOutput" is reserved by structured requests',
+      },
+      message: 'Agent "opencode" (span-1) failed',
+    })
+    expect(client.capabilityAttachmentCalls).toHaveLength(1)
+    expect(
+      client.capabilityAttachmentCalls[0]?.input.structuredOutput,
+    ).toBe(true)
+    expect(client.createCalls).toHaveLength(0)
     await provider.close()
   })
 
@@ -741,9 +830,122 @@ describe("OpenCodeSession", () => {
     expect(reads).toBe(1)
     expect(client.deleteCalls).toEqual([{ sessionId: "session-1" }])
   })
+
+  it("accepts inherited structured values from an injected session port", async () => {
+    const client = new RecordingSessionClient()
+    let reads = 0
+    const inherited = Object.create({
+      get structured() {
+        reads += 1
+        return { count: 2 }
+      },
+    }) as OpenCodeSessionPromptResult
+
+    Object.defineProperty(inherited, "parts", {
+      enumerable: true,
+      value: [],
+    })
+    client.promptResult = inherited
+
+    await expect(
+      new OpenCodeSession(client, {}).run(
+        createRequest({
+          output: {
+            jsonSchema: {
+              properties: { count: { type: "number" } },
+              type: "object",
+            },
+            type: "json",
+          },
+        }),
+        createContext(),
+      ),
+    ).resolves.toEqual({
+      structured: { count: 2 },
+      text: "",
+    })
+    expect(reads).toBe(1)
+  })
 })
 
 describe("OpenCodeSdkClient", () => {
+  it("preflights and grants structured output as an exact capability", async () => {
+    const ids = vi.fn(async () => ({ data: [] }))
+    const health = vi.fn(async () => ({
+      data: { healthy: true, version: "1.18.5" },
+    }))
+    const client = new OpenCodeSdkClient({
+      global: { health },
+      tool: { ids },
+    } as never)
+    const signal = new AbortController().signal
+
+    const attachment = await client.attachCapabilities(
+      {
+        context: createContext(signal),
+        mcpServers: [],
+        structuredOutput: true,
+        tools: [],
+      },
+      signal,
+    )
+
+    expect(health).toHaveBeenCalledOnce()
+    expect(ids).toHaveBeenCalledOnce()
+    expect(attachment.tools).toEqual({
+      "*": false,
+      StructuredOutput: true,
+    })
+    await attachment.close()
+  })
+
+  it("rejects unreviewed servers for structured-only requests", async () => {
+    const ids = vi.fn()
+    const client = createSdkClient(
+      { tool: { ids } },
+      "1.19.0",
+    )
+
+    await expect(
+      client.attachCapabilities(
+        {
+          context: createContext(),
+          mcpServers: [],
+          structuredOutput: true,
+          tools: [],
+        },
+        new AbortController().signal,
+      ),
+    ).rejects.toThrow(
+      "OpenCode server 1.19.0 is unsupported for capability isolation",
+    )
+    expect(ids).not.toHaveBeenCalled()
+  })
+
+  it("rejects ambient host Tools that collide with structured output", async () => {
+    const client = createSdkClient({
+      tool: {
+        ids: vi.fn(async () => ({
+          data: ["StructuredOutput"],
+        })),
+      },
+    })
+
+    await expect(
+      client.attachCapabilities(
+        {
+          context: createContext(),
+          mcpServers: [],
+          structuredOutput: true,
+          tools: [],
+        },
+        new AbortController().signal,
+      ),
+    ).rejects.toThrow(
+      'OpenCode host Tool "StructuredOutput" is reserved by structured requests',
+    )
+  })
+
   it("rejects unreviewed OpenCode server versions before capability setup", async () => {
     const ids = vi.fn()
     const client = createSdkClient(
@@ -759,6 +961,7 @@ describe("OpenCodeSdkClient", () => {
         {
           context: createContext(),
           mcpServers: [],
+          structuredOutput: false,
           tools: [{ kind: "host", name: "read" }],
         },
         new AbortController().signal,
@@ -810,6 +1013,7 @@ describe("OpenCodeSdkClient", () => {
       {
         context: createContext(signal),
         mcpServers: [],
+        structuredOutput: false,
         tools: [{ kind: "host", name: "read" }],
       },
       signal,
@@ -822,6 +1026,7 @@ describe("OpenCodeSdkClient", () => {
         {
           context: createContext(signal),
           mcpServers: [],
+          structuredOutput: false,
           tools: [{ kind: "host", name: "write" }],
         },
         signal,
@@ -833,6 +1038,7 @@ describe("OpenCodeSdkClient", () => {
         {
           context: createContext(signal),
           mcpServers: [],
+          structuredOutput: false,
           tools: [{ kind: "host", name: "read*" }],
         },
         signal,
@@ -845,6 +1051,7 @@ describe("OpenCodeSdkClient", () => {
         {
           context: createContext(signal),
           mcpServers: [],
+          structuredOutput: false,
           tools: [{ kind: "host", name: "read?" }],
         },
         signal,
@@ -880,6 +1087,7 @@ describe("OpenCodeSdkClient", () => {
         {
           context: createContext(signal),
           mcpServers: [],
+          structuredOutput: false,
           tools: [{ kind: "host", name: "write" }],
         },
         signal,
@@ -906,6 +1114,7 @@ describe("OpenCodeSdkClient", () => {
         {
           context: createContext(signal),
           mcpServers: [],
+          structuredOutput: false,
           tools: [{ kind: "host", name: "github_admin" }],
         },
         signal,
@@ -933,6 +1142,7 @@ describe("OpenCodeSdkClient", () => {
         {
           context: createContext(signal),
           mcpServers: [],
+          structuredOutput: false,
           tools: [{ kind: "host", name: "path\\read" }],
         },
         signal,
@@ -979,6 +1189,7 @@ describe("OpenCodeSdkClient", () => {
           {
             context: createContext(signal),
             mcpServers: [{ kind: "named", name: "github" }],
+            structuredOutput: false,
             tools: [],
           },
           signal,
@@ -1045,6 +1256,7 @@ describe("OpenCodeSdkClient", () => {
           { definition: local, kind: "configured" },
           { definition: remote, kind: "configured" },
         ],
+        structuredOutput: false,
         tools: [],
       },
       signal,
@@ -1103,6 +1315,7 @@ describe("OpenCodeSdkClient", () => {
         {
           context: createContext(signal),
           mcpServers: [{ kind: "named", name: "missing" }],
+          structuredOutput: false,
           tools: [],
         },
         signal,
@@ -1127,6 +1340,7 @@ describe("OpenCodeSdkClient", () => {
           mcpServers: [
             { definition: withCwd, kind: "configured" },
           ],
+          structuredOutput: false,
           tools: [],
         },
         signal,
@@ -1143,6 +1357,7 @@ describe("OpenCodeSdkClient", () => {
             { kind: "named", name: "same.name" },
             { kind: "named", name: "same_name" },
           ],
+          structuredOutput: false,
           tools: [],
         },
         signal,
@@ -1158,6 +1373,7 @@ describe("OpenCodeSdkClient", () => {
             { kind: "named", name: "github" },
             { kind: "named", name: "github_admin" },
           ],
+          structuredOutput: false,
           tools: [],
         },
         signal,
@@ -1197,6 +1413,7 @@ describe("OpenCodeSdkClient", () => {
         {
           context: createContext(signal),
           mcpServers: [{ kind: "named", name: "github" }],
+          structuredOutput: false,
           tools: [],
         },
         signal,
@@ -1218,6 +1435,7 @@ describe("OpenCodeSdkClient", () => {
         {
           context: createContext(signal),
           mcpServers: [{ kind: "named", name: "github" }],
+          structuredOutput: false,
           tools: [],
         },
         signal,
@@ -1235,6 +1453,7 @@ describe("OpenCodeSdkClient", () => {
         {
           context: createContext(signal),
           mcpServers: [{ kind: "named", name: "github_admin" }],
+          structuredOutput: false,
           tools: [],
         },
         signal,
@@ -1278,6 +1497,7 @@ describe("OpenCodeSdkClient", () => {
             { definition: first, kind: "configured" },
             { kind: "named", name: "missing" },
           ],
+          structuredOutput: false,
           tools: [],
         },
         signal,
@@ -1302,6 +1522,7 @@ describe("OpenCodeSdkClient", () => {
           mcpServers: [
             { definition: first, kind: "configured" },
           ],
+          structuredOutput: false,
           tools: [],
         },
         signal,
@@ -1375,6 +1596,7 @@ describe("OpenCodeSdkClient", () => {
       {
         context: createContext(signal),
         mcpServers: [],
+        structuredOutput: false,
         tools: [lookup],
       },
       signal,
@@ -1446,6 +1668,7 @@ describe("OpenCodeSdkClient", () => {
         {
           context: createContext(),
           mcpServers: [],
+          structuredOutput: false,
           tools: [
             lookup,
             { kind: "host", name: "missing" },
@@ -1473,7 +1696,13 @@ describe("OpenCodeSdkClient", () => {
         create: vi.fn(async () => ({ data: { id: "session-id" } })),
         delete: vi.fn(async () => ({ data: true })),
         prompt: vi.fn(async () => ({
-          data: { info: { error: undefined }, parts: [textPart] },
+          data: {
+            info: {
+              error: undefined,
+              structured: { answer: 42 },
+            },
+            parts: [textPart],
+          },
         })),
       },
     }
@@ -1491,6 +1720,13 @@ describe("OpenCodeSdkClient", () => {
         {
           directory: "/workspace",
           model,
+          output: {
+            jsonSchema: {
+              properties: { answer: { type: "number" } },
+              type: "object",
+            },
+            type: "json",
+          },
           prompt: "prompt",
           sessionId: "session-id",
           system: "system",
@@ -1498,7 +1734,10 @@ describe("OpenCodeSdkClient", () => {
         },
         signal,
       ),
-    ).resolves.toEqual({ parts: [textPart] })
+    ).resolves.toEqual({
+      parts: [textPart],
+      structured: { answer: 42 },
+    })
     await client.abort({
       directory: "/workspace",
       sessionId: "session-id",
@@ -1519,6 +1758,13 @@ describe("OpenCodeSdkClient", () => {
     expect(rawClient.session.prompt).toHaveBeenCalledWith(
       {
         directory: "/workspace",
+        format: {
+          schema: {
+            properties: { answer: { type: "number" } },
+            type: "object",
+          },
+          type: "json_schema",
+        },
         model: { modelID: "model", providerID: "provider" },
         parts: [{ text: "prompt", type: "text" }],
         sessionID: "session-id",

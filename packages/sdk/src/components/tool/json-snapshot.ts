@@ -1,4 +1,4 @@
-import type { AmlJsonValue } from "./agent-tool.js"
+import type { AmlJsonValue } from "../../core/aml-json-value.js"
 
 interface ArrayFrame {
   readonly kind: "array"
