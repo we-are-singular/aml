@@ -174,7 +174,7 @@ examples/   human-readable client workflows
 poc/        archived Phase 0 experiments and research
 ```
 
-[`SPEC.md`](./SPEC.md) is the normative behavior contract. [`PRD.md`](./PRD.md) records product decisions, architecture, and delivery status.
+[`SPEC.md`](./SPEC.md) is the normative behavior contract. [`PRD.md`](./PRD.md) records product decisions, architecture, and delivery status. [`PROVIDERS.md`](./PROVIDERS.md) tracks the provider implementation wishlist.
 
 ## Development
 
