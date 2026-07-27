@@ -132,10 +132,10 @@ AML's core runtime defines provider contracts and does not import concrete imple
 
 | Role | Package | Factory | Notes |
 | --- | --- | --- | --- |
-| Agent | [`@aml/agent-opencode`](./packages/agents/opencode) | `opencodeAgent()` | Runs OpenCode sessions with model overrides, JavaScript Tools, MCP grants, FollowUps, cancellation, and structured output. |
-| Agent | [`@aml/agent-codex`](./packages/agents/codex) | `codexAgent()` | Runs Codex SDK threads with model overrides, read-only host Tools, JavaScript Tools, MCP grants, FollowUps, and structured output. |
-| Sandbox | [`@aml/sandbox-docker`](./packages/sandboxes/docker) | `dockerSandbox()` | Provides confined Docker container leases to compatible Agent providers with explicit filesystem, network, identity, capability, and resource policies. |
-| Workspace | [`@aml/workspace-local`](./packages/workspaces/local) | `localWorkspace()` | Uses an existing local directory as a durable Workspace with cross-process writer locking. |
+| Agent | [`@aml/agent-opencode`](./providers/agents/opencode) | `opencodeAgent()` | Runs OpenCode sessions with model overrides, JavaScript Tools, MCP grants, FollowUps, cancellation, and structured output. |
+| Agent | [`@aml/agent-codex`](./providers/agents/codex) | `codexAgent()` | Runs Codex SDK threads with model overrides, read-only host Tools, JavaScript Tools, MCP grants, FollowUps, and structured output. |
+| Sandbox | [`@aml/sandbox-docker`](./providers/sandboxes/docker) | `dockerSandbox()` | Provides confined Docker container leases to compatible Agent providers with explicit filesystem, network, identity, capability, and resource policies. |
+| Workspace | [`@aml/workspace-local`](./providers/workspaces/local) | `localWorkspace()` | Uses an existing local directory as a durable Workspace with cross-process writer locking. |
 | Testing | [`@aml/sdk/testing`](./sdk/src/testing.ts) | Deterministic providers | Supplies deterministic Agent, Sandbox, and Workspace providers plus reusable conformance suites. |
 
 `<System>`, `<Skill>`, `<FollowUp>`, `<Loop>`, Context, and tree evaluation are runtime-owned and work independently of the selected Agent provider. JavaScript Tool and MCP execution ultimately depend on the Agent provider; both bundled Agent adapters implement those capability bridges.
@@ -168,7 +168,7 @@ The deterministic examples are snapshot-tested. Live model, Docker, and filesyst
 
 ```text
 sdk/        @aml/sdk, the AML runtime and public API
-packages/   optional Agent, Sandbox, and Workspace providers
+providers/  optional Agent, Sandbox, and Workspace provider implementations
 apps/       runnable products built on AML (reserved for future apps)
 examples/   human-readable client workflows
 poc/        archived Phase 0 experiments and research

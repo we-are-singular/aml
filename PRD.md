@@ -221,7 +221,7 @@ Phase 1 starts as an npm 11 workspace managed by Turborepo:
 │   │   ├── __snapshots__/
 │   │   └── examples.test.ts
 │   └── run.ts
-├── packages/
+├── providers/
 │   ├── agents/
 │   │   ├── opencode/
 │   │   ├── codex/
@@ -247,7 +247,7 @@ The root workspace globs are:
 
 ```json
 {
-  "workspaces": ["apps/*", "examples", "sdk", "packages/*/*"]
+  "workspaces": ["apps/*", "examples", "sdk", "providers/*/*"]
 }
 ```
 
@@ -262,15 +262,15 @@ Turborepo runs the SDK build before the built-package examples, but there is no 
 | Directory | Package | Responsibility |
 | --- | --- | --- |
 | `sdk` | `@aml/sdk` | Primary AML package: JSX runtime, evaluator, primitives, provider contracts, definition helpers, and conformance utilities |
-| `packages/agents/opencode` | `@aml/agent-opencode` | OpenCode Agent adapter and OpenCode-specific options |
-| `packages/agents/codex` | `@aml/agent-codex` | Codex Agent adapter and Codex-specific options |
-| `packages/agents/claude` | `@aml/agent-claude` | Claude Agent adapter and Claude-specific options |
-| `packages/sandboxes/local` | `@aml/sandbox-local` | Local-process Sandbox adapter |
-| `packages/sandboxes/docker` | `@aml/sandbox-docker` | Docker Sandbox adapter |
-| `packages/sandboxes/daytona` | `@aml/sandbox-daytona` | Daytona Sandbox adapter |
-| `packages/sandboxes/cloudflare` | `@aml/sandbox-cloudflare` | Cloudflare Sandbox adapter |
-| `packages/workspaces/local` | `@aml/workspace-local` | Local durable Workspace adapter |
-| `packages/workspaces/s3` | `@aml/workspace-s3` | S3-compatible Workspace adapter |
+| `providers/agents/opencode` | `@aml/agent-opencode` | OpenCode Agent adapter and OpenCode-specific options |
+| `providers/agents/codex` | `@aml/agent-codex` | Codex Agent adapter and Codex-specific options |
+| `providers/agents/claude` | `@aml/agent-claude` | Claude Agent adapter and Claude-specific options |
+| `providers/sandboxes/local` | `@aml/sandbox-local` | Local-process Sandbox adapter |
+| `providers/sandboxes/docker` | `@aml/sandbox-docker` | Docker Sandbox adapter |
+| `providers/sandboxes/daytona` | `@aml/sandbox-daytona` | Daytona Sandbox adapter |
+| `providers/sandboxes/cloudflare` | `@aml/sandbox-cloudflare` | Cloudflare Sandbox adapter |
+| `providers/workspaces/local` | `@aml/workspace-local` | Local durable Workspace adapter |
+| `providers/workspaces/s3` | `@aml/workspace-s3` | S3-compatible Workspace adapter |
 
 npm package names permit one scope and one package segment. `@aml/agents/opencode` would be a subpath export of one installed `@aml/agents` package, not an independently installable provider. Separate packages use names such as `@aml/agent-opencode`, allowing consumers to install and bundle only selected adapters.
 
@@ -383,7 +383,7 @@ There is deliberately no `lib/`, `utils/`, or global `types.ts` namespace. JSON 
 Every concrete adapter is a self-contained package:
 
 ```text
-packages/agents/opencode/
+providers/agents/opencode/
 ├── package.json
 ├── turbo.json
 ├── tsconfig.build.json

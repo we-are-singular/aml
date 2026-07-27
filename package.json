@@ -6,7 +6,7 @@
     "apps/*",
     "examples",
     "sdk",
-    "packages/*/*"
+    "providers/*/*"
   ],
   "scripts": {
     "build": "turbo run build",
