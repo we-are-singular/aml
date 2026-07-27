@@ -15,11 +15,13 @@ import {
   Agent,
   AmlRuntime,
   Sandbox,
+  Workspace,
   type AgentExecutionContext,
   type AgentProvider,
   type AgentRequest,
   type SandboxSession,
 } from "@aml/sdk"
+import { DeterministicWorkspaceProvider } from "@aml/sdk/testing"
 
 import {
   dockerSandbox,
@@ -198,6 +200,60 @@ describe.skipIf(!dockerEnabled)("Docker Sandbox integration", () => {
       )
 
       expect(output).toBe("/workspace/nested")
+    } finally {
+      await cleanupContainers(client, containerIds)
+      await rm(temporary, { force: true, recursive: true })
+    }
+  }, 180_000)
+
+  it("mounts an active Workspace materialization without a fallback", async () => {
+    const temporary = await createIntegrationWorkspace()
+    const client = new Dockerode()
+    const workspaceProvider = new DeterministicWorkspaceProvider({
+      directory: temporary,
+    })
+    const provider = dockerSandbox({
+      client,
+      image: process.env.AML_DOCKER_IMAGE ?? "alpine:3.22",
+    })
+    const containerIds: string[] = []
+    const agentProvider: AgentProvider = {
+      name: "docker-workspace-probe",
+      async run(
+        _request: AgentRequest,
+        context: AgentExecutionContext,
+      ) {
+        const sandbox = requireDockerSandbox(context.sandbox)
+        containerIds.push(sandbox.lease.handle.containerId)
+        const result = await sandbox.lease.handle.exec(
+          ["cat", "fixture.txt"],
+          {
+            cwd: sandbox.cwd,
+            signal: context.signal,
+          },
+        )
+        return { text: result.stdout.trim() }
+      },
+      supportsSandbox: supportsDockerSandbox,
+    }
+
+    try {
+      const output = await new AmlRuntime({
+        agentProvider,
+      }).evaluate(
+        <Workspace
+          id="docker-workspace"
+          provider={workspaceProvider}
+        >
+          <Sandbox provider={provider} root="repository">
+            <Agent>Read the attached Workspace.</Agent>
+          </Sandbox>
+        </Workspace>,
+      )
+
+      expect(output).toBe("sandbox fixture")
+      expect(workspaceProvider.saves).toHaveLength(1)
+      expect(workspaceProvider.releases).toHaveLength(1)
     } finally {
       await cleanupContainers(client, containerIds)
       await rm(temporary, { force: true, recursive: true })

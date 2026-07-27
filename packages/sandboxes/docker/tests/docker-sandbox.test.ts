@@ -18,6 +18,7 @@ import type {
   SandboxAcquireRequest,
   SandboxLeaseReference,
   SandboxSession,
+  WorkspaceMaterializationReference,
 } from "@aml/sdk"
 import { sandboxProviderConformance } from "@aml/sdk/testing"
 
@@ -541,6 +542,47 @@ describe("dockerSandbox()", () => {
     ).toThrow("requires a same-host local-socket Docker client")
   })
 
+  it("prefers an active Workspace materialization over its fallback", async () => {
+    const fallback = await createWorkspace()
+    const active = await createWorkspace()
+    const docker = createDockerHarness()
+    const provider = dockerSandbox({
+      client: docker.client,
+      image: "alpine:3.22",
+      workspace: fallback,
+    })
+    const workspace: WorkspaceMaterializationReference =
+      Object.freeze({
+        directory: active,
+        handle: {},
+        leaseId: "workspace-lease",
+        provider: { name: "local-workspace" },
+        workspaceId: "review-42",
+      })
+    const lease = await provider.acquire(
+      rootRequest({ workspace }),
+    )
+    const mount = docker.createRequests[0]?.HostConfig?.Mounts?.find(
+      (candidate) => candidate.Target === "/workspace",
+    )
+
+    expect(mount?.Source).toBe(active)
+    await lease.release()
+  })
+
+  it("requires either a Workspace materialization or standalone fallback", async () => {
+    const docker = createDockerHarness()
+    const provider = dockerSandbox({
+      client: docker.client,
+      image: "alpine:3.22",
+    })
+
+    await expect(provider.acquire(rootRequest())).rejects.toThrow(
+      "requires an active Workspace or configured workspace",
+    )
+    expect(docker.createRequests).toHaveLength(0)
+  })
+
   it("accepts only sessions enforced by the acquired bind mount", async () => {
     const workspace = await createWorkspace()
     const docker = createDockerHarness()
@@ -748,5 +790,8 @@ function rootRequest(
     ...(overrides.signal === undefined
       ? {}
       : { signal: overrides.signal }),
+    ...(overrides.workspace === undefined
+      ? {}
+      : { workspace: overrides.workspace }),
   }
 }

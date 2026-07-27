@@ -167,7 +167,7 @@ The status table is the canonical implementation tracker. A slice moves to `Done
 | Slice 4 | `<Skill>` | Done |
 | Slice 5 | `<Sandbox>` contract | Done |
 | Slice 6 | Docker Sandbox package | Done |
-| Slice 7 | `<Workspace>` contract | Pending |
+| Slice 7 | `<Workspace>` contract | Done |
 | Slice 8 | Local Workspace package and MVP completion | Pending |
 | Slice 9 | `<Mcp>` and `defineMcpServer()` | Pending |
 | Slice 10 | `evaluate()` and structured results | Pending |
@@ -662,9 +662,11 @@ Status: Done on 2026-07-27. `@aml/sandbox-docker` now uses Dockerode for Engine 
 - add deterministic Workspace fixtures and conformance tests
 - acquire, materialize, save, and release
 - attach multiple sequential Sandboxes
-- serialize or reject conflicting writers
+- reject conflicting writers deterministically
 
 Proof: two disposable deterministic Sandboxes observe one durable working tree and final changes survive both.
+
+Status: Done on 2026-07-27. The SDK now exposes the top-level `<Workspace>` primitive, `defineWorkspaceProvider()`, immutable materialization references, exclusive lease acquisition, save-after-success-or-failure semantics, and exactly-once release. One evaluation may declare one Workspace outside Agent, Sandbox, Skill, and nested Workspace scopes; sequential outer Sandboxes receive the same frozen materialization while lifecycle authority remains private to AML. The provider contract now requires an explicit cross-package `WorkspaceConflictError` for active-writer rejection rather than inferring serialization from Promise timing. Its conformance suite proves conflict discrimination, bounded rejection, late serialized cleanup, reacquisition, persistence, malformed leases, unrelated failures, and hostile accessors. Deterministic fixtures prove shared processing data, placement errors, cancellation before and during cleanup, partial-work persistence, multi-boundary failure causality, and writer-lock recovery. The Docker provider prefers an active Workspace over its standalone host fallback and rejects acquisition when neither exists; six real-daemon tests include active Workspace attachment. The dist-backed Workspace example runs two disposable Sandboxes over one materialization and produces `wroteobserved:shared finding`. Singular correctness, maintainability, and skeptical review lanes reported no actionable findings after the conflict, timeout, cancellation, cleanup, and package-export fixes. One hundred nine SDK tests, twenty-one OpenCode tests, fifteen deterministic Docker tests, six real Docker integration tests, all workspace type checks, all three dist/package checks, the built-package Workspace example, and diff validation pass.
 
 #### Slice 8 — Local Workspace package
 
@@ -780,15 +782,15 @@ Before marking a slice `Done`:
 
 ## Immediate implementation boundary
 
-Slices 0 through 5 are complete. The next implementation gate is Slice 6 only:
+Slices 0 through 7 are complete. The next implementation gate is Slice 8 only:
 
-1. create the independently installable `@aml/sandbox-docker` package
-2. implement a configured `dockerSandbox()` factory using the public `defineSandboxProvider()` contract
-3. keep Docker options, process execution, filesystem mounting, and cleanup inside the provider package
-4. pass the SDK Sandbox conformance lifecycle and deterministic package tests
-5. prove read-only and read-write confinement, path mapping, cancellation, and container removal against a real Docker daemon
+1. define the configured local durable-directory mapping in `SPEC.md`
+2. create the independently installable `@aml/workspace-local` package
+3. implement `localWorkspace()` through the public `defineWorkspaceProvider()` and `WorkspaceConflictError` contracts
+4. preserve one durable local directory across evaluations while rejecting concurrent writers
+5. pass SDK Workspace conformance, filesystem integration, dist/package, and built-example proofs
 
-No Workspace, MCP, structured output, FollowUp, Loop, CLI, website, Codex provider, or unrelated primitive belongs in Slice 6.
+No MCP, structured output, FollowUp, Loop, CLI, website, Codex provider, or unrelated primitive belongs in Slice 8.
 
 ## Explicitly deferred
 

@@ -37,9 +37,9 @@ export interface DockerSandboxOptions {
   readonly user?: string
 
   /**
-   * Explicit host directory from which AML may select a Sandbox root.
+   * Standalone host-directory fallback when no Workspace is active.
    */
-  readonly workspace: string
+  readonly workspace?: string
 }
 
 /**
@@ -57,7 +57,7 @@ export interface ParsedDockerSandboxOptions {
   readonly pidsLimit: number
   readonly tmpfsBytes: number
   readonly user: string
-  readonly workspace: string
+  readonly workspace?: string
 }
 
 /**
@@ -146,12 +146,16 @@ export function parseDockerSandboxOptions(
     user: requireNonRootUser(
       value.user ?? defaultDockerUser(),
     ),
-    workspace: path.resolve(
-      requireNormalizedString(
-        value.workspace,
-        "Docker workspace",
-      ),
-    ),
+    ...(value.workspace === undefined
+      ? {}
+      : {
+          workspace: path.resolve(
+            requireNormalizedString(
+              value.workspace,
+              "Docker workspace",
+            ),
+          ),
+        }),
   })
 }
 

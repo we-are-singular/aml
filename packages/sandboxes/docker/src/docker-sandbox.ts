@@ -53,10 +53,11 @@ const AMBIGUOUS_CREATE_RECONCILIATION_DELAYS = [
 ] as const
 
 /**
- * Creates a lazy Docker Sandbox provider from one explicit host workspace.
+ * Creates a lazy Docker provider with an optional standalone host fallback.
  *
  * Construction performs no Docker or filesystem I/O. Each outermost
- * `<Sandbox>` acquisition creates one hardened container and AML owns release.
+ * `<Sandbox>` uses its active Workspace first, creates one hardened container,
+ * and leaves release ownership with AML.
  */
 export function dockerSandbox(
   options: DockerSandboxOptions,
@@ -456,7 +457,19 @@ class DockerSandboxProvider
   async #resolveSource(
     request: SandboxAcquireRequest,
   ): Promise<ResolvedSource> {
-    const workspace = await realpath(this.#options.workspace)
+    // An active durable materialization always wins over the provider's
+    // standalone fallback; silently mounting different files would violate
+    // the Workspace-to-Sandbox attachment contract.
+    const workspaceDirectory =
+      request.workspace?.directory ?? this.#options.workspace
+
+    if (workspaceDirectory === undefined) {
+      throw new TypeError(
+        "Docker Sandbox requires an active Workspace or configured workspace",
+      )
+    }
+
+    const workspace = await realpath(workspaceDirectory)
     request.signal.throwIfAborted()
     const source = await realpath(
       path.resolve(workspace, request.root),
