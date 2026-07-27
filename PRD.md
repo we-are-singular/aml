@@ -1,6 +1,6 @@
 # Agent Markup Language product requirements and delivery plan
 
-Status: Phase 1 — Slices 0–4 done; Slice 5 pending
+Status: Phase 1 — MVP complete; Slices 0–8 done; Slice 9 pending
 
 This is the living product definition, architecture plan, implementation roadmap, and progress tracker for AML. It is not a normative runtime contract. Settled behavior belongs in `SPEC.md`; this document records why AML exists, how it is organized, what is being built next, and which slices have been proven.
 
@@ -168,7 +168,7 @@ The status table is the canonical implementation tracker. A slice moves to `Done
 | Slice 5 | `<Sandbox>` contract | Done |
 | Slice 6 | Docker Sandbox package | Done |
 | Slice 7 | `<Workspace>` contract | Done |
-| Slice 8 | Local Workspace package and MVP completion | Pending |
+| Slice 8 | Local Workspace package and MVP completion | Done |
 | Slice 9 | `<Mcp>` and `defineMcpServer()` | Pending |
 | Slice 10 | `evaluate()` and structured results | Pending |
 | Slice 11 | Bounded Agent concurrency | Pending |
@@ -676,6 +676,8 @@ Status: Done on 2026-07-27. The SDK now exposes the top-level `<Workspace>` prim
 
 Proof: a local Workspace survives multiple SDK evaluations without adding Node filesystem assumptions to the provider-neutral contract.
 
+Status: Done on 2026-07-27. `@aml/workspace-local` now maps one configured existing directory to a lazy provider-neutral Workspace provider. Acquisition canonicalizes symlinks and obtains a zero-retry cross-process renewable lock through `proper-lockfile`; concurrent providers targeting the same physical directory reject with `WorkspaceConflictError`, and successful release permits reacquisition. The direct materialization persists ordinary filesystem writes across SDK evaluations, while `save()` acts as a lock-health barrier and cleanup reports compromise without leaking dependency lifecycle errors. Timing options are validated within `proper-lockfile` and Node timer bounds, cancellation before acquisition performs no I/O, and cancellation racing a successful lock uses the same attributed cleanup path as a live lease. Singular review found overclaimed exclusivity for renewable locks, raw compromised-release errors, mutable configuration rereads, missing cross-process proof, unbounded timer values, and a late-cancellation cleanup inconsistency. The corrected SPEC documents the lack of fencing and possible overlap after stale recovery. Twelve focused Local Workspace tests include real child-process contention through canonical and symlink paths, lifecycle fault injection, SDK conformance, and persistence. Package type checking, dist/package validation, the built-package example, full workspace validation, and diff validation pass. Final correctness, maintainability, and skeptical review lanes reported no actionable findings.
+
 MVP is complete when Slice 8 passes. It contains exactly the five component boundaries selected for the first usable language surface plus the evaluation foundation and concrete OpenCode, Docker, and local Workspace proofs.
 
 ### Phase C — Post-MVP capabilities and orchestration
@@ -782,15 +784,15 @@ Before marking a slice `Done`:
 
 ## Immediate implementation boundary
 
-Slices 0 through 7 are complete. The next implementation gate is Slice 8 only:
+Slices 0 through 8 and the MVP are complete. The next implementation gate is Slice 9 only:
 
-1. define the configured local durable-directory mapping in `SPEC.md`
-2. create the independently installable `@aml/workspace-local` package
-3. implement `localWorkspace()` through the public `defineWorkspaceProvider()` and `WorkspaceConflictError` contracts
-4. preserve one durable local directory across evaluations while rejecting concurrent writers
-5. pass SDK Workspace conformance, filesystem integration, dist/package, and built-example proofs
+1. settle the provider-neutral MCP descriptor and Agent grant semantics in `SPEC.md`
+2. add `<Mcp>` and `defineMcpServer()` to `@aml/sdk`
+3. keep MCP lifecycle and transport ownership inside Agent providers
+4. extend deterministic and OpenCode provider proofs for session-scoped attachment and cleanup
+5. prove a declared MCP server is available to one Agent and absent from siblings
 
-No MCP, structured output, FollowUp, Loop, CLI, website, Codex provider, or unrelated primitive belongs in Slice 8.
+No structured output, concurrency scheduler, FollowUp, Loop, CLI, website, Codex provider, Context, or unrelated primitive belongs in Slice 9.
 
 ## Explicitly deferred
 

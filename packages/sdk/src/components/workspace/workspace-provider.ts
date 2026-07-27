@@ -30,8 +30,10 @@ export interface WorkspaceLease<Handle = unknown> {
  * Acquires exclusive writer access to one durable Workspace identity.
  *
  * A provider must reject another acquisition of the same id with
- * `WorkspaceConflictError` until the active lease releases. Scheduling complete
- * evaluations belongs above this boundary.
+ * `WorkspaceConflictError` while the active lease retains healthy writer
+ * authority. Renewable providers may instead report compromise after their
+ * documented stale-recovery boundary. Scheduling complete evaluations belongs
+ * above this boundary.
  */
 export interface WorkspaceProvider<Handle = unknown> {
   readonly name: string

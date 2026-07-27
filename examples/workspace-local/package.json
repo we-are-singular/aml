@@ -1,0 +1,13 @@
+{
+  "name": "@aml/example-workspace-local",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@aml/sdk": "*",
+    "@aml/workspace-local": "*"
+  },
+  "scripts": {
+    "example": "vite-node main.tsx",
+    "typecheck": "tsc --noEmit"
+  }
+}

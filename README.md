@@ -29,6 +29,8 @@ Slice 6 adds the independently installable `@aml/sandbox-docker` adapter. Its Do
 
 Slice 7 adds provider-neutral `<Workspace>` scopes and `defineWorkspaceProvider()`. One top-level Workspace acquires an exclusive durable materialization, passes its immutable reference to sequential outer Sandboxes, saves partial work after success or failure, and releases exactly once. `examples/workspace` proves two disposable Sandboxes sharing one materialization through built SDK exports.
 
+Slice 8 completes the MVP with the independently installable `@aml/workspace-local` adapter. Its configured `localWorkspace()` factory maps one existing directory into a direct durable materialization, canonicalizes symlinks, rejects concurrent writers through a renewable cross-process lock, and reports stale-lock compromise honestly rather than claiming fencing. `examples/workspace-local` proves filesystem changes survive separate SDK evaluations through built package exports.
+
 Nothing under `poc/` is part of the new package or public API.
 
 ```sh
@@ -43,6 +45,7 @@ npm run example:opencode
 npm run example:sandbox
 npm run example:skill
 npm run example:workspace
+npm run example:workspace-local
 ```
 
 `npm run example:opencode` is an explicit live model call. Set `AML_OPENCODE_MODEL` to override its default model.

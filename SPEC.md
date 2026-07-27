@@ -1321,7 +1321,9 @@ Shared mounts may avoid copying. Remote providers may upload and download the se
 
 Parallel read-only Sandboxes may use one Workspace revision. The initial runtime must reject conflicting writable attachments; it must not wait indefinitely or silently apply last-writer-wins copies. Higher-level scheduling may serialize complete Workspace evaluations before acquisition, but serialization is not part of the Workspace provider contract.
 
-Workspace providers may use disk, Docker volumes, object storage, Durable Objects, or another durable backend. While one lease is active, another acquisition of the same durable identity must reject with the provider-neutral `WorkspaceConflictError` without returning a lease. Releasing the active lease must make that identity acquirable again. The error carries the stable code `AML_WORKSPACE_CONFLICT` and the conflicting `workspaceId` so duplicated SDK packages can recognize the contract without relying on `instanceof`.
+Workspace providers may use disk, Docker volumes, object storage, Durable Objects, or another durable backend. While one lease remains healthy and owns its writer authority, another acquisition of the same durable identity must reject with the provider-neutral `WorkspaceConflictError` without returning a lease. Releasing the active lease must make that identity acquirable again. The error carries the stable code `AML_WORKSPACE_CONFLICT` and the conflicting `workspaceId` so duplicated SDK packages can recognize the contract without relying on `instanceof`.
+
+A provider backed by a renewable distributed or filesystem lease may lose writer authority after a documented stale threshold. Such a provider must detect and report compromise through `save()` or `release()`, document whether overlap can leave partial edits, and must not claim fencing or unconditional exclusion across suspension. Providers with stronger locking may retain the unconditional contract.
 
 A Sandbox without a Workspace is ephemeral. A Workspace without a Sandbox is durable but makes no confinement claim.
 
@@ -1360,11 +1362,39 @@ interface WorkspaceMaterializationReference<Handle = unknown> {
 }
 ```
 
-`directory` is the runtime-visible materialization of the durable Workspace. A provider may implement it as a local directory, mounted volume, synchronized remote snapshot, or another filesystem adapter, but descendant Sandboxes must observe the same logical files and ordering guarantees from section 14.2. `save()` persists the current materialization and `release()` relinquishes locks and temporary resources. AML calls both through failure-safe cleanup and preserves multiple failures with causality. `acquire()` must reject a competing writer with `WorkspaceConflictError` while a lease for the same Workspace id remains active; conformance propagates every other provider failure and does not infer locking from timing or provider latency.
+`directory` is the runtime-visible materialization of the durable Workspace. A provider may implement it as a local directory, mounted volume, synchronized remote snapshot, or another filesystem adapter, but descendant Sandboxes must observe the same logical files and ordering guarantees from section 14.2. `save()` persists the current materialization and `release()` relinquishes locks and temporary resources. AML calls both through failure-safe cleanup and preserves multiple failures with causality. `acquire()` must reject a competing writer with `WorkspaceConflictError` while a healthy lease for the same Workspace id retains writer authority; conformance propagates every other provider failure and does not infer locking from timing or provider latency.
 
 After acquisition AML captures an immutable `WorkspaceMaterializationReference` for descendant outer Sandboxes. `workspaceId` is the authored durable identity, `leaseId` is the provider's acquired resource identity, and `provider.name` is descriptive identity rather than acquisition authority. Descendants never receive `save()`, `release()`, or the Workspace provider's `acquire()` method.
 
 `WorkspaceLease.handle` is opaque provider data. It may support optimized transfer or shared-mount integration with a compatible Sandbox provider, but AML does not expose it as a portable filesystem API. A Sandbox provider that cannot attach the reference must reject rather than run against different files.
+
+### 14.4 Local Workspace provider
+
+The Node-specific local provider binds one configured existing directory to one provider:
+
+```tsx
+const repository = localWorkspace({
+  directory: "/work/repository",
+})
+
+await runtime.evaluate(
+  <Workspace id="review-42" provider={repository}>
+    <Sandbox provider={docker}>
+      <Agent>Review and update the repository.</Agent>
+    </Sandbox>
+  </Workspace>,
+)
+```
+
+`localWorkspace({ directory, staleMs?, updateMs? })` is a lazy configured factory. Construction validates and resolves the configured path relative to the current process but performs no filesystem I/O. Acquisition resolves symlinks, requires an existing directory, checks cancellation, and obtains a zero-retry cross-process lock on that physical directory. The provider uses `proper-lockfile`; it does not implement its own lock protocol.
+
+The configured directory is the complete durable Workspace. The authored Workspace `id` remains its logical execution identity but does not select a child path. Two providers aimed at the same physical directory therefore contend even when their authored ids differ. Lock contention rejects with `WorkspaceConflictError` for the requesting id. Other filesystem and lock failures remain provider failures.
+
+The local lock is a renewable filesystem lease rather than an OS-owned advisory lock. `staleMs` defaults to 30 seconds and cannot be less than 2 seconds. `updateMs` defaults to 10 seconds, cannot be less than 1 second, and cannot exceed half of `staleMs`. Both values are capped at Node's maximum timer delay of 2,147,483,647 milliseconds. Another process may recover a lock whose owner cannot refresh it within the stale window. The original provider records that state as compromise and fails completion, but direct edits from an overlap cannot be rolled back. Consumers requiring fencing or unconditional exclusion across process suspension need another Workspace provider.
+
+The local materialization is direct: descendants work against the configured directory and writes are durable as ordinary local filesystem mutations occur. `save()` performs no copy or snapshot; it verifies that the renewable lock was not reported compromised. `release()` relinquishes a healthy cross-process lock exactly once and reports an unreported compromise without leaking dependency lifecycle errors. Cancellation before acquisition prevents locking. Cancellation after a late successful lock releases it before propagating the caller's exact reason.
+
+The lock lives beside the resolved physical directory rather than inside its contents, so that physical directory's parent must permit lock creation. The provider makes no sandboxing or filesystem-isolation claim. A descendant Sandbox provider must still enforce its own confinement and must reject the materialization if it cannot attach a same-host local directory.
 
 ## 15. Provider contract
 
