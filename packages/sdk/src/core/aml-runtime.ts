@@ -18,6 +18,15 @@ import {
 import type { SystemProps } from "../components/system/system.js"
 import { ToolCollection } from "../components/tool/tool-collection.js"
 import type { ToolProps } from "../components/tool/tool.js"
+import {
+  type WorkspaceEvaluationScope,
+  WorkspaceEvaluator,
+} from "../components/workspace/workspace-evaluator.js"
+import type {
+  WorkspaceMaterializationReference,
+  WorkspaceProvider,
+} from "../components/workspace/workspace-provider.js"
+import type { WorkspaceProps } from "../components/workspace/workspace.js"
 import { AmlNode, type AmlRenderable } from "./aml-node.js"
 import { EvaluationContext } from "./evaluation-context.js"
 import { EvaluationError } from "./evaluation-error.js"
@@ -32,6 +41,9 @@ interface TextTarget {
   readonly parentSpanId: string | undefined
   readonly sandbox: Readonly<SandboxSession> | undefined
   readonly source: "evaluation" | "skill" | "system"
+  readonly workspace:
+    | Readonly<WorkspaceMaterializationReference>
+    | undefined
 }
 
 interface AgentTarget {
@@ -41,6 +53,9 @@ interface AgentTarget {
   readonly sandbox: Readonly<SandboxSession> | undefined
   readonly systemFragments: string[]
   readonly tools: ToolCollection
+  readonly workspace:
+    | Readonly<WorkspaceMaterializationReference>
+    | undefined
 }
 
 type ResolutionTarget = AgentTarget | TextTarget
@@ -83,6 +98,11 @@ interface CompleteSandboxFrame {
   readonly scope: Readonly<SandboxEvaluationScope>
 }
 
+interface CompleteWorkspaceFrame {
+  readonly kind: "complete-workspace"
+  readonly scope: Readonly<WorkspaceEvaluationScope>
+}
+
 interface CompleteSystemFrame {
   readonly kind: "complete-system"
   readonly parent: AgentTarget
@@ -102,6 +122,7 @@ type EvaluationFrame =
   | CompleteSandboxFrame
   | CompleteSkillFrame
   | CompleteSystemFrame
+  | CompleteWorkspaceFrame
   | ReleaseFrame
   | ResolveFrame
 
@@ -145,6 +166,11 @@ export interface AmlRuntimeOptions {
    * First system fragment supplied to every Agent in this runtime.
    */
   readonly system?: string
+
+  /**
+   * Default provider for the one top-level Workspace in an evaluation.
+   */
+  readonly workspaceProvider?: WorkspaceProvider
 }
 
 /**
@@ -167,6 +193,7 @@ export class AmlRuntime {
   readonly #maxDepth: number
   readonly #sandboxEvaluator: SandboxEvaluator
   readonly #skillEvaluator: SkillEvaluator
+  readonly #workspaceEvaluator: WorkspaceEvaluator
 
   /**
    * Captures one immutable set of runtime limits and Agent defaults.
@@ -200,6 +227,9 @@ export class AmlRuntime {
     this.#skillEvaluator = new SkillEvaluator(
       options.cwd ?? process.cwd(),
     )
+    this.#workspaceEvaluator = new WorkspaceEvaluator(
+      options.workspaceProvider,
+    )
   }
 
   /**
@@ -220,12 +250,15 @@ export class AmlRuntime {
     const context = new EvaluationContext(this.#maxAgentCalls, signal)
     const activeValues = new Set<object>()
     const activeSandboxScopes: SandboxEvaluationScope[] = []
+    let activeWorkspaceScope: WorkspaceEvaluationScope | undefined
+    let workspaceDeclared = false
     const output: TextTarget = {
       chunks: [],
       kind: "text",
       parentSpanId: undefined,
       sandbox: undefined,
       source: "evaluation",
+      workspace: undefined,
     }
     const frames: EvaluationFrame[] = [
       { depth: 0, kind: "resolve", target: output, value },
@@ -279,6 +312,35 @@ export class AmlRuntime {
             throw releaseError
           }
 
+          context.signal.throwIfAborted()
+          continue
+        }
+
+        if (frame.kind === "complete-workspace") {
+          if (activeWorkspaceScope !== frame.scope) {
+            throw new EvaluationError(
+              "Workspace scopes completed out of lifecycle order",
+            )
+          }
+
+          // Remove ownership before completion so a save or release failure is
+          // never retried by the outer cleanup path.
+          activeWorkspaceScope = undefined
+
+          try {
+            await frame.scope.complete()
+          } catch (completionError) {
+            if (context.signal.aborted) {
+              throw new AggregateError(
+                [context.signal.reason, completionError],
+                "AML evaluation was cancelled and Workspace completion failed",
+              )
+            }
+
+            throw completionError
+          }
+
+          context.signal.throwIfAborted()
           continue
         }
 
@@ -443,6 +505,7 @@ export class AmlRuntime {
               sandbox: frame.target.sandbox,
               systemFragments: [],
               tools: new ToolCollection(this.#allowedTools),
+              workspace: frame.target.workspace,
             }
 
             // Push completion before children: the LIFO stack gives AML its
@@ -473,11 +536,12 @@ export class AmlRuntime {
             const props = current.props as Readonly<SandboxProps>
             const trace = context.createTrace(frame.target.parentSpanId)
             const scope = await this.#sandboxEvaluator.enter(
-            props,
-            frame.target.sandbox,
-            trace.runId,
-            context.signal,
-          )
+              props,
+              frame.target.sandbox,
+              frame.target.workspace,
+              trace.runId,
+              context.signal,
+            )
             const scopedTarget: ResolutionTarget = {
               ...frame.target,
               parentSpanId: trace.spanId,
@@ -494,6 +558,58 @@ export class AmlRuntime {
               frames.push({ kind: "complete-sandbox", scope })
             }
 
+            frames.push({
+              depth: nodeDepth,
+              kind: "resolve",
+              target: scopedTarget,
+              value: props.children,
+            })
+            continue
+          }
+
+          // <Workspace> is the one top-level durable resource boundary. It
+          // cannot hide inside prompt assembly or another resource scope.
+          if (primitiveKind === "workspace") {
+            if (workspaceDeclared) {
+              throw new EvaluationError(
+                "An AML evaluation may contain at most one <Workspace>",
+              )
+            }
+
+            if (
+              frame.target.kind !== "text" ||
+              frame.target.source !== "evaluation" ||
+              frame.target.sandbox !== undefined ||
+              frame.target.workspace !== undefined
+            ) {
+              throw new EvaluationError(
+                "<Workspace> must be a top-level resource boundary",
+              )
+            }
+
+            workspaceDeclared = true
+            const props = current.props as Readonly<WorkspaceProps>
+            const trace = context.createTrace(
+              frame.target.parentSpanId,
+            )
+            const scope = await this.#workspaceEvaluator.enter(
+              props,
+              trace.runId,
+              context.signal,
+            )
+            const scopedTarget: TextTarget = {
+              ...frame.target,
+              parentSpanId: trace.spanId,
+              workspace: scope.materialization,
+            }
+
+            activeWorkspaceScope = scope
+            activeValues.add(current)
+            frames.push({ kind: "release", value: current })
+            frames.push({
+              kind: "complete-workspace",
+              scope,
+            })
             frames.push({
               depth: nodeDepth,
               kind: "resolve",
@@ -530,6 +646,7 @@ export class AmlRuntime {
               parentSpanId: frame.target.parentSpanId,
               sandbox: frame.target.sandbox,
               source: "skill",
+              workspace: frame.target.workspace,
             }
 
             activeValues.add(current)
@@ -573,6 +690,7 @@ export class AmlRuntime {
               parentSpanId: frame.target.parentSpanId,
               sandbox: frame.target.sandbox,
               source: "system",
+              workspace: frame.target.workspace,
             }
 
             activeValues.add(current)
@@ -655,10 +773,21 @@ export class AmlRuntime {
         }
       }
 
+      if (activeWorkspaceScope !== undefined) {
+        const scope = activeWorkspaceScope
+        activeWorkspaceScope = undefined
+
+        try {
+          await scope.complete()
+        } catch (completionError) {
+          releaseErrors.push(completionError)
+        }
+      }
+
       if (releaseErrors.length > 0) {
         throw new AggregateError(
           [error, ...releaseErrors],
-          "AML evaluation and Sandbox cleanup both failed",
+          "AML evaluation and resource cleanup both failed",
         )
       }
 

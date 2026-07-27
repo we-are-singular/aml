@@ -1,3 +1,5 @@
+import type { WorkspaceMaterializationReference } from "../workspace/workspace-provider.js"
+
 /**
  * Portable filesystem authority exposed by a Sandbox scope.
  */
@@ -12,6 +14,7 @@ export interface SandboxAcquireRequest {
   readonly evaluationId: string
   readonly root: string
   readonly signal: AbortSignal
+  readonly workspace?: Readonly<WorkspaceMaterializationReference>
 }
 
 /**

@@ -38,11 +38,21 @@ interface BuiltSdk {
         context: unknown,
       ): Promise<{ text: string }>
     }
+    workspaceProvider?: unknown
   }) => {
     evaluate(value: unknown): Promise<string>
   }
   readonly Fragment: unknown
   readonly Tool: unknown
+  readonly Workspace: unknown
+  readonly WorkspaceConflictError: {
+    is(value: unknown, workspaceId?: string): boolean
+    new (workspaceId: string): {
+      readonly code: string
+      readonly workspaceId: string
+    }
+  }
+  defineWorkspaceProvider(provider: unknown): unknown
   defineTool(options: unknown): unknown
 }
 
@@ -55,7 +65,12 @@ interface BuiltTesting {
   readonly DeterministicAgentProvider: new () => {
     readonly calls: readonly unknown[]
   }
+  readonly DeterministicWorkspaceProvider: new () => {
+    readonly releases: readonly string[]
+    readonly saves: readonly string[]
+  }
   agentProviderConformance(provider: unknown): Promise<void>
+  workspaceProviderConformance(provider: unknown): Promise<void>
 }
 
 const packageDirectory = resolve(import.meta.dirname, "..")
@@ -144,9 +159,13 @@ for (const entry of Object.values(resolvedEntries)) {
   }
 }
 
-const { AmlRuntime, Fragment: publicFragment } = (await import(
-  pathToFileURL(resolvedEntries.index).href
-)) as BuiltSdk
+const {
+  AmlRuntime,
+  defineWorkspaceProvider,
+  Fragment: publicFragment,
+  Workspace: publicWorkspace,
+  WorkspaceConflictError,
+} = (await import(pathToFileURL(resolvedEntries.index).href)) as BuiltSdk
 const {
   Fragment: runtimeFragment,
   jsx: runtimeJsx,
@@ -155,7 +174,9 @@ const {
 )) as BuiltJsxRuntime
 const {
   DeterministicAgentProvider,
+  DeterministicWorkspaceProvider,
   agentProviderConformance,
+  workspaceProviderConformance,
 } = (await import(
   pathToFileURL(resolvedEntries.testing).href
 )) as BuiltTesting
@@ -179,6 +200,55 @@ await agentProviderConformance(deterministicProvider)
 
 if (deterministicProvider.calls.length !== 1) {
   throw new Error("SDK testing entry point did not exercise its provider")
+}
+
+await workspaceProviderConformance(
+  new DeterministicWorkspaceProvider(),
+)
+const deterministicWorkspaceProvider =
+  new DeterministicWorkspaceProvider()
+const definedWorkspaceProvider = defineWorkspaceProvider(
+  deterministicWorkspaceProvider,
+)
+
+if (
+  definedWorkspaceProvider !== deterministicWorkspaceProvider ||
+  !Object.isFrozen(definedWorkspaceProvider)
+) {
+  throw new Error(
+    "SDK dist defineWorkspaceProvider contract is invalid",
+  )
+}
+
+const conflict = new WorkspaceConflictError("package-check")
+
+if (
+  conflict.code !== "AML_WORKSPACE_CONFLICT" ||
+  conflict.workspaceId !== "package-check" ||
+  !WorkspaceConflictError.is(conflict, "package-check")
+) {
+  throw new Error(
+    "SDK dist WorkspaceConflictError contract is invalid",
+  )
+}
+
+const workspaceOutput = await new AmlRuntime({
+  workspaceProvider: definedWorkspaceProvider,
+}).evaluate(
+  runtimeJsx(publicWorkspace, {
+    children: "built Workspace",
+    id: "package-check",
+  }),
+)
+
+if (
+  workspaceOutput !== "built Workspace" ||
+  deterministicWorkspaceProvider.saves.length !== 1 ||
+  deterministicWorkspaceProvider.releases.length !== 1
+) {
+  throw new Error(
+    "SDK dist Workspace lifecycle or testing export is invalid",
+  )
 }
 
 // Compile and execute one tree across two physical SDK copies. Runtime brands

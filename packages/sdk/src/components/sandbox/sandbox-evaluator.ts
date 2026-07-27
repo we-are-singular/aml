@@ -1,6 +1,7 @@
 import path from "node:path"
 
 import { EvaluationError } from "../../core/evaluation-error.js"
+import type { WorkspaceMaterializationReference } from "../workspace/workspace-provider.js"
 import type { SandboxProps } from "./sandbox.js"
 import type {
   SandboxAccess,
@@ -51,11 +52,19 @@ export class SandboxEvaluator {
   async enter(
     props: Readonly<SandboxProps>,
     parent: Readonly<SandboxSession> | undefined,
+    workspace:
+      | Readonly<WorkspaceMaterializationReference>
+      | undefined,
     evaluationId: string,
     signal: AbortSignal,
   ): Promise<Readonly<SandboxEvaluationScope>> {
     return parent === undefined
-      ? await this.#acquireRoot(props, evaluationId, signal)
+      ? await this.#acquireRoot(
+          props,
+          workspace,
+          evaluationId,
+          signal,
+        )
       : this.#enterNested(props, parent)
   }
 
@@ -91,6 +100,9 @@ export class SandboxEvaluator {
    */
   async #acquireRoot(
     props: Readonly<SandboxProps>,
+    workspace:
+      | Readonly<WorkspaceMaterializationReference>
+      | undefined,
     evaluationId: string,
     signal: AbortSignal,
   ): Promise<Readonly<SandboxEvaluationScope>> {
@@ -105,7 +117,12 @@ export class SandboxEvaluator {
       )
     }
 
-    const request = createRootRequest(props, evaluationId, signal)
+    const request = createRootRequest(
+      props,
+      workspace,
+      evaluationId,
+      signal,
+    )
     let value: unknown
 
     try {
@@ -235,6 +252,9 @@ export class SandboxEvaluator {
  */
 function createRootRequest(
   props: Readonly<SandboxProps>,
+  workspace:
+    | Readonly<WorkspaceMaterializationReference>
+    | undefined,
   evaluationId: string,
   signal: AbortSignal,
 ): SandboxAcquireRequest {
@@ -254,6 +274,7 @@ function createRootRequest(
     evaluationId,
     root,
     signal,
+    ...(workspace === undefined ? {} : { workspace }),
   }
 }
 

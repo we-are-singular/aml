@@ -8,3 +8,12 @@ export {
   type DeterministicSandboxProviderOptions,
 } from "./testing/deterministic-sandbox-provider.js"
 export { sandboxProviderConformance } from "./testing/sandbox-provider-conformance.js"
+export {
+  DeterministicWorkspaceProvider,
+  type DeterministicWorkspaceHandle,
+  type DeterministicWorkspaceProviderOptions,
+} from "./testing/deterministic-workspace-provider.js"
+export {
+  workspaceProviderConformance,
+  type WorkspaceProviderConformanceOptions,
+} from "./testing/workspace-provider-conformance.js"

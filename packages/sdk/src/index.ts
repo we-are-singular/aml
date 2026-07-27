@@ -26,6 +26,21 @@ export {
   type SandboxProps,
 } from "./components/sandbox/sandbox.js"
 
+// Durable materialization scope and provider-neutral lifecycle contracts.
+export { defineWorkspaceProvider } from "./components/workspace/define-workspace-provider.js"
+export { WorkspaceConflictError } from "./components/workspace/workspace-conflict-error.js"
+export {
+  type WorkspaceAcquireRequest,
+  type WorkspaceLease,
+  type WorkspaceMaterializationReference,
+  type WorkspaceProvider,
+  type WorkspaceProviderReference,
+} from "./components/workspace/workspace-provider.js"
+export {
+  Workspace,
+  type WorkspaceProps,
+} from "./components/workspace/workspace.js"
+
 // Scoped provider-native and application-owned capabilities.
 export type {
   AgentHostTool,

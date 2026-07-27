@@ -27,6 +27,8 @@ Slice 5 adds provider-neutral `<Sandbox>` scopes, `defineSandboxProvider()`, opa
 
 Slice 6 adds the independently installable `@aml/sandbox-docker` adapter. Its Dockerode-backed factory creates one same-host container per outer Sandbox lease with a confined bind mount, no network, no Linux capabilities, a non-root numeric UID, resource limits, bounded command output, and failure-safe cleanup. `examples/docker` proves an Agent-local working directory and the primary confinement settings against a real Docker daemon.
 
+Slice 7 adds provider-neutral `<Workspace>` scopes and `defineWorkspaceProvider()`. One top-level Workspace acquires an exclusive durable materialization, passes its immutable reference to sequential outer Sandboxes, saves partial work after success or failure, and releases exactly once. `examples/workspace` proves two disposable Sandboxes sharing one materialization through built SDK exports.
+
 Nothing under `poc/` is part of the new package or public API.
 
 ```sh
@@ -40,6 +42,7 @@ npm run example:docker
 npm run example:opencode
 npm run example:sandbox
 npm run example:skill
+npm run example:workspace
 ```
 
 `npm run example:opencode` is an explicit live model call. Set `AML_OPENCODE_MODEL` to override its default model.

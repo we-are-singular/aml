@@ -16,6 +16,7 @@
     "example:opencode": "turbo run example --filter=@aml/example-opencode",
     "example:sandbox": "turbo run example --filter=@aml/example-sandbox",
     "example:skill": "turbo run example --filter=@aml/example-skill",
+    "example:workspace": "turbo run example --filter=@aml/example-workspace",
     "pack:check": "npm run pack:check --workspace=@aml/sdk && npm run pack:check --workspace=@aml/agent-opencode && npm run pack:check --workspace=@aml/sandbox-docker",
     "test": "turbo run test",
     "typecheck": "turbo run typecheck"

@@ -1167,6 +1167,7 @@ interface SandboxAcquireRequest {
   evaluationId: string;
   root: string;
   signal: AbortSignal;
+  workspace?: WorkspaceMaterializationReference;
 }
 
 interface SandboxLease<Handle = unknown> {
@@ -1188,6 +1189,16 @@ interface SandboxSession<Handle = unknown> {
   };
   root: string;
 }
+
+interface WorkspaceMaterializationReference<Handle = unknown> {
+  directory: string;
+  handle: Handle;
+  leaseId: string;
+  provider: {
+    name: string;
+  };
+  workspaceId: string;
+}
 ```
 
 AML:
@@ -1207,6 +1218,8 @@ Nested Sandboxes emit their own spans but do not acquire or release another leas
 Descendants receive only the immutable lease identity and handle shown by `SandboxSession`; they never receive `release()` or the provider's `acquire()` method. AML retains both lifecycle capabilities privately because it alone owns acquisition and exactly-once release. The captured provider name is descriptive identity, not an authority-bearing provider object.
 
 The acquisition signal belongs to the complete evaluation domain. A cooperative provider stops pending setup and rejects with `signal.reason` when it is aborted. If a provider ignores cancellation and eventually returns a valid lease, AML captures the lease and releases it before rejecting the evaluation with the caller's cancellation reason.
+
+When an outer Sandbox is inside a Workspace, `workspace` carries the active immutable materialization reference. Its directory is the provider-neutral shared snapshot; its handle is opaque data for compatible provider-specific transfer or mount optimizations. A Sandbox provider must either attach that materialization or reject acquisition. It must not silently use an unrelated configured directory.
 
 ### 13.4 Docker provider requirements
 
@@ -1228,7 +1241,7 @@ await runtime.evaluate(
 );
 ```
 
-The factory requires an explicit host `workspace` and exactly one of `image` or `dockerfile`. `buildContext`, `cpus`, `maxOutputBytes`, `memoryBytes`, `pidsLimit`, `tmpfsBytes`, `user`, and an injected Dockerode client are provider configuration, not AML props. `user` is a numeric non-zero UID with an optional numeric non-zero GID. The injected client must use a local socket, and the Docker daemon must resolve paths in the same filesystem namespace as the AML process. A local socket alone does not prove that condition, so every acquisition creates, mounts, reads, and removes a random identity beneath the exact selected root before exposing the lease. The selected host root must therefore be writable by the AML process during acquisition even when the container receives `"read-only"` access; no probe remains when descendant AML begins. Remote Docker providers require an explicit Workspace transfer or volume contract and are outside this provider.
+The factory requires exactly one of `image` or `dockerfile`. Its optional `workspace` is the approved host-directory fallback for a standalone Sandbox. An active `<Workspace>` materialization supersedes that fallback; acquisition rejects if neither exists. `buildContext`, `cpus`, `maxOutputBytes`, `memoryBytes`, `pidsLimit`, `tmpfsBytes`, `user`, and an injected Dockerode client are provider configuration, not AML props. `user` is a numeric non-zero UID with an optional numeric non-zero GID. The injected client must use a local socket, and the Docker daemon must resolve paths in the same filesystem namespace as the AML process. A local socket alone does not prove that condition, so every acquisition creates, mounts, reads, and removes a random identity beneath the exact selected root before exposing the lease. The selected host root must therefore be writable by the AML process during acquisition even when the container receives `"read-only"` access; no probe remains when descendant AML begins. Remote Docker providers require an explicit Workspace transfer or volume contract and are outside this provider.
 
 The configured image must contain POSIX `sh` and `sleep`; the provider replaces its entrypoint with a shell keepalive process for the lease lifetime. Dockerfile builds run with networking disabled. The provider uses Dockerode for Docker Engine transport, container lifecycle, exec streams, BuildKit-aware progress, and image builds; AML-specific code owns only policy translation, real-path confinement, cancellation compensation, output limits, and lease cleanup.
 
@@ -1306,9 +1319,9 @@ Sequential Sandboxes operate on one logical working snapshot:
 
 Shared mounts may avoid copying. Remote providers may upload and download the selected directory. Observable file behavior must remain consistent.
 
-Parallel read-only Sandboxes may use one Workspace revision. The initial runtime must serialize or reject conflicting writable attachments; it must not silently apply last-writer-wins copies.
+Parallel read-only Sandboxes may use one Workspace revision. The initial runtime must reject conflicting writable attachments; it must not wait indefinitely or silently apply last-writer-wins copies. Higher-level scheduling may serialize complete Workspace evaluations before acquisition, but serialization is not part of the Workspace provider contract.
 
-Workspace providers may use disk, Docker volumes, object storage, Durable Objects, or another durable backend. They must expose version conflict or exclusive writer semantics.
+Workspace providers may use disk, Docker volumes, object storage, Durable Objects, or another durable backend. While one lease is active, another acquisition of the same durable identity must reject with the provider-neutral `WorkspaceConflictError` without returning a lease. Releasing the active lease must make that identity acquirable again. The error carries the stable code `AML_WORKSPACE_CONFLICT` and the conflicting `workspaceId` so duplicated SDK packages can recognize the contract without relying on `instanceof`.
 
 A Sandbox without a Workspace is ephemeral. A Workspace without a Sandbox is durable but makes no confinement claim.
 
@@ -1335,11 +1348,23 @@ interface WorkspaceLease<Handle = unknown> {
   release(): Promise<void>;
   save(): Promise<void>;
 }
+
+interface WorkspaceMaterializationReference<Handle = unknown> {
+  directory: string;
+  handle: Handle;
+  leaseId: string;
+  provider: {
+    name: string;
+  };
+  workspaceId: string;
+}
 ```
 
-`directory` is the runtime-visible materialization of the durable Workspace. A provider may implement it as a local directory, mounted volume, synchronized remote snapshot, or another filesystem adapter, but descendant Sandboxes must observe the same logical files and ordering guarantees from section 14.2. `save()` persists the current materialization and `release()` relinquishes locks and temporary resources. AML calls both through failure-safe cleanup and preserves multiple failures with causality.
+`directory` is the runtime-visible materialization of the durable Workspace. A provider may implement it as a local directory, mounted volume, synchronized remote snapshot, or another filesystem adapter, but descendant Sandboxes must observe the same logical files and ordering guarantees from section 14.2. `save()` persists the current materialization and `release()` relinquishes locks and temporary resources. AML calls both through failure-safe cleanup and preserves multiple failures with causality. `acquire()` must reject a competing writer with `WorkspaceConflictError` while a lease for the same Workspace id remains active; conformance propagates every other provider failure and does not infer locking from timing or provider latency.
 
-`WorkspaceLease.handle` is opaque provider data. It may support optimized transfer or shared-mount integration with a compatible Sandbox provider, but AML does not expose it as a portable filesystem API.
+After acquisition AML captures an immutable `WorkspaceMaterializationReference` for descendant outer Sandboxes. `workspaceId` is the authored durable identity, `leaseId` is the provider's acquired resource identity, and `provider.name` is descriptive identity rather than acquisition authority. Descendants never receive `save()`, `release()`, or the Workspace provider's `acquire()` method.
+
+`WorkspaceLease.handle` is opaque provider data. It may support optimized transfer or shared-mount integration with a compatible Sandbox provider, but AML does not expose it as a portable filesystem API. A Sandbox provider that cannot attach the reference must reject rather than run against different files.
 
 ## 15. Provider contract
 

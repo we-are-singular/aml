@@ -6,6 +6,7 @@ type AmlPrimitiveKind =
   | "skill"
   | "system"
   | "tool"
+  | "workspace"
 
 /**
  * JSX values that intentionally contribute no AML output.
@@ -102,7 +103,8 @@ export class AmlNode<Props = Record<string, unknown>> {
       kind === "sandbox" ||
       kind === "skill" ||
       kind === "system" ||
-      kind === "tool"
+      kind === "tool" ||
+      kind === "workspace"
       ? kind
       : undefined
   }
