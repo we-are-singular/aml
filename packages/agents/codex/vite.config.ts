@@ -14,8 +14,7 @@ export default defineConfig({
         /^node:/,
         /^@aml\/sdk(?:\/.*)?$/,
         /^@modelcontextprotocol\/sdk(?:\/.*)?$/,
-        /^@opencode-ai\/sdk(?:\/.*)?$/,
-        /^execa$/,
+        /^@openai\/codex-sdk(?:\/.*)?$/,
       ],
       output: {
         minifyInternalExports: false,

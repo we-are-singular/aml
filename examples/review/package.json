@@ -1,0 +1,15 @@
+{
+  "name": "@aml/example-review",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@aml/agent-codex": "*",
+    "@aml/agent-opencode": "*",
+    "@aml/sdk": "*",
+    "zod": "^4.4.3"
+  },
+  "scripts": {
+    "example": "vite-node main.tsx",
+    "typecheck": "tsc --noEmit"
+  }
+}

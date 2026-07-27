@@ -1,0 +1,26 @@
+{
+  "extends": [
+    "//"
+  ],
+  "tasks": {
+    "example": {
+      "dependsOn": [
+        "@aml/agent-codex#build",
+        "@aml/agent-opencode#build"
+      ],
+      "env": [
+        "AML_CODEX_MODEL",
+        "AML_OPENCODE_MODEL",
+        "AML_REVIEW_PROVIDER"
+      ],
+      "cache": false
+    },
+    "typecheck": {
+      "dependsOn": [
+        "@aml/agent-codex#build",
+        "@aml/agent-opencode#build"
+      ],
+      "outputs": []
+    }
+  }
+}

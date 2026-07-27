@@ -1,5 +1,5 @@
 {
-  "name": "@aml/agent-opencode",
+  "name": "@aml/agent-codex",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -16,15 +16,16 @@
   "dependencies": {
     "@aml/sdk": "*",
     "@modelcontextprotocol/sdk": "^1.29.0",
-    "@opencode-ai/sdk": "1.18.5",
-    "execa": "^10.0.0",
+    "@openai/codex-sdk": "0.145.0"
+  },
+  "devDependencies": {
     "zod": "^4.4.3"
   },
   "scripts": {
     "build": "vite build && tsc --project tsconfig.build.json",
     "pack:check": "npm run build && node scripts/check-package.ts",
     "test": "vitest run",
-    "test:integration": "vitest run tests/opencode-agent.integration.test.tsx",
+    "test:integration": "vitest run tests/codex-agent.integration.test.tsx",
     "typecheck": "tsc --noEmit"
   }
 }

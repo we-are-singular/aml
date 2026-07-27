@@ -19,11 +19,14 @@ import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/
 import { z } from "zod"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
-const openCodeSdk = vi.hoisted(() => ({
-  createOpencode: vi.fn(),
+const openCodeHost = vi.hoisted(() => ({
+  createIsolatedOpencode: vi.fn(),
 }))
 
-vi.mock("@opencode-ai/sdk/v2", () => openCodeSdk)
+vi.mock(
+  "../src/create-isolated-opencode.js",
+  () => openCodeHost,
+)
 
 import {
   opencodeAgent,
@@ -149,14 +152,16 @@ function createSdkClient(
 
 describe("opencodeAgent", () => {
   beforeEach(() => {
-    openCodeSdk.createOpencode.mockReset()
+    openCodeHost.createIsolatedOpencode.mockReset()
   })
 
   it("is side-effect-free, immutable, and SDK-conformant", async () => {
     const client = new RecordingSessionClient()
     const provider = opencodeAgent({ sessionClient: client })
 
-    expect(openCodeSdk.createOpencode).not.toHaveBeenCalled()
+    expect(
+      openCodeHost.createIsolatedOpencode,
+    ).not.toHaveBeenCalled()
     expect(Object.isFrozen(provider)).toBe(true)
     expect(provider.name).toBe("opencode")
 
@@ -432,6 +437,9 @@ describe("opencodeAgent", () => {
   })
 
   it("rejects invalid configuration synchronously", () => {
+    expect(() => opencodeAgent(null as never)).toThrow(
+      "OpenCode Agent options must be an object",
+    )
     expect(() => opencodeAgent({ directory: "" })).toThrow(
       "OpenCode directory must be a non-empty string",
     )
@@ -467,6 +475,70 @@ describe("opencodeAgent", () => {
     ).toThrow("OpenCode sessionClient attachCapabilities must be a function")
   })
 
+  it("captures accessor-backed injected authority exactly once", async () => {
+    const client = new RecordingSessionClient()
+    const methodReads = {
+      abort: 0,
+      attachCapabilities: 0,
+      create: 0,
+      delete: 0,
+      prompt: 0,
+    }
+    const accessorClient = {
+      get abort() {
+        methodReads.abort += 1
+        return client.abort.bind(client)
+      },
+      get attachCapabilities() {
+        methodReads.attachCapabilities += 1
+        return client.attachCapabilities.bind(client)
+      },
+      get create() {
+        methodReads.create += 1
+        return client.create.bind(client)
+      },
+      get delete() {
+        methodReads.delete += 1
+        return client.delete.bind(client)
+      },
+      get prompt() {
+        methodReads.prompt += 1
+        return client.prompt.bind(client)
+      },
+    }
+    let clientReads = 0
+    const options = Object.defineProperty(
+      {},
+      "sessionClient",
+      {
+        enumerable: true,
+        get() {
+          clientReads += 1
+          return clientReads === 1 ? accessorClient : undefined
+        },
+      },
+    )
+    const provider = opencodeAgent(options)
+
+    await expect(
+      provider.run(createRequest(), createContext()),
+    ).resolves.toEqual({ text: "response" })
+
+    expect(clientReads).toBe(1)
+    expect(methodReads).toEqual({
+      abort: 1,
+      attachCapabilities: 1,
+      create: 1,
+      delete: 1,
+      prompt: 1,
+    })
+    expect(
+      openCodeHost.createIsolatedOpencode,
+    ).not.toHaveBeenCalled()
+
+    await provider.close()
+  })
+
   it("starts an owned server lazily and closes it once", async () => {
     const close = vi.fn()
     const rawClient = {
@@ -484,21 +556,55 @@ describe("opencodeAgent", () => {
         })),
       },
     }
-    openCodeSdk.createOpencode.mockResolvedValue({
+    openCodeHost.createIsolatedOpencode.mockResolvedValue({
       client: rawClient,
       server: { close },
     })
-    const provider = opencodeAgent({
-      model: "opencode-go/minimax-m3",
-      server: { hostname: "127.0.0.1", port: 0, timeout: 10_000 },
-    })
+    const serverReads = {
+      hostname: 0,
+      port: 0,
+      timeout: 0,
+    }
+    const server = {
+      get hostname() {
+        serverReads.hostname += 1
+        return "127.0.0.1"
+      },
+      get port() {
+        serverReads.port += 1
+        return 0
+      },
+      get timeout() {
+        serverReads.timeout += 1
+        return 10_000
+      },
+    }
+    let serverOptionReads = 0
+    const options = Object.defineProperty(
+      { model: "opencode-go/minimax-m3" },
+      "server",
+      {
+        enumerable: true,
+        get() {
+          serverOptionReads += 1
+          return serverOptionReads === 1 ? server : undefined
+        },
+      },
+    )
+    const provider = opencodeAgent(options)
 
-    expect(openCodeSdk.createOpencode).not.toHaveBeenCalled()
+    expect(openCodeHost.createIsolatedOpencode).not.toHaveBeenCalled()
+    expect(serverOptionReads).toBe(1)
+    expect(serverReads).toEqual({
+      hostname: 1,
+      port: 1,
+      timeout: 1,
+    })
 
     await expect(
       provider.run(createRequest(), createContext()),
     ).resolves.toEqual({ text: "owned response" })
-    expect(openCodeSdk.createOpencode).toHaveBeenCalledWith({
+    expect(openCodeHost.createIsolatedOpencode).toHaveBeenCalledWith({
       hostname: "127.0.0.1",
       port: 0,
       timeout: 10_000,
@@ -515,7 +621,7 @@ describe("opencodeAgent", () => {
     const serverCloses: ReturnType<typeof vi.fn>[] = []
     let sessionIndex = 0
 
-    openCodeSdk.createOpencode.mockImplementation(async () => {
+    openCodeHost.createIsolatedOpencode.mockImplementation(async () => {
       const close = vi.fn()
       const statuses: Record<string, { status: string }> = {}
       serverCloses.push(close)
@@ -604,7 +710,7 @@ describe("opencodeAgent", () => {
       ),
     ).resolves.toEqual({ text: "tool response" })
 
-    expect(openCodeSdk.createOpencode.mock.calls).toEqual([
+    expect(openCodeHost.createIsolatedOpencode.mock.calls).toEqual([
       [{}],
       [{ port: 0 }],
       [{ port: 0 }],
@@ -659,7 +765,7 @@ describe("opencodeAgent", () => {
         ),
       },
     }
-    openCodeSdk.createOpencode.mockResolvedValue({
+    openCodeHost.createIsolatedOpencode.mockResolvedValue({
       client: rawClient,
       server: { close },
     })
@@ -705,7 +811,7 @@ describe("opencodeAgent", () => {
         })),
       },
     }
-    openCodeSdk.createOpencode.mockResolvedValue({
+    openCodeHost.createIsolatedOpencode.mockResolvedValue({
       client: rawClient,
       server: { close },
     })

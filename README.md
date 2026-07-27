@@ -17,7 +17,7 @@ Phase 1 Slice 0 implements the fresh evaluation foundation:
 
 Slice 1 adds provider-neutral `<Agent>` and `<System>` boundaries, `defineAgentProvider()`, deterministic fixtures under `@aml/sdk/testing`, Agent-call budgets, and cross-package primitive identity. `examples/agent` demonstrates a child Agent generating system text for its parent.
 
-Slice 2 adds the independently installable `@aml/agent-opencode` adapter. It starts OpenCode lazily, creates and cleans up one session per Agent, propagates cancellation, disables undeclared tools, and exposes a narrow injected session-client port for deterministic tests.
+Slice 2 adds the independently installable `@aml/agent-opencode` adapter. It starts OpenCode lazily with private ephemeral databases for package-owned hosts, creates and cleans up one session per Agent, propagates cancellation, disables undeclared tools, and exposes a narrow injected session-client port for deterministic tests.
 
 Slice 3 adds Agent-scoped `<Tool>` grants and `defineTool()`. JavaScript Tools use Standard Schema for runtime validation and Standard JSON Schema for model declarations, retain exact cross-copy identity, and return immutable JSON. The OpenCode adapter exposes them through authenticated invocation-scoped MCP bridges on disposable OpenCode hosts so dynamic registrations cannot accumulate. `examples/opencode` proves a credentialed `opencode-go/minimax-m3` model can call a process-local async function through built package exports.
 
@@ -41,6 +41,8 @@ Slice 12 adds static flat `<FollowUp>` turns inside one Agent session. AML resol
 
 Slice 13 adds `<Loop>` for schema-validated transactional state between fresh Agent sessions. Each iteration receives one deeply frozen snapshot and one expiring `aml_set_state` capability on its selected outer Agent. Valid patches remain staged through the complete session, changed state discards stale output and commits into the next iteration, and stable state returns the current output. `examples/loop` proves the built SDK commits once and starts a new provider session with the updated prompt.
 
+Slice 14 adds the independently installable `@aml/agent-codex` adapter. It creates one fresh Codex thread per Agent, preserves FollowUps in that thread, applies read-only provider defaults, attaches authored JavaScript Tools and MCP servers, supports strict structured output, and inherits normal host Codex configuration without claiming capability isolation. `examples/review` runs the same two-specialist parallel review and synthesis workflow through deterministic, OpenCode, or Codex harnesses by changing only provider construction.
+
 Nothing under `poc/` is part of the new package or public API.
 
 ```sh
@@ -50,12 +52,15 @@ npm run test
 npm run pack:check
 npm run example:basic
 npm run example:concurrency
+AML_CODEX_MODEL=gpt-5.3-codex-spark npm run example:codex
 npm run example:agent
 npm run example:docker
 npm run example:follow-up
 npm run example:loop
 npm run example:mcp
 npm run example:opencode
+npm run example:review
+npm run example:review:opencode
 npm run example:sandbox
 npm run example:skill
 npm run example:structured
@@ -64,5 +69,7 @@ npm run example:workspace-local
 ```
 
 `npm run example:opencode` is an explicit live model call. Set `AML_OPENCODE_MODEL` to override its default model.
+
+`npm run example:codex` is an explicit live model call through the installed Codex SDK and CLI. Set `AML_CODEX_MODEL` to override its default `gpt-5.3-codex-spark` model.
 
 `npm run example:docker` requires a running same-filesystem Docker daemon, a host workspace writable during acquisition, and an `alpine:3.22` image by default. Set `AML_DOCKER_IMAGE` to use another image that provides POSIX `sh` and `sleep`.

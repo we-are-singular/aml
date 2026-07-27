@@ -794,7 +794,7 @@ type McpProps =
   | { name?: never; use: AmlMcpServer };
 ```
 
-A named MCP server refers to configuration owned by the selected Agent provider or its native host. The adapter must reject a name it cannot attach. This makes existing provider-native MCP configuration available without copying credentials or vendor configuration into AML.
+A named MCP server refers to configuration owned by the selected Agent provider or its native host. Provider execution must fail closed when that exact name cannot be attached. An adapter may preflight configuration it can inspect or delegate late-bound resolution to a native host whose ambient configuration is intentionally opaque, but it must not silently omit the authored grant. This makes existing provider-native MCP configuration available without copying credentials or vendor configuration into AML.
 
 `defineMcpServer()` defines an explicit standard transport:
 
@@ -1719,6 +1719,7 @@ The OpenCode adapter:
 - disables all tools before enabling declared Tools
 - maps named Tools to host capabilities
 - exposes JavaScript Tools through one invocation-scoped localhost MCP bridge
+- gives every package-created OpenCode host a process-private in-memory database by passing OpenCode's documented `OPENCODE_DB=:memory:` override directly to the child environment, without mutating AML's process environment, so concurrent hosts do not contend on ambient session state
 - attaches declared provider-native and explicit MCP servers for the complete OpenCode session
 - supports native structured output where available
 - uses a JSON-only prompt fallback for `opencode-go`
@@ -1733,18 +1734,55 @@ OpenCode owns its internal tool loop.
 
 #### Codex
 
+```ts
+type CodexReasoningEffort =
+  | "minimal"
+  | "low"
+  | "medium"
+  | "high"
+  | "xhigh";
+
+interface CodexAgentOptions {
+  apiKey?: string;
+  baseUrl?: string;
+  clientFactory?: CodexClientFactory;
+  codexPathOverride?: string;
+  config?: CodexConfig;
+  env?: Readonly<Record<string, string>>;
+  model?: string;
+  reasoningEffort?: CodexReasoningEffort;
+  skipGitRepoCheck?: boolean;
+  workingDirectory?: string;
+}
+
+function codexAgent(options?: CodexAgentOptions): AgentProvider;
+```
+
+`codexAgent()` is synchronous and performs no filesystem, process, or network work. It snapshots provider-specific configuration and creates a Codex SDK client only inside `run()`. `clientFactory` is the narrow provider-owned dependency-injection port used by deterministic tests and alternative Codex SDK hosts; it receives the complete invocation configuration because system text, Tool bridges, and explicit MCP grants vary per Agent. Provider configuration and structured-output schemas deeper than 128 nested containers reject at their owning adapter boundary instead of risking JavaScript call-stack overflow or failing later in the Codex CLI.
+
 The Codex adapter:
 
 - creates one fresh Codex thread per Agent
-- maps AML system text to developer instructions
-- defaults to read-only, approval `never`, disabled web search, and disabled Codex subagents
-- exposes JavaScript Tools through an invocation-scoped MCP bridge
+- calls the same thread once for the initial prompt and once per FollowUp, in authored order
+- maps the complete AML system channel to Codex `developer_instructions` and, when capabilities need it, appends provider-owned discovery guidance that names the exact authored JavaScript Tools and MCP servers
+- applies the configured model unless `<Agent model>` overrides it
+- defaults every thread to read-only sandboxing, approval `never`, disabled network access, disabled web search, and disabled Codex subagents
+- rejects unsupported host Tool names before starting a thread
+- treats the logical `read`, `grep`, and `glob` grants as aliases for one provider-native read-only shell boundary; any one of those names enables that complete boundary, while their absence disables Codex shell execution
+- exposes JavaScript Tools through one authenticated invocation-scoped Streamable HTTP MCP bridge
+- keeps that bridge alive for the complete thread and accepts a distinct MCP client session from each CLI process used for FollowUps
 - attaches declared provider-native and explicit MCP servers for the complete Codex thread
-- uses Codex JSON Schema output
-- traces thread events and usage
-- maps logical `read`, `grep`, and `glob` to the same read-only shell boundary
+- marks authored MCP grants required and uses Codex approval mode `approve` so an explicitly granted capability neither disappears silently nor conflicts with the thread-wide approval policy `never`
+- applies Codex JSON Schema output only to the final authored turn; it recursively closes object schemas with `additionalProperties: false` and rejects optional object properties that Codex strict output cannot represent without changing their application semantics
+- parses the final structured response as JSON and leaves schema validation to the SDK Agent boundary
+- keeps Codex thread items and usage behind the adapter boundary; provider-neutral publication belongs to the observability contract
+- closes the invocation Tool bridge after success, failure, or cancellation and preserves both execution and cleanup failures
 
-The Codex adapter must report applicable inherited host configuration such as `AGENTS.md`, skills, plugins, and configured MCP servers. Provider-specific configuration overrides must remain visible; AML must not imply that the session has an empty profile when it cannot guarantee one.
+Configured stdio and Streamable HTTP MCP descriptors map directly to Codex `mcp_servers` configuration. Named grants enable an existing Codex MCP server by exact name. Factory-supplied `config.mcp_servers` entries can be retained directly, but their absence does not prove that a name is missing from ambient repository or user configuration. The adapter therefore sends an enabled, required exact-name overlay and delegates late-bound resolution or fail-closed rejection to the real Codex CLI. Injected `CodexClientFactory` implementations must preserve that contract. Codex-compatible MCP names use letters, digits, `_`, and `-`; the adapter rejects names that cannot be represented safely through the SDK's dotted configuration override interface. Duplicate names reject before any bridge or thread starts.
+
+Codex configuration still inherits the selected host's normal configuration sources. This can include `AGENTS.md`, repository and user skills, plugins, rules, and MCP servers not authored in the AML tree. Invocation overrides for developer instructions, safety settings, declared MCP servers, and shell availability take precedence, but AML does not claim that the resulting Codex profile is empty or capability-isolated. Provider-neutral traces must identify this profile as inherited once the observability slice is active. A future strict capability mode may use an isolated `CODEX_HOME`; it is not implied by this adapter.
+
+The adapter does not implement `supportsSandbox()`. Codex's own read-only sandbox is a provider policy, not proof that model-controlled actions use an active AML Sandbox lease.
 
 ## 17. Futurology
 

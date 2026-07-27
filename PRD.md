@@ -1,6 +1,6 @@
 # Agent Markup Language product requirements and delivery plan
 
-Status: Phase 1 — MVP complete; Slices 0–13 done; Slice 14 pending
+Status: Phase 1 — MVP complete; Slices 0–14 done; Slice 15 pending
 
 This is the living product definition, architecture plan, implementation roadmap, and progress tracker for AML. It is not a normative runtime contract. Settled behavior belongs in `SPEC.md`; this document records why AML exists, how it is organized, what is being built next, and which slices have been proven.
 
@@ -174,7 +174,7 @@ The status table is the canonical implementation tracker. A slice moves to `Done
 | Slice 11 | Bounded Agent concurrency | Done |
 | Slice 12 | `<FollowUp>` | Done |
 | Slice 13 | `<Loop>` | Done |
-| Slice 14 | Codex Agent package | Pending |
+| Slice 14 | Codex Agent package | Done |
 | Slice 15 | Observability consumers | Pending |
 | Slice 16 | Context | Pending |
 
@@ -468,9 +468,17 @@ Each implementation file has one primary export whose name matches the filename:
 | `loop-evaluator.ts`        | `LoopEvaluator`       |
 | `loop.tsx`                 | `Loop`                |
 | `opencode-capability-attachment.ts` | `OpenCodeCapabilityAttachment` |
+| `create-isolated-opencode.ts` | `createIsolatedOpencode` |
 | `docker-sandbox.ts`        | `dockerSandbox`       |
 | `local-workspace.ts`       | `localWorkspace`      |
 | `opencode-agent.ts`        | `opencodeAgent`       |
+| `codex-agent.ts`           | `codexAgent`          |
+| `codex-capability-attachment.ts` | `CodexCapabilityAttachment` |
+| `codex-client-factory.ts`  | `CodexClientFactory`  |
+| `codex-sdk-client-factory.ts` | `CodexSdkClientFactory` |
+| `codex-session.ts`         | `CodexSession`        |
+| `codex-tool-bridge.ts`     | `CodexToolBridge`     |
+| `prepare-codex-output-schema.ts` | `prepareCodexOutputSchema` |
 | `trace-sink.ts`            | `TraceSink`           |
 | `aml-json-value.ts`        | `AmlJsonValue`        |
 
@@ -766,6 +774,14 @@ Status: Done on 2026-07-27. The SDK now exposes `<Loop>` for fresh Agent session
 
 Proof: the same review example runs through Codex by changing injected provider construction only.
 
+Status: Done on 2026-07-27. The independently installable `@aml/agent-codex` package provides a synchronous, side-effect-free `codexAgent()` factory over the official Codex SDK. Each AML Agent receives one fresh read-only Codex thread; authored FollowUps resume that thread in order; `<Agent model>` takes precedence over provider defaults; host `read`, `grep`, and `glob` grants enable only Codex's read-only shell boundary; JavaScript Tools use an authenticated invocation-local multi-session MCP bridge; explicit and provider-native MCP grants remain attached for the complete thread; and strict structured output applies only to the final turn. The adapter intentionally inherits normal repository and user Codex configuration and does not claim an isolated capability profile or AML Sandbox compatibility.
+
+Singular review found prototype-sensitive capability dictionaries, explicit `null` dependency injection falling through to the real credentialed SDK, stateful option getters bypassing validation, incomplete recursive JSON Schema normalization, sparse and excessively deep provider input failing late, misleading ambient MCP naming, malformed explicit named MCP configuration falling through to ambient authority, incomplete Tool shutdown draining, cancellation hidden by an injected result getter, an unnecessary bridge state field, export ownership drift, and a copied Tool echo that did not prove the stated provider-substitution workflow. The corrected implementation preserves hostile property names as ordinary data, captures every external option once, distinguishes absent, supplied, and opaque host MCP configuration, delegates only genuinely absent exact-name resolution to the real CLI, recursively closes standard schema containers, rejects malformed or excessively deep input synchronously, drains admitted Tool work before releasing the Agent boundary, and keeps internal bridge types private. `examples/review` owns one shared two-specialist parallel review and synthesis tree with deterministic, OpenCode, and Codex harnesses.
+
+The first live parallel OpenCode review exposed two disposable hosts contending on OpenCode's ambient SQLite database. Package-owned OpenCode servers now use Execa to pass the documented process-private `OPENCODE_DB=:memory:` override directly to each child without mutating the caller environment. Deterministic launcher tests prove explicit environment ownership, complete-line readiness parsing, bounded lifecycle diagnostics, startup cleanup, and idempotent shutdown. The external execution gate reached its usage limit before a post-fix credentialed OpenCode rerun could be authorized; this does not weaken the Slice 14 Codex acceptance proof but remains explicit validation debt for the shared OpenCode harness.
+
+Twenty deterministic Codex tests, fifty deterministic OpenCode tests, all workspace type checks, all five package proofs, the deterministic and credentialed Codex dist-backed review example, diff validation, and three credentialed `gpt-5.3-codex-spark` integrations for FollowUps, a JavaScript Tool, and structured output pass. Final correctness, hostile-boundary, and maintainability review lanes reported no actionable findings.
+
 #### Slice 15 — Observability consumers
 
 - stabilize provider-neutral trace events
@@ -811,16 +827,16 @@ Before marking a slice `Done`:
 
 ## Immediate implementation boundary
 
-Slices 0 through 13 and the MVP are complete. The next implementation gate is Slice 14 only:
+Slices 0 through 14 and the MVP are complete. The next implementation gate is Slice 15 only:
 
-1. settle the Codex adapter contract and provider-owned behavior in `SPEC.md`
-2. add the independently installable `@aml/agent-codex` package
-3. expose a side-effect-free configured `codexAgent()` factory through `defineAgentProvider()`
-4. keep Codex sessions, native capabilities, MCP attachment, credentials, usage, and cleanup inside the adapter
-5. pass provider conformance, package validation, deterministic adapter tests, and an opt-in credentialed integration
-6. run the same review example by changing injected Agent provider construction only
+1. settle the provider-neutral trace-event and observer contract in `SPEC.md`
+2. expose one evaluation-scoped observer attachment surface without permitting request or result mutation
+3. add a console presentation that makes tree, Agent, Tool, capability, and lifecycle progress visible without exposing prompt content by default
+4. report observer failures out of band without changing workflow semantics
+5. evaluate Hookable as an internal typed event dispatcher and record the dependency decision
+6. prove one deterministic run and one live-provider run produce attributable parent/child spans
 
-No observability consumer, Context implementation, CLI, website, Sandbox expansion, Workspace expansion, or unrelated primitive belongs in Slice 14.
+No Context implementation, CLI, website, Sandbox expansion, Workspace expansion, OpenTelemetry package, or unrelated primitive belongs in Slice 15 unless its need is proven by the trace contract itself.
 
 ## Explicitly deferred
 
