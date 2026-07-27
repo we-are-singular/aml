@@ -1,6 +1,6 @@
 # Agent Markup Language product requirements and delivery plan
 
-Status: Phase 1 — Slice 0 pending
+Status: Phase 1 — Slices 0–1 done; Slice 2 pending
 
 This is the living product definition, architecture plan, implementation roadmap, and progress tracker for AML. It is not a normative runtime contract. Settled behavior belongs in `SPEC.md`; this document records why AML exists, how it is organized, what is being built next, and which slices have been proven.
 
@@ -8,7 +8,7 @@ The Phase 0 proof of concept is parked under `poc/`. It is reference material, n
 
 ## Product statement
 
-Agent Markup Language is a TypeScript and JSX orchestration SDK for composing agents, tools, context, and execution resources while allowing each Agent to keep its native provider harness.
+Agent Markup Language is a TypeScript and JSX orchestration SDK for composing agents, message channels, tools, context, and execution resources while allowing each Agent to keep its native provider harness.
 
 AML should make multi-agent control flow readable without:
 
@@ -97,7 +97,7 @@ Produce a small local SDK whose architecture, semantics, and optional-provider p
 Phase 1 should prove:
 
 1. Async JSX components evaluate once and compose bottom-up.
-2. Nested Agents preserve explicit dataflow.
+2. Nested Agents preserve explicit prompt and system-message dataflow.
 3. JavaScript functions become scoped model-callable Tools.
 4. Skills contribute reusable instructions with explicit provenance.
 5. Sandbox providers own confinement and cleanup.
@@ -111,7 +111,7 @@ Phase 1 should prove:
 13. Traces explain execution without exposing sensitive content by default.
 14. Context eventually provides immutable session dependencies to descendants without blocking the MVP.
 
-The component delivery order through MVP is Agent, Tool, Skill, Sandbox, then Workspace. MCP, richer orchestration, and Context follow only after those five boundaries have been proven; Context is intentionally last because it is useful composition infrastructure rather than a prerequisite for the execution model.
+The component delivery order through MVP is Agent with System, Tool, Skill, Sandbox, then Workspace. System ships as part of the Agent message-channel boundary rather than adding a sixth independent execution boundary. MCP, richer orchestration, and Context follow only after those five boundaries have been proven; Context is intentionally last because it is useful composition infrastructure rather than a prerequisite for the execution model.
 
 ## Demonstration candidate
 
@@ -157,26 +157,26 @@ This is a candidate, not a reason to add review-specific concepts to AML.
 
 The status table is the canonical implementation tracker. A slice moves to `Done` only after its implementation, behavioral proof, package validation, and relevant documentation are complete.
 
-| Work     | Scope                                      | Status            |
-| -------- | ------------------------------------------ | ----------------- |
-| Phase 0  | Proof of concept preserved under `poc/`    | Done and archived |
-| Slice 0  | Monorepo and evaluation foundation         | Pending           |
-| Slice 1  | `<Agent>` and provider authorship          | Pending           |
-| Slice 2  | OpenCode Agent package                     | Pending           |
-| Slice 3  | `<Tool>` and `defineTool()`                | Pending           |
-| Slice 4  | `<Skill>`                                  | Pending           |
-| Slice 5  | `<Sandbox>` contract                       | Pending           |
-| Slice 6  | Docker Sandbox package                     | Pending           |
-| Slice 7  | `<Workspace>` contract                     | Pending           |
-| Slice 8  | Local Workspace package and MVP completion | Pending           |
-| Slice 9  | `<Mcp>` and `defineMcpServer()`            | Pending           |
-| Slice 10 | `evaluate()` and structured results        | Pending           |
-| Slice 11 | Bounded Agent concurrency                  | Pending           |
-| Slice 12 | `<FollowUp>`                               | Pending           |
-| Slice 13 | `<Loop>`                                   | Pending           |
-| Slice 14 | Codex Agent package                        | Pending           |
-| Slice 15 | Observability consumers                    | Pending           |
-| Slice 16 | Context                                    | Pending           |
+| Work | Scope | Status |
+| --- | --- | --- |
+| Phase 0 | Proof of concept preserved under `poc/` | Done and archived |
+| Slice 0 | Monorepo and evaluation foundation | Done |
+| Slice 1 | `<Agent>`, `<System>`, and provider authorship | Done |
+| Slice 2 | OpenCode Agent package | Pending |
+| Slice 3 | `<Tool>` and `defineTool()` | Pending |
+| Slice 4 | `<Skill>` | Pending |
+| Slice 5 | `<Sandbox>` contract | Pending |
+| Slice 6 | Docker Sandbox package | Pending |
+| Slice 7 | `<Workspace>` contract | Pending |
+| Slice 8 | Local Workspace package and MVP completion | Pending |
+| Slice 9 | `<Mcp>` and `defineMcpServer()` | Pending |
+| Slice 10 | `evaluate()` and structured results | Pending |
+| Slice 11 | Bounded Agent concurrency | Pending |
+| Slice 12 | `<FollowUp>` | Pending |
+| Slice 13 | `<Loop>` | Pending |
+| Slice 14 | Codex Agent package | Pending |
+| Slice 15 | Observability consumers | Pending |
+| Slice 16 | Context | Pending |
 
 Allowed statuses are `Pending`, `In progress`, `Blocked`, and `Done`. A blocked slice includes its blocker directly in the status cell.
 
@@ -239,7 +239,11 @@ The root workspace globs are:
 }
 ```
 
-The root owns orchestration scripts and shared development policy. It does not publish runtime code. Turborepo executes tasks from the package dependency graph; a package build depends on `^build`, so examples and applications consume built package exports rather than reaching into provider source.
+The root owns orchestration scripts and shared development policy. It does not publish runtime code.
+
+Slice 0 has one formal build target: `@aml/sdk`. The SDK owns `packages/sdk/vite.config.ts`, and its Vite build follows the SDK's complete source import graph, including neutral workspace source outside `packages/sdk` when such a boundary eventually exists. Workspace dependencies do not need intermediate builds or `dist` directories. The SDK must not import or bundle concrete providers.
+
+Turborepo runs the SDK build before the built-package example, but there is no recursive `^build` chain. Examples and applications do not gain build pipelines merely to participate in the workspace. A future independently distributed provider may own its own leaf build when its implementation slice requires an artifact; that build compiles its source closure directly and treats `@aml/sdk` as an external public dependency rather than depending on an SDK build task.
 
 ### Package identities
 
@@ -285,19 +289,30 @@ Importing `@aml/sdk` must not install, initialize, import, or require OpenCode, 
 ```text
 packages/sdk/
 ├── package.json
+├── tsconfig.build.json
+├── vite.config.ts
 ├── src/
 │   ├── index.ts
+│   ├── jsx-dev-runtime.ts
 │   ├── jsx-runtime.ts
 │   ├── core/
 │   │   ├── aml-node.ts
 │   │   ├── aml-runtime.ts
 │   │   ├── evaluation-context.ts
-│   │   └── evaluation-error.ts
+│   │   ├── evaluation-error.ts
+│   │   └── trace-identity.ts
 │   ├── components/
 │   │   ├── agent/
 │   │   │   ├── agent.tsx
+│   │   │   ├── agent-execution-context.ts
 │   │   │   ├── agent-provider.ts
-│   │   │   └── define-agent-provider.ts
+│   │   │   ├── agent-request.ts
+│   │   │   ├── agent-response.ts
+│   │   │   ├── agent-executor.ts
+│   │   │   ├── define-agent-provider.ts
+│   │   │   └── validate-agent-provider.ts
+│   │   ├── system/
+│   │   │   └── system.tsx
 │   │   ├── follow-up/
 │   │   │   └── follow-up.tsx
 │   │   ├── tool/
@@ -325,8 +340,10 @@ packages/sdk/
 │   ├── observability/
 │   │   ├── trace-event.ts
 │   │   └── trace-sink.ts
+│   ├── testing.ts
 │   └── testing/
 │       ├── agent-provider-conformance.ts
+│       ├── deterministic-agent-provider.ts
 │       ├── sandbox-provider-conformance.ts
 │       └── workspace-provider-conformance.ts
 └── tests/
@@ -351,6 +368,9 @@ Every concrete adapter is a self-contained package:
 ```text
 packages/agents/opencode/
 ├── package.json
+├── tsconfig.build.json
+├── tsconfig.json
+├── vite.config.ts
 ├── src/
 │   ├── index.ts
 │   ├── opencode-agent.ts
@@ -375,7 +395,7 @@ export function opencodeAgent(options: OpenCodeAgentOptions): AgentProvider {
 
 The factory is synchronous and side-effect-free. It captures configuration and returns an immutable adapter. Client creation, credentials, network calls, processes, and leases occur only in the lifecycle method that needs them.
 
-Every official provider package uses the same public `defineAgentProvider()`, `defineSandboxProvider()`, or `defineWorkspaceProvider()` helper available to third-party authors. The package must pass the corresponding suite from `@aml/sdk/testing`.
+Every official provider package uses the same public `defineAgentProvider()`, `defineSandboxProvider()`, or `defineWorkspaceProvider()` helper available to third-party authors. Provider names must already be non-empty and trimmed; definition helpers validate rather than rewrite inferred identity values. The package must pass the corresponding suite from `@aml/sdk/testing`.
 
 ### Definition helper rules
 
@@ -389,7 +409,7 @@ The SDK exposes role-specific helpers:
 | `defineSandboxProvider()`   | An adapter for ephemeral execution      |
 | `defineWorkspaceProvider()` | An adapter for durable filesystem state |
 
-Provider helpers preserve exact generic inference, validate and normalize stable identity and required lifecycle methods, and return the public provider contract. They do not perform I/O, construct external clients, acquire resources, register global state, or hide vendor-specific options.
+Provider helpers preserve exact generic inference, validate stable identity and required lifecycle methods, and return the public provider contract. Provider names must already be non-empty and trimmed so runtime values cannot contradict inferred literal types. Helpers do not perform I/O, construct external clients, acquire resources, register global state, or hide vendor-specific options.
 
 There is no generic `defineProvider()` because the three provider roles have materially different contracts. There is no `defineWorkspace()` because `<Workspace>` already names the authored runtime primitive. `defineAgent()` remains deferred: ordinary async function components already define reusable Agent compositions, and the SDK should add the name only when it owns distinct semantics.
 
@@ -402,9 +422,17 @@ Each implementation file has one primary export whose name matches the filename:
 | File                       | Primary export        |
 | -------------------------- | --------------------- |
 | `aml-runtime.ts`           | `AmlRuntime`          |
+| `evaluation-context.ts`    | `EvaluationContext`   |
+| `trace-identity.ts`        | `AmlTraceIdentity`    |
 | `agent.tsx`                | `Agent`               |
+| `agent-execution-context.ts` | `AgentExecutionContext` |
 | `agent-provider.ts`        | `AgentProvider`       |
+| `agent-request.ts`         | `AgentRequest`        |
+| `agent-response.ts`        | `AgentResponse`       |
 | `define-agent-provider.ts` | `defineAgentProvider` |
+| `agent-executor.ts`        | `AgentExecutor`       |
+| `validate-agent-provider.ts` | `validateAgentProvider` |
+| `system.tsx`               | `System`              |
 | `define-tool.ts`           | `defineTool`          |
 | `define-mcp-server.ts`     | `defineMcpServer`     |
 | `docker-sandbox.ts`        | `dockerSandbox`       |
@@ -417,6 +445,8 @@ Private helpers and private types stay in the owning file. A supporting export g
 Exceptions:
 
 - `index.ts` is the reviewed public export manifest for one package.
+- `testing.ts` is the reviewed `@aml/sdk/testing` public subpath manifest.
+- `jsx-dev-runtime.ts` exposes the development functions required by TypeScript and Vite's automatic JSX runtime contract.
 - `jsx-runtime.ts` exposes the functions required by TypeScript's automatic JSX runtime contract.
 - a schema may export its inferred type when the schema is the canonical contract source.
 
@@ -424,7 +454,7 @@ Use kebab-case filenames. Avoid internal barrels. A package's root `index.ts` ma
 
 ### Examples and built-package proof
 
-Every example is a private npm workspace with explicit dependencies:
+Every example is a private npm workspace with explicit dependencies. A provider-backed example may declare:
 
 ```json
 {
@@ -436,7 +466,13 @@ Every example is a private npm workspace with explicit dependencies:
 }
 ```
 
-Package exports point to `dist/`. Examples do not import package source paths. Turborepo builds dependencies first, so a successful example run proves packaged output rather than an accidental source-only setup.
+`examples/basic` declares only `@aml/sdk`.
+
+The SDK package exports `.`, `./jsx-runtime`, and `./jsx-dev-runtime` exclusively from `dist/`, declares `"files": ["dist"]`, and has no TypeScript path alias that can redirect `@aml/sdk` to source. Examples import only the public package name. Their `vite-node` task depends explicitly on `@aml/sdk#build`, so a successful example run proves packaged output rather than an accidental source-only setup while the example itself remains unbuilt.
+
+SDK-owned TSX uses the private `#aml` package-import namespace with an `aml-source` condition during TypeScript analysis. Vite's SDK-local Oxc transform uses the same source runtime directly because its development dependency optimizer resolves injected automatic-runtime imports after normal alias resolution. Neither mechanism is visible to applications or examples, and the package-import defaults still point to the built runtime.
+
+Slice 0 also verifies the resolved entry points are under the SDK's `dist` directory and runs a local `npm pack` inspection to prove the artifact contains its declared runtime and type files. This is a local packaging proof, not npm publication.
 
 Focused behavior tests stay beside their owner. Conformance suites live in `@aml/sdk/testing`. Real Docker, network, credentials, and model calls remain explicit integration tests in the concrete provider package.
 
@@ -445,12 +481,15 @@ Focused behavior tests stay beside their owner. Conformance suites live in `@aml
 ### Workspace and bootstrap dependencies
 
 - npm 11 for package management and workspace linking
-- Turborepo for dependency-aware build, test, typecheck, and example tasks
-- TypeScript with strict ESM settings for canonical type checking
-- tsdown for ESM output, declarations, and package exports
+- Turborepo for SDK build, test, typecheck, and explicitly ordered example tasks
+- TypeScript with strict ESM settings for canonical type checking and SDK declaration emission
+- Vite library mode for the `@aml/sdk` ESM build
+- vite-node for running trusted TypeScript and JSX examples without building them
 - Vitest for unit, conformance, and integration tests
 
 The root pins the selected npm version through `packageManager`. Package scripts remain runnable through npm without requiring Turbo-specific runtime APIs.
+
+`packages/sdk/vite.config.ts` is the only Vite build configuration in Slice 0. Vite writes the SDK JavaScript and source maps to `dist` and bundles its source closure without requiring dependency builds. TypeScript emits declarations through `tsconfig.build.json`. The SDK's `package.json` declares its public exports explicitly. No root, example, application, or future provider package receives a build script until it needs to produce a distributable artifact.
 
 ### Boundary dependencies
 
@@ -459,8 +498,6 @@ The root pins the selected npm version through `packageManager`. Package scripts
 - Zod 4 in tests and examples as the first concrete implementation
 - `p-limit` when bounded Agent concurrency is implemented
 - Execa only inside a provider that owns local process execution
-- Unstorage only if a remote Workspace provider stores opaque snapshots in an object-storage-shaped backend
-- Hookable only after at least two extensions need the same ordered lifecycle hook
 
 `@aml/sdk` does not own an MCP client dependency. Agent adapter packages use their harness's native MCP support or own any MCP client library required to implement their adapter lifecycle.
 
@@ -481,10 +518,7 @@ Do not introduce Effect, a task-graph engine, a generic queue, a service locator
 
 The CLI is an application that consumes `@aml/sdk`; it does not define language semantics. It may use:
 
-- `tsx` or Vite's module runner to execute trusted `main.tsx`
-- Citty for commands and help
-- Consola for terminal presentation
-- C12 only if AML gains declarative configuration separate from `main.tsx`
+- vite-node to execute trusted `main.tsx`
 
 `aml run main.tsx` must execute the same entry point that direct SDK consumers run. The CLI does not introduce an `.aml` file format or a second evaluator.
 
@@ -492,7 +526,7 @@ The CLI is an application that consumes `@aml/sdk`; it does not define language 
 
 Each slice is separately reviewed. A slice may change this structure only after `SPEC.md` changes first and the new ownership is clearer.
 
-The component sequence through MVP is fixed: `<Agent>` → `<Tool>` → `<Skill>` → `<Sandbox>` → `<Workspace>`. Provider packages and runtime infrastructure may be proven between component slices, but no later component moves ahead of this order.
+The component sequence through MVP is fixed: `<Agent>` with its `<System>` message-channel descriptor → `<Tool>` → `<Skill>` → `<Sandbox>` → `<Workspace>`. System ships with Agent because it is part of constructing one Agent request rather than an independent execution boundary. Provider packages and runtime infrastructure may be proven between component slices, but no later component moves ahead of this order.
 
 ### Phase A — Evaluation foundation
 
@@ -500,31 +534,49 @@ The component sequence through MVP is fixed: `<Agent>` → `<Tool>` → `<Skill>
 
 - create the npm workspace root and Turborepo task graph
 - create `packages/sdk` and its package exports
+- configure `packages/sdk/vite.config.ts` as the only formal build in Slice 0
+- build the SDK's complete source import graph without intermediate workspace builds
+- emit SDK declarations with TypeScript
 - implement AML values and JSX construction
 - support text, empty values, arrays, fragments, and async components
-- evaluate deterministically from left to right
-- invoke every component once
-- add `examples/basic` as a private workspace importing `@aml/sdk` from built exports
+- concatenate nested arrays and Fragments without implicit separators
+- await siblings deterministically from left to right while preserving ordinary semantics for already-started Promises
+- invoke every component once per evaluated occurrence
+- add `examples/basic` as a private workspace importing `@aml/sdk` from built exports and running through vite-node
+- verify SDK entry-point resolution and local package contents
 
-Proof: the SDK builds to `dist`, and the isolated example resolves an async component tree to one string without importing source files.
+Proof: the SDK builds to `dist`; its package artifact contains the public runtime, production JSX, development JSX, and type entry points; and the unbuilt isolated example resolves an async component tree to one string through public `@aml/sdk` exports without source aliases or imports.
+
+Status: Done on 2026-07-27. Singular review passes found and verified async cycle guards ending before promised descendants settled, VM stack overflow for deeply nested valid values, double PromiseLike accessor reads, synchronous custom-thenable invocation that differed from native `await`, a non-callable named Fragment export, SDK-owned TSX self-resolving through stale `dist`, reverse sibling reads in the first iterative evaluator, erased JSX prop types, incomplete TSX typecheck globs, and a package proof that could inspect stale output. The corrected implementation uses an explicit stack-safe cursor evaluator, callable Fragments, generic JSX construction, clean source-only SDK TSX resolution, a self-building package proof, twenty behavior tests, strict SDK and consumer type checking, and a dist-only vite-node example. The final review confirmation reported no actionable findings.
 
 ### Phase B — MVP components
 
-#### Slice 1 — `<Agent>` and provider authorship
+#### Slice 1 — `<Agent>`, `<System>`, and provider authorship
 
 - add the provider-neutral Agent contract
 - add `defineAgentProvider()`
 - add a deterministic Agent fixture and conformance suite under `@aml/sdk/testing`
+- support an optional runtime-default provider and an optional per-Agent provider override
+- enforce the documented `maxAgentCalls` default and zero-as-unlimited convention
+- keep `model` and fixed `system` as explicit Agent props
+- resolve provider selection and model defaults with documented precedence
+- collect asynchronous System subtrees in authored order and join their resolved text with newline separators
+- allow child Agent output to become a parent Agent system fragment
 - resolve children before the parent Agent
 - propagate provider failure with Agent identity
+- add an isolated `examples/agent` proof that imports only built SDK exports
 
-Proof: two nested Agents run child first, preserve authored text position, and the deterministic provider passes the public conformance suite.
+Proof: Agents using two deterministic provider instances run in one evaluation; a child Agent contributes generated system text to its parent; fixed and composed system fragments reach the provider in the required order; model overrides are preserved; the deterministic provider passes the public conformance suite; and the isolated example executes through built `@aml/sdk` and `@aml/sdk/testing` exports.
+
+Status: Done on 2026-07-27. Singular review found and verified response accessors escaping Agent attribution, provider shapes accepted by the helper and conformance but rejected by the runtime, name normalization contradicting inferred literal types, missing Agent-call budgeting, copy-local primitive identity at both runtime and TypeScript boundaries, repeated provider-member capture, Agent behavior accumulating in the core evaluator, co-located independent public contracts, and one extracted file whose name did not match its primary export. The corrected implementation captures response text once, shares strict object-provider validation, rejects non-normalized names, captures each configured provider boundary once, enforces the default 32-call budget with zero as unlimited, uses a copy-stable structural runtime discriminant without accepting unbranded descriptors, keeps provider execution in `AgentExecutor`, gives public contracts matching files, and passes forty-one behavior tests plus clean installed-package and two-copy validation. Final reviewer confirmation reported no unresolved findings.
 
 #### Slice 2 — OpenCode Agent package
 
 - create `@aml/agent-opencode`
 - implement its configured `opencodeAgent()` factory with `defineAgentProvider()`
 - keep OpenCode sessions, credentials, and usage data inside the adapter
+- create one fresh OpenCode session per Agent request and propagate cancellation
+- inject the OpenCode client boundary so deterministic tests never start a real server
 - pass SDK conformance and opt-in credentialed integration tests
 
 Proof: a packaged single-Agent example runs through OpenCode without importing provider source files.
@@ -655,6 +707,8 @@ Proof: the same review example runs through Codex by changing injected provider 
 - stabilize provider-neutral trace events
 - add console trace presentation
 - evaluate whether OpenTelemetry deserves its own package
+- evaluate Hookable as an internal typed lifecycle-event dispatcher for trace consumers, span setup, inspection, and extraction
+- keep hooks scoped to one evaluation and prevent observers from mutating requests or results
 - keep trace-sink failure reporting out of workflow semantics
 
 Proof: one deterministic run and one live-provider run produce attributable spans without exposing prompt content by default.
@@ -692,15 +746,15 @@ Before marking a slice `Done`:
 
 ## Immediate approval boundary
 
-The next implementation approval authorizes Slice 0 only:
+Slices 0 and 1 are complete. The next implementation approval authorizes Slice 2 only:
 
-1. create the npm 11 workspace root and Turborepo task graph
-2. create `packages/sdk` with only the Slice 0 source and package files
-3. create `examples/basic` as the built-package proof
-4. add TypeScript, tsdown, Vitest, and Turborepo
-5. implement and prove the evaluation foundation
+1. create the independently installable `@aml/agent-opencode` package
+2. implement its configured provider factory with `defineAgentProvider()`
+3. keep OpenCode SDK types, sessions, credentials, and usage handling inside the adapter
+4. pass the public Agent-provider conformance suite with deterministic dependencies
+5. add one opt-in credentialed integration proof and one built-package example
 
-No Agent, provider contract, Tool, Skill, Sandbox, Workspace, CLI, website, or concrete provider package belongs in Slice 0.
+No Tool, Skill, Sandbox, Workspace, MCP, structured output, FollowUp, Loop, CLI, website, Codex provider, or unrelated primitive belongs in Slice 2.
 
 ## Explicitly deferred
 
@@ -727,6 +781,7 @@ These remain product questions until resolved into `SPEC.md`:
 
 - When, if ever, should JSX siblings become implicitly concurrent?
 - Which trace events are stable public API?
+- Should observability hooks be synchronous, awaited and isolated, or buffered behind a flush boundary?
 - What is the first useful artifact contract for large data?
 - Where should retries and schema repair live?
 - How should remote Skills be pinned and trusted?
@@ -756,16 +811,11 @@ Items in this section are not commitments and must not shape implementation unti
 
 - [npm workspaces](https://docs.npmjs.com/cli/using-npm/workspaces)
 - [Turborepo](https://turborepo.com/docs)
-- [tsdown](https://tsdown.dev/guide/)
+- [Vite library mode](https://vite.dev/guide/build.html#library-mode)
 - [Vitest](https://vitest.dev/guide/)
 - [Standard Schema](https://standardschema.dev/schema)
 - [Standard JSON Schema](https://standardschema.dev/json-schema)
 - [p-limit](https://github.com/sindresorhus/p-limit)
 - [Execa](https://github.com/sindresorhus/execa)
 - [Hookable](https://github.com/unjs/hookable)
-- [Unstorage](https://unstorage.unjs.io/)
-- [C12](https://github.com/unjs/c12)
-- [Citty](https://github.com/unjs/citty)
-- [Consola](https://github.com/unjs/consola)
-- [tsx](https://tsx.is/dev-api/)
-- [Vite Module Runner](https://vite.dev/guide/api-environment-runtimes.html)
+- [vite-node](https://github.com/antfu-collective/vite-node)

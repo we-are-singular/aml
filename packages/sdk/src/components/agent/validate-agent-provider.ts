@@ -1,0 +1,43 @@
+import type { AgentProvider } from "./agent-provider.js"
+
+export interface ValidatedAgentProvider {
+  readonly name: string
+  readonly provider: AgentProvider
+  readonly run: AgentProvider["run"]
+}
+
+/**
+ * Validates a provider once and captures the exact members an invocation uses.
+ */
+export function validateAgentProvider(
+  value: unknown,
+): Readonly<ValidatedAgentProvider> {
+  if (typeof value !== "object" || value === null) {
+    throw new TypeError("Agent provider must be an object")
+  }
+
+  const candidate = value as {
+    readonly name?: unknown
+    readonly run?: unknown
+  }
+  const name = candidate.name
+  const run = candidate.run
+
+  if (typeof name !== "string" || name.length === 0) {
+    throw new TypeError("Agent provider name must be a non-empty string")
+  }
+
+  if (name !== name.trim()) {
+    throw new TypeError("Agent provider name must already be normalized")
+  }
+
+  if (typeof run !== "function") {
+    throw new TypeError("Agent provider run must be a function")
+  }
+
+  return Object.freeze({
+    name,
+    provider: value as AgentProvider,
+    run: run as AgentProvider["run"],
+  })
+}

@@ -1,0 +1,16 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "customConditions": ["aml-source"],
+    "jsxImportSource": "#aml",
+    "noEmit": true
+  },
+  "include": [
+    "scripts/**/*.ts",
+    "src/**/*.ts",
+    "src/**/*.tsx",
+    "tests/**/*.ts",
+    "tests/**/*.tsx",
+    "vite.config.ts"
+  ]
+}

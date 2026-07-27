@@ -1,0 +1,46 @@
+{
+  "name": "@aml/sdk",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "sideEffects": false,
+  "files": [
+    "dist"
+  ],
+  "imports": {
+    "#aml/jsx-dev-runtime": {
+      "aml-source": "./src/jsx-dev-runtime.ts",
+      "types": "./dist/jsx-dev-runtime.d.ts",
+      "default": "./dist/jsx-dev-runtime.js"
+    },
+    "#aml/jsx-runtime": {
+      "aml-source": "./src/jsx-runtime.ts",
+      "types": "./dist/jsx-runtime.d.ts",
+      "default": "./dist/jsx-runtime.js"
+    }
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./jsx-runtime": {
+      "types": "./dist/jsx-runtime.d.ts",
+      "import": "./dist/jsx-runtime.js"
+    },
+    "./jsx-dev-runtime": {
+      "types": "./dist/jsx-dev-runtime.d.ts",
+      "import": "./dist/jsx-dev-runtime.js"
+    },
+    "./testing": {
+      "types": "./dist/testing.d.ts",
+      "import": "./dist/testing.js"
+    }
+  },
+  "scripts": {
+    "build": "vite build && tsc --project tsconfig.build.json",
+    "pack:check": "npm run build && node scripts/check-package.ts",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  }
+}

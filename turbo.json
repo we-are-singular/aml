@@ -1,0 +1,20 @@
+{
+  "$schema": "https://turborepo.com/schema.json",
+  "globalDependencies": ["tsconfig.json"],
+  "tasks": {
+    "build": {
+      "outputs": ["dist/**"]
+    },
+    "example": {
+      "dependsOn": ["@aml/sdk#build"],
+      "cache": false
+    },
+    "test": {
+      "outputs": []
+    },
+    "typecheck": {
+      "dependsOn": ["@aml/sdk#build"],
+      "outputs": []
+    }
+  }
+}

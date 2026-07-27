@@ -33,12 +33,15 @@ AML is not:
 The canonical application entry point is an ordinary `main.tsx`:
 
 ```tsx
-const runtime = new AmlRuntime(provider, options);
+const runtime = new AmlRuntime({
+  agentProvider: provider,
+  ...options,
+});
 const result = await runtime.evaluate(<Application />);
 console.log(result);
 ```
 
-Applications own provider construction, credentials, runtime configuration, and cleanup. A CLI is outside the AML language contract. Any `aml run main.tsx` command must execute the same TypeScript entry point and must not introduce a second AML syntax or require an `.aml` filename.
+The runtime Agent provider is optional until an `<Agent>` requires it. Applications own provider construction, credentials, runtime configuration, and cleanup. A CLI is outside the AML language contract. Any `aml run main.tsx` command must execute the same TypeScript entry point and must not introduce a second AML syntax or require an `.aml` filename.
 
 ### 1.1 Authored control flow
 
@@ -68,6 +71,8 @@ An AML tree may coordinate Agents backed by different harnesses. Each harness ke
 
 AML standardizes how authored data flows into those boundaries and how their final results flow back into the tree. It does not pretend the providers have identical capabilities.
 
+The runtime may supply a default Agent provider, and each Agent may override it with another configured provider instance. `model` is the portable per-Agent provider override. Provider-specific settings remain on the provider's configured factory unless AML later defines a real cross-provider contract for them.
+
 ### 1.3 Package boundary
 
 AML is developed as an npm workspace monorepo. Its provider-neutral runtime is distributed as `@aml/sdk`, and concrete integrations are independently installable packages:
@@ -86,7 +91,13 @@ AML is developed as an npm workspace monorepo. Its provider-neutral runtime is d
 
 `@aml/sdk` owns the JSX runtime, evaluator, primitives, public provider interfaces, provider definition helpers, and conformance contracts. It must not import concrete providers or their vendor dependencies. Concrete provider packages depend on `@aml/sdk`, own their vendor-specific configuration and lifecycle, and expose configured factories.
 
-Examples and applications consume built package exports. They must not depend on SDK or provider source paths.
+The SDK exports both `@aml/sdk/jsx-runtime` and `@aml/sdk/jsx-dev-runtime` for TypeScript and Vite's automatic production and development JSX transforms.
+
+Each distributable package owns one leaf build over its complete source import graph. Workspace source dependencies do not need intermediate `dist` directories before that build runs. A build must not pull a dependency across the package boundaries above: in particular, `@aml/sdk` never bundles a concrete provider, and a concrete provider treats `@aml/sdk` as its public runtime dependency rather than embedding another SDK copy.
+
+Examples and applications consume built package exports for every distributable package under proof. They must not bypass those exports through source paths or TypeScript aliases.
+
+AML node and primitive interoperability markers must be copy-stable. The exported JSX node type uses a structural symbol-valued discriminant rather than a copy-local unique-symbol key, so an arbitrary `{ type, props }` object is not renderable while TypeScript code using one physical `@aml/sdk` copy can compose nodes evaluated by another compatible copy.
 
 AML does not use names such as `@aml/agents/opencode` for independently installed providers because npm interprets that form as the `opencode` subpath of one `@aml/agents` package. Convenience aggregator packages are non-normative and may exist later, but cannot replace independently installable adapters.
 
@@ -100,6 +111,7 @@ AML has two conceptual phases:
 Not every resolved child becomes prompt text:
 
 - text becomes message content
+- `<System>` becomes an Agent system-prompt fragment
 - `<Tool>` becomes an Agent capability
 - `<Mcp>` becomes an Agent-scoped MCP server grant
 - `<FollowUp>` becomes a staged later message
@@ -114,7 +126,7 @@ The core dataflow invariant is:
 
 > Every value consumed by an AML boundary is fully resolved before that consumer executes.
 
-`<Agent>` is the primary post-order consumer: child Agents, Skills, text, Tools, MCP servers, and FollowUps all resolve into its complete session plan before the provider session begins.
+`<Agent>` is the primary post-order consumer: child Agents, System fragments, Skills, text, Tools, MCP servers, and FollowUps all resolve into its complete session plan before the provider session begins.
 
 Lexical resource boundaries have the complementary lifecycle:
 
@@ -194,6 +206,7 @@ AML cannot automatically roll back arbitrary effects already performed by an Age
 | `<Fragment>` / `<>` | Group authored siblings | Ordered child results |
 | `AmlRuntime` | Own one complete evaluation | Final string |
 | `<Agent>` | Execute one Agent boundary | Final text |
+| `<System>` | Contribute resolved text to an Agent's system prompt | System descriptor |
 | `defineAgentProvider()` | Define an Agent harness adapter | `AgentProvider` |
 | `<Tool>` | Grant a host or JavaScript capability | Tool descriptor |
 | `defineTool()` | Expose a JavaScript function to an Agent | Tool definition |
@@ -217,7 +230,7 @@ The normative surface is delivered in phases so the public API grows only after 
 | Phase | Surface | Purpose |
 | --- | --- | --- |
 | Foundation | JSX values, Fragments, async components, `AmlRuntime` | Prove single-invocation asynchronous evaluation |
-| MVP 1 | `<Agent>`, `defineAgentProvider()` | Establish the provider-neutral execution boundary |
+| MVP 1 | `<Agent>`, `<System>`, `defineAgentProvider()` | Establish the provider-neutral execution and message-channel boundary |
 | MVP 2 | `<Tool>`, `defineTool()` | Add scoped host and JavaScript capabilities |
 | MVP 3 | `<Skill>` | Add reusable instruction resolution |
 | MVP 4 | `<Sandbox>`, `defineSandboxProvider()` | Add ephemeral execution scope |
@@ -252,6 +265,10 @@ An AML component may return:
 
 Plain objects are not renderable. Authors must serialize them explicitly or move them through typed `evaluate()` results.
 
+Strings contribute their exact characters. Numbers use JavaScript string conversion. Empty values contribute an empty string. Arrays and Fragments recursively concatenate their resolved children without inserting separators. Nested arrays are valid.
+
+AML awaits sibling results in authored order. A Promise created before AML receives it has already started according to ordinary JavaScript semantics and may make progress concurrently; AML does not attempt to serialize work that the application started itself.
+
 ```tsx
 async function CustomerContext() {
   const customer = await database.customers.find(42);
@@ -263,7 +280,7 @@ All components are asynchronous computations even when their functions do not us
 
 ### 4.1 Ordinary async semantics
 
-AML invokes a component exactly once and awaits its result.
+AML invokes a component exactly once for each evaluated occurrence and awaits its result. Reusing the same JSX value in two authored positions creates two evaluated occurrences; AML does not memoize component results by element identity.
 
 ```tsx
 async function Workflow() {
@@ -299,8 +316,10 @@ An `<Agent>` is one Agent-session boundary. It may contain one initial input and
 ```tsx
 <Agent
   model="opencode-go/minimax-m3"
+  provider={openCode}
   system="You are a support operations lead."
 >
+  <System>Prefer concrete operational evidence.</System>
   <Tool name="support.search" />
   Investigate customer 42.
 </Agent>
@@ -312,9 +331,16 @@ Props:
 interface AgentProps {
   children?: AmlRenderable;
   model?: string;
+  provider?: AgentProvider;
   system?: string;
 }
 ```
+
+`provider` selects the harness for this Agent. When omitted, AML uses `AmlRuntimeOptions.agentProvider`. An Agent without either provider is invalid. Different Agents in one evaluation may select different providers while remaining in the same evaluation domain.
+
+`model` is a provider-neutral override whose string remains provider-owned. Resolution order is the Agent `model` prop, then the configured provider's default, then the provider-native default. AML passes the explicit prop through `AgentRequest.model`; the selected provider rejects identifiers it cannot use.
+
+`system` is the concise fixed-text system prompt. `<System>` is the composable form for resolved asynchronous content. Provider-specific settings that have no portable AML semantics belong to configured provider instances, not arbitrary Agent props or an untyped `providerOptions` bag.
 
 ### 5.1 Agent plan
 
@@ -327,27 +353,63 @@ interface AgentPlan {
   mcpServers: readonly AgentMcpServer[];
   model?: string;
   system: string;
+  systemFragments: readonly string[];
   tools: readonly AgentTool[];
 }
 ```
 
 This interface illustrates the semantics; it is not necessarily the exported runtime type.
 
+`systemFragments` is the ordered internal list after runtime, prop, and child resolution. The Agent provider receives only the joined `system` string.
+
 Resolution:
 
 1. Resolve all descendants post-order.
 2. Preserve resolved text in authored order.
-3. Collect Agent-level Tool descriptors.
-4. Collect Agent-level MCP server descriptors.
-5. Collect flat FollowUp descriptors in authored order.
-6. Trim the initial prompt and each FollowUp prompt.
-7. Combine runtime system text and Agent system text with one blank line.
-8. Reject invalid or duplicate capabilities.
-9. Open one provider session and execute the plan.
+3. Collect resolved System descriptors in authored order.
+4. Collect Agent-level Tool descriptors.
+5. Collect Agent-level MCP server descriptors.
+6. Collect flat FollowUp descriptors in authored order.
+7. Trim the initial prompt, each FollowUp prompt, and each system fragment.
+8. Build the provider system text from the runtime `system`, Agent `system` prop, and collected System descriptors, omitting empty fixed-text entries and joining the remaining entries with `"\n"`.
+9. Reject invalid or duplicate capabilities.
+10. Open one provider session and execute the plan.
 
 Text children are concatenated without implicit separators. JSX indentation is ordinary authored text; developers should add deliberate whitespace where needed.
 
-### 5.2 Child Agents
+### 5.2 `<System>` prompts
+
+`<System>` changes the provider message channel for its nearest containing Agent:
+
+```tsx
+<Agent provider={coordinator} system="You coordinate specialist evidence.">
+  <System>
+    <Agent provider={policyWriter} model="anthropic/claude-haiku-4-5">
+      Produce compact decision rules for this request.
+    </Agent>
+  </System>
+  <System>
+    <Skill src="./skills/evidence.md" />
+  </System>
+  Apply the generated rules to the request.
+</Agent>
+```
+
+AML resolves each System subtree before opening the containing Agent session. Any AML subtree that ultimately resolves to text may contribute, including ordinary components, Skills, scoped resources, Loops, and child Agents. A child Agent inside `<System>` is a real child session; its final text becomes system text for the parent rather than initial-prompt text.
+
+System rules:
+
+- `<System>` is valid only as an immediate message descriptor of its nearest Agent after component and Fragment expansion.
+- A System descriptor must resolve to non-empty text after trimming.
+- Tool, MCP, FollowUp, and nested System descriptors that escape a nested consumer and reach the System text boundary are invalid.
+- A Tool, Skill, or other capability used by a child Agent inside System remains scoped to that child Agent.
+- System output never contributes to the containing Agent's initial prompt.
+- Multiple System descriptors preserve authored order even when other prompt text appears between them.
+- The final provider system text is `systemFragments.join("\n")`; AML inserts no additional blank lines.
+
+`<Agent system="...">` remains the preferred concise form for one fixed instruction. `<System>` exists for reusable, conditional, or asynchronously resolved system content. AML does not define `<Model>` because `model` is scalar Agent request metadata and can already receive any TypeScript expression.
+
+### 5.3 Child Agents
 
 A child Agent is deterministic authored composition:
 
@@ -363,7 +425,7 @@ The child Agents finish before the parent Agent session begins. Their final text
 
 AML evaluates these siblings left to right. Explicit `Promise.all(evaluate(...))` is the normative parallel form.
 
-### 5.3 Agent result
+### 5.4 Agent result
 
 Without structured output, the Agent element resolves to the final assistant text from its session. With FollowUps, intermediate assistant responses remain in provider session history and traces but do not become AML output.
 
@@ -569,7 +631,10 @@ const skillResolver = new SkillResolver({
   skillsShToken: process.env.VERCEL_OIDC_TOKEN,
 });
 
-const runtime = new AmlRuntime(provider, { skillResolver });
+const runtime = new AmlRuntime({
+  agentProvider: provider,
+  skillResolver,
+});
 ```
 
 ## 8. Tools
@@ -654,7 +719,8 @@ Every Agent declares its own Tools. Tools are not inherited from parent Agents. 
 `AmlRuntimeOptions.allowedTools` may further restrict both host and JavaScript Tool names:
 
 ```tsx
-const runtime = new AmlRuntime(provider, {
+const runtime = new AmlRuntime({
+  agentProvider: provider,
   allowedTools: ["read", "lookup_customer"],
 });
 ```
@@ -1003,7 +1069,8 @@ The outermost Sandbox acquires one Sandbox lease before evaluating its children 
 A provider may be supplied directly or configured once on the runtime:
 
 ```tsx
-const runtime = new AmlRuntime(agentProvider, {
+const runtime = new AmlRuntime({
+  agentProvider,
   sandboxProvider: remoteSandbox,
 });
 
@@ -1233,6 +1300,12 @@ interface WorkspaceLease<Handle = unknown> {
 The provider boundary is:
 
 ```ts
+interface AmlTraceIdentity {
+  parentSpanId?: string;
+  runId: string;
+  spanId: string;
+}
+
 interface AgentProvider {
   readonly name: string;
   run(
@@ -1268,6 +1341,8 @@ interface AgentExecutionContext {
 }
 ```
 
+`runId` identifies one `AmlRuntime.evaluate()` call. `spanId` identifies the Agent session within that evaluation, and `parentSpanId` is present when the runtime can attribute the session to an enclosing execution boundary. Trace identities are opaque correlation values; providers must preserve them rather than deriving behavior from their format.
+
 Host Tools contain a name. JavaScript Tools contain a name, description, model-facing input schema, and async execution function. MCP servers contain either a provider-native name or one explicit standard transport descriptor.
 
 An omitted or empty `followUps` array represents a single-input Agent. When FollowUps are present, the adapter:
@@ -1288,7 +1363,7 @@ The exact internal adapter class structure is not normative. The observable sess
 
 The runtime always passes an `AgentExecutionContext`.
 
-When a Sandbox is active, the runtime calls `provider.supportsSandbox(session)`. The method must return exactly `true` before the Agent runs. A missing method, `false`, or another value rejects evaluation and the Sandbox lease is still released. This explicit handshake prevents a provider from silently ignoring an execution boundary.
+When a Sandbox is active, the runtime calls `supportsSandbox(session)` on the provider selected for that Agent. The method must return exactly `true` before the Agent runs. A missing method, `false`, or another value rejects evaluation and the Sandbox lease is still released. This explicit handshake prevents a provider from silently ignoring an execution boundary.
 
 An Agent adapter must not claim compatibility with a Sandbox provider until its model-controlled filesystem, commands, and host tools are attached to the opaque lease.
 
@@ -1322,6 +1397,20 @@ AML does not forward arbitrary JSX props to providers, accept an untyped `provid
 
 Applications may construct multiple differently configured providers from the same factory and choose between those instances with ordinary TypeScript.
 
+An Agent selects a configured provider through its `provider` prop or the runtime default:
+
+```tsx
+const fast = claudeAgent({ model: "anthropic/claude-haiku-4-5" });
+const deep = codexAgent({ reasoningEffort: "high" });
+
+<Agent provider={fast}>Classify the request.</Agent>
+<Agent provider={deep} model="gpt-5.3-codex">
+  Audit the result.
+</Agent>
+```
+
+The model prop is the one intentionally portable per-Agent provider override. Other provider-specific options stay type-safe on the configured factory until AML defines a real cross-provider contract for them.
+
 ### 15.4 Definition helpers
 
 `@aml/sdk` exports capability and provider definition helpers:
@@ -1333,7 +1422,9 @@ defineSandboxProvider(implementation);
 defineWorkspaceProvider(implementation);
 ```
 
-These helpers are the supported authoring surface for official and third-party adapters. Each helper preserves the implementation's generic types, validates and normalizes stable provider identity and required lifecycle methods, and returns the corresponding public SDK contract. It performs no network access, client creation, resource acquisition, global registration, or vendor-option interpretation.
+These helpers are the supported authoring surface for official and third-party adapters. Each helper preserves the implementation's generic types, validates stable provider identity and required lifecycle methods, and returns the corresponding public SDK contract. Provider names must already be non-empty and equal to their trimmed form; helpers reject non-normalized names instead of rewriting a runtime value behind its inferred TypeScript type. They perform no network access, client creation, resource acquisition, global registration, or vendor-option interpretation.
+
+A configured provider's identity and invocation method are captured when it enters its runtime or Agent boundary. AML does not repeatedly read those members while resolving or executing the same Agent.
 
 Official provider packages use the same public helpers available to application authors:
 
@@ -1369,7 +1460,8 @@ AML does not expose a generic `defineProvider()`. Agent, Sandbox, and Workspace 
 ## 16. Runtime, limits, and observability
 
 ```tsx
-const runtime = new AmlRuntime(provider, {
+const runtime = new AmlRuntime({
+  agentProvider: provider,
   allowedMcpServers: ["github", "project"],
   allowedTools: ["read", "lookup_customer"],
   maxAgentCalls: 32,
@@ -1390,6 +1482,7 @@ Defaults:
 
 | Option | Default | Meaning |
 | --- | --: | --- |
+| `agentProvider` | none | Default provider for Agents without a `provider` prop |
 | `maxAgentCalls` | `32` | Maximum Agent sessions in one evaluation |
 | `maxConcurrentAgents` | `4` | Maximum active Agent sessions |
 | `maxDepth` | `16` | Maximum recursive AML evaluation depth |
@@ -1398,7 +1491,7 @@ Defaults:
 | `onTraceError` | stderr once | Out-of-band trace failure handler |
 | `allowedMcpServers` | unrestricted | Optional MCP-server-name allowlist |
 | `allowedTools` | unrestricted | Optional Tool-name allowlist |
-| `system` | empty | System text prepended to every Agent |
+| `system` | empty | First system fragment for every Agent |
 | `skillResolver` | default resolver | Skill resolution and caching |
 | `trace` | none | Synchronous execution-event callback |
 
@@ -1406,7 +1499,7 @@ For every `max*` option, `0` means unlimited. Supplied values must be non-negati
 
 One multi-turn Agent counts as one Agent session, not one call per FollowUp. Every initial prompt and FollowUp counts toward `maxTurnsPerAgent`. Provider-internal model/tool loops do not increment either authored limit.
 
-`runtime.evaluate()` returns a string. Invalid placement, invalid values, provider errors, schema errors, missing resources, and exceeded limits reject.
+`runtime.evaluate()` returns a string. A text-only tree does not require an Agent provider. An Agent without a local or runtime-default provider rejects. Invalid placement, invalid values, provider errors, schema errors, missing resources, and exceeded limits reject.
 
 ### 16.1 Trace contract
 
@@ -1416,6 +1509,7 @@ The trace sink receives typed events for:
 - component start, completion, and failure
 - Agent session start, completion, and failure
 - Agent turns and their ordering
+- System resolution and fragment ordering
 - Skill resolution and provenance
 - JavaScript Tool start, completion, and failure
 - MCP attachment, initialization, capability summary, disconnection, and failure
@@ -1584,7 +1678,8 @@ async function ReviewWorkflow() {
   );
 }
 
-const runtime = new AmlRuntime(provider, {
+const runtime = new AmlRuntime({
+  agentProvider: provider,
   allowedTools: ["load_patch", "read"],
   trace: createConsoleTracer(),
 });

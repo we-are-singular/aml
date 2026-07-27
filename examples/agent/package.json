@@ -1,0 +1,12 @@
+{
+  "name": "@aml/example-agent",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@aml/sdk": "*"
+  },
+  "scripts": {
+    "example": "vite-node main.tsx",
+    "typecheck": "tsc --noEmit"
+  }
+}

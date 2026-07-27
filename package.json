@@ -1,0 +1,32 @@
+{
+  "name": "agent-markup-language",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "apps/*",
+    "examples/*",
+    "packages/sdk",
+    "packages/*/*"
+  ],
+  "scripts": {
+    "build": "turbo run build",
+    "example:agent": "turbo run example --filter=@aml/example-agent",
+    "example:basic": "turbo run example --filter=@aml/example-basic",
+    "pack:check": "npm run pack:check --workspace=@aml/sdk",
+    "test": "turbo run test",
+    "typecheck": "turbo run typecheck"
+  },
+  "engines": {
+    "node": ">=26.0.0",
+    "npm": ">=11.0.0"
+  },
+  "packageManager": "npm@11.18.0",
+  "devDependencies": {
+    "@types/node": "^26.1.1",
+    "turbo": "^2.10.7",
+    "typescript": "^7.0.2",
+    "vite": "^8.1.5",
+    "vite-node": "^6.0.0",
+    "vitest": "^4.1.10"
+  }
+}
