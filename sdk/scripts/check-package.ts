@@ -485,7 +485,7 @@ try {
   )
   mkdirSync(standardSchemaDirectory, { recursive: true })
   cpSync(
-    resolve(packageDirectory, "../../node_modules/@standard-schema/spec"),
+    resolve(packageDirectory, "../node_modules/@standard-schema/spec"),
     standardSchemaDirectory,
     { recursive: true },
   )
@@ -558,7 +558,7 @@ try {
   execFileSync(
     process.execPath,
     [
-      resolve(packageDirectory, "../../node_modules/typescript/bin/tsc"),
+      resolve(packageDirectory, "../node_modules/typescript/bin/tsc"),
       "--project",
       join(copyFixtureDirectory, "tsconfig.json"),
     ],

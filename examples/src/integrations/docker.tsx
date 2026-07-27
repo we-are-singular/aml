@@ -15,7 +15,8 @@ import { DeterministicAgentProvider } from "@aml/sdk/testing"
  */
 const ExampleSandbox = dockerSandbox({
   image: process.env.AML_DOCKER_IMAGE ?? "alpine:3.22",
-  workspace: resolve(import.meta.dirname, "../.."),
+  // Mount the repository so the Agent can select the root-level SDK directory.
+  workspace: resolve(import.meta.dirname, "../../.."),
 })
 
 /**
@@ -64,7 +65,7 @@ const ExampleProvider = new DeterministicAgentProvider({
 export default function DockerExample() {
   return (
     <Sandbox provider={ExampleSandbox} access="read-only">
-      <Agent cwd="packages/sdk" provider={ExampleProvider}>
+      <Agent cwd="sdk" provider={ExampleProvider}>
         Inspect the active Docker confinement.
       </Agent>
     </Sandbox>

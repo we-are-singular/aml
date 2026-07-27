@@ -203,7 +203,13 @@ Phase 1 starts as an npm 11 workspace managed by Turborepo:
 .
 ├── apps/
 │   ├── cli/
-│   └── website/
+│   ├── docs/
+│   └── site/
+├── sdk/
+│   ├── src/
+│   ├── tests/
+│   ├── package.json
+│   └── vite.config.ts
 ├── examples/
 │   ├── src/
 │   │   ├── capabilities/
@@ -216,7 +222,6 @@ Phase 1 starts as an npm 11 workspace managed by Turborepo:
 │   │   └── examples.test.ts
 │   └── run.ts
 ├── packages/
-│   ├── sdk/
 │   ├── agents/
 │   │   ├── opencode/
 │   │   ├── codex/
@@ -242,13 +247,13 @@ The root workspace globs are:
 
 ```json
 {
-  "workspaces": ["apps/*", "examples", "packages/sdk", "packages/*/*"]
+  "workspaces": ["apps/*", "examples", "sdk", "packages/*/*"]
 }
 ```
 
 The root owns orchestration scripts and shared development policy. It does not publish runtime code.
 
-Slice 0 has one formal build target: `@aml/sdk`. The SDK owns `packages/sdk/vite.config.ts`, and its Vite build follows the SDK's complete source import graph, including neutral workspace source outside `packages/sdk` when such a boundary eventually exists. Workspace dependencies do not need intermediate builds or `dist` directories. The SDK must not import or bundle concrete providers.
+Slice 0 has one formal build target: `@aml/sdk`. The SDK owns `sdk/vite.config.ts`, and its Vite build follows the SDK's complete source import graph, including neutral workspace source outside `sdk` when such a boundary eventually exists. Workspace dependencies do not need intermediate builds or `dist` directories. The SDK must not import or bundle concrete providers.
 
 Turborepo runs the SDK build before the built-package examples, but there is no recursive `^build` chain. Examples and applications do not gain build pipelines merely to participate in the workspace. Each independently distributed provider owns its own leaf build and package-level Turbo configuration. Because `@aml/sdk` is its public package dependency, that provider build and its consumer proof depend explicitly on `@aml/sdk#build`; the provider keeps the SDK external rather than embedding another copy.
 
@@ -256,7 +261,7 @@ Turborepo runs the SDK build before the built-package examples, but there is no 
 
 | Directory | Package | Responsibility |
 | --- | --- | --- |
-| `packages/sdk` | `@aml/sdk` | JSX runtime, evaluator, primitives, provider contracts, definition helpers, and conformance utilities |
+| `sdk` | `@aml/sdk` | Primary AML package: JSX runtime, evaluator, primitives, provider contracts, definition helpers, and conformance utilities |
 | `packages/agents/opencode` | `@aml/agent-opencode` | OpenCode Agent adapter and OpenCode-specific options |
 | `packages/agents/codex` | `@aml/agent-codex` | Codex Agent adapter and Codex-specific options |
 | `packages/agents/claude` | `@aml/agent-claude` | Claude Agent adapter and Claude-specific options |
@@ -291,10 +296,10 @@ Importing `@aml/sdk` must not install, initialize, import, or require OpenCode, 
 
 ### SDK source layout
 
-`packages/sdk` uses one domain-first source tree:
+`sdk` uses one domain-first source tree:
 
 ```text
-packages/sdk/
+sdk/
 ├── package.json
 ├── tsconfig.build.json
 ├── vite.config.ts
@@ -533,7 +538,7 @@ Focused behavior tests stay beside their owner. Conformance suites live in `@aml
 
 The root pins the selected npm version through `packageManager`. Package scripts remain runnable through npm without requiring Turbo-specific runtime APIs.
 
-`packages/sdk/vite.config.ts` is the only Vite build configuration in Slice 0. Vite writes the SDK JavaScript and source maps to `dist` and bundles its source closure without requiring dependency builds. TypeScript emits declarations through `tsconfig.build.json`. The SDK's `package.json` declares its public exports explicitly. No root, example, application, or future provider package receives a build script until it needs to produce a distributable artifact.
+`sdk/vite.config.ts` is the only Vite build configuration in Slice 0. Vite writes the SDK JavaScript and source maps to `dist` and bundles its source closure without requiring dependency builds. TypeScript emits declarations through `tsconfig.build.json`. The SDK's `package.json` declares its public exports explicitly. No root, example, application, or future provider package receives a build script until it needs to produce a distributable artifact.
 
 ### Boundary dependencies
 
@@ -578,8 +583,8 @@ The component sequence through MVP is fixed: `<Agent>` with its `<System>` messa
 #### Slice 0 — Monorepo and evaluation foundation
 
 - create the npm workspace root and Turborepo task graph
-- create `packages/sdk` and its package exports
-- configure `packages/sdk/vite.config.ts` as the only formal build in Slice 0
+- create `sdk` and its package exports
+- configure `sdk/vite.config.ts` as the only formal build in Slice 0
 - build the SDK's complete source import graph without intermediate workspace builds
 - emit SDK declarations with TypeScript
 - implement AML values and JSX construction
