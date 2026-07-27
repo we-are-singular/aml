@@ -3,6 +3,7 @@ import type { AgentProvider } from "../components/agent/agent-provider.js"
 import type { AgentRequest } from "../components/agent/agent-request.js"
 import type { AgentResponse } from "../components/agent/agent-response.js"
 import { validateAgentProvider } from "../components/agent/validate-agent-provider.js"
+import type { AmlEventSubscriber } from "../core/aml-event-subscriber.js"
 
 /**
  * Exercises the provider-neutral call boundary without a test-runner dependency.
@@ -26,7 +27,12 @@ export async function agentProviderConformance(
     tools: Object.freeze([]),
     trace,
   })
+  const events: AmlEventSubscriber = Object.freeze({
+    on: () => () => undefined,
+    once: () => () => undefined,
+  })
   const context: AgentExecutionContext = Object.freeze({
+    events,
     signal: new AbortController().signal,
     trace,
   })

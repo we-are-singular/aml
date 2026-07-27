@@ -10,6 +10,7 @@ import {
 } from "@aml/sdk"
 import type {
   AgentExecutionContext,
+  AmlEventSubscriber,
   AgentRequest,
 } from "@aml/sdk"
 import { agentProviderConformance } from "@aml/sdk/testing"
@@ -34,6 +35,11 @@ interface RecordedTurn {
   readonly prompt: string
   readonly threadIndex: number
 }
+
+const TestEvents: AmlEventSubscriber = Object.freeze({
+  on: () => () => undefined,
+  once: () => () => undefined,
+})
 
 /**
  * Deterministic Codex construction port used by adapter boundary tests.
@@ -96,6 +102,7 @@ function createContext(
   signal = new AbortController().signal,
 ): AgentExecutionContext {
   return Object.freeze({
+    events: TestEvents,
     signal,
     trace: Object.freeze({
       runId: "run",

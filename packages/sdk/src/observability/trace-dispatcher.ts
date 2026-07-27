@@ -1,3 +1,4 @@
+import type { AmlEventBus } from "../core/aml-event-bus.js"
 import { ComponentEvaluationContext } from "../core/component-evaluation-context.js"
 import type { AmlTraceIdentity } from "../core/trace-identity.js"
 import type {
@@ -8,7 +9,6 @@ import type {
 } from "./trace-event.js"
 import type {
   TraceErrorHandler,
-  TraceSink,
 } from "./trace-sink.js"
 
 type TraceAttributes = Readonly<
@@ -30,8 +30,8 @@ export interface TraceSpan {
  */
 export class TraceDispatcher {
   readonly #captureContent: boolean
+  readonly #events: AmlEventBus
   readonly #onError: TraceErrorHandler | undefined
-  readonly #sink: TraceSink | undefined
   readonly #activeSpans = new Set<string>()
   #closed = false
   #sequence = 0
@@ -41,11 +41,11 @@ export class TraceDispatcher {
    * Captures the consumer boundary once for one isolated evaluation.
    */
   constructor(
-    sink: TraceSink | undefined,
+    events: AmlEventBus,
     captureContent: boolean,
     onError: TraceErrorHandler | undefined,
   ) {
-    this.#sink = sink
+    this.#events = events
     this.#captureContent = captureContent
     this.#onError = onError
   }
@@ -188,65 +188,15 @@ export class TraceDispatcher {
    * Invokes a consumer outside component-local evaluate() authority.
    */
   #emit(event: AmlTraceEvent): void {
-    if (this.#closed || this.#sink === undefined) {
+    if (this.#closed) {
       return
     }
 
     const immutableEvent = Object.freeze(event)
-    let result: unknown
-
-    try {
-      result = ComponentEvaluationContext.withoutAccess(() =>
-        Reflect.apply(this.#sink as TraceSink, undefined, [
-          immutableEvent,
-        ]),
-      )
-    } catch (error) {
-      this.#report(error, immutableEvent)
-      return
-    }
-
-    if (result === undefined) {
-      return
-    }
-
-    // A trace callback is deliberately synchronous. Consume a returned
-    // thenable so its later rejection is reported rather than becoming an
-    // unhandled rejection, but never await it or delay the workflow.
-    let then: unknown
-
-    try {
-      then = ComponentEvaluationContext.withoutAccess(() =>
-        (typeof result === "object" && result !== null) ||
-        typeof result === "function"
-          ? Reflect.get(result, "then")
-          : undefined,
-      )
-    } catch (error) {
-      this.#report(error, immutableEvent)
-      return
-    }
-
-    if (typeof then === "function") {
-      const contractError = new TypeError(
-        "AML trace sinks must not return a thenable",
-      )
-      this.#report(contractError, immutableEvent)
-
-      void new Promise<unknown>((resolve, reject) => {
-        queueMicrotask(() => {
-          ComponentEvaluationContext.withoutAccess(() => {
-            try {
-              Reflect.apply(then, result, [resolve, reject])
-            } catch (error) {
-              reject(error)
-            }
-          })
-        })
-      }).catch((error: unknown) => {
-        this.#report(error, immutableEvent)
-      })
-    }
+    this.#events.trace(
+      immutableEvent,
+      (error, traceEvent) => this.#report(error, traceEvent),
+    )
   }
 
   /**
@@ -255,43 +205,18 @@ export class TraceDispatcher {
   #report(error: unknown, event: AmlTraceEvent): void {
     if (this.#onError !== undefined) {
       try {
-        const result = ComponentEvaluationContext.withoutAccess(() =>
-          Reflect.apply(this.#onError as TraceErrorHandler, undefined, [
-            error,
-            event,
-          ]),
-        ) as unknown
+        const pending = ComponentEvaluationContext.withoutAccess(() =>
+          Promise.resolve(
+            Reflect.apply(
+              this.#onError as TraceErrorHandler,
+              undefined,
+              [error, event],
+            ),
+          ),
+        )
 
-        // Secondary handlers are also out-of-band. Swallow any asynchronous
-        // rejection without recursively reporting observer failures.
-        if (
-          (typeof result === "object" && result !== null) ||
-          typeof result === "function"
-        ) {
-          let then: unknown
-
-          try {
-            then = ComponentEvaluationContext.withoutAccess(() =>
-              Reflect.get(result, "then"),
-            )
-          } catch {
-            return
-          }
-
-          if (typeof then === "function") {
-            void new Promise<unknown>((resolve, reject) => {
-              queueMicrotask(() => {
-                ComponentEvaluationContext.withoutAccess(() => {
-                  try {
-                    Reflect.apply(then, result, [resolve, reject])
-                  } catch (handlerError) {
-                    reject(handlerError)
-                  }
-                })
-              })
-            }).catch(() => undefined)
-          }
-        }
+        // The secondary channel is out-of-band and cannot recursively report.
+        void pending.catch(() => undefined)
       } catch {
         // The secondary channel must never become another workflow boundary.
       }
@@ -307,7 +232,7 @@ export class TraceDispatcher {
 
     try {
       console.error(
-        `[aml] trace sink failed at ${event.type} ${event.spanId}`,
+        `[aml] trace listener failed at ${event.type} ${event.spanId}`,
       )
     } catch {
       // Even a replaced console cannot make tracing part of workflow behavior.

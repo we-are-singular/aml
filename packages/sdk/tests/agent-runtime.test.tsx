@@ -473,7 +473,6 @@ describe("defineAgentProvider", () => {
     expect(() =>
       defineAgentProvider({ name: "missing-run" } as never),
     ).toThrow("Agent provider run must be a function")
-
     const callable = Object.assign(function callableProvider() {}, {
       async run() {
         return { text: "" }

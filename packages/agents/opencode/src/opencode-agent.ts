@@ -43,13 +43,13 @@ export interface OpenCodeAgentOptions {
 }
 
 /**
- * Configured OpenCode strategy with explicit lifecycle cleanup.
+ * Configured OpenCode strategy with runtime-managed evaluation cleanup.
  */
 export interface OpenCodeAgentProvider extends AgentProvider {
   readonly name: "opencode"
 
   /**
-   * Waits for active calls and releases only resources owned by this adapter.
+   * Permanently shuts down direct provider use outside normal AML evaluation.
    */
   close(): Promise<void>
 }
@@ -61,18 +61,21 @@ interface CapturedOpenCodeAgentOptions {
   readonly sessionClient?: OpenCodeSessionClient
 }
 
+interface OpenCodeEvaluationState {
+  readonly activeRuns: Set<Promise<AgentResponse>>
+  closePromise?: Promise<void>
+  clientPromise?: Promise<OpenCodeSessionClient>
+  ownedServer?: { close(): Promise<void> | void }
+}
+
 class OpenCodeAgentImplementation implements OpenCodeAgentProvider {
-  readonly #activeRuns = new Set<Promise<AgentResponse>>()
   readonly #directory: string | undefined
+  readonly #evaluations = new Map<string, OpenCodeEvaluationState>()
   readonly #model: string | undefined
   readonly #serverOptions: OpenCodeServerOptions | undefined
   readonly #sessionClient: OpenCodeSessionClient | undefined
-  #clientPromise: Promise<OpenCodeSessionClient> | undefined
   #closePromise: Promise<void> | undefined
   #closed = false
-  #ownedServer:
-    | { close(): Promise<void> | void }
-    | undefined
   readonly name = "opencode" as const
 
   /**
@@ -96,13 +99,14 @@ class OpenCodeAgentImplementation implements OpenCodeAgentProvider {
       throw new Error("OpenCode Agent provider is closed")
     }
 
-    const execution = this.#run(request, context)
-    this.#activeRuns.add(execution)
+    const evaluation = this.#getEvaluation(context)
+    const execution = this.#run(request, context, evaluation)
+    evaluation.activeRuns.add(execution)
 
     try {
       return await execution
     } finally {
-      this.#activeRuns.delete(execution)
+      evaluation.activeRuns.delete(execution)
     }
   }
 
@@ -121,6 +125,7 @@ class OpenCodeAgentImplementation implements OpenCodeAgentProvider {
   async #run(
     request: AgentRequest,
     context: AgentExecutionContext,
+    evaluation: OpenCodeEvaluationState,
   ): Promise<AgentResponse> {
     // OpenCode disconnects dynamic MCP clients but retains their configuration.
     // JavaScript Tools and MCP grants therefore require a disposable host.
@@ -132,7 +137,7 @@ class OpenCodeAgentImplementation implements OpenCodeAgentProvider {
       return await this.#runWithDisposableServer(request, context)
     }
 
-    const client = await this.#getClient()
+    const client = await this.#getClient(evaluation)
     return await new OpenCodeSession(client, {
       ...(this.#directory === undefined
         ? {}
@@ -148,7 +153,7 @@ class OpenCodeAgentImplementation implements OpenCodeAgentProvider {
     request: AgentRequest,
     context: AgentExecutionContext,
   ): Promise<AgentResponse> {
-    // This server is deliberately not assigned to #ownedServer: its lifetime
+    // This server is deliberately not stored in evaluation state: its lifetime
     // belongs to this invocation and must end even when the session fails.
     const owned = await createIsolatedOpencode({
       ...(this.#serverOptions === undefined ? {} : this.#serverOptions),
@@ -210,7 +215,9 @@ class OpenCodeAgentImplementation implements OpenCodeAgentProvider {
   /**
    * Returns the injected client or one lazily shared package-owned client.
    */
-  async #getClient(): Promise<OpenCodeSessionClient> {
+  async #getClient(
+    evaluation: OpenCodeEvaluationState,
+  ): Promise<OpenCodeSessionClient> {
     // An injected port owns its own OpenCode host and attachment semantics.
     if (this.#sessionClient) {
       return this.#sessionClient
@@ -218,33 +225,115 @@ class OpenCodeAgentImplementation implements OpenCodeAgentProvider {
 
     // Share one startup barrier across concurrent calls, but permit retry after
     // a failed startup because no reusable client was established.
-    this.#clientPromise ??= this.#createClient().catch((error: unknown) => {
-      this.#clientPromise = undefined
-      throw error
-    })
+    evaluation.clientPromise ??= this.#createClient(evaluation).catch(
+      (error: unknown) => {
+        delete evaluation.clientPromise
+        throw error
+      },
+    )
 
-    return await this.#clientPromise
+    return await evaluation.clientPromise
   }
 
   /**
-   * Starts the reusable OpenCode host and records package ownership for close().
+   * Returns the state shared only by Agents in one AML evaluation.
    */
-  async #createClient(): Promise<OpenCodeSessionClient> {
+  #getEvaluation(
+    context: AgentExecutionContext,
+  ): OpenCodeEvaluationState {
+    const runId = context.trace.runId
+    const existing = this.#evaluations.get(runId)
+
+    if (existing !== undefined) {
+      return existing
+    }
+
+    const evaluation: OpenCodeEvaluationState = {
+      activeRuns: new Set(),
+    }
+    this.#evaluations.set(runId, evaluation)
+
+    // The runtime owns the evaluation boundary. Register cleanup on its event
+    // scope instead of adding lifecycle methods to the provider contract.
+    context.events.once(
+      "finish",
+      async () => await this.#finishEvaluation(runId),
+    )
+
+    return evaluation
+  }
+
+  /**
+   * Starts one evaluation-scoped reusable OpenCode host.
+   */
+  async #createClient(
+    evaluation: OpenCodeEvaluationState,
+  ): Promise<OpenCodeSessionClient> {
     const owned = await createIsolatedOpencode(
       this.#serverOptions === undefined ? {} : { ...this.#serverOptions },
     )
-    this.#ownedServer = owned.server
+    evaluation.ownedServer = owned.server
     return new OpenCodeSdkClient(owned.client)
   }
 
   /**
-   * Waits for invocation cleanup before releasing the reusable host.
+   * Returns one cleanup barrier for a completed evaluation.
+   */
+  #finishEvaluation(runId: string): Promise<void> {
+    const evaluation = this.#evaluations.get(runId)
+
+    if (evaluation === undefined) {
+      return Promise.resolve()
+    }
+
+    evaluation.closePromise ??= this.#closeEvaluation(
+      runId,
+      evaluation,
+    )
+    return evaluation.closePromise
+  }
+
+  /**
+   * Waits for evaluation calls before releasing their shared host.
+   */
+  async #closeEvaluation(
+    runId: string,
+    evaluation: OpenCodeEvaluationState,
+  ): Promise<void> {
+    await Promise.allSettled(evaluation.activeRuns)
+
+    try {
+      await evaluation.ownedServer?.close()
+    } finally {
+      if (this.#evaluations.get(runId) === evaluation) {
+        this.#evaluations.delete(runId)
+      }
+    }
+  }
+
+  /**
+   * Permanently closes every evaluation still owned by this provider.
    */
   async #close(): Promise<void> {
-    // Active calls include their invocation-scoped cleanup. Closing the shared
-    // server earlier could strand their session deletion requests.
-    await Promise.allSettled(this.#activeRuns)
-    await this.#ownedServer?.close()
+    const results = await Promise.allSettled(
+      [...this.#evaluations.keys()].map(
+        async (runId) => await this.#finishEvaluation(runId),
+      ),
+    )
+    const errors = results.flatMap((result) =>
+      result.status === "rejected" ? [result.reason] : [],
+    )
+
+    if (errors.length === 1) {
+      throw errors[0]
+    }
+
+    if (errors.length > 1) {
+      throw new AggregateError(
+        errors,
+        "OpenCode Agent provider cleanup failed",
+      )
+    }
   }
 }
 

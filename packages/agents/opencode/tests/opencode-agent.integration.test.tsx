@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto"
 import {
   Agent,
   AmlRuntime,
+  type AmlEventSubscriber,
   defineMcpServer,
   defineTool,
   evaluate,
@@ -18,6 +19,11 @@ import { OpenCodeToolBridge } from "../src/opencode-tool-bridge.js"
 
 const liveTest =
   process.env.AML_OPENCODE_LIVE === "1" ? it : it.skip
+
+const TestEvents: AmlEventSubscriber = Object.freeze({
+  on: () => () => undefined,
+  once: () => () => undefined,
+})
 
 liveTest(
   "retains conversation history across real OpenCode FollowUps",
@@ -148,6 +154,7 @@ liveTest(
     const bridge = new OpenCodeToolBridge(
       [lookupLabel],
       Object.freeze({
+        events: TestEvents,
         signal: controller.signal,
         trace: Object.freeze({
           runId: "mcp-live",

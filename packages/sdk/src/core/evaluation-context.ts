@@ -1,4 +1,6 @@
 import type { AmlTraceIdentity } from "./trace-identity.js"
+import { AmlEventBus } from "./aml-event-bus.js"
+import type { AmlEventSubscriber } from "./aml-event-subscriber.js"
 import { AgentScheduler } from "./agent-scheduler.js"
 import { EvaluationError } from "./evaluation-error.js"
 import {
@@ -12,7 +14,6 @@ import type {
 } from "../observability/trace-event.js"
 import type {
   TraceErrorHandler,
-  TraceSink,
 } from "../observability/trace-sink.js"
 
 type TraceAttributes = Readonly<
@@ -25,12 +26,14 @@ type TraceAttributes = Readonly<
 export class EvaluationContext {
   readonly #agentScheduler: AgentScheduler
   readonly #captureTraceContent: boolean
+  readonly #eventScope: ReturnType<AmlEventBus["scope"]>
+  readonly #events: AmlEventBus
   readonly #maxAgentCalls: number
   readonly #maxStateTransitions: number
   readonly #runId = globalThis.crypto.randomUUID()
   readonly #signal: AbortSignal
   readonly #traceDispatcher: TraceDispatcher
-  readonly #rootSpan: TraceSpan
+  #rootSpan: TraceSpan | undefined
   #agentCalls = 0
   #observationSpanSequence = 0
   #spanSequence = 0
@@ -44,10 +47,10 @@ export class EvaluationContext {
     maxConcurrentAgents: number,
     maxStateTransitions: number,
     signal: AbortSignal,
+    events: AmlEventBus,
     trace: {
       readonly captureContent: boolean
       readonly onError: TraceErrorHandler | undefined
-      readonly sink: TraceSink | undefined
     },
   ) {
     this.#agentScheduler = new AgentScheduler(
@@ -57,16 +60,13 @@ export class EvaluationContext {
     this.#maxAgentCalls = maxAgentCalls
     this.#maxStateTransitions = maxStateTransitions
     this.#signal = signal
+    this.#events = events
+    this.#eventScope = events.scope(this.#runId)
     this.#captureTraceContent = trace.captureContent
     this.#traceDispatcher = new TraceDispatcher(
-      trace.sink,
+      events,
       trace.captureContent,
       trace.onError,
-    )
-    this.#rootSpan = this.#traceDispatcher.startSpan(
-      this.#identity("trace-0"),
-      "evaluation",
-      "evaluate",
     )
   }
 
@@ -75,6 +75,13 @@ export class EvaluationContext {
    */
   get signal(): AbortSignal {
     return this.#signal
+  }
+
+  /**
+   * Exposes registration without giving providers event publication authority.
+   */
+  get events(): AmlEventSubscriber {
+    return this.#eventScope
   }
 
   /**
@@ -91,7 +98,29 @@ export class EvaluationContext {
    * Returns the root identity inherited by top-level AML execution spans.
    */
   get rootTrace(): AmlTraceIdentity {
+    if (this.#rootSpan === undefined) {
+      throw new EvaluationError("AML evaluation has not started")
+    }
+
     return this.#rootSpan.identity
+  }
+
+  /**
+   * Runs runtime-wide setup before AML enters the authored tree.
+   */
+  async start(): Promise<void> {
+    await this.#events.start(
+      Object.freeze({
+        runId: this.#runId,
+        signal: this.#signal,
+      }),
+    )
+    this.#signal.throwIfAborted()
+    this.#rootSpan = this.#traceDispatcher.startSpan(
+      this.#identity("trace-0"),
+      "evaluation",
+      "evaluate",
+    )
   }
 
   /**
@@ -235,17 +264,57 @@ export class EvaluationContext {
   }
 
   /**
-   * Releases scheduler listeners after every nested evaluation has settled.
+   * Runs finish listeners and closes tracing after evaluation settles.
    */
-  close(failed: boolean, error?: unknown): void {
+  async close(failed: boolean, error?: unknown): Promise<void> {
     this.#agentScheduler.close()
-    if (failed) {
-      this.#traceDispatcher.failSpan(this.#rootSpan, error)
-    } else {
-      this.#traceDispatcher.endSpan(this.#rootSpan, "ok")
+
+    let finishError: unknown
+    let finishFailed = false
+
+    try {
+      await this.#events.finish(
+        Object.freeze({
+          ...(failed ? { error } : {}),
+          runId: this.#runId,
+          signal: this.#signal,
+          status: failed ? "error" : "ok",
+        }),
+      )
+    } catch (listenerError) {
+      finishFailed = true
+      finishError = listenerError
+    }
+
+    let terminalError = error
+
+    if (failed && finishFailed) {
+      terminalError = new AggregateError(
+        [error, finishError],
+        "AML evaluation and finish listeners both failed",
+      )
+    } else if (finishFailed) {
+      terminalError = finishError
+    }
+
+    // A failed start hook has no execution trace to close.
+    if (this.#rootSpan !== undefined) {
+      if (failed || finishFailed) {
+        this.#traceDispatcher.failSpan(
+          this.#rootSpan,
+          terminalError,
+        )
+      } else {
+        this.#traceDispatcher.endSpan(this.#rootSpan, "ok")
+      }
     }
 
     this.#traceDispatcher.close()
+    this.#eventScope.close()
+
+    if (finishFailed) {
+      throw terminalError
+    }
   }
 
   /**

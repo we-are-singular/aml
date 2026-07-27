@@ -1,0 +1,23 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`examples > agent 1`] = `"Review complete."`;
+
+exports[`examples > basic 1`] = `"AML resolves bottom-up"`;
+
+exports[`examples > concurrency 1`] = `"synthesized:combine:review-result|audit-result"`;
+
+exports[`examples > context 1`] = `"orders:["order-17","order-29"]"`;
+
+exports[`examples > follow-up 1`] = `"final:Produce the review."`;
+
+exports[`examples > loop 1`] = `"final:state commits after this session"`;
+
+exports[`examples > mcp 1`] = `"MCP attached. Sibling isolated."`;
+
+exports[`examples > sandbox 1`] = `"Inspected repository/packages/api/src through deterministic-sandbox-1."`;
+
+exports[`examples > skill 1`] = `"Skill resolved."`;
+
+exports[`examples > structured 1`] = `"synthesized:Explain this high finding: authorization is checked after mutation"`;
+
+exports[`examples > workspace 1`] = `"wroteobserved:shared finding"`;

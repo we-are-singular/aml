@@ -482,7 +482,7 @@ describe("observability", () => {
     })
   })
 
-  it("isolates thrown and asynchronous observer failures from evaluation", async () => {
+  it("isolates asynchronous observer failures from evaluation", async () => {
     const errors: unknown[] = []
     const sink = vi.fn((_event: AmlTraceEvent) =>
       Promise.reject(new Error("async trace failure")),
@@ -502,20 +502,13 @@ describe("observability", () => {
     expect(
       errors.some(
         (error) =>
-          error instanceof TypeError &&
-          error.message.includes("must not return a thenable"),
-      ),
-    ).toBe(true)
-    expect(
-      errors.some(
-        (error) =>
           error instanceof Error &&
           error.message === "async trace failure",
       ),
     ).toBe(true)
   })
 
-  it("masks component evaluate authority from custom observer thenables", async () => {
+  it("masks component evaluate authority from asynchronous observers", async () => {
     const attempts: Array<{
       readonly error: unknown
       readonly phase: string
@@ -567,31 +560,16 @@ describe("observability", () => {
 
     await expect(
       new AmlRuntime({
-        onTraceError(error, event) {
-          return (
-            error instanceof TypeError &&
-            event.type === "span.start" &&
-            event.kind === "component" &&
-            event.name === "Nested"
-              ? observerThenable("handler")
-              : undefined
-          ) as never
-        },
         trace,
       }).evaluate(<Workflow />),
     ).resolves.toBe("nested")
 
     await new Promise((resolve) => setImmediate(resolve))
 
-    expect(attempts.map(({ phase }) => phase)).toHaveLength(4)
-    expect(attempts.map(({ phase }) => phase)).toEqual(
-      expect.arrayContaining([
-        "sink:getter",
-        "handler:getter",
-        "sink:then",
-        "handler:then",
-      ]),
-    )
+    expect(attempts.map(({ phase }) => phase)).toEqual([
+      "sink:getter",
+      "sink:then",
+    ])
     expect(attempts).toSatisfy(
       (
         values: Array<{
@@ -625,7 +603,7 @@ describe("observability", () => {
 
       expect(stderr).toHaveBeenCalledTimes(1)
       expect(stderr).toHaveBeenCalledWith(
-        expect.stringContaining("[aml] trace sink failed"),
+        expect.stringContaining("[aml] trace listener failed"),
       )
     } finally {
       stderr.mockRestore()

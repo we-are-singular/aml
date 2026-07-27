@@ -1,7 +1,0 @@
-{
-  "extends": "../../tsconfig.json",
-  "include": [
-    "main.tsx",
-    "run-review-workflow.tsx"
-  ]
-}

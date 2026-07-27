@@ -1,0 +1,59 @@
+import { codexAgent } from "@aml/agent-codex"
+import { opencodeAgent } from "@aml/agent-opencode"
+import type { AgentProvider } from "@aml/sdk"
+import { DeterministicAgentProvider } from "@aml/sdk/testing"
+
+/**
+ * Selects one provider without changing the review workflow that consumes it.
+ */
+export function createReviewProvider(name: string): AgentProvider {
+  if (name === "codex") {
+    return codexAgent({
+      model:
+        process.env.AML_CODEX_MODEL ?? "gpt-5.3-codex-spark",
+    })
+  }
+
+  if (name === "opencode") {
+    return opencodeAgent({
+      model:
+        process.env.AML_OPENCODE_MODEL ?? "opencode-go/minimax-m3",
+      server: { port: 0, timeout: 15_000 },
+    })
+  }
+
+  if (name !== "deterministic") {
+    throw new TypeError(`Unsupported AML review provider "${name}"`)
+  }
+
+  return new DeterministicAgentProvider({
+    async respond(request, context) {
+      const tool = request.tools[0]
+
+      if (tool?.kind === "javascript") {
+        const source = await tool.execute(
+          {},
+          {
+            signal: context.signal,
+            trace: context.trace,
+          },
+        )
+
+        if (request.system.includes("correctness")) {
+          return {
+            text: `calculateInvoiceTotal returns an average instead of a total. Evidence: ${String(source)}`,
+          }
+        }
+
+        return {
+          text: "The function name and implementation disagree; express either total or average directly.",
+        }
+      }
+
+      return {
+        text:
+          "calculateInvoiceTotal divides the sum by the line count, so callers receive an average. Remove the division or rename the API to match. AML_REVIEW_COMPLETE",
+      }
+    },
+  })
+}

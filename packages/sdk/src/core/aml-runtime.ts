@@ -41,6 +41,11 @@ import type {
 import type { WorkspaceProps } from "../components/workspace/workspace.js"
 import { AmlNode, type AmlRenderable } from "./aml-node.js"
 import { ComponentEvaluationContext } from "./component-evaluation-context.js"
+import { AmlEventBus } from "./aml-event-bus.js"
+import type {
+  AmlEventListener,
+  AmlEventName,
+} from "./aml-event-subscriber.js"
 import { EvaluationContext } from "./evaluation-context.js"
 import { EvaluationError } from "./evaluation-error.js"
 import type { AmlTraceIdentity } from "./trace-identity.js"
@@ -299,13 +304,13 @@ export class AmlRuntime {
   readonly #agentExecutor: AgentExecutor
   readonly #allowedMcpServers: ReadonlySet<string> | undefined
   readonly #allowedTools: ReadonlySet<string> | undefined
+  readonly #events = new AmlEventBus()
   readonly #maxAgentCalls: number
   readonly #maxConcurrentAgents: number
   readonly #maxDepth: number
   readonly #maxStateTransitions: number
   readonly #onTraceError: TraceErrorHandler | undefined
   readonly #traceCaptureContent: boolean
-  readonly #traceSink: TraceSink | undefined
   readonly #loopAgentSelector: LoopAgentSelector
   readonly #loopEvaluator = new LoopEvaluator()
   readonly #sandboxEvaluator: SandboxEvaluator
@@ -384,7 +389,10 @@ export class AmlRuntime {
     this.#maxStateTransitions = maxStateTransitions
     this.#onTraceError = trace.onError
     this.#traceCaptureContent = trace.captureContent
-    this.#traceSink = trace.sink
+
+    if (trace.sink !== undefined) {
+      this.#events.on("trace", trace.sink)
+    }
     this.#loopAgentSelector = new LoopAgentSelector(maxDepth)
     this.#sandboxEvaluator = new SandboxEvaluator(
       options.sandboxProvider,
@@ -395,6 +403,26 @@ export class AmlRuntime {
     this.#workspaceEvaluator = new WorkspaceEvaluator(
       options.workspaceProvider,
     )
+  }
+
+  /**
+   * Registers one listener for every evaluation executed by this runtime.
+   */
+  on<Name extends AmlEventName>(
+    name: Name,
+    listener: AmlEventListener<Name>,
+  ): () => void {
+    return this.#events.on(name, listener)
+  }
+
+  /**
+   * Registers one listener for the next matching runtime event.
+   */
+  once<Name extends AmlEventName>(
+    name: Name,
+    listener: AmlEventListener<Name>,
+  ): () => void {
+    return this.#events.once(name, listener)
   }
 
   /**
@@ -418,10 +446,10 @@ export class AmlRuntime {
         this.#maxConcurrentAgents,
         this.#maxStateTransitions,
         signal,
+        this.#events,
         {
           captureContent: this.#traceCaptureContent,
           onError: this.#onTraceError,
-          sink: this.#traceSink,
         },
       ),
       workspaceDeclared: false,
@@ -431,6 +459,8 @@ export class AmlRuntime {
     let evaluationFailed = false
 
     try {
+      await domain.context.start()
+
       return (await this.#evaluateInDomain(
         value,
         domain,
@@ -448,7 +478,7 @@ export class AmlRuntime {
       evaluationError = error
       throw error
     } finally {
-      domain.context.close(evaluationFailed, evaluationError)
+      await domain.context.close(evaluationFailed, evaluationError)
     }
   }
 

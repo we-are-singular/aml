@@ -475,6 +475,9 @@ describe("<Workspace>", () => {
         { signal: controller.signal },
       )
 
+      await vi.waitFor(() =>
+        expect(finishAcquisition).toBeTypeOf("function"),
+      )
       controller.abort(reason)
       finishAcquisition?.(malformed)
       const error = await pending.catch((cause: unknown) => cause)

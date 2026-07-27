@@ -205,11 +205,16 @@ Phase 1 starts as an npm 11 workspace managed by Turborepo:
 │   ├── cli/
 │   └── website/
 ├── examples/
-│   ├── agent/
-│   ├── basic/
-│   ├── opencode/
-│   ├── parallel-agents/
-│   └── review/
+│   ├── src/
+│   │   ├── capabilities/
+│   │   ├── core/
+│   │   ├── integrations/
+│   │   ├── resources/
+│   │   └── shared/
+│   ├── test/
+│   │   ├── __snapshots__/
+│   │   └── examples.test.ts
+│   └── run.ts
 ├── packages/
 │   ├── sdk/
 │   ├── agents/
@@ -237,7 +242,7 @@ The root workspace globs are:
 
 ```json
 {
-  "workspaces": ["apps/*", "examples/*", "packages/sdk", "packages/*/*"]
+  "workspaces": ["apps/*", "examples", "packages/sdk", "packages/*/*"]
 }
 ```
 
@@ -501,21 +506,13 @@ Every exported type, class, function, and public method has a contract docblock.
 
 ### Examples and built-package proof
 
-Every example is a private npm workspace with explicit dependencies. A provider-backed example may declare:
+All examples share one private `@aml/examples` workspace. Group directories under `examples/src` organize related examples, and every example is one `.tsx` file whose filename is its CLI title. Its single default function returns a complete AML tree directly. Examples do not return wrapper descriptors, configure `AmlRuntime`, or own provider cleanup. An example that requires special evaluator behavior is demonstrating the runner rather than AML and must be redesigned.
 
-```json
-{
-  "private": true,
-  "dependencies": {
-    "@aml/agent-opencode": "*",
-    "@aml/sdk": "*"
-  }
-}
-```
+`examples/run.ts` is the sole CLI orchestrator. It discovers example modules through a literal Vite glob, constructs `AmlRuntime` with the shared console tracer, evaluates the selected tree, and prints the final output. Agent providers release evaluation-owned resources through the provider lifecycle contract. Run an example with `npm run example -- <title>`.
 
-`examples/basic` declares only `@aml/sdk`.
+`examples/test/examples.test.ts` evaluates every deterministic example under `src/capabilities`, `src/core`, and `src/resources` and snapshots its final output under `examples/test/__snapshots__`. Credentialed model calls, Docker, filesystem-backed providers, and other environment-dependent proofs live under `src/integrations` and remain explicit commands rather than default tests.
 
-The SDK package exports `.`, `./jsx-runtime`, and `./jsx-dev-runtime` exclusively from `dist/`, declares `"files": ["dist"]`, and has no TypeScript path alias that can redirect `@aml/sdk` to source. Examples import only public package names. Each `vite-node` task depends explicitly on the build boundary it exercises: SDK-only examples depend on `@aml/sdk#build`, while provider examples depend on that provider's build and the provider build depends on the SDK build. A successful example run therefore proves packaged output rather than an accidental source-only setup while the example itself remains unbuilt.
+The SDK package exports `.`, `./jsx-runtime`, and `./jsx-dev-runtime` exclusively from `dist/`, declares `"files": ["dist"]`, and has no TypeScript path alias that can redirect `@aml/sdk` to source. The shared examples package imports only public package names and has no source aliases. Its Turbo tasks depend on package builds, so a successful example run proves packaged output rather than an accidental source-only setup while the example itself remains unbuilt.
 
 SDK-owned TSX uses the private `#aml` package-import namespace with an `aml-source` condition during TypeScript analysis. Vite's SDK-local Oxc transform uses the same source runtime directly because its development dependency optimizer resolves injected automatic-runtime imports after normal alias resolution. Neither mechanism is visible to applications or examples, and the package-import defaults still point to the built runtime.
 
@@ -590,10 +587,10 @@ The component sequence through MVP is fixed: `<Agent>` with its `<System>` messa
 - concatenate nested arrays and Fragments without implicit separators
 - await siblings deterministically from left to right while preserving ordinary semantics for already-started Promises
 - invoke every component once per evaluated occurrence
-- add `examples/basic` as a private workspace importing `@aml/sdk` from built exports and running through vite-node
+- add `examples/src/core/basic.tsx` to the shared examples workspace, importing `@aml/sdk` from built exports and running through vite-node
 - verify SDK entry-point resolution and local package contents
 
-Proof: the SDK builds to `dist`; its package artifact contains the public runtime, production JSX, development JSX, and type entry points; and the unbuilt isolated example resolves an async component tree to one string through public `@aml/sdk` exports without source aliases or imports.
+Proof: the SDK builds to `dist`; its package artifact contains the public runtime, production JSX, development JSX, and type entry points; and the unbuilt single-file example resolves an async component tree to one string through public `@aml/sdk` exports without source aliases or imports.
 
 Status: Done on 2026-07-27. Singular review passes found and verified async cycle guards ending before promised descendants settled, VM stack overflow for deeply nested valid values, double PromiseLike accessor reads, synchronous custom-thenable invocation that differed from native `await`, a non-callable named Fragment export, SDK-owned TSX self-resolving through stale `dist`, reverse sibling reads in the first iterative evaluator, erased JSX prop types, incomplete TSX typecheck globs, and a package proof that could inspect stale output. The corrected implementation uses an explicit stack-safe cursor evaluator, callable Fragments, generic JSX construction, clean source-only SDK TSX resolution, a self-building package proof, twenty behavior tests, strict SDK and consumer type checking, and a dist-only vite-node example. The final review confirmation reported no actionable findings.
 
@@ -612,9 +609,9 @@ Status: Done on 2026-07-27. Singular review passes found and verified async cycl
 - allow child Agent output to become a parent Agent system fragment
 - resolve children before the parent Agent
 - propagate provider failure with Agent identity
-- add an isolated `examples/agent` proof that imports only built SDK exports
+- add `examples/src/core/agent.tsx` to the shared examples workspace and import only built SDK exports
 
-Proof: Agents using two deterministic provider instances run in one evaluation; a child Agent contributes generated system text to its parent; fixed and composed system fragments reach the provider in the required order; model overrides are preserved; the deterministic provider passes the public conformance suite; and the isolated example executes through built `@aml/sdk` and `@aml/sdk/testing` exports.
+Proof: Agents using two deterministic provider instances run in one evaluation; a child Agent contributes generated system text to its parent; fixed and composed system fragments reach the provider in the required order; model overrides are preserved; the deterministic provider passes the public conformance suite; and the shared runner executes the example through built `@aml/sdk` and `@aml/sdk/testing` exports.
 
 Status: Done on 2026-07-27. Singular review found and verified response accessors escaping Agent attribution, provider shapes accepted by the helper and conformance but rejected by the runtime, name normalization contradicting inferred literal types, missing Agent-call budgeting, copy-local primitive identity at both runtime and TypeScript boundaries, repeated provider-member capture, Agent behavior accumulating in the core evaluator, co-located independent public contracts, and one extracted file whose name did not match its primary export. The corrected implementation captures response text once, shares strict object-provider validation, rejects non-normalized names, captures each configured provider boundary once, enforces the default 32-call budget with zero as unlimited, uses a copy-stable structural runtime discriminant without accepting unbranded descriptors, keeps provider execution in `AgentExecutor`, gives public contracts matching files, and passes forty-one behavior tests plus clean installed-package and two-copy validation. Final reviewer confirmation reported no unresolved findings.
 
@@ -779,7 +776,7 @@ Proof: the same review example runs through Codex by changing injected provider 
 
 Status: Done on 2026-07-27. The independently installable `@aml/agent-codex` package provides a synchronous, side-effect-free `codexAgent()` factory over the official Codex SDK. Each AML Agent receives one fresh read-only Codex thread; authored FollowUps resume that thread in order; `<Agent model>` takes precedence over provider defaults; host `read`, `grep`, and `glob` grants enable only Codex's read-only shell boundary; JavaScript Tools use an authenticated invocation-local multi-session MCP bridge; explicit and provider-native MCP grants remain attached for the complete thread; and strict structured output applies only to the final turn. The adapter intentionally inherits normal repository and user Codex configuration and does not claim an isolated capability profile or AML Sandbox compatibility.
 
-Singular review found prototype-sensitive capability dictionaries, explicit `null` dependency injection falling through to the real credentialed SDK, stateful option getters bypassing validation, incomplete recursive JSON Schema normalization, sparse and excessively deep provider input failing late, misleading ambient MCP naming, malformed explicit named MCP configuration falling through to ambient authority, incomplete Tool shutdown draining, cancellation hidden by an injected result getter, an unnecessary bridge state field, export ownership drift, and a copied Tool echo that did not prove the stated provider-substitution workflow. The corrected implementation preserves hostile property names as ordinary data, captures every external option once, distinguishes absent, supplied, and opaque host MCP configuration, delegates only genuinely absent exact-name resolution to the real CLI, recursively closes standard schema containers, rejects malformed or excessively deep input synchronously, drains admitted Tool work before releasing the Agent boundary, and keeps internal bridge types private. `examples/review` owns one shared two-specialist parallel review and synthesis tree with deterministic, OpenCode, and Codex harnesses.
+Singular review found prototype-sensitive capability dictionaries, explicit `null` dependency injection falling through to the real credentialed SDK, stateful option getters bypassing validation, incomplete recursive JSON Schema normalization, sparse and excessively deep provider input failing late, misleading ambient MCP naming, malformed explicit named MCP configuration falling through to ambient authority, incomplete Tool shutdown draining, cancellation hidden by an injected result getter, an unnecessary bridge state field, export ownership drift, and a copied Tool echo that did not prove the stated provider-substitution workflow. The corrected implementation preserves hostile property names as ordinary data, captures every external option once, distinguishes absent, supplied, and opaque host MCP configuration, delegates only genuinely absent exact-name resolution to the real CLI, recursively closes standard schema containers, rejects malformed or excessively deep input synchronously, drains admitted Tool work before releasing the Agent boundary, and keeps internal bridge types private. `examples/src/integrations/review` owns one shared two-specialist parallel review and synthesis tree with deterministic, OpenCode, and Codex harnesses.
 
 The first live parallel OpenCode review exposed two disposable hosts contending on OpenCode's ambient SQLite database. Package-owned OpenCode servers now use Execa to pass the documented process-private `OPENCODE_DB=:memory:` override directly to each child without mutating the caller environment. Deterministic launcher tests prove explicit environment ownership, complete-line readiness parsing, bounded lifecycle diagnostics, startup cleanup, and idempotent shutdown. The external execution gate reached its usage limit before a post-fix credentialed OpenCode rerun could be authorized; this does not weaken the Slice 14 Codex acceptance proof but remains explicit validation debt for the shared OpenCode harness.
 
@@ -790,15 +787,15 @@ Twenty deterministic Codex tests, fifty deterministic OpenCode tests, all worksp
 - stabilize provider-neutral trace events
 - add console trace presentation
 - defer OpenTelemetry to a consumer package until the stable event contract proves the dependency
-- use a direct evaluation-owned dispatcher instead of Hookable because trace delivery is synchronous, non-awaitable, and failure-isolated
+- use one runtime-owned Hookable event layer for evaluation lifecycle and observability
 - keep hooks scoped to one evaluation and prevent observers from mutating requests or results
 - keep trace-sink failure reporting out of workflow semantics
 
 Proof: one deterministic run and one live-provider run produce attributable spans without exposing prompt content by default.
 
-Dependency decision: Hookable remains out of the runtime. Its current `callHook()` contract awaits handlers sequentially and rejects when one fails, while AML traces must neither delay nor fail evaluation. Adapting Hookable would require the same isolation and Promise policing as a direct dispatcher while adding registration lifecycle and plugin semantics Slice 15 does not need. OpenTelemetry also remains out: the stable event stream is the integration boundary, and an eventual exporter can live in its own optional package without adding telemetry dependencies to `@aml/sdk`.
+Dependency decision: Hookable is the runtime's typed registration substrate. The runtime owns publication and exposes only `on()` and `once()` to providers and consumers. Awaited lifecycle events use Hookable's asynchronous semantics; trace observers use parallel publication whose result AML deliberately does not await, so observer failures remain isolated and cannot delay AML. OpenTelemetry remains out: the stable event stream is the integration boundary, and an eventual exporter can live in its own optional package without adding telemetry dependencies to `@aml/sdk`.
 
-Status: Done on 2026-07-27. The SDK now exposes immutable evaluation-local span and point-event contracts, one failure-isolated synchronous trace sink, an optional sensitive-content boundary, and a dependency-free tree console. Evaluation, component, Agent, System, Skill, JavaScript Tool, Loop, Sandbox, and Workspace lifecycles use canonical parent identities; providers receive the exact Agent identity published to observers. Capability events identify Tool kind and MCP provenance without copying transport credentials. JavaScript Tool transport input is captured once into stable JSON regardless of tracing, so opt-in content serialization cannot change validation or execution. Returned observer thenables, custom getters, asynchronous writers, hostile thrown values, concurrent evaluations, provider-owned Tool cancellation, resource cleanup failures, and invalid Tool transport calls remain isolated and attributable.
+Status: Done on 2026-07-27. Tracing and awaited evaluation cleanup now share one runtime-owned Hookable layer. `AmlRuntime` exposes `on()` and `once()`, provider contexts receive an evaluation-scoped subscriber, and OpenCode closes its evaluation host through `events.once("finish")` without extending the Agent provider contract. The example runner attaches the console tracer through `runtime.on("trace")`. Splitting request planning, response resolution, and Tool instrumentation reduced `AgentExecutor` from 556 lines to 208. Two hundred twenty-one SDK tests, all adapter and resource-provider tests, every workspace type check and build, all package checks, and the dist-backed basic and review examples pass.
 
 Singular review found component authority escaping through custom thenables, flattened lexical hierarchy, console-writer rejection leaks, split Agent span ownership and identity, provider cancellation replacement, missing MCP provenance, untraced Agent and Tool preflight failures, and content tracing that could change stateful Tool input. The corrected design gives each span one runtime owner and one canonical identity, preserves provider signals, snapshots transport input independently of tracing, and reports observer failures only out of band. One hundred ninety-nine SDK tests, fifty OpenCode tests, twenty Codex tests, fifteen Docker tests, twelve Local Workspace tests, all workspace type checks and builds, SDK package validation, the dist-backed deterministic example, and a credentialed `gpt-5.3-codex-spark` observability run pass. Final correctness, skeptical intent, and maintainability review lanes reported no actionable findings.
 
@@ -867,7 +864,6 @@ These remain product questions until resolved into `SPEC.md`:
 
 - When, if ever, should JSX siblings become implicitly concurrent?
 - Which trace events are stable public API?
-- Should observability hooks be synchronous, awaited and isolated, or buffered behind a flush boundary?
 - What is the first useful artifact contract for large data?
 - Where should retries and schema repair live?
 - Which Sandbox providers are worth supporting after Docker?

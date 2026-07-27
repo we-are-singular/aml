@@ -11,6 +11,7 @@
       "passThroughEnv": ["AML_*"]
     },
     "test": {
+      "dependsOn": ["^build"],
       "outputs": []
     },
     "typecheck": {

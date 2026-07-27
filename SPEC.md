@@ -97,6 +97,8 @@ Each distributable package owns one leaf build over its complete source import g
 
 Examples and applications consume built package exports for every distributable package under proof. They must not bypass those exports through source paths or TypeScript aliases.
 
+An example module exports one default function that returns its AML tree directly. It does not return a runner descriptor, construct or configure `AmlRuntime`, or expose a cleanup callback. The shared runner owns cross-cutting evaluation concerns such as tracing. Agent, Sandbox, and Workspace providers own their resource lifecycles through the runtime contracts below.
+
 AML node and primitive interoperability markers must be copy-stable. The exported JSX node type uses a structural symbol-valued discriminant rather than a copy-local unique-symbol key, so an arbitrary `{ type, props }` object is not renderable while TypeScript code using one physical `@aml/sdk` copy can compose nodes evaluated by another compatible copy.
 
 AML does not use names such as `@aml/agents/opencode` for independently installed providers because npm interprets that form as the `opencode` subpath of one `@aml/agents` package. Convenience aggregator packages are non-normative and may exist later, but cannot replace independently installable adapters.
@@ -1517,6 +1519,7 @@ interface AgentResponse {
 }
 
 interface AgentExecutionContext {
+  events: AmlEventSubscriber;
   signal: AbortSignal;
   sandbox?: SandboxSession;
   trace: AmlTraceIdentity;
@@ -1524,6 +1527,8 @@ interface AgentExecutionContext {
 ```
 
 `runId` identifies one `AmlRuntime.evaluate()` call. `spanId` identifies the Agent session within that evaluation, and `parentSpanId` is present when the runtime can attribute the session to an enclosing execution boundary. Trace identities are opaque correlation values; providers must preserve them rather than deriving behavior from their format.
+
+The runtime owns one event bus. Every provider receives a subscriber-only view scoped to the current evaluation through `AgentExecutionContext.events`. Providers may register evaluation-local listeners but cannot emit runtime events. A provider that allocates evaluation-owned resources registers a `once("finish", listener)` callback when it creates them. The runtime awaits finish listeners after every Agent and resource scope has settled and before `evaluate()` completes. A finish-listener failure rejects an otherwise successful evaluation, and failure during both execution and finish handling is preserved as an `AggregateError`. AML authors never call provider cleanup from components or example functions.
 
 Host Tools contain a name. JavaScript Tools contain a name, description, model-facing input schema, and async execution function. MCP servers contain either a provider-native name or one explicit standard transport descriptor.
 
@@ -1653,10 +1658,14 @@ const runtime = new AmlRuntime({
   maxStateTransitions: 16,
   maxTurnsPerAgent: 16,
   onTraceError(error, event) {
-    console.error("Trace sink failed", event.type, error);
+    console.error("Trace listener failed", event.type, error);
   },
   system: "Global application instructions.",
-  trace,
+});
+
+runtime.on("trace", createConsoleTracer());
+runtime.once("finish", async ({ status }) => {
+  await recordRunCompletion(status);
 });
 ```
 
@@ -1683,7 +1692,46 @@ One multi-turn Agent counts as one Agent session, not one call per FollowUp. Eve
 
 `runtime.evaluate()` returns a string. A text-only tree does not require an Agent provider. An Agent without a local or runtime-default provider rejects. Invalid placement, invalid values, provider errors, schema errors, missing resources, and exceeded limits reject.
 
-### 16.1 Trace contract
+### 16.1 Runtime events
+
+The runtime is the only event publisher. `AmlRuntime` exposes `on()` and `once()` for runtime-wide subscribers, while execution contexts receive the same registration surface scoped to their evaluation:
+
+```ts
+interface AmlEventSubscriber {
+  on<Name extends AmlEventName>(
+    name: Name,
+    listener: AmlEventListener<Name>,
+  ): () => void;
+  once<Name extends AmlEventName>(
+    name: Name,
+    listener: AmlEventListener<Name>,
+  ): () => void;
+}
+
+type AmlEventName = "start" | "finish" | "trace";
+
+interface AmlEvaluationStartEvent {
+  readonly runId: string;
+  readonly signal: AbortSignal;
+}
+
+interface AmlEvaluationFinishEvent {
+  readonly error?: unknown;
+  readonly runId: string;
+  readonly signal: AbortSignal;
+  readonly status: "error" | "ok";
+}
+```
+
+`on()` returns an unsubscribe function. `once()` removes its listener before the first matching call. Context listeners receive events only from their evaluation and are removed when it finishes; runtime listeners may observe every evaluation executed by that runtime.
+
+The SDK uses Hookable as the typed registration and dispatch substrate instead of maintaining separate observer and lifecycle registries. Hookable remains internal: subscribers can register and unregister listeners but cannot publish events.
+
+`start` listeners are awaited before AML begins evaluating the authored tree. `finish` listeners are awaited after the tree, Agent scheduler, Sandbox leases, and Workspace lease have settled. Every finish listener is given a chance to run; multiple failures are preserved. The root evaluation trace closes only after finish listeners settle, so cleanup failure is visible in both the returned error and trace status.
+
+`trace` is the common observability event. Trace listeners begin synchronously but are never awaited by AML. Hookable consumes asynchronous results, and thrown errors or rejections are reported through the isolated trace-error channel without delaying or failing the workflow. `createConsoleTracer()`, test inspectors, visual tree consumers, and future telemetry exporters subscribe through this event rather than a separate dispatcher API.
+
+### 16.2 Trace contract
 
 AML publishes one immutable, provider-neutral event stream:
 
@@ -1757,17 +1805,15 @@ Every event includes `runId`, `spanId`, a monotonically increasing evaluation-lo
 
 Agent spans begin when the runtime enters the authored Agent, before Agent-specific prop and Sandbox preflight, and include post-order request assembly plus the provider session. The runtime closes a successful Agent span only after its result enters the parent AML output channel. FollowUps remain inside that Agent span. `agent.turn` events are emitted in authored order at the provider handoff: the initial prompt is turn `1`, and the first FollowUp is turn `2`. Provider-internal reasoning, retries, tool loops, token accounting, and usage records are not part of the stable Slice 15 contract because the portable provider interface cannot observe them consistently.
 
-Trace sinks are captured by `AmlRuntime` and each evaluation creates its own dispatcher, ordering counter, root span, and failure-warning state. A sink receives deeply immutable snapshots rather than request, response, Tool, provider, lease, or component objects. It runs outside component-local `evaluate()` access and cannot mutate workflow inputs or results through the trace API.
+Trace sinks supplied through the compatibility `trace` runtime option are registered as `trace` event listeners. Each evaluation still owns its ordering counter, root span, and failure-warning state. A listener receives deeply immutable snapshots rather than request, response, Tool, provider, lease, or component objects. It runs outside component-local `evaluate()` access and cannot mutate workflow inputs or results through the event API.
 
-Trace sinks are synchronous and should return `void`. A thrown error or returned thenable cannot change workflow behavior. Returned thenables are contract failures because AML never awaits observers; their later rejection is still consumed and reported. `onTraceError(error, event)` receives failures through an isolated secondary channel; otherwise AML emits at most one compact stderr warning per evaluation. Errors and asynchronous rejections from the secondary handler are swallowed.
+Compatibility trace sinks are synchronous and should return `void`. A thrown error or returned thenable cannot change workflow behavior. Hookable consumes asynchronous results without making them part of evaluation completion. `onTraceError(error, event)` receives failures through an isolated secondary channel; otherwise AML emits at most one compact stderr warning per evaluation. Errors and asynchronous rejections from the secondary handler are swallowed.
 
 Prompts, System and Skill contents, Tool input/output, MCP configuration, filesystem paths, and model output may be sensitive. These values are omitted by default. A sink with `captureContent: true` explicitly opts into the content fields the stable runtime owns. JavaScript Tool spans serialize the already captured transport input as `input` on `span.start` and the stable Tool result as `output` on a successful `span.end`. Serialization failure for unusually deep JSON omits optional content without replacing Tool validation or execution. Credential-bearing MCP configuration and provider-private diagnostics are never copied into AML events.
 
-`createConsoleTracer()` renders the same event tree with indentation, span status, elapsed time, safe attributes, and optional captured content. A custom writer remains subject to the synchronous sink contract; throws and returned thenables are isolated and reported through the runtime trace-error channel. OpenTelemetry remains a possible consumer package after the event contract is proven; Slice 15 does not export `createOpenTelemetryTraceSink()` or add an OpenTelemetry dependency.
+`createConsoleTracer()` renders the same event tree with indentation, span status, elapsed time, safe attributes, and optional captured content. A custom writer remains subject to the synchronous trace-listener contract; throws and returned thenables are isolated and reported through the runtime trace-error channel. OpenTelemetry remains a possible consumer package after the event contract is proven; this phase does not export `createOpenTelemetryTraceSink()` or add an OpenTelemetry dependency.
 
-Hookable is not the internal dispatcher. Its awaitable sequential hooks and rejecting error semantics require an isolation wrapper that would be larger than the evaluation-owned synchronous dispatcher and would invite unrelated plugin lifecycle into the runtime. This decision may be revisited only if AML approves multiple asynchronous lifecycle subscribers whose work is intentionally awaited.
-
-### 16.2 Agent adapter requirements
+### 16.3 Agent adapter requirements
 
 #### OpenCode
 
@@ -1794,7 +1840,7 @@ function opencodeAgent(
 ): OpenCodeAgentProvider;
 ```
 
-`opencodeAgent()` is synchronous and performs no I/O. When `sessionClient` is supplied, the package uses that injected provider-owned port and does not start or stop an OpenCode server; that port owns complete Tool and MCP attachment and cleanup. `sessionClient` and `server` are mutually exclusive. Without `sessionClient`, the first Agent call that has neither a JavaScript Tool nor an MCP grant lazily starts one reusable package-owned local OpenCode server using the optional server settings. An Agent with a JavaScript Tool or MCP grant uses a disposable package-owned OpenCode server because OpenCode can disconnect but cannot remove a dynamically added MCP configuration from a long-lived server and MCP connections are host-scoped rather than session-scoped. Every disposable server requests port `0` so it cannot collide with the reusable server or another concurrent capability invocation; an explicit `server.port` configures only the reusable host. Other server settings still apply. The disposable server is closed after the complete Agent session and capability cleanup settle, so registrations and connections cannot accumulate or leak into sibling Agents. Named grants connect an exact server already present in the disposable host's provider configuration. Explicit grants are added dynamically. OpenCode's per-prompt Tool map disables `"*"` and enables only declared host Tools, JavaScript Tools, and each declared MCP server's normalized `<server>_*` namespace. A structured request additionally grants exactly OpenCode's provider-owned `StructuredOutput` Tool because that is how the harness implements JSON Schema output; text requests never receive it, and a structured Agent cannot also declare a host Tool with that reserved provider-equivalent name. Capability isolation mirrors OpenCode's permission equivalence by normalizing backslashes to slashes and comparing case-insensitively on Windows. Because this adapter must mirror OpenCode server internals to secure those grants, it preflights `/global/health` and accepts only reviewed server versions `1.18.4` and `1.18.5` for any capability-bearing Agent. Its generated OpenCode SDK dependency is pinned separately at `1.18.5` for API compatibility. An upgrade must revalidate punctuation normalization, platform equivalence, namespace overlap, and both client and server versions before expanding either compatibility boundary. `close()` is idempotent, rejects future calls, waits for active calls, and stops only the reusable server owned by that provider instance. Concurrent and later callers receive the same cleanup promise and therefore observe the same completion or failure. Credentials remain in the OpenCode environment and configuration; AML does not read or copy them.
+`opencodeAgent()` is synchronous and performs no I/O. When `sessionClient` is supplied, the package uses that injected provider-owned port and does not start or stop an OpenCode server; that port owns complete Tool and MCP attachment and cleanup. `sessionClient` and `server` are mutually exclusive. Without `sessionClient`, the first ordinary Agent call in an evaluation lazily starts one package-owned local OpenCode server shared only by that evaluation. When it creates that evaluation state, the adapter registers one `events.once("finish", ...)` listener. The listener waits for active calls, stops the host, and leaves the provider reusable so concurrent and later AML evaluations receive independent lifecycle state. An Agent with a JavaScript Tool or MCP grant uses a disposable package-owned OpenCode server because OpenCode can disconnect but cannot remove a dynamically added MCP configuration from a long-lived server and MCP connections are host-scoped rather than session-scoped. Every disposable server requests port `0` so it cannot collide with the evaluation host or another concurrent capability invocation; an explicit `server.port` configures only the ordinary evaluation host. Other server settings still apply. The disposable server is closed after the complete Agent session and capability cleanup settle, so registrations and connections cannot accumulate or leak into sibling Agents. Named grants connect an exact server already present in the disposable host's provider configuration. Explicit grants are added dynamically. OpenCode's per-prompt Tool map disables `"*"` and enables only declared host Tools, JavaScript Tools, and each declared MCP server's normalized `<server>_*` namespace. A structured request additionally grants exactly OpenCode's provider-owned `StructuredOutput` Tool because that is how the harness implements JSON Schema output; text requests never receive it, and a structured Agent cannot also declare a host Tool with that reserved provider-equivalent name. Capability isolation mirrors OpenCode's permission equivalence by normalizing backslashes to slashes and comparing case-insensitively on Windows. Because this adapter must mirror OpenCode server internals to secure those grants, it preflights `/global/health` and accepts only reviewed server versions `1.18.4` and `1.18.5` for any capability-bearing Agent. Its generated OpenCode SDK dependency is pinned separately at `1.18.5` for API compatibility. An upgrade must revalidate punctuation normalization, platform equivalence, namespace overlap, and both client and server versions before expanding either compatibility boundary. `close()` remains an idempotent permanent shutdown escape hatch for direct provider use outside normal AML evaluation; components and examples do not call it. Credentials remain in the OpenCode environment and configuration; AML does not read or copy them.
 
 `directory` selects the OpenCode working directory. `model` is the configured default and is overridden by `<Agent model>`. Explicit model identifiers use `provider/model` form and are validated before the session is created.
 

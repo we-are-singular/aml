@@ -1,5 +1,6 @@
 import type {
   AgentExecutionContext,
+  AmlEventSubscriber,
   AgentRequest,
   AgentResponse,
 } from "@aml/sdk"
@@ -40,6 +41,11 @@ import {
 import { OpenCodeCapabilityAttachment } from "../src/opencode-capability-attachment.js"
 import { OpenCodeSdkClient } from "../src/opencode-sdk-client.js"
 import { OpenCodeSession } from "../src/opencode-session.js"
+
+const TestEvents: AmlEventSubscriber = Object.freeze({
+  on: () => () => undefined,
+  once: () => () => undefined,
+})
 
 class RecordingSessionClient implements OpenCodeSessionClient {
   readonly abortCalls: OpenCodeSessionLocation[] = []
@@ -130,7 +136,11 @@ function createRequest(overrides: Partial<AgentRequest> = {}): AgentRequest {
 
 function createContext(signal = new AbortController().signal) {
   const trace = Object.freeze({ runId: "run", spanId: "span-1" })
-  return Object.freeze({ signal, trace }) satisfies AgentExecutionContext
+  return Object.freeze({
+    events: TestEvents,
+    signal,
+    trace,
+  }) satisfies AgentExecutionContext
 }
 
 /**
@@ -791,6 +801,50 @@ describe("opencodeAgent", () => {
     await expect(run).resolves.toEqual({ text: "done" })
     await expect(firstClose).resolves.toBeUndefined()
     expect(close).toHaveBeenCalledTimes(1)
+  })
+
+  it("releases evaluation hosts automatically and remains reusable", async () => {
+    const closes: ReturnType<typeof vi.fn>[] = []
+    let session = 0
+
+    openCodeHost.createIsolatedOpencode.mockImplementation(async () => {
+      const close = vi.fn()
+      closes.push(close)
+
+      return {
+        client: {
+          session: {
+            abort: vi.fn(async () => ({ data: true })),
+            create: vi.fn(async () => ({
+              data: { id: `session-${++session}` },
+            })),
+            delete: vi.fn(async () => ({ data: true })),
+            prompt: vi.fn(async () => ({
+              data: {
+                info: {},
+                parts: [{ text: "done", type: "text" }],
+              },
+            })),
+          },
+        },
+        server: { close },
+      }
+    })
+    const provider = opencodeAgent()
+    const runtime = new AmlRuntime()
+
+    await expect(
+      runtime.evaluate(<Agent provider={provider}>first</Agent>),
+    ).resolves.toBe("done")
+    await expect(
+      runtime.evaluate(<Agent provider={provider}>second</Agent>),
+    ).resolves.toBe("done")
+
+    expect(closes).toHaveLength(2)
+    expect(closes[0]).toHaveBeenCalledTimes(1)
+    expect(closes[1]).toHaveBeenCalledTimes(1)
+    await provider.close()
+    expect(closes[1]).toHaveBeenCalledTimes(1)
   })
 
   it("preserves one owned-server close failure for every caller", async () => {
