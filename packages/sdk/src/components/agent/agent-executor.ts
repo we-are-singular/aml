@@ -18,6 +18,9 @@ export class AgentExecutor {
   readonly #agentProvider: Readonly<ValidatedAgentProvider> | undefined
   readonly #system: string
 
+  /**
+   * Captures runtime-wide Agent defaults and their provider boundary.
+   */
   constructor(options: {
     readonly agentProvider?: AgentProvider
     readonly system?: string
@@ -33,6 +36,9 @@ export class AgentExecutor {
     this.#system = options.system ?? ""
   }
 
+  /**
+   * Validates portable Agent props before any descendants execute.
+   */
   validateProps(
     props: Readonly<AgentProps>,
   ): Readonly<ValidatedAgentProvider> | undefined {
@@ -49,12 +55,16 @@ export class AgentExecutor {
       : validateAgentProvider(props.provider)
   }
 
+  /**
+   * Builds and runs one complete provider-neutral Agent request.
+   */
   async execute(input: {
     readonly context: EvaluationContext
     readonly prompt: string
     readonly provider: Readonly<ValidatedAgentProvider> | undefined
     readonly props: Readonly<AgentProps>
     readonly systemFragments: readonly string[]
+    readonly tools: readonly import("../tool/agent-tool.js").AgentTool[]
     readonly trace: AmlTraceIdentity
   }): Promise<string> {
     if (!input.provider) {
@@ -63,6 +73,7 @@ export class AgentExecutor {
       )
     }
 
+    // Fixed system text precedes asynchronously resolved <System> fragments.
     const systemFragments: string[] = []
 
     for (const fixedSystem of [this.#system, input.props.system]) {
@@ -81,6 +92,7 @@ export class AgentExecutor {
         : { model: input.props.model }),
       prompt: input.prompt.trim(),
       system: systemFragments.join("\n"),
+      tools: input.tools,
       trace: input.trace,
     })
     const agentContext: AgentExecutionContext = Object.freeze({
@@ -88,6 +100,8 @@ export class AgentExecutor {
       trace: input.trace,
     })
 
+    // Reserve only after the complete plan exists and immediately before the
+    // provider boundary, so rejected descendants do not consume call budget.
     input.context.reserveAgentCall(input.trace)
 
     let response: AgentResponse
@@ -111,6 +125,8 @@ export class AgentExecutor {
       )
     }
 
+    // Provider objects are external values: read response text once so getters
+    // cannot return a different value after validation.
     let text: unknown
 
     try {

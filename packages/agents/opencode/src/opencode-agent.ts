@@ -11,12 +11,22 @@ import { OpenCodeSdkClient } from "./opencode-sdk-client.js"
 import type { OpenCodeSessionClient } from "./opencode-session-client.js"
 import { OpenCodeSession } from "./opencode-session.js"
 
+/**
+ * Vendor-owned settings for a package-created local OpenCode server.
+ */
 export interface OpenCodeServerOptions {
   readonly hostname?: string
+
+  /**
+   * Fixed port for the reusable host; disposable Tool hosts always use port 0.
+   */
   readonly port?: number
   readonly timeout?: number
 }
 
+/**
+ * Configures the OpenCode adapter and its resource ownership.
+ */
 export interface OpenCodeAgentOptions {
   readonly directory?: string
   readonly model?: string
@@ -24,8 +34,15 @@ export interface OpenCodeAgentOptions {
   readonly sessionClient?: OpenCodeSessionClient
 }
 
+/**
+ * Configured OpenCode strategy with explicit lifecycle cleanup.
+ */
 export interface OpenCodeAgentProvider extends AgentProvider {
   readonly name: "opencode"
+
+  /**
+   * Waits for active calls and releases only resources owned by this adapter.
+   */
   close(): Promise<void>
 }
 
@@ -48,6 +65,9 @@ class OpenCodeAgentImplementation implements OpenCodeAgentProvider {
     this.#sessionClient = options.sessionClient
   }
 
+  /**
+   * Runs one Agent while registering it with the provider close barrier.
+   */
   async run(
     request: AgentRequest,
     context: AgentExecutionContext,
@@ -66,6 +86,9 @@ class OpenCodeAgentImplementation implements OpenCodeAgentProvider {
     }
   }
 
+  /**
+   * Rejects future work and returns one shared cleanup promise to every caller.
+   */
   close(): Promise<void> {
     this.#closed = true
     this.#closePromise ??= this.#close()
@@ -76,6 +99,15 @@ class OpenCodeAgentImplementation implements OpenCodeAgentProvider {
     request: AgentRequest,
     context: AgentExecutionContext,
   ): Promise<AgentResponse> {
+    // OpenCode disconnects dynamic MCP clients but retains their configuration.
+    // A disposable host prevents one stale registration per JavaScript Tool run.
+    if (
+      !this.#sessionClient &&
+      request.tools.some((tool) => tool.kind === "javascript")
+    ) {
+      return await this.#runWithDisposableServer(request, context)
+    }
+
     const client = await this.#getClient()
     return await new OpenCodeSession(client, {
       ...(this.#directory === undefined
@@ -85,11 +117,77 @@ class OpenCodeAgentImplementation implements OpenCodeAgentProvider {
     }).run(request, context)
   }
 
+  async #runWithDisposableServer(
+    request: AgentRequest,
+    context: AgentExecutionContext,
+  ): Promise<AgentResponse> {
+    // This server is deliberately not assigned to #ownedServer: its lifetime
+    // belongs to this invocation and must end even when the session fails.
+    const owned = await createOpencode({
+      ...(this.#serverOptions === undefined ? {} : this.#serverOptions),
+      // Disposable hosts must not contend with the reusable configured port or
+      // with another concurrent JavaScript Tool invocation.
+      port: 0,
+    })
+    const client = new OpenCodeSdkClient(owned.client)
+    let hasExecutionError = false
+    let executionError: unknown
+    let response: AgentResponse | undefined
+
+    // Keep execution and server shutdown errors separately so neither masks the
+    // other at this distributed resource boundary.
+    try {
+      response = await new OpenCodeSession(client, {
+        ...(this.#directory === undefined
+          ? {}
+          : { directory: this.#directory }),
+        ...(this.#model === undefined ? {} : { model: this.#model }),
+      }).run(request, context)
+    } catch (error) {
+      hasExecutionError = true
+      executionError = error
+    }
+
+    let hasCleanupError = false
+    let cleanupError: unknown
+
+    try {
+      await owned.server.close()
+    } catch (error) {
+      hasCleanupError = true
+      cleanupError = error
+    }
+
+    if (hasExecutionError && hasCleanupError) {
+      throw new AggregateError(
+        [executionError, cleanupError],
+        "OpenCode disposable server execution and cleanup failed",
+      )
+    }
+
+    if (hasExecutionError) {
+      throw executionError
+    }
+
+    if (hasCleanupError) {
+      throw cleanupError
+    }
+
+    if (!response) {
+      throw new Error("OpenCode disposable server produced no response")
+    }
+
+    return response
+  }
+
   async #getClient(): Promise<OpenCodeSessionClient> {
+    // An injected port owns its own OpenCode host and attachment semantics.
     if (this.#sessionClient) {
       return this.#sessionClient
     }
 
+    // Share one startup barrier across concurrent calls, but permit retry after
+    // a failed startup because no reusable client was established.
     this.#clientPromise ??= this.#createClient().catch((error: unknown) => {
       this.#clientPromise = undefined
       throw error
@@ -107,6 +205,8 @@ class OpenCodeAgentImplementation implements OpenCodeAgentProvider {
   }
 
   async #close(): Promise<void> {
+    // Active calls include their invocation-scoped cleanup. Closing the shared
+    // server earlier could strand their session deletion requests.
     await Promise.allSettled(this.#activeRuns)
     this.#ownedServer?.close()
   }
@@ -114,6 +214,9 @@ class OpenCodeAgentImplementation implements OpenCodeAgentProvider {
 
 /**
  * Configures one immutable OpenCode Agent adapter without performing I/O.
+ *
+ * Network and process resources remain lazy so importing or authoring an AML
+ * tree cannot start an OpenCode server.
  */
 export function opencodeAgent(
   options: OpenCodeAgentOptions = {},
@@ -136,6 +239,8 @@ export function opencodeAgent(
 }
 
 function validateOptions(options: OpenCodeAgentOptions): void {
+  // Portable model parsing happens synchronously so invalid configured
+  // identities never reach server or session creation.
   if (
     options.directory !== undefined &&
     (typeof options.directory !== "string" ||
@@ -160,7 +265,15 @@ function validateOptions(options: OpenCodeAgentOptions): void {
       throw new TypeError("OpenCode sessionClient must be an object")
     }
 
-    for (const method of ["abort", "create", "delete", "prompt"] as const) {
+    // Validate the complete injected port now; late missing-method failures can
+    // otherwise occur only after remote provider state has been created.
+    for (const method of [
+      "abort",
+      "attachTools",
+      "create",
+      "delete",
+      "prompt",
+    ] as const) {
       if (typeof options.sessionClient[method] !== "function") {
         throw new TypeError(
           `OpenCode sessionClient ${method} must be a function`,

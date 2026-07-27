@@ -4,7 +4,8 @@
   "type": "module",
   "dependencies": {
     "@aml/agent-opencode": "*",
-    "@aml/sdk": "*"
+    "@aml/sdk": "*",
+    "zod": "^4.4.3"
   },
   "scripts": {
     "example": "vite-node main.tsx",

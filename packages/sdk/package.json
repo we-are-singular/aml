@@ -42,5 +42,11 @@
     "pack:check": "npm run build && node scripts/check-package.ts",
     "test": "vitest run",
     "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@standard-schema/spec": "^1.1.0"
+  },
+  "devDependencies": {
+    "zod": "^4.4.3"
   }
 }

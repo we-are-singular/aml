@@ -20,10 +20,30 @@ interface PackResult {
 }
 
 interface BuiltSdk {
-  readonly AmlRuntime: new () => {
+  readonly Agent: unknown
+  readonly AmlRuntime: new (options?: {
+    agentProvider?: {
+      readonly name: string
+      run(
+        request: {
+          readonly tools: readonly {
+            execute?(
+              input: unknown,
+              context: unknown,
+            ): Promise<unknown>
+            readonly kind: string
+            readonly name: string
+          }[]
+        },
+        context: unknown,
+      ): Promise<{ text: string }>
+    }
+  }) => {
     evaluate(value: unknown): Promise<string>
   }
   readonly Fragment: unknown
+  readonly Tool: unknown
+  defineTool(options: unknown): unknown
 }
 
 interface BuiltJsxRuntime {
@@ -187,15 +207,45 @@ try {
     )
   }
 
+  const standardSchemaDirectory = join(
+    copyFixtureDirectory,
+    "node_modules/@standard-schema/spec",
+  )
+  mkdirSync(standardSchemaDirectory, { recursive: true })
+  cpSync(
+    resolve(packageDirectory, "../../node_modules/@standard-schema/spec"),
+    standardSchemaDirectory,
+    { recursive: true },
+  )
+
   writeFileSync(
     join(copyFixtureDirectory, "consumer.mts"),
     [
       'import { AmlRuntime, type AmlRenderable } from "@aml/sdk-a"',
+      'import type { ToolProps } from "@aml/sdk-a"',
+      'import { defineTool } from "@aml/sdk-b"',
       'import { jsx } from "@aml/sdk-b/jsx-runtime"',
       "",
       'const foreignNode = jsx(() => "cross-copy", {})',
       "const renderable: AmlRenderable = foreignNode",
       "await new AmlRuntime().evaluate(renderable)",
+      "",
+      "const schema = {",
+      '  "~standard": {',
+      "    jsonSchema: { input: () => ({ type: \"object\" }) },",
+      "    validate: (value: unknown) => ({ value }),",
+      '    vendor: "fixture",',
+      "    version: 1 as const,",
+      "  },",
+      "} as any",
+      "const foreignTool = defineTool({",
+      '  description: "Cross-copy Tool",',
+      "  execute: (input: any) => input.id,",
+      "  input: schema,",
+      '  name: "cross_copy",',
+      "})",
+      "const toolProps: ToolProps = { use: foreignTool }",
+      "void toolProps",
       "",
     ].join("\n"),
   )
@@ -229,12 +279,70 @@ try {
   const copyB = (await import(
     pathToFileURL(join(copyDirectories.b, "dist/jsx-runtime.js")).href
   )) as BuiltJsxRuntime
+  const copyBPackage = (await import(
+    pathToFileURL(join(copyDirectories.b, "dist/index.js")).href
+  )) as BuiltSdk
   const crossCopyOutput = await new copyA.AmlRuntime().evaluate(
     copyB.jsx(() => "cross-copy", {}),
   )
 
   if (crossCopyOutput !== "cross-copy") {
     throw new Error(`Unexpected cross-copy output: ${crossCopyOutput}`)
+  }
+
+  // Tool authenticity uses a global exact-identity registry. Prove a Tool
+  // created by copy B keeps its validated execution port in copy A.
+  const schema = {
+    "~standard": {
+      jsonSchema: {
+        input: () => ({
+          properties: { id: { type: "number" } },
+          required: ["id"],
+          type: "object",
+        }),
+      },
+      validate: (value: unknown) =>
+        typeof value === "object" &&
+        value !== null &&
+        typeof Reflect.get(value, "id") === "number"
+          ? { value }
+          : { issues: [{ message: "id must be a number" }] },
+      vendor: "package-check",
+      version: 1,
+    },
+  }
+  const foreignTool = copyBPackage.defineTool({
+    description: "Read one cross-copy ID",
+    execute: (input: { id: number }) => input.id,
+    input: schema,
+    name: "cross_copy",
+  })
+  const toolOutput = await new copyA.AmlRuntime({
+    agentProvider: {
+      name: "cross-copy-provider",
+      async run(request, context) {
+        const [tool] = request.tools
+
+        if (tool?.kind !== "javascript" || !tool.execute) {
+          throw new Error("Cross-copy Tool did not reach the provider")
+        }
+
+        return {
+          text: String(await tool.execute({ id: 42 }, context)),
+        }
+      },
+    },
+  }).evaluate(
+    copyB.jsx(copyBPackage.Agent, {
+      children: [
+        copyB.jsx(copyBPackage.Tool, { use: foreignTool }),
+        "Use the Tool.",
+      ],
+    }),
+  )
+
+  if (toolOutput !== "42") {
+    throw new Error(`Unexpected cross-copy Tool output: ${toolOutput}`)
   }
 } finally {
   rmSync(copyFixtureDirectory, { force: true, recursive: true })

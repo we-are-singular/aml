@@ -3,8 +3,11 @@ import type {
   AgentRequest,
   AgentResponse,
 } from "@aml/sdk"
-import { Agent, AmlRuntime } from "@aml/sdk"
+import { Agent, AmlRuntime, defineTool } from "@aml/sdk"
 import { agentProviderConformance } from "@aml/sdk/testing"
+import { Client as McpClient } from "@modelcontextprotocol/sdk/client/index.js"
+import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js"
+import { z } from "zod"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
 const openCodeSdk = vi.hoisted(() => ({
@@ -20,7 +23,9 @@ import {
   type OpenCodeSessionLocation,
   type OpenCodeSessionPromptInput,
   type OpenCodeSessionPromptResult,
+  type OpenCodeToolAttachmentInput,
 } from "../src/index.js"
+import { OpenCodeToolAttachment } from "../src/opencode-tool-attachment.js"
 import { OpenCodeSdkClient } from "../src/opencode-sdk-client.js"
 import { OpenCodeSession } from "../src/opencode-session.js"
 
@@ -31,10 +36,16 @@ class RecordingSessionClient implements OpenCodeSessionClient {
     signal: AbortSignal
   }[] = []
   readonly deleteCalls: OpenCodeSessionLocation[] = []
+  readonly events: string[] = []
   readonly promptCalls: {
     input: OpenCodeSessionPromptInput
     signal: AbortSignal
   }[] = []
+  readonly toolAttachmentCalls: {
+    input: OpenCodeToolAttachmentInput
+    signal: AbortSignal
+  }[] = []
+  readonly toolAttachmentClose = vi.fn(async () => undefined)
   promptResult: OpenCodeSessionPromptResult = {
     parts: [{ text: "response", type: "text" }],
   }
@@ -43,6 +54,7 @@ class RecordingSessionClient implements OpenCodeSessionClient {
     input: OpenCodeSessionCreateInput,
     signal: AbortSignal,
   ): Promise<string> {
+    this.events.push("create")
     this.createCalls.push({ input, signal })
     return `session-${this.createCalls.length}`
   }
@@ -53,6 +65,18 @@ class RecordingSessionClient implements OpenCodeSessionClient {
   ): Promise<OpenCodeSessionPromptResult> {
     this.promptCalls.push({ input, signal })
     return this.promptResult
+  }
+
+  async attachTools(
+    input: OpenCodeToolAttachmentInput,
+    signal: AbortSignal,
+  ): Promise<OpenCodeToolAttachment> {
+    this.events.push("attach")
+    this.toolAttachmentCalls.push({ input, signal })
+    return new OpenCodeToolAttachment(
+      { "*": false },
+      this.toolAttachmentClose,
+    )
   }
 
   async abort(input: OpenCodeSessionLocation): Promise<void> {
@@ -68,6 +92,7 @@ function createRequest(overrides: Partial<AgentRequest> = {}): AgentRequest {
   return Object.freeze({
     prompt: "prompt",
     system: "system",
+    tools: Object.freeze([]),
     ...overrides,
   })
 }
@@ -195,6 +220,16 @@ describe("opencodeAgent", () => {
         sessionClient: { create() {} } as never,
       }),
     ).toThrow("OpenCode sessionClient abort must be a function")
+    expect(() =>
+      opencodeAgent({
+        sessionClient: {
+          abort() {},
+          create() {},
+          delete() {},
+          prompt() {},
+        } as never,
+      }),
+    ).toThrow("OpenCode sessionClient attachTools must be a function")
   })
 
   it("starts an owned server lazily and closes it once", async () => {
@@ -239,6 +274,89 @@ describe("opencodeAgent", () => {
     await expect(
       provider.run(createRequest(), createContext()),
     ).rejects.toThrow("OpenCode Agent provider is closed")
+  })
+
+  it("uses disposable owned servers for JavaScript Tool sessions", async () => {
+    const serverCloses: ReturnType<typeof vi.fn>[] = []
+    let sessionIndex = 0
+
+    openCodeSdk.createOpencode.mockImplementation(async () => {
+      const close = vi.fn()
+      serverCloses.push(close)
+
+      return {
+        client: {
+          mcp: {
+            add: vi.fn(async ({ name }: { name: string }) => ({
+              data: { [name]: { status: "connected" } },
+            })),
+            disconnect: vi.fn(async () => ({ data: true })),
+          },
+          session: {
+            abort: vi.fn(async () => ({ data: true })),
+            create: vi.fn(async () => ({
+              data: { id: `tool-session-${++sessionIndex}` },
+            })),
+            delete: vi.fn(async () => ({ data: true })),
+            prompt: vi.fn(async () => ({
+              data: {
+                info: {},
+                parts: [{ text: "tool response", type: "text" }],
+              },
+            })),
+          },
+          tool: {
+            ids: vi.fn(async () => ({ data: [] })),
+          },
+        },
+        server: { close },
+      }
+    })
+    const lookup = defineTool({
+      description: "Look up one record",
+      input: z.object({ id: z.number() }),
+      name: "lookup",
+      execute: async ({ id }) => ({ id }),
+    })
+    const provider = opencodeAgent()
+
+    await expect(
+      provider.run(createRequest(), createContext()),
+    ).resolves.toEqual({ text: "tool response" })
+    await expect(
+      Promise.all([
+        provider.run(
+          createRequest({ tools: [lookup] }),
+          createContext(),
+        ),
+        provider.run(
+          createRequest({ tools: [lookup] }),
+          createContext(),
+        ),
+      ]),
+    ).resolves.toEqual([
+      { text: "tool response" },
+      { text: "tool response" },
+    ])
+
+    expect(openCodeSdk.createOpencode.mock.calls).toEqual([
+      [{}],
+      [{ port: 0 }],
+      [{ port: 0 }],
+    ])
+    expect(serverCloses).toHaveLength(3)
+    expect(serverCloses.map((close) => close.mock.calls.length)).toEqual([
+      0,
+      1,
+      1,
+    ])
+
+    await provider.close()
+    expect(serverCloses.map((close) => close.mock.calls.length)).toEqual([
+      1,
+      1,
+      1,
+    ])
   })
 
   it("shares one close barrier across concurrent callers", async () => {
@@ -380,6 +498,50 @@ describe("opencodeAgent", () => {
 })
 
 describe("OpenCodeSession", () => {
+  it("rejects Tool attachment before creating a session", async () => {
+    const attachError = new Error("attach failed")
+    const client = new RecordingSessionClient()
+    client.attachTools = async () => {
+      client.events.push("attach")
+      throw attachError
+    }
+
+    await expect(
+      new OpenCodeSession(client, {}).run(
+        createRequest({
+          tools: [{ kind: "host", name: "read" }],
+        }),
+        createContext(),
+      ),
+    ).rejects.toBe(attachError)
+    expect(client.events).toEqual(["attach"])
+    expect(client.createCalls).toHaveLength(0)
+    expect(client.promptCalls).toHaveLength(0)
+    expect(client.deleteCalls).toHaveLength(0)
+  })
+
+  it("closes a Tool attachment when session creation fails", async () => {
+    const createError = new Error("create failed")
+    const client = new RecordingSessionClient()
+    client.create = async (input, signal) => {
+      client.events.push("create")
+      client.createCalls.push({ input, signal })
+      throw createError
+    }
+
+    await expect(
+      new OpenCodeSession(client, {}).run(
+        createRequest({
+          tools: [{ kind: "host", name: "read" }],
+        }),
+        createContext(),
+      ),
+    ).rejects.toBe(createError)
+    expect(client.events).toEqual(["attach", "create"])
+    expect(client.toolAttachmentClose).toHaveBeenCalledTimes(1)
+    expect(client.deleteCalls).toHaveLength(0)
+  })
+
   it("preserves execution and cleanup failures", async () => {
     const promptError = new Error("prompt failed")
     const cleanupError = new Error("cleanup failed")
@@ -488,6 +650,205 @@ describe("OpenCodeSession", () => {
 })
 
 describe("OpenCodeSdkClient", () => {
+  it("rejects incompatible JavaScript Tools before session creation", async () => {
+    const create = vi.fn()
+    const scalar = defineTool({
+      description: "Accept a scalar",
+      input: z.string(),
+      name: "scalar",
+      execute: async (value) => value,
+    })
+    const client = new OpenCodeSdkClient({
+      session: { create },
+    } as never)
+
+    await expect(
+      new OpenCodeSession(client, {}).run(
+        createRequest({ tools: [scalar] }),
+        createContext(),
+      ),
+    ).rejects.toThrow(
+      'OpenCode Tool "scalar" requires an object input schema',
+    )
+    expect(create).not.toHaveBeenCalled()
+  })
+
+  it("maps declared host Tools and rejects unavailable capabilities", async () => {
+    const rawClient = {
+      tool: {
+        ids: vi.fn(async () => ({ data: ["read", "grep"] })),
+      },
+    }
+    const client = new OpenCodeSdkClient(rawClient as never)
+    const signal = new AbortController().signal
+
+    const attachment = await client.attachTools(
+      {
+        context: createContext(signal),
+        tools: [{ kind: "host", name: "read" }],
+      },
+      signal,
+    )
+
+    expect(attachment.tools).toEqual({ "*": false, read: true })
+    await attachment.close()
+    await expect(
+      client.attachTools(
+        {
+          context: createContext(signal),
+          tools: [{ kind: "host", name: "write" }],
+        },
+        signal,
+      ),
+    ).rejects.toThrow('OpenCode host Tool "write" is unavailable')
+  })
+
+  it("serves JavaScript Tools through an invocation-scoped MCP bridge", async () => {
+    let bridgeClient: McpClient | undefined
+    let bridgeName: string | undefined
+    const mcp = {
+      add: vi.fn(async (input: {
+        config: {
+          headers: Record<string, string>
+          url: string
+        }
+        name: string
+      }) => {
+        bridgeName = input.name
+        bridgeClient = new McpClient({
+          name: "opencode-test",
+          version: "0.0.0",
+        })
+        await bridgeClient.connect(
+          new StreamableHTTPClientTransport(
+            new URL(input.config.url),
+            {
+              requestInit: {
+                headers: { ...input.config.headers },
+              },
+            },
+          ) as never,
+        )
+
+        return {
+          data: {
+            [input.name]: { status: "connected" },
+          },
+        }
+      }),
+      disconnect: vi.fn(async () => {
+        await bridgeClient?.close()
+        return { data: true }
+      }),
+    }
+    const rawClient = {
+      mcp,
+      tool: {
+        ids: vi.fn(async () => ({ data: [] })),
+      },
+    }
+    const execute = vi.fn(async ({ id }: { id: number }) => ({
+      id,
+      status: "active",
+    }))
+    const lookup = defineTool({
+      description: "Look up a customer",
+      execute,
+      input: z.object({ id: z.number() }),
+      name: "lookup_customer",
+    })
+    const signal = new AbortController().signal
+    const client = new OpenCodeSdkClient(rawClient as never)
+    const attachment = await client.attachTools(
+      {
+        context: createContext(signal),
+        tools: [lookup],
+      },
+      signal,
+    )
+
+    expect(attachment.tools).toEqual({
+      "*": false,
+      [`${bridgeName}_lookup_customer`]: true,
+    })
+    await expect(bridgeClient!.listTools()).resolves.toMatchObject({
+      tools: [
+        {
+          description: "Look up a customer",
+          name: "lookup_customer",
+        },
+      ],
+    })
+    await expect(
+      bridgeClient!.callTool({
+        arguments: { id: 42 },
+        name: "lookup_customer",
+      }),
+    ).resolves.toMatchObject({
+      content: [
+        {
+          text: '{"id":42,"status":"active"}',
+          type: "text",
+        },
+      ],
+    })
+    expect(execute).toHaveBeenCalledWith(
+      { id: 42 },
+      expect.objectContaining({
+        signal: expect.any(AbortSignal),
+        trace: createContext().trace,
+      }),
+    )
+
+    await attachment.close()
+    await attachment.close()
+    expect(mcp.disconnect).toHaveBeenCalledTimes(1)
+  })
+
+  it("preserves attachment setup and cleanup failures", async () => {
+    const disconnectError = new Error("disconnect failed")
+    const mcp = {
+      add: vi.fn(async ({ name }: { name: string }) => ({
+        data: { [name]: { status: "connected" } },
+      })),
+      disconnect: vi.fn(async () => {
+        throw disconnectError
+      }),
+    }
+    const client = new OpenCodeSdkClient({
+      mcp,
+      tool: {
+        ids: vi.fn(async () => ({ data: [] })),
+      },
+    } as never)
+    const lookup = defineTool({
+      description: "Look up a customer",
+      input: z.object({ id: z.number() }),
+      name: "lookup_customer",
+      execute: async ({ id }) => ({ id }),
+    })
+    const error = await client
+      .attachTools(
+        {
+          context: createContext(),
+          tools: [
+            lookup,
+            { kind: "host", name: "missing" },
+          ],
+        },
+        new AbortController().signal,
+      )
+      .catch((cause: unknown) => cause)
+
+    expect(error).toBeInstanceOf(AggregateError)
+    expect(error).toHaveProperty("errors", [
+      expect.objectContaining({
+        message: 'OpenCode host Tool "missing" is unavailable',
+      }),
+      disconnectError,
+    ])
+  })
+
   it("maps the AML session port to the generated v2 SDK", async () => {
     const signal = new AbortController().signal
     const textPart = { text: "response", type: "text" }

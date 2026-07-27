@@ -1,6 +1,6 @@
 # Agent Markup Language product requirements and delivery plan
 
-Status: Phase 1 — Slices 0–2 done; Slice 3 next
+Status: Phase 1 — Slices 0–3 done; Slice 4 pending
 
 This is the living product definition, architecture plan, implementation roadmap, and progress tracker for AML. It is not a normative runtime contract. Settled behavior belongs in `SPEC.md`; this document records why AML exists, how it is organized, what is being built next, and which slices have been proven.
 
@@ -163,7 +163,7 @@ The status table is the canonical implementation tracker. A slice moves to `Done
 | Slice 0 | Monorepo and evaluation foundation | Done |
 | Slice 1 | `<Agent>`, `<System>`, and provider authorship | Done |
 | Slice 2 | OpenCode Agent package | Done |
-| Slice 3 | `<Tool>` and `defineTool()` | Pending |
+| Slice 3 | `<Tool>` and `defineTool()` | Done |
 | Slice 4 | `<Skill>` | Pending |
 | Slice 5 | `<Sandbox>` contract | Pending |
 | Slice 6 | Docker Sandbox package | Pending |
@@ -440,7 +440,15 @@ Each implementation file has one primary export whose name matches the filename:
 | `agent-executor.ts`        | `AgentExecutor`       |
 | `validate-agent-provider.ts` | `validateAgentProvider` |
 | `system.tsx`               | `System`              |
+| `tool.tsx`                 | `Tool`                |
+| `agent-tool.ts`            | `AgentTool`           |
 | `define-tool.ts`           | `defineTool`          |
+| `tool-definition.ts`       | `ToolDefinition`      |
+| `tool-collection.ts`       | `ToolCollection`      |
+| `json-snapshot.ts`         | `JsonSnapshot`        |
+| `standard-schema-adapter.ts` | `StandardSchemaAdapter` |
+| `tool-input-error.ts`      | `ToolInputError`      |
+| `tool-output-error.ts`     | `ToolOutputError`     |
 | `define-mcp-server.ts`     | `defineMcpServer`     |
 | `docker-sandbox.ts`        | `dockerSandbox`       |
 | `local-workspace.ts`       | `localWorkspace`      |
@@ -503,6 +511,7 @@ The root pins the selected npm version through `packageManager`. Package scripts
 - Standard Schema for validation contracts
 - Standard JSON Schema for model-facing schema generation
 - Zod 4 in tests and examples as the first concrete implementation
+- the official MCP TypeScript SDK inside the OpenCode adapter for invocation-scoped JavaScript Tool transport
 - `p-limit` when bounded Agent concurrency is implemented
 - Execa only inside a provider that owns local process execution
 
@@ -604,6 +613,8 @@ Status: Done on 2026-07-27. Singular review found that cancellation existed belo
 - extend deterministic and OpenCode conformance for host and JavaScript Tools
 
 Proof: an Agent calls one declared async function and cannot call an undeclared Tool.
+
+Status: Done on 2026-07-27. The implementation adds exact Agent-local host and JavaScript Tool grants, runtime allowlists, Standard Schema input and optional output validation, Standard JSON Schema declarations, stack-safe immutable JSON snapshots, and an authenticated OpenCode MCP bridge. Singular review found malformed Standard Schema results reaching application code, structural and copied Tool definitions bypassing validation, generated input schemas reported as output errors, `__proto__` snapshot corruption, recursive snapshot stack overflow, OpenCode capability setup after session creation, missing injected-port validation, hidden setup-cleanup failures, persistent dynamic MCP registrations, and mixed or concurrent disposable-host port collisions. The corrected design uses a package-global exact-identity WeakMap with an SDK-owned execution port, preserves cross-copy Tool compatibility, translates boundary-neutral snapshot errors at their owner, preflights capabilities before creating sessions, runs JavaScript Tool sessions on disposable port-0 OpenCode hosts, and preserves multi-boundary cleanup causality. Fifty-four SDK tests and twenty-one deterministic OpenCode tests pass; both package checks include dist-only and cross-copy execution proof; and a fresh credentialed `opencode-go/minimax-m3` call returned `AML_OPENCODE_TOOL_OK`. Final correctness, maintainability, and skeptical review lanes reported no actionable findings.
 
 #### Slice 4 — `<Skill>`
 
@@ -758,15 +769,15 @@ Before marking a slice `Done`:
 
 ## Immediate implementation boundary
 
-Slices 0 through 2 are complete. The next implementation gate is Slice 3 only:
+Slices 0 through 3 are complete. The next implementation gate is Slice 4 only:
 
-1. add the `<Tool>` capability descriptor without contributing prompt text
-2. add `defineTool()` for named host Tools and validated async JavaScript Tools
-3. scope declared Tools to their containing Agent and enforce runtime allowlists
-4. validate JavaScript Tool input and optional output at the execution boundary
-5. extend deterministic and OpenCode conformance with one declared Tool call and one undeclared-Tool rejection
+1. add `<Skill>` as Agent system-instruction content without introducing a second execution language
+2. support inline Skill text and deterministic source resolution using the precedence in `SPEC.md`
+3. capture local, network, and registry provenance with an explicit remote trust boundary
+4. fail closed for missing paths, unknown registry locators, disallowed hosts, fetch failures, and empty resolved content
+5. prove one valid local Skill contributes instructions and one typo rejects before the containing Agent executes
 
-No Skill, Sandbox, Workspace, MCP, structured output, FollowUp, Loop, CLI, website, Codex provider, or unrelated primitive belongs in Slice 3.
+No Sandbox, Workspace, MCP, structured output, FollowUp, Loop, CLI, website, Codex provider, or unrelated primitive belongs in Slice 4.
 
 ## Explicitly deferred
 

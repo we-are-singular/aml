@@ -3,6 +3,8 @@ import type { AgentProvider } from "../components/agent/agent-provider.js"
 import { AgentExecutor } from "../components/agent/agent-executor.js"
 import type { ValidatedAgentProvider } from "../components/agent/validate-agent-provider.js"
 import type { SystemProps } from "../components/system/system.js"
+import { ToolCollection } from "../components/tool/tool-collection.js"
+import type { ToolProps } from "../components/tool/tool.js"
 import { AmlNode, type AmlRenderable } from "./aml-node.js"
 import { EvaluationContext } from "./evaluation-context.js"
 import { EvaluationError } from "./evaluation-error.js"
@@ -20,6 +22,7 @@ interface AgentTarget {
   readonly parentSpanId: string
   readonly promptChunks: string[]
   readonly systemFragments: string[]
+  readonly tools: ToolCollection
 }
 
 type ResolutionTarget = AgentTarget | TextTarget
@@ -68,6 +71,11 @@ type EvaluationFrame =
 
 export interface AmlRuntimeOptions {
   /**
+   * Optional exact-name capability allowlist.
+   */
+  readonly allowedTools?: readonly string[]
+
+  /**
    * Default provider for Agents without an explicit provider prop.
    */
   readonly agentProvider?: AgentProvider
@@ -102,9 +110,13 @@ export interface AmlEvaluationOptions {
  */
 export class AmlRuntime {
   readonly #agentExecutor: AgentExecutor
+  readonly #allowedTools: ReadonlySet<string> | undefined
   readonly #maxAgentCalls: number
   readonly #maxDepth: number
 
+  /**
+   * Captures one immutable set of runtime limits and Agent defaults.
+   */
   constructor(options: AmlRuntimeOptions = {}) {
     const maxAgentCalls = options.maxAgentCalls ?? 32
     const maxDepth = options.maxDepth ?? 16
@@ -119,6 +131,7 @@ export class AmlRuntime {
       throw new TypeError("maxDepth must be a non-negative safe integer")
     }
 
+    this.#allowedTools = captureAllowedTools(options.allowedTools)
     this.#agentExecutor = new AgentExecutor({
       ...(options.agentProvider === undefined
         ? {}
@@ -129,6 +142,12 @@ export class AmlRuntime {
     this.#maxDepth = maxDepth
   }
 
+  /**
+   * Resolves one AML tree post-order into its final string output.
+   *
+   * The evaluator uses an explicit frame stack so asynchronous components and
+   * deeply nested trees do not depend on JavaScript recursion.
+   */
   async evaluate(
     value: AmlRenderable,
     options: AmlEvaluationOptions = {},
@@ -136,6 +155,8 @@ export class AmlRuntime {
     const signal = options.signal ?? new AbortController().signal
     signal.throwIfAborted()
 
+    // Each evaluation owns cancellation, limits, trace allocation, and cycle
+    // tracking. No mutable execution state is shared between calls.
     const context = new EvaluationContext(this.#maxAgentCalls, signal)
     const activeValues = new Set<object>()
     const output: TextTarget = {
@@ -194,12 +215,15 @@ export class AmlRuntime {
       }
 
       if (frame.kind === "complete-agent") {
+        // A completion frame runs only after every child has contributed text,
+        // System fragments, or Tool descriptors to the Agent plan.
         const response = await this.#agentExecutor.execute({
           context,
           prompt: frame.plan.promptChunks.join(""),
           provider: frame.provider,
           props: frame.props,
           systemFragments: frame.plan.systemFragments,
+          tools: frame.plan.tools.values(),
           trace: frame.trace,
         })
 
@@ -291,8 +315,11 @@ export class AmlRuntime {
             parentSpanId: trace.spanId,
             promptChunks: [],
             systemFragments: [],
+            tools: new ToolCollection(this.#allowedTools),
           }
 
+          // Push completion before children: the LIFO stack gives AML its
+          // bottom-up execution semantics without suspending a component.
           activeValues.add(current)
           frames.push({ kind: "release", value: current })
           frames.push({
@@ -309,6 +336,21 @@ export class AmlRuntime {
             target: plan,
             value: props.children,
           })
+          continue
+        }
+
+        if (primitiveKind === "tool") {
+          if (frame.target.kind !== "agent") {
+            throw new EvaluationError(
+              "<Tool> is only valid inside <Agent>",
+            )
+          }
+
+          // Tool descriptors mutate only the nearest Agent plan and never add
+          // text to its initial prompt.
+          frame.target.tools.add(
+            current.props as Readonly<ToolProps>,
+          )
           continue
         }
 
@@ -389,4 +431,34 @@ export class AmlRuntime {
 
     return output.chunks.join("")
   }
+}
+
+function captureAllowedTools(
+  values: readonly string[] | undefined,
+): ReadonlySet<string> | undefined {
+  if (values === undefined) {
+    return undefined
+  }
+
+  if (!Array.isArray(values)) {
+    throw new TypeError("allowedTools must be an array")
+  }
+
+  const result = new Set<string>()
+
+  for (const value of values) {
+    if (
+      typeof value !== "string" ||
+      value.length === 0 ||
+      value !== value.trim()
+    ) {
+      throw new TypeError(
+        "allowedTools entries must be non-empty normalized strings",
+      )
+    }
+
+    result.add(value)
+  }
+
+  return result
 }

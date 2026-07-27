@@ -657,7 +657,44 @@ Tools are capabilities, not render-time calls.
 
 ```ts
 type ToolProps = { name: string; use?: never } | { name?: never; use: AmlTool };
+
+type AmlJsonValue =
+  | null
+  | boolean
+  | number
+  | string
+  | readonly AmlJsonValue[]
+  | { readonly [key: string]: AmlJsonValue };
+
+interface AgentHostTool {
+  kind: "host";
+  name: string;
+}
+
+interface AgentJavaScriptTool {
+  description: string;
+  execute(
+    input: unknown,
+    context: AgentToolExecutionContext,
+  ): Promise<AmlJsonValue>;
+  inputSchema: Readonly<Record<string, unknown>>;
+  kind: "javascript";
+  name: string;
+}
+
+type AgentTool = AgentHostTool | AgentJavaScriptTool;
+
+interface AgentToolExecutionContext {
+  signal: AbortSignal;
+  trace: AmlTraceIdentity;
+}
+
+interface AmlTool extends AgentJavaScriptTool {
+  // Nominal SDK brand: authored through defineTool(), not implemented structurally.
+}
 ```
+
+Tool names and JavaScript Tool descriptions must be non-empty strings equal to their trimmed forms. AML never silently normalizes either value. A provider whose native tool protocol requires an object-root input schema must reject an incompatible Tool before opening the Agent session.
 
 ### 8.1 Host tools
 
@@ -692,7 +729,7 @@ const lookupCustomer = defineTool({
 </Agent>
 ```
 
-The input schema must satisfy both Standard Schema and Standard JSON Schema: AML validates every call before `execute()` runs and gives the generated JSON Schema to the Agent provider. An optional Standard Schema output contract validates the function result.
+The input schema must satisfy both Standard Schema and Standard JSON Schema. `defineTool()` generates draft 2020-12 input JSON Schema synchronously, validates the returned JSON value, and freezes a stable snapshot. `AmlTool` has a non-enumerable authoring brand, while runtime authenticity uses a package-global exact-identity registry that maps the original `defineTool()` result to an SDK-owned execution port. `<Tool use>` rejects structurally similar objects, clones, derived objects, and forwarding proxies so replaced public members cannot bypass validation. The registry remains interoperable across physical copies of the same SDK package in one JavaScript realm. AML validates every call before the authored `execute()` runs and gives only that generated JSON Schema to the Agent provider. An optional Standard Schema output contract validates and may transform the function result.
 
 Every successful result must be a string or stable JSON data even without an output schema. AML rejects:
 
@@ -702,6 +739,8 @@ Every successful result must be a string or stable JSON data even without an out
 - class instances
 - Maps and Sets
 - cyclic values
+
+Snapshotting is stack-safe for deeply nested valid JSON and preserves own string keys such as `__proto__` as data without changing the result object's prototype.
 
 The tool may be asynchronous. It may capture request context, repositories, or session identity through a closure:
 
@@ -1365,7 +1404,7 @@ An omitted or empty `followUps` array represents a single-input Agent. When Foll
 4. sends each `followUps` entry after the preceding response
 5. applies structured output only to the final input
 6. returns only the final response
-7. disposes invocation-scoped Tool registrations and MCP connections after the session settles
+7. disposes invocation-scoped Tool registrations and MCP connections after the session settles; if the provider cannot remove dynamic registrations, its adapter must use a disposable provider host or reject that capability rather than accumulate registrations in shared provider state
 
 Any failed turn rejects `run()`.
 
@@ -1569,7 +1608,7 @@ function opencodeAgent(
 ): OpenCodeAgentProvider;
 ```
 
-`opencodeAgent()` is synchronous and performs no I/O. When `sessionClient` is supplied, the package uses that injected provider-owned port and does not start or stop an OpenCode server. `sessionClient` and `server` are mutually exclusive. Without `sessionClient`, the first Agent call lazily starts one package-owned local OpenCode server using the optional server settings. `close()` is idempotent, rejects future calls, and stops only a server owned by that provider instance. Concurrent and later callers receive the same cleanup promise and therefore observe the same completion or failure. Credentials remain in the OpenCode environment and configuration; AML does not read or copy them.
+`opencodeAgent()` is synchronous and performs no I/O. When `sessionClient` is supplied, the package uses that injected provider-owned port and does not start or stop an OpenCode server; that port owns complete Tool attachment and registration cleanup. `sessionClient` and `server` are mutually exclusive. Without `sessionClient`, the first Agent call that has no JavaScript Tool lazily starts one reusable package-owned local OpenCode server using the optional server settings. An Agent with a JavaScript Tool uses a disposable package-owned OpenCode server because OpenCode can disconnect but cannot remove a dynamically added MCP configuration from a long-lived server. Every disposable server requests port `0` so it cannot collide with the reusable server or another concurrent Tool invocation; an explicit `server.port` configures only the reusable host. Other server settings still apply. The disposable server is closed after the complete Agent session and Tool cleanup settle, so registrations cannot accumulate across calls. `close()` is idempotent, rejects future calls, waits for active calls, and stops only the reusable server owned by that provider instance. Concurrent and later callers receive the same cleanup promise and therefore observe the same completion or failure. Credentials remain in the OpenCode environment and configuration; AML does not read or copy them.
 
 `directory` selects the OpenCode working directory. `model` is the configured default and is overridden by `<Agent model>`. Explicit model identifiers use `provider/model` form and are validated before the session is created.
 

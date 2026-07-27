@@ -15,7 +15,9 @@
   },
   "dependencies": {
     "@aml/sdk": "*",
-    "@opencode-ai/sdk": "^1.18.5"
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "@opencode-ai/sdk": "^1.18.5",
+    "zod": "^4.4.3"
   },
   "scripts": {
     "build": "vite build && tsc --project tsconfig.build.json",

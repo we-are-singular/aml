@@ -17,7 +17,9 @@ Phase 1 Slice 0 implements the fresh evaluation foundation:
 
 Slice 1 adds provider-neutral `<Agent>` and `<System>` boundaries, `defineAgentProvider()`, deterministic fixtures under `@aml/sdk/testing`, Agent-call budgets, and cross-package primitive identity. `examples/agent` demonstrates a child Agent generating system text for its parent.
 
-Slice 2 adds the independently installable `@aml/agent-opencode` adapter. It starts OpenCode lazily, creates and cleans up one session per Agent, propagates cancellation, disables undeclared tools, and exposes a narrow injected session-client port for deterministic tests. `examples/opencode` runs the built adapter against `opencode-go/minimax-m3` using the credentials already configured for OpenCode.
+Slice 2 adds the independently installable `@aml/agent-opencode` adapter. It starts OpenCode lazily, creates and cleans up one session per Agent, propagates cancellation, disables undeclared tools, and exposes a narrow injected session-client port for deterministic tests.
+
+Slice 3 adds Agent-scoped `<Tool>` grants and `defineTool()`. JavaScript Tools use Standard Schema for runtime validation and Standard JSON Schema for model declarations, retain exact cross-copy identity, and return immutable JSON. The OpenCode adapter exposes them through authenticated invocation-scoped MCP bridges on disposable OpenCode hosts so dynamic registrations cannot accumulate. `examples/opencode` proves a credentialed `opencode-go/minimax-m3` model can call a process-local async function through built package exports.
 
 Nothing under `poc/` is part of the new package or public API.
 

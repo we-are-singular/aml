@@ -1,19 +1,36 @@
+import type {
+  AgentExecutionContext,
+  AgentTool,
+} from "@aml/sdk"
+
+/**
+ * OpenCode's provider/model identity split.
+ */
 export interface OpenCodeModel {
   readonly modelId: string
   readonly providerId: string
 }
 
+/**
+ * Address of one created OpenCode session.
+ */
 export interface OpenCodeSessionLocation {
   readonly directory?: string
   readonly sessionId: string
 }
 
+/**
+ * Provider-owned fields used to create a fresh OpenCode session.
+ */
 export interface OpenCodeSessionCreateInput {
   readonly directory?: string
   readonly model?: OpenCodeModel
   readonly title: string
 }
 
+/**
+ * Complete initial prompt and capability map for one OpenCode session.
+ */
 export interface OpenCodeSessionPromptInput extends OpenCodeSessionLocation {
   readonly model?: OpenCodeModel
   readonly prompt: string
@@ -21,6 +38,9 @@ export interface OpenCodeSessionPromptInput extends OpenCodeSessionLocation {
   readonly tools: Readonly<Record<string, boolean>>
 }
 
+/**
+ * Minimal response-part shape consumed by the AML adapter.
+ */
 export interface OpenCodeSessionPart {
   readonly ignored?: unknown
   readonly synthetic?: unknown
@@ -28,9 +48,29 @@ export interface OpenCodeSessionPart {
   readonly type: string
 }
 
+/**
+ * Provider response retained until visible text is validated and selected.
+ */
 export interface OpenCodeSessionPromptResult {
   readonly error?: unknown
   readonly parts: readonly OpenCodeSessionPart[]
+}
+
+/**
+ * Invocation-scoped capability map and its idempotent cleanup boundary.
+ */
+export interface OpenCodeToolAttachment {
+  readonly tools: Readonly<Record<string, boolean>>
+  close(): Promise<void>
+}
+
+/**
+ * Inputs needed to preflight and attach capabilities before session creation.
+ */
+export interface OpenCodeToolAttachmentInput {
+  readonly context: AgentExecutionContext
+  readonly directory?: string
+  readonly tools: readonly AgentTool[]
 }
 
 /**
@@ -40,12 +80,35 @@ export interface OpenCodeSessionPromptResult {
  * third-party client bridges do not depend on the generated transport surface.
  */
 export interface OpenCodeSessionClient {
+  /**
+   * Requests cancellation for an already-created session.
+   */
   abort(input: OpenCodeSessionLocation): Promise<void>
+
+  /**
+   * Preflights and attaches all Agent capabilities before session creation.
+   */
+  attachTools(
+    input: OpenCodeToolAttachmentInput,
+    signal: AbortSignal,
+  ): Promise<OpenCodeToolAttachment>
+
+  /**
+   * Opens one fresh provider session and returns its acknowledged identity.
+   */
   create(
     input: OpenCodeSessionCreateInput,
     signal: AbortSignal,
   ): Promise<string>
+
+  /**
+   * Deletes provider state after execution and capability cleanup.
+   */
   delete(input: OpenCodeSessionLocation): Promise<void>
+
+  /**
+   * Sends the complete initial Agent request into the created session.
+   */
   prompt(
     input: OpenCodeSessionPromptInput,
     signal: AbortSignal,

@@ -24,6 +24,9 @@ export class OpenCodeSession {
   readonly #directory: string | undefined
   readonly #model: string | undefined
 
+  /**
+   * Captures the provider port and configured per-provider defaults.
+   */
   constructor(
     client: OpenCodeSessionClient,
     options: OpenCodeSessionOptions,
@@ -33,6 +36,9 @@ export class OpenCodeSession {
     this.#model = options.model
   }
 
+  /**
+   * Parses OpenCode's provider/model string without interpreting either part.
+   */
   static parseModel(value: string | undefined): OpenCodeModel | undefined {
     if (value === undefined) {
       return undefined
@@ -60,6 +66,9 @@ export class OpenCodeSession {
     })
   }
 
+  /**
+   * Executes one fresh OpenCode session with failure-safe capability cleanup.
+   */
   async run(
     request: AgentRequest,
     context: AgentExecutionContext,
@@ -67,21 +76,57 @@ export class OpenCodeSession {
     context.signal.throwIfAborted()
 
     const model = OpenCodeSession.parseModel(request.model ?? this.#model)
-    const sessionId = await this.#client.create(
+    // Capability incompatibility and attachment failure must happen before any
+    // remote session exists. This is both a side-effect and security boundary.
+    const toolAttachment = await this.#client.attachTools(
       {
         ...(this.#directory === undefined
           ? {}
           : { directory: this.#directory }),
-        ...(model === undefined ? {} : { model }),
-        title: `AML ${context.trace.spanId}`,
+        context,
+        tools: request.tools,
       },
       context.signal,
     )
+    let sessionId: string
 
-    if (typeof sessionId !== "string" || sessionId.length === 0) {
-      throw new TypeError(
-        "OpenCode session client must return a non-empty session ID",
+    // A created attachment is already a live resource, so session-creation
+    // failure must close it and preserve both errors when cleanup also fails.
+    try {
+      context.signal.throwIfAborted()
+      sessionId = await this.#client.create(
+        {
+          ...(this.#directory === undefined
+            ? {}
+            : { directory: this.#directory }),
+          ...(model === undefined ? {} : { model }),
+          title: `AML ${context.trace.spanId}`,
+        },
+        context.signal,
       )
+
+      if (typeof sessionId !== "string" || sessionId.length === 0) {
+        throw new TypeError(
+          "OpenCode session client must return a non-empty session ID",
+        )
+      }
+    } catch (creationError) {
+      const errors: unknown[] = [creationError]
+
+      try {
+        await toolAttachment.close()
+      } catch (cleanupError) {
+        errors.push(cleanupError)
+      }
+
+      if (errors.length > 1) {
+        throw new AggregateError(
+          errors,
+          "OpenCode session creation and Tool cleanup failed",
+        )
+      }
+
+      throw creationError
     }
 
     const location: OpenCodeSessionLocation = Object.freeze({
@@ -95,6 +140,8 @@ export class OpenCodeSession {
     let abortPromise: Promise<void> | undefined
 
     const requestAbort = () => {
+      // Multiple abort observations share one provider request and one captured
+      // result; cancellation must not race duplicate session aborts.
       abortPromise ??= this.#client.abort(location).then(
         () => undefined,
         (error: unknown) => {
@@ -114,6 +161,8 @@ export class OpenCodeSession {
     let executionError: unknown
     let response: AgentResponse | undefined
 
+    // Prompt execution is separate from cleanup so every failure path still
+    // closes Tool resources and deletes the acknowledged session.
     try {
       const result = await this.#client.prompt(
         {
@@ -121,7 +170,7 @@ export class OpenCodeSession {
           ...(model === undefined ? {} : { model }),
           prompt: request.prompt,
           system: request.system,
-          tools: { "*": false },
+          tools: toolAttachment.tools,
         },
         context.signal,
       )
@@ -137,6 +186,16 @@ export class OpenCodeSession {
 
     await abortPromise
 
+    let hasToolCleanupError = false
+    let toolCleanupError: unknown
+
+    try {
+      await toolAttachment.close()
+    } catch (error) {
+      hasToolCleanupError = true
+      toolCleanupError = error
+    }
+
     let hasCleanupError = false
     let cleanupError: unknown
 
@@ -147,6 +206,8 @@ export class OpenCodeSession {
       cleanupError = error
     }
 
+    // Cleanup failures are causally significant. Preserve them in deterministic
+    // lifecycle order instead of masking execution or cancellation failures.
     const errors: unknown[] = []
 
     if (hasExecutionError) {
@@ -155,6 +216,10 @@ export class OpenCodeSession {
 
     if (hasAbortError) {
       errors.push(abortError)
+    }
+
+    if (hasToolCleanupError) {
+      errors.push(toolCleanupError)
     }
 
     if (hasCleanupError) {
@@ -179,6 +244,9 @@ export class OpenCodeSession {
     return response
   }
 
+  /**
+   * Selects only validated, user-visible text from OpenCode response parts.
+   */
   private static visibleText(result: OpenCodeSessionPromptResult): string {
     const error = result.error
 
@@ -205,6 +273,8 @@ export class OpenCodeSession {
       const synthetic = part.synthetic
       const ignored = part.ignored
 
+      // Tool, reasoning, synthetic, and ignored content stays in provider
+      // traces/history and never becomes AML's string result.
       if (
         typeof type !== "string" ||
         (synthetic !== undefined && typeof synthetic !== "boolean") ||

@@ -10,7 +10,12 @@ export default defineConfig({
       formats: ["es"],
     },
     rolldownOptions: {
-      external: [/^@aml\/sdk(?:\/.*)?$/, /^@opencode-ai\/sdk(?:\/.*)?$/],
+      external: [
+        /^node:/,
+        /^@aml\/sdk(?:\/.*)?$/,
+        /^@modelcontextprotocol\/sdk(?:\/.*)?$/,
+        /^@opencode-ai\/sdk(?:\/.*)?$/,
+      ],
       output: {
         minifyInternalExports: false,
       },

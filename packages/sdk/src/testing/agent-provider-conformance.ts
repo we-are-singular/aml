@@ -19,6 +19,7 @@ export async function agentProviderConformance(
   const request: AgentRequest = Object.freeze({
     prompt: "agent-provider-conformance",
     system: "Follow the provider contract.",
+    tools: Object.freeze([]),
     trace,
   })
   const context: AgentExecutionContext = Object.freeze({

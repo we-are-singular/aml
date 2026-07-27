@@ -1,8 +1,15 @@
 const AML_NODE_BRAND = Symbol.for("@aml/sdk/node")
 const AML_PRIMITIVE_KIND = Symbol.for("@aml/sdk/primitive-kind")
-type AmlPrimitiveKind = "agent" | "system"
+type AmlPrimitiveKind = "agent" | "system" | "tool"
+
+/**
+ * JSX values that intentionally contribute no AML output.
+ */
 export type AmlEmpty = boolean | null | undefined
 
+/**
+ * Complete set of values accepted by the asynchronous AML evaluator.
+ */
 export type AmlRenderable =
   | AmlEmpty
   | AmlNode<any>
@@ -11,10 +18,16 @@ export type AmlRenderable =
   | number
   | string
 
+/**
+ * Function-component contract used by the AML JSX runtime.
+ */
 export type AmlComponent<Props = Record<string, unknown>> = (
   props: Props,
 ) => AmlRenderable
 
+/**
+ * Immutable component props after JSX child normalization.
+ */
 export type AmlNodeProps<Props = Record<string, unknown>> = Readonly<
   Props & {
     children?: AmlRenderable
@@ -32,6 +45,9 @@ export class AmlNode<Props = Record<string, unknown>> {
   readonly props: AmlNodeProps<Props>
   readonly type: AmlComponent<Props>
 
+  /**
+   * Captures a component reference and immutable props without invoking it.
+   */
   constructor(
     type: AmlComponent<Props>,
     props: Props & { children?: AmlRenderable },
@@ -42,6 +58,9 @@ export class AmlNode<Props = Record<string, unknown>> {
     Object.freeze(this)
   }
 
+  /**
+   * Recognizes AML nodes across physical copies of the SDK package.
+   */
   static is(value: unknown): value is AmlNode {
     return (
       typeof value === "object" &&
@@ -50,6 +69,9 @@ export class AmlNode<Props = Record<string, unknown>> {
     )
   }
 
+  /**
+   * Marks a built-in component for runtime-owned primitive evaluation.
+   */
   static markPrimitive(
     component: AmlComponent<any>,
     kind: AmlPrimitiveKind,
@@ -59,6 +81,9 @@ export class AmlNode<Props = Record<string, unknown>> {
     })
   }
 
+  /**
+   * Returns a previously registered primitive kind without invoking the component.
+   */
   static primitiveKind(
     component: AmlComponent<any>,
   ): AmlPrimitiveKind | undefined {
@@ -68,6 +93,8 @@ export class AmlNode<Props = Record<string, unknown>> {
       }
     )[AML_PRIMITIVE_KIND]
 
-    return kind === "agent" || kind === "system" ? kind : undefined
+    return kind === "agent" || kind === "system" || kind === "tool"
+      ? kind
+      : undefined
   }
 }
