@@ -161,6 +161,7 @@ Every example is one self-contained AML component. Run one with `npm run example
 | [`review`](./examples/src/integrations/review.tsx) | Runs a parallel multi-agent code review through deterministic, OpenCode, or Codex providers. |
 | [`docker`](./examples/src/integrations/docker.tsx) | Inspects a real Docker Sandbox's working directory and confinement settings. |
 | [`workspace-local`](./examples/src/integrations/workspace-local.tsx) | Persists a file across disposable Sandbox runs through the local Workspace provider. |
+| [`workspace-routing`](./examples/src/integrations/workspace-routing.tsx) | Uses typed Agent output to select a local Workspace and pass a normalized task to a second Agent. |
 
 The deterministic examples are snapshot-tested. Live model, Docker, and filesystem integrations are opt-in.
 
