@@ -118,13 +118,14 @@ Scoped Context and `<Loop>` exist as draft surfaces. Do not depend on them for s
 
 The public SDK currently exports the runtime, built-in providers, and their types from `@aml-jsx/sdk`:
 
-- `opencodeAgent({})`: OpenCode sessions with model overrides, JavaScript Tools, MCP grants, FollowUps, cancellation, and structured output.
+- `opencodeAgent({ config })`: OpenCode sessions with native OpenCode configuration, model overrides, JavaScript Tools, MCP grants, FollowUps, cancellation, and structured output.
 - `codexAgent({})`: Codex SDK threads with model overrides, read-only host Tools, JavaScript Tools, MCP grants, FollowUps, and structured output.
+- `piAgent({ model: "provider/model", providers })`: embedded Pi SDK sessions with native Pi provider configuration, host and JavaScript Tools, FollowUps, cancellation, and schema-validated JSON output. Pi currently rejects AML MCP grants.
 - `dockerSandbox({ image })`: confined Docker leases with filesystem, identity, capability, and resource policies.
 - `localWorkspace({ directory })`: durable local-directory materialization with cross-process writer locking.
 - `@aml-jsx/sdk/testing`: deterministic Agent, Sandbox, and Workspace providers plus provider conformance suites.
 
-OpenCode, Codex, Docker, and local disk are implemented. Other agent harnesses, sandbox platforms, and storage providers shown on the website are roadmap candidates, not current package exports.
+OpenCode, Codex, Pi, Docker, and local disk are implemented. Other agent harnesses, sandbox platforms, and storage providers shown on the website are roadmap candidates, not current package exports.
 
 ## Capabilities
 
@@ -185,7 +186,7 @@ Repository requirements:
 - Node.js 26 or newer.
 - npm 11 or newer.
 - Docker only for Docker integration tests and examples.
-- Configured OpenCode or Codex credentials only for live Agent examples.
+- Configured OpenCode, Pi-supported model-provider, or Codex credentials only for live Agent examples.
 
 Common repository commands:
 
