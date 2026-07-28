@@ -169,7 +169,7 @@ The deterministic examples are snapshot-tested. Live model, Docker, and filesyst
 ```text
 sdk/        @aml/sdk, the AML runtime and public API
 providers/  optional Agent, Sandbox, and Workspace provider implementations
-apps/       runnable products built on AML (reserved for future apps)
+apps/       runnable products built on AML (website: the project site)
 examples/   human-readable client workflows
 poc/        archived Phase 0 experiments and research
 ```
@@ -215,4 +215,4 @@ npm run test:integration --workspace=@aml/sandbox-docker
 
 ## License
 
-This repository does not currently include a license. No permission to use, modify, or redistribute the project is granted until a license is added.
+AML is available under the [MIT License](./LICENSE).

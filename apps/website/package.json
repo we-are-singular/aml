@@ -1,0 +1,21 @@
+{
+  "name": "@aml/website",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "vite build",
+    "dev": "vite",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.1.11",
+    "tailwindcss": "^4.1.11",
+    "typescript": "^7.0.2",
+    "vite": "^8.1.5"
+  },
+  "dependencies": {
+    "shiki": "^4.3.1"
+  }
+}

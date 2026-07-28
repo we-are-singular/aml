@@ -237,6 +237,8 @@ AML cannot automatically roll back arbitrary effects already performed by an Age
 | `<Context.Provider>` | Scope an immutable dependency downward | Descendant context |
 | `createContext()` / `useContext()` | Define and read scoped dependencies | Typed value |
 
+`<Loop>`, `<Context.Provider>`, and `createContext()` / `useContext()` are draft design targets. Their sections remain in this specification so the intended boundaries can be reviewed, but they are not part of the current public reference or release-ready primitive count.
+
 ### 3.2 Delivery phases
 
 The normative surface is delivered in phases so the public API grows only after each earlier boundary has deterministic proof.
@@ -250,8 +252,8 @@ The normative surface is delivered in phases so the public API grows only after 
 | MVP 4 | `<Sandbox>`, `defineSandboxProvider()` | Add ephemeral execution scope |
 | MVP 5 | `<Workspace>`, `defineWorkspaceProvider()` | Add durable filesystem scope and complete the MVP |
 | Post-MVP capabilities | `<Mcp>`, `defineMcpServer()` | Attach MCP servers without making the SDK own an Agent harness |
-| Post-MVP orchestration | `evaluate()`, structured output, `<FollowUp>`, `<Loop>` | Add richer dataflow and same-session or iterative execution |
-| Late surface | `createContext()`, `useContext()`, `<Context.Provider>` | Add immutable dependency scope only after the execution and resource model is stable |
+| Post-MVP orchestration | `evaluate()`, structured output, `<FollowUp>`; draft: `<Loop>` | Add richer dataflow and same-session or iterative execution |
+| Draft late surface | `createContext()`, `useContext()`, `<Context.Provider>` | Add immutable dependency scope only after the execution and resource model is stable |
 
 This is a delivery order, not a hierarchy of importance. Later primitives remain normative desired state, but they must not shape earlier implementations beyond the explicit extension points in their contracts.
 
@@ -943,7 +945,7 @@ The scheduler belongs to one evaluation domain. An Agent resolves its authored c
 
 Use `Promise.allSettled()` only when partial failure is an explicit application decision. AML itself does not silently convert Agent failures into partial results.
 
-## 11. Scoped context
+## 11. Scoped context (Draft)
 
 `createContext()` defines an immutable downward-scoped dependency:
 
@@ -1010,7 +1012,7 @@ Context is not reactive state. It has no setter, subscription, invalidation, re-
 
 Tools should capture scoped dependencies while the component is active. This provides session-based tools without mutable globals.
 
-## 12. `<Loop>` and staged state
+## 12. `<Loop>` and staged state (Draft)
 
 `<Loop>` repeats fresh Agent sessions over immutable, schema-validated state snapshots:
 
