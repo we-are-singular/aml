@@ -41,7 +41,7 @@ export interface Scenario {
   duration: number
 }
 
-const REVIEW_CODE = `import { Agent, AmlRuntime, evaluate } from "@aml/sdk"
+const REVIEW_CODE = `import { Agent, AmlRuntime, evaluate } from "@aml-jsx/sdk"
 
 async function Review() {
   const [correctness, maintainability] = await Promise.all([
@@ -141,7 +141,7 @@ const review: Scenario = {
   duration: 12400,
 }
 
-const LOOP_CODE = `import { Agent, Loop } from "@aml/sdk"
+const LOOP_CODE = `import { Agent, Loop } from "@aml-jsx/sdk"
 import { z } from "zod"
 
 const ResearchState = z.object({
@@ -162,7 +162,7 @@ const ResearchState = z.object({
 
 const LOOP_OUTPUT = "final: state commits after this session"
 
-const loop: Scenario = {
+const _loop: Scenario = {
   id: "loop",
   tab: "loop until stable",
   title: "Transactional state across fresh sessions",
@@ -220,7 +220,7 @@ const loop: Scenario = {
   duration: 7600,
 }
 
-const SANDBOX_CODE = `import { Agent, Sandbox } from "@aml/sdk"
+const SANDBOX_CODE = `import { Agent, Sandbox } from "@aml-jsx/sdk"
 
 export default function SandboxExample() {
   return (
@@ -266,7 +266,12 @@ const sandbox: Scenario = {
     { at: 1150, kind: "node", id: "outer", state: "running" },
     { at: 1150, kind: "node", id: "inner", state: "resolving" },
     { at: 1150, kind: "code", lines: [6] },
-    { at: 1450, kind: "trace", text: "sandbox:narrow root=packages/api access=read-only (reuses lease-1)", tone: "info" },
+    {
+      at: 1450,
+      kind: "trace",
+      text: "sandbox:narrow root=packages/api access=read-only (reuses lease-1)",
+      tone: "info",
+    },
     { at: 1700, kind: "edge", id: "e-share", state: "done" },
     { at: 1700, kind: "node", id: "inner", state: "running" },
     { at: 1700, kind: "node", id: "agent", state: "resolving" },
@@ -289,7 +294,7 @@ const sandbox: Scenario = {
   duration: 7400,
 }
 
-const AGENT_CODE = `import { Agent, Skill, System, Tool } from "@aml/sdk"
+const AGENT_CODE = `import { Agent, Skill, System, Tool } from "@aml-jsx/sdk"
 
 const notes = (
   <Agent provider={OpenCode}>

@@ -1,0 +1,9 @@
+{
+  "extends": ["//"],
+  "tasks": {
+    "build": {
+      "env": ["SITE_BASE", "SITE_URL"],
+      "outputs": ["dist/**"]
+    }
+  }
+}

@@ -1,7 +1,6 @@
 import { highlightTsx } from "./highlight"
 
-const START_AGENT_SOURCE = `import { opencodeAgent } from "@aml/agent-opencode"
-import { Agent, AmlRuntime } from "@aml/sdk"
+const START_AGENT_SOURCE = `import { Agent, AmlRuntime, opencodeAgent } from "@aml-jsx/sdk"
 
 const OpenCode = opencodeAgent({})
 const runtime = new AmlRuntime()

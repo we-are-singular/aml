@@ -107,7 +107,7 @@ export function initHeroTree(): void {
   }
 
   function point(id: string): { x: number; y: number } {
-    const node = NODES.find((candidate) => candidate.id === id)!
+    const node = NODES.find(candidate => candidate.id === id)!
     return { x: node.x * width, y: node.y * height }
   }
 
@@ -279,7 +279,7 @@ export function initHeroTree(): void {
         cancelAnimationFrame(raf)
       }
     },
-    { threshold: 0.05 },
+    { threshold: 0.05 }
   ).observe(canvas)
 
   raf = requestAnimationFrame(frame)

@@ -1,818 +1,1121 @@
 <!doctype html>
 <html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AML — Framework for Agent Workflows</title>
+    <meta
+      name="description"
+      content="AML is a TypeScript and JSX framework for building complex, provider-agnostic AI agent workflows as composable, executable trees."
+    />
+    <meta name="application-name" content="AML" />
+    <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1" />
+    <meta name="theme-color" content="#fafaf7" />
+    <meta name="color-scheme" content="light" />
+    <link rel="canonical" href="__SITE_URL__/" />
 
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>AML — Framework for Agent Workflows</title>
-  <meta name="description"
-    content="AML is a TypeScript and JSX framework for building complex, provider-agnostic AI agent workflows as composable, executable trees." />
-  <meta name="application-name" content="AML" />
-  <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1" />
-  <meta name="theme-color" content="#fafaf7" />
-  <meta name="color-scheme" content="light" />
-  <link rel="canonical" href="__SITE_URL__/" />
+    <meta property="og:title" content="AML — Framework for Agent Workflows" />
+    <meta
+      property="og:description"
+      content="Build complex, provider-agnostic AI agent workflows as composable, executable JSX trees."
+    />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="__SITE_URL__/" />
+    <meta property="og:site_name" content="AML — Agent Markup Language" />
+    <meta property="og:locale" content="en_US" />
+    <meta property="og:image" content="__SITE_URL__/og.jpg" />
+    <meta property="og:image:type" content="image/jpeg" />
+    <meta property="og:image:width" content="1343" />
+    <meta property="og:image:height" content="682" />
+    <meta
+      property="og:image:alt"
+      content="AML agent workflows authored as markup, alongside a visual agent workflow tree."
+    />
 
-  <meta property="og:title" content="AML — Framework for Agent Workflows" />
-  <meta property="og:description"
-    content="Build complex, provider-agnostic AI agent workflows as composable, executable JSX trees." />
-  <meta property="og:type" content="website" />
-  <meta property="og:url" content="__SITE_URL__/" />
-  <meta property="og:site_name" content="AML — Agent Markup Language" />
-  <meta property="og:locale" content="en_US" />
-  <meta property="og:image" content="__SITE_URL__/og.jpg" />
-  <meta property="og:image:type" content="image/jpeg" />
-  <meta property="og:image:width" content="1343" />
-  <meta property="og:image:height" content="682" />
-  <meta property="og:image:alt"
-    content="AML agent workflows authored as markup, alongside a visual agent workflow tree." />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="AML — Framework for Agent Workflows" />
+    <meta
+      name="twitter:description"
+      content="Build complex, provider-agnostic AI agent workflows as composable, executable JSX trees."
+    />
+    <meta name="twitter:image" content="__SITE_URL__/og.jpg" />
+    <meta
+      name="twitter:image:alt"
+      content="AML agent workflows authored as markup, alongside a visual agent workflow tree."
+    />
 
-  <meta name="twitter:card" content="summary_large_image" />
-  <meta name="twitter:title" content="AML — Framework for Agent Workflows" />
-  <meta name="twitter:description"
-    content="Build complex, provider-agnostic AI agent workflows as composable, executable JSX trees." />
-  <meta name="twitter:image" content="__SITE_URL__/og.jpg" />
-  <meta name="twitter:image:alt"
-    content="AML agent workflows authored as markup, alongside a visual agent workflow tree." />
+    <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
+    <link rel="icon" href="./favicon.ico" sizes="any" />
+    <link rel="icon" type="image/png" sizes="32x32" href="./favicon-32x32.png" />
+    <link rel="icon" type="image/png" sizes="16x16" href="./favicon-16x16.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="./apple-touch-icon.png" />
+    <link rel="manifest" href="./site.webmanifest" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:ital,wght@0,400;0,500;0,600;1,400&family=Space+Grotesk:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <script type="module" src="./src/main.ts"></script>
+  </head>
 
-  <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
-  <link rel="icon" href="./favicon.ico" sizes="any" />
-  <link rel="icon" type="image/png" sizes="32x32" href="./favicon-32x32.png" />
-  <link rel="icon" type="image/png" sizes="16x16" href="./favicon-16x16.png" />
-  <link rel="apple-touch-icon" sizes="180x180" href="./apple-touch-icon.png" />
-  <link rel="manifest" href="./site.webmanifest" />
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link
-    href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:ital,wght@0,400;0,500;0,600;1,400&family=Space+Grotesk:wght@400;500;600;700&display=swap"
-    rel="stylesheet" />
-  <script type="module" src="./src/main.ts"></script>
-</head>
-
-<body>
-  <!-- ============================== nav ============================== -->
-  <header class="fixed inset-x-0 top-0 z-50 border-b border-line/70 bg-paper/85 backdrop-blur-md">
-    <nav class="mx-auto flex h-14 max-w-6xl items-center justify-between px-5">
-      <a href="#top" class="group flex items-center gap-2.5">
-        <span class="select-none font-mono text-[15px] font-semibold tracking-tight" aria-label="AML">
-          <span class="text-muted">&lt;</span><span class="text-ink">aml</span><span class="text-resolve"> /</span><span
-            class="text-muted">&gt;</span>
-        </span>
-      </a>
-
-      <div class="hidden items-center gap-6 text-[13.5px] font-medium text-ink-soft md:flex">
-        <a class="link-underline hover:text-ink" href="#why">Why</a>
-        <a class="link-underline hover:text-ink" href="#how">How it works</a>
-        <a class="link-underline hover:text-ink" href="#providers">Integrations</a>
-        <a class="link-underline hover:text-ink" href="#reference">Reference</a>
-      </div>
-
-      <div class="flex items-center gap-3">
-        <span
-          class="hidden rounded-full border border-line bg-surface px-2.5 py-1 font-mono text-[11px] text-muted sm:inline">
-          pre-release · spec v0
-        </span>
-        <a href="https://github.com/we-are-singular/aml" target="_blank" rel="noreferrer"
-          class="flex items-center gap-1.5 rounded-full bg-ink px-3.5 py-1.5 text-[13px] font-medium text-paper transition-colors hover:bg-resolve">
-          <svg viewBox="0 0 16 16" class="size-3.5 fill-current" aria-hidden="true">
-            <path
-              d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z" />
-          </svg>
-          GitHub
+  <body>
+    <!-- ============================== nav ============================== -->
+    <header class="fixed inset-x-0 top-0 z-50 border-b border-line/70 bg-paper/85 backdrop-blur-md">
+      <nav class="mx-auto flex h-14 max-w-6xl items-center justify-between px-5">
+        <a href="#top" class="group flex items-center gap-2.5">
+          <span class="select-none font-mono text-[15px] font-semibold tracking-tight" aria-label="AML">
+            <span class="text-muted">&lt;</span><span class="text-ink">aml</span><span class="text-resolve"> /</span
+            ><span class="text-muted">&gt;</span>
+          </span>
         </a>
-      </div>
-    </nav>
-  </header>
 
-  <main id="top">
-    <!-- ============================== hero ============================== -->
-    <section class="relative overflow-hidden pt-14">
-      <div class="dot-grid absolute inset-0" aria-hidden="true"></div>
-      <div class="absolute inset-0"
-        style="background: radial-gradient(75% 60% at 50% 30%, transparent 30%, var(--color-paper) 100%)"
-        aria-hidden="true"></div>
-      <div id="hero-glow" class="pointer-events-none absolute inset-0" aria-hidden="true"></div>
+        <div class="hidden items-center gap-6 text-[13.5px] font-medium text-ink-soft md:flex">
+          <a class="link-underline hover:text-ink" href="#why">Why</a>
+          <a class="link-underline hover:text-ink" href="#how">How it works</a>
+          <a class="link-underline hover:text-ink" href="#providers">Integrations</a>
+          <a class="link-underline hover:text-ink" href="#reference">Reference</a>
+        </div>
 
-      <div class="relative mx-auto max-w-6xl px-5 pb-28 pt-14 sm:pb-40 sm:pt-20">
-        <div class="grid items-center gap-8 lg:grid-cols-[1.05fr_0.95fr]">
-          <div>
-            <p
-              class="reveal mb-5 inline-flex items-center gap-2 rounded-full border border-line bg-surface px-3 py-1 font-mono text-[11.5px] text-muted">
-              <span class="size-1.5 rounded-full bg-ok animate-pulse-dot"></span>
-              agent markup language
-              <span class="text-line-strong">|</span>
-              <span class="text-resolve">async JSX runtime</span>
-            </p>
+        <div class="flex items-center gap-3">
+          <span
+            class="hidden rounded-full border border-line bg-surface px-2.5 py-1 font-mono text-[11px] text-muted sm:inline"
+          >
+            pre-release · spec v0
+          </span>
+          <a
+            href="https://github.com/we-are-singular/aml"
+            target="_blank"
+            rel="noreferrer"
+            class="flex items-center gap-1.5 rounded-full bg-ink px-3.5 py-1.5 text-[13px] font-medium text-paper transition-colors hover:bg-resolve"
+          >
+            <svg viewBox="0 0 16 16" class="size-3.5 fill-current" aria-hidden="true">
+              <path
+                d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"
+              />
+            </svg>
+            GitHub
+          </a>
+        </div>
+      </nav>
+    </header>
 
-            <h1 class="reveal text-balance text-5xl font-bold leading-[1.02] tracking-tight sm:text-6xl lg:text-7xl"
-              style="--reveal-delay: 80ms">
-              Agent workflows<br />
-              authored as
-              <span class="relative inline-block text-resolve">
-                &lt;markup /&gt;
-                <svg class="absolute -bottom-2 left-0 w-full" viewBox="0 0 220 12" fill="none" aria-hidden="true">
-                  <path d="M3 9C60 3 160 3 217 8" stroke="var(--color-signal)" stroke-width="4"
-                    stroke-linecap="round" />
-                </svg>
-              </span>
-            </h1>
+    <main id="top">
+      <!-- ============================== hero ============================== -->
+      <section class="relative overflow-hidden pt-14">
+        <div class="dot-grid absolute inset-0" aria-hidden="true"></div>
+        <div
+          class="absolute inset-0"
+          style="background: radial-gradient(75% 60% at 50% 30%, transparent 30%, var(--color-paper) 100%)"
+          aria-hidden="true"
+        ></div>
+        <div id="hero-glow" class="pointer-events-none absolute inset-0" aria-hidden="true"></div>
 
-            <p class="reveal mt-7 max-w-xl text-pretty text-lg leading-relaxed text-ink-soft"
-              style="--reveal-delay: 160ms">
-              Write the workflow you mean. AML brings agents, tools, sandboxes, persistent files, and multi-step
-              logic into <strong class="font-semibold text-ink">one async JSX tree</strong> — without tying that
-              workflow to one provider.
-            </p>
+        <div class="relative mx-auto max-w-6xl px-5 pb-28 pt-14 sm:pb-40 sm:pt-20">
+          <div class="grid items-center gap-8 lg:grid-cols-[1.05fr_0.95fr]">
+            <div>
+              <p
+                class="reveal mb-5 inline-flex items-center gap-2 rounded-full border border-line bg-surface px-3 py-1 font-mono text-[11.5px] text-muted"
+              >
+                <span class="size-1.5 rounded-full bg-ok animate-pulse-dot"></span>
+                agent markup language
+                <span class="text-line-strong">|</span>
+                <span class="text-resolve">async JSX runtime</span>
+              </p>
 
-            <div class="reveal mt-9 flex flex-wrap items-center gap-3" style="--reveal-delay: 240ms">
-              <a href="#how"
-                class="group flex items-center gap-2 rounded-full bg-resolve px-6 py-3 text-[15px] font-semibold text-white shadow-lg shadow-resolve/25 transition-all hover:shadow-xl hover:shadow-resolve/35">
-                <span
-                  class="grid size-5 place-items-center rounded-full bg-white/20 transition-transform group-hover:scale-110">
-                  <svg viewBox="0 0 16 16" class="ml-px size-2.5 fill-current" aria-hidden="true">
-                    <path d="M4 2.75v10.5L13 8 4 2.75Z" />
+              <h1
+                class="reveal text-balance text-5xl font-bold leading-[1.02] tracking-tight sm:text-6xl lg:text-7xl"
+                style="--reveal-delay: 80ms"
+              >
+                Agent workflows<br />
+                authored as
+                <span class="relative inline-block text-resolve">
+                  &lt;markup /&gt;
+                  <svg class="absolute -bottom-2 left-0 w-full" viewBox="0 0 220 12" fill="none" aria-hidden="true">
+                    <path
+                      d="M3 9C60 3 160 3 217 8"
+                      stroke="var(--color-signal)"
+                      stroke-width="4"
+                      stroke-linecap="round"
+                    />
                   </svg>
                 </span>
-                See how it works
-              </a>
-              <a href="https://github.com/we-are-singular/aml/blob/main/SPEC.md" target="_blank" rel="noreferrer"
-                class="rounded-full border border-line-strong bg-surface px-6 py-3 text-[15px] font-semibold transition-colors hover:border-ink">
-                Read the spec ↗
-              </a>
-            </div>
+              </h1>
 
-          </div>
+              <p
+                class="reveal mt-7 max-w-xl text-pretty text-lg leading-relaxed text-ink-soft"
+                style="--reveal-delay: 160ms"
+              >
+                Write the workflow you mean. AML brings agents, tools, sandboxes, persistent files, and multi-step logic
+                into <strong class="font-semibold text-ink">one async JSX tree</strong> — without tying that workflow to
+                one provider.
+              </p>
 
-          <!-- hero canvas: a tree continuously resolving -->
-          <div class="reveal relative" style="--reveal-delay: 200ms">
-            <div class="relative rounded-2xl border border-line bg-surface/80 shadow-2xl shadow-ink/5 backdrop-blur-sm">
-              <div class="flex items-center justify-between border-b border-line px-4 py-2.5">
-                <div class="flex items-center gap-1.5">
-                  <span class="size-2.5 rounded-full bg-line-strong"></span>
-                  <span class="size-2.5 rounded-full bg-line-strong"></span>
-                  <span class="size-2.5 rounded-full bg-ok"></span>
-                </div>
-                <p class="font-mono text-[11px] text-muted">AmlRuntime · example leaves-first resolution tree</p>
+              <div class="reveal mt-9 flex flex-wrap items-center gap-3" style="--reveal-delay: 240ms">
+                <a
+                  href="#how"
+                  class="group flex items-center gap-2 rounded-full bg-resolve px-6 py-3 text-[15px] font-semibold text-white shadow-lg shadow-resolve/25 transition-all hover:shadow-xl hover:shadow-resolve/35"
+                >
+                  <span
+                    class="grid size-5 place-items-center rounded-full bg-white/20 transition-transform group-hover:scale-110"
+                  >
+                    <svg viewBox="0 0 16 16" class="ml-px size-2.5 fill-current" aria-hidden="true">
+                      <path d="M4 2.75v10.5L13 8 4 2.75Z" />
+                    </svg>
+                  </span>
+                  See how it works
+                </a>
+                <a
+                  href="https://github.com/we-are-singular/aml/blob/main/SPEC.md"
+                  target="_blank"
+                  rel="noreferrer"
+                  class="rounded-full border border-line-strong bg-surface px-6 py-3 text-[15px] font-semibold transition-colors hover:border-ink"
+                >
+                  Read the spec ↗
+                </a>
               </div>
-              <canvas id="hero-canvas" class="block h-[310px] w-full sm:h-[390px]"></canvas>
-              <div class="flex items-center justify-between border-t border-line px-4 py-2 font-mono text-[11px]">
-                <span class="flex items-center gap-1.5 text-muted">
-                  <span class="size-2 rounded-full bg-resolve"></span> resolving
-                  <span class="ml-2 size-2 rounded-full bg-signal"></span> running
-                  <span class="ml-2 size-2 rounded-full bg-ok"></span> resolved
-                </span>
-                <span id="hero-cycle" class="text-muted">cycle 1</span>
-              </div>
             </div>
 
-            <div
-              class="absolute -left-4 bottom-28 hidden rounded-lg border border-line bg-surface px-3 py-1.5 font-mono text-[11px] text-ink-soft shadow-md sm:block"
-              data-float="1">
-              evaluate(<span class="text-resolve">&lt;WeeklyStandup /&gt;</span>)
-            </div>
-            <div
-              class="absolute -right-3 top-20 hidden rounded-lg border border-line bg-surface px-3 py-1.5 font-mono text-[11px] text-ink-soft shadow-md sm:block"
-              data-float="2">
-              Promise.all(<span class="text-signal">gatherers</span>)
-            </div>
-            <!-- The elevator pitch stays visible on mobile: it is the first concrete glimpse of AML syntax. -->
-            <div
-              class="relative z-10 ml-auto mt-3 w-full max-w-sm rounded-xl border border-line bg-surface/95 px-4 py-3 font-mono text-[11.5px] leading-[1.75] shadow-lg backdrop-blur-sm sm:absolute sm:-bottom-4 sm:-right-10 sm:mt-0 sm:w-56"
-              data-float="3">
-              <p><span class="text-muted">&lt;</span><span class="text-agent">Agent</span> <span
-                  class="text-resolve">provider</span><span class="text-muted">=</span>{codex}<span
-                  class="text-muted">&gt;</span></p>
-              <p class="pl-4"><span class="text-muted">&lt;</span><span class="text-ok">Mcp</span> <span
-                  class="text-resolve">use</span><span class="text-muted">=</span>{slack} <span
-                  class="text-muted">/&gt;</span></p>
-              <p class="pl-4 text-ink">post our weekly standup:</p>
-              <p class="pl-4 text-ink"><span class="text-signal">{synthesis}</span></p>
-              <p><span class="text-muted">&lt;/</span><span class="text-agent">Agent</span><span
-                  class="text-muted">&gt;</span></p>
-            </div>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <!-- ============================== product thesis ============================== -->
-    <section class="border-y border-ink bg-ink text-paper">
-      <div class="mx-auto max-w-6xl px-5 py-5">
-        <p class="text-lg font-semibold">A framework for building complex, provider-agnostic agent workflows.</p>
-      </div>
-    </section>
-
-    <!-- ============================== why ============================== -->
-    <section id="why" class="mx-auto max-w-6xl scroll-mt-20 px-5 py-24 sm:py-32">
-      <div>
-        <p class="reveal font-mono text-[12px] uppercase tracking-[0.2em] text-resolve">why aml</p>
-        <h2 class="reveal mt-3 text-3xl font-bold tracking-tight sm:text-5xl" style="--reveal-delay: 60ms">
-          Your agent isn’t enough.
-        </h2>
-        <p class="reveal mt-5 text-[15px] leading-relaxed text-ink-soft" style="--reveal-delay: 120ms">
-          Most AI SDKs are designed around chat: send a message, call a model, stream a response. Agentic workflows
-          need much more around that conversation — tools, permissions, sandboxed execution, persistent files,
-          multiple agents, and clear control over how work moves between them. AML brings those pieces into one
-          provider-agnostic runtime, expressed as composable, human-readable XML trees that developers can read,
-          reason about, and reuse.
-        </p>
-      </div>
-
-      <div class="mt-14 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
-        <article class="magnetic-card reveal card-hover rounded-2xl border border-line bg-surface p-6">
-          <div
-            class="grid size-10 place-items-center rounded-xl bg-resolve-soft font-mono text-[15px] font-semibold text-resolve">
-            &lt;/&gt;</div>
-          <h3 class="mt-5 text-lg font-semibold">Write the workflow as reusable components</h3>
-          <p class="mt-2 text-[14.5px] leading-relaxed text-ink-soft">
-            Package agents, prompts, capabilities, and control flow as ordinary async JSX components. Compose them
-            into larger workflows without hiding how data moves.
-          </p>
-        </article>
-
-        <article class="magnetic-card reveal card-hover rounded-2xl border border-line bg-surface p-6"
-          style="--reveal-delay: 80ms">
-          <div class="grid size-10 place-items-center rounded-xl bg-agent-soft text-agent">
-            <svg viewBox="0 0 24 24" class="size-5" aria-hidden="true">
-              <path d="M4 8h14m0 0-3.5-3.5M18 8l-3.5 3.5M20 16H6m0 0 3.5-3.5M6 16l3.5 3.5" fill="none"
-                stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
-            </svg>
-          </div>
-          <h3 class="mt-5 text-lg font-semibold">Change providers without starting over</h3>
-          <p class="mt-2 text-[14.5px] leading-relaxed text-ink-soft">
-            Move from OpenCode to Codex — or replace both with a deterministic test provider — without rebuilding
-            the workflow around a new SDK.
-          </p>
-        </article>
-
-        <article class="magnetic-card reveal card-hover rounded-2xl border border-line bg-surface p-6"
-          style="--reveal-delay: 160ms">
-          <div class="grid size-10 place-items-center rounded-xl bg-signal-soft font-mono text-lg text-signal">▣</div>
-          <h3 class="mt-5 text-lg font-semibold">Give agents a real place to work</h3>
-          <p class="mt-2 text-[14.5px] leading-relaxed text-ink-soft">
-            Attach sandboxes and persistent workspaces exactly where they’re needed. AML manages their scope,
-            lifecycle, and cleanup.
-          </p>
-        </article>
-
-        <article class="magnetic-card reveal card-hover rounded-2xl border border-line bg-surface p-6"
-          style="--reveal-delay: 240ms">
-          <div class="grid size-10 place-items-center rounded-xl bg-ok-soft text-ok">
-            <svg viewBox="0 0 24 24" class="size-5" aria-hidden="true">
-              <path d="m5 5 13 5-2 5L3 10l2-5ZM18 10l2-1M11 13l-4 8M12 13l3 8M11.5 13l7 7" fill="none"
-                stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
-            </svg>
-          </div>
-          <h3 class="mt-5 text-lg font-semibold">See what happened</h3>
-          <p class="mt-2 text-[14.5px] leading-relaxed text-ink-soft">
-            Every run emits structured lifecycle and trace events, so you can inspect a workflow today and build
-            better tooling around it tomorrow.
-          </p>
-        </article>
-      </div>
-    </section>
-
-    <!-- ============================== how it works ============================== -->
-    <section id="how" class="scroll-mt-20 border-y border-line bg-surface">
-      <div class="mx-auto max-w-6xl px-5 py-24 sm:py-32">
-        <p class="reveal font-mono text-[12px] uppercase tracking-[0.2em] text-resolve">how it works</p>
-        <div class="mt-3">
-          <h2 class="reveal text-3xl font-bold tracking-tight sm:text-5xl" style="--reveal-delay: 60ms">
-            Start at the leaves. Work your way back.
-          </h2>
-          <p class="reveal mt-5 text-[15px] leading-relaxed text-ink-soft" style="--reveal-delay: 120ms">
-            AML gives JSX a new job. Instead of describing a user interface, the tree describes an agent
-            workflow—and the runtime resolves it from the leaves up. There’s no new DSL to learn: editors already
-            understand JSX, TypeScript already checks it, and language models already know how to write it.
-          </p>
-        </div>
-
-        <div class="reveal how-card mt-14" style="--reveal-delay: 180ms">
-          <div class="mb-3 flex justify-end" role="tablist" aria-label="How it works view">
-            <div class="inline-flex rounded-full border border-line-strong bg-paper p-1">
-              <button id="how-view-visual" role="tab" aria-selected="true"
-                class="rounded-full bg-ink px-3.5 py-1.5 font-mono text-[11.5px] font-medium text-paper transition-colors">
-                walkthrough
-              </button>
-              <button id="how-view-source" role="tab" aria-selected="false"
-                class="source-attention relative rounded-full px-3.5 py-1.5 font-mono text-[11.5px] font-medium text-muted transition-colors hover:text-ink">
-                view source
-              </button>
-            </div>
-          </div>
-
-          <div id="how-card-inner" class="how-card-inner">
-            <div id="how-visual-face"
-              class="how-card-face overflow-hidden rounded-2xl border border-line bg-surface p-5 sm:p-6">
-              <div class="grid gap-8 lg:grid-cols-[1fr_1.2fr]">
-                <ol id="how-steps" class="space-y-3"></ol>
-
-                <div class="rounded-2xl border border-line bg-paper p-4">
-                  <div class="flex items-center justify-between px-2 pb-3">
-                    <p class="font-mono text-[11.5px] text-muted">&lt;Review /&gt; resolution order</p>
-                    <button id="how-replay"
-                      class="rounded-full border border-line-strong bg-surface px-3 py-1 font-mono text-[11.5px] font-medium transition-colors hover:border-resolve hover:text-resolve">
-                      ↻ replay
-                    </button>
+            <!-- hero canvas: a tree continuously resolving -->
+            <div class="reveal relative" style="--reveal-delay: 200ms">
+              <div
+                class="relative rounded-2xl border border-line bg-surface/80 shadow-2xl shadow-ink/5 backdrop-blur-sm"
+              >
+                <div class="flex items-center justify-between border-b border-line px-4 py-2.5">
+                  <div class="flex items-center gap-1.5">
+                    <span class="size-2.5 rounded-full bg-line-strong"></span>
+                    <span class="size-2.5 rounded-full bg-line-strong"></span>
+                    <span class="size-2.5 rounded-full bg-ok"></span>
                   </div>
-                  <svg id="how-tree" viewBox="0 0 560 340" class="w-full" role="img"
-                    aria-label="AML tree resolving leaves first"></svg>
-                  <p id="how-caption"
-                    class="min-h-10 border-t border-line px-2 pt-3 font-mono text-[12px] leading-relaxed text-ink-soft">
-                  </p>
+                  <p class="font-mono text-[11px] text-muted">AmlRuntime · example leaves-first resolution tree</p>
+                </div>
+                <canvas id="hero-canvas" class="block h-[310px] w-full sm:h-[390px]"></canvas>
+                <div class="flex items-center justify-between border-t border-line px-4 py-2 font-mono text-[11px]">
+                  <span class="flex items-center gap-1.5 text-muted">
+                    <span class="size-2 rounded-full bg-resolve"></span> resolving
+                    <span class="ml-2 size-2 rounded-full bg-signal"></span> running
+                    <span class="ml-2 size-2 rounded-full bg-ok"></span> resolved
+                  </span>
+                  <span id="hero-cycle" class="text-muted">cycle 1</span>
                 </div>
               </div>
-            </div>
 
-            <div id="how-source-face"
-              class="how-card-face how-card-back overflow-hidden rounded-2xl border border-line bg-[#12110d]"
-              aria-hidden="true">
-              <div class="flex items-center justify-between border-b border-white/10 px-5 py-3">
-                <p class="font-mono text-[11.5px] text-white/45">parallel-review.tsx</p>
-                <p class="font-mono text-[10.5px] text-white/30">the same workflow, as AML</p>
+              <div
+                class="absolute -left-4 bottom-28 hidden rounded-lg border border-line bg-surface px-3 py-1.5 font-mono text-[11px] text-ink-soft shadow-md sm:block"
+                data-float="1"
+              >
+                evaluate(<span class="text-resolve">&lt;WeeklyStandup /&gt;</span>)
               </div>
-              <pre id="how-source"
-                class="code-block overflow-auto rounded-none border-0 px-5 py-5 text-[12.5px] leading-[1.75]"></pre>
-            </div>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <!-- ============================== providers / integrations ============================== -->
-    <section id="providers" class="mx-auto max-w-6xl scroll-mt-20 px-5 py-24 sm:py-32">
-      <p class="reveal font-mono text-[12px] uppercase tracking-[0.2em] text-resolve">integrations</p>
-      <div class="mt-3">
-        <h2 class="reveal text-3xl font-bold tracking-tight sm:text-5xl" style="--reveal-delay: 60ms">
-          Bring your own agent, sandbox, or storage.
-        </h2>
-        <p class="reveal mt-5 text-[15px] leading-relaxed text-ink-soft" style="--reveal-delay: 120ms">
-          AML defines the contracts and stays out of the way. Choose the implementations that fit your stack, then
-          swap them without rewriting the workflow.
-        </p>
-      </div>
-
-      <!-- Logo chips use Lobe Icons for agent products and Simple Icons for infrastructure brands. -->
-      <div class="reveal mt-14 divide-y divide-line rounded-2xl border border-line bg-surface"
-        style="--reveal-delay: 180ms">
-        <!-- agents -->
-        <div class="grid gap-4 p-5 sm:p-6 lg:grid-cols-[170px_1fr] lg:items-center">
-          <div>
-            <p class="font-mono text-[11px] uppercase tracking-wider text-agent">agents</p>
-            <p class="mt-1 text-[12.5px] text-muted">harnesses & model runtimes</p>
-          </div>
-          <div class="flex flex-wrap items-center gap-3">
-            <span class="integration-logo" tabindex="0" aria-label="OpenCode" data-tooltip="OpenCode">
-              <img src="https://unpkg.com/@lobehub/icons-static-svg@1.94.0/icons/opencode.svg" alt="" />
-            </span>
-            <span class="integration-logo" tabindex="0" aria-label="Codex" data-tooltip="Codex">
-              <img src="https://unpkg.com/@lobehub/icons-static-svg@1.94.0/icons/codex.svg" alt="" />
-            </span>
-            <span class="integration-roadmap-label">roadmap →</span>
-            <span class="integration-logo is-roadmap" tabindex="0" aria-label="Pi — on the roadmap"
-              data-tooltip="Pi · on the roadmap">
-              <img src="https://unpkg.com/@lobehub/icons-static-svg@1.94.0/icons/pi.svg" alt="" />
-            </span>
-            <span class="integration-logo is-roadmap" tabindex="0" aria-label="Claude Code — on the roadmap"
-              data-tooltip="Claude Code · on the roadmap">
-              <img src="https://unpkg.com/@lobehub/icons-static-svg@1.94.0/icons/claudecode.svg" alt="" />
-            </span>
-            <span class="integration-logo is-roadmap" tabindex="0" aria-label="Cursor — on the roadmap"
-              data-tooltip="Cursor · on the roadmap">
-              <img src="https://unpkg.com/@lobehub/icons-static-svg@1.94.0/icons/cursor.svg" alt="" />
-            </span>
-            <span class="integration-logo is-roadmap" tabindex="0" aria-label="GitHub Copilot — on the roadmap"
-              data-tooltip="GitHub Copilot · on the roadmap">
-              <img src="https://unpkg.com/@lobehub/icons-static-svg@1.94.0/icons/githubcopilot.svg" alt="" />
-            </span>
-            <span class="integration-logo is-roadmap" tabindex="0" aria-label="Gemini CLI — on the roadmap"
-              data-tooltip="Gemini CLI · on the roadmap">
-              <img src="https://unpkg.com/@lobehub/icons-static-svg@1.94.0/icons/geminicli.svg" alt="" />
-            </span>
-            <span class="integration-logo is-roadmap" tabindex="0" aria-label="Cline — on the roadmap"
-              data-tooltip="Cline · on the roadmap">
-              <img src="https://unpkg.com/@lobehub/icons-static-svg@1.94.0/icons/cline.svg" alt="" />
-            </span>
-            <span class="integration-logo is-roadmap" tabindex="0" aria-label="Goose — on the roadmap"
-              data-tooltip="Goose · on the roadmap">
-              <img src="https://unpkg.com/@lobehub/icons-static-svg@1.94.0/icons/goose.svg" alt="" />
-            </span>
-            <span class="integration-logo is-roadmap" tabindex="0" aria-label="OpenHands — on the roadmap"
-              data-tooltip="OpenHands · on the roadmap">
-              <img src="https://unpkg.com/@lobehub/icons-static-svg@1.94.0/icons/openhands-color.svg" alt="" />
-            </span>
-            <span class="integration-logo is-roadmap" tabindex="0" aria-label="Windsurf — maybe"
-              data-tooltip="Windsurf · maybe">
-              <img src="https://unpkg.com/@lobehub/icons-static-svg@1.94.0/icons/windsurf.svg" alt="" />
-            </span>
-            <span class="integration-logo is-roadmap" tabindex="0" aria-label="Roo Code — maybe"
-              data-tooltip="Roo Code · maybe">
-              <img src="https://unpkg.com/@lobehub/icons-static-svg@1.94.0/icons/roocode.svg" alt="" />
-            </span>
-            <span class="integration-logo is-roadmap" tabindex="0" aria-label="Devin — maybe"
-              data-tooltip="Devin · maybe">
-              <img src="https://unpkg.com/@lobehub/icons-static-svg@1.94.0/icons/devin-color.svg" alt="" />
-            </span>
-          </div>
-        </div>
-
-        <!-- sandboxes -->
-        <div class="grid gap-4 p-5 sm:p-6 lg:grid-cols-[170px_1fr] lg:items-center">
-          <div>
-            <p class="font-mono text-[11px] uppercase tracking-wider text-signal">sandboxes</p>
-            <p class="mt-1 text-[12.5px] text-muted">ephemeral execution</p>
-          </div>
-          <div class="flex flex-wrap items-center gap-3">
-            <span class="integration-logo" tabindex="0" aria-label="Local process" data-tooltip="Local process">
-              <svg viewBox="0 0 24 24" aria-hidden="true">
-                <path d="m3 7 4 5-4 5M10 18h8" fill="none" stroke="currentColor" stroke-width="2.2"
-                  stroke-linecap="round" stroke-linejoin="round" />
-              </svg>
-            </span>
-            <span class="integration-logo" tabindex="0" aria-label="Docker" data-tooltip="Docker">
-              <img src="https://cdn.simpleicons.org/docker" alt="" />
-            </span>
-            <span class="integration-roadmap-label">roadmap →</span>
-            <span class="integration-logo is-roadmap" tabindex="0" aria-label="Cloudflare — on the roadmap"
-              data-tooltip="Cloudflare · on the roadmap">
-              <img src="https://cdn.simpleicons.org/cloudflare" alt="" />
-            </span>
-            <span class="integration-logo is-roadmap" tabindex="0" aria-label="Modal — on the roadmap"
-              data-tooltip="Modal · on the roadmap">
-              <img src="https://cdn.simpleicons.org/modal" alt="" />
-            </span>
-            <span class="integration-logo is-roadmap" tabindex="0" aria-label="Fly.io — on the roadmap"
-              data-tooltip="Fly.io · on the roadmap">
-              <img src="https://cdn.simpleicons.org/flydotio" alt="" />
-            </span>
-            <span class="integration-logo is-roadmap" tabindex="0" aria-label="Kubernetes — on the roadmap"
-              data-tooltip="Kubernetes · on the roadmap">
-              <img src="https://cdn.simpleicons.org/kubernetes" alt="" />
-            </span>
-            <span class="integration-logo is-roadmap" tabindex="0" aria-label="Gitpod — maybe"
-              data-tooltip="Gitpod · maybe">
-              <img src="https://cdn.simpleicons.org/gitpod" alt="" />
-            </span>
-            <span class="integration-logo is-roadmap" tabindex="0" aria-label="CodeSandbox — maybe"
-              data-tooltip="CodeSandbox · maybe">
-              <img src="https://cdn.simpleicons.org/codesandbox" alt="" />
-            </span>
-            <span class="integration-logo is-roadmap" tabindex="0" aria-label="Replit — maybe"
-              data-tooltip="Replit · maybe">
-              <img src="https://cdn.simpleicons.org/replit" alt="" />
-            </span>
-            <span class="integration-logo is-roadmap" tabindex="0" aria-label="Railway — maybe"
-              data-tooltip="Railway · maybe">
-              <img src="https://cdn.simpleicons.org/railway" alt="" />
-            </span>
-            <span class="integration-logo is-roadmap" tabindex="0" aria-label="Vercel Sandbox — on the roadmap"
-              data-tooltip="Vercel Sandbox · on the roadmap">
-              <img src="https://cdn.simpleicons.org/vercel" alt="" />
-            </span>
-            <span class="integration-logo is-roadmap" tabindex="0" aria-label="GitHub Codespaces — on the roadmap"
-              data-tooltip="GitHub Codespaces · on the roadmap">
-              <img src="https://cdn.simpleicons.org/github" alt="" />
-            </span>
-            <span class="integration-logo is-roadmap" tabindex="0" aria-label="AWS Fargate — maybe"
-              data-tooltip="AWS Fargate · maybe">
-              <img src="https://unpkg.com/@lobehub/icons-static-svg@1.94.0/icons/aws-color.svg" alt="" />
-            </span>
-          </div>
-        </div>
-
-        <!-- workspaces -->
-        <div class="grid gap-4 p-5 sm:p-6 lg:grid-cols-[170px_1fr] lg:items-center">
-          <div>
-            <p class="font-mono text-[11px] uppercase tracking-wider text-ok">workspaces</p>
-            <p class="mt-1 text-[12.5px] text-muted">durable object storage</p>
-          </div>
-          <div class="flex flex-wrap items-center gap-3">
-            <span class="integration-logo" tabindex="0" aria-label="Local disk" data-tooltip="Local disk">
-              <svg viewBox="0 0 24 24" aria-hidden="true">
-                <path d="M3.5 6.5h6l2 2h9v9a2 2 0 0 1-2 2h-15z" fill="none" stroke="currentColor" stroke-width="2"
-                  stroke-linejoin="round" />
-              </svg>
-            </span>
-            <span class="integration-roadmap-label">roadmap →</span>
-            <span class="integration-logo is-roadmap" tabindex="0" aria-label="Docker volumes — on the roadmap"
-              data-tooltip="Docker volumes · on the roadmap">
-              <img src="https://cdn.simpleicons.org/docker" alt="" />
-            </span>
-            <span class="integration-logo is-roadmap" tabindex="0" aria-label="Amazon S3 — on the roadmap"
-              data-tooltip="Amazon S3 · on the roadmap">
-              <img src="https://unpkg.com/@lobehub/icons-static-svg@1.94.0/icons/aws-color.svg" alt="" />
-            </span>
-            <span class="integration-logo is-roadmap" tabindex="0" aria-label="Cloudflare R2 — on the roadmap"
-              data-tooltip="Cloudflare R2 · on the roadmap">
-              <img src="https://cdn.simpleicons.org/cloudflare" alt="" />
-            </span>
-            <span class="integration-logo is-roadmap" tabindex="0" aria-label="Backblaze B2 — on the roadmap"
-              data-tooltip="Backblaze B2 · on the roadmap">
-              <img src="https://cdn.simpleicons.org/backblaze" alt="" />
-            </span>
-            <span class="integration-logo is-roadmap" tabindex="0" aria-label="MinIO — on the roadmap"
-              data-tooltip="MinIO · on the roadmap">
-              <img src="https://cdn.simpleicons.org/minio" alt="" />
-            </span>
-            <span class="integration-logo is-roadmap" tabindex="0" aria-label="DigitalOcean Spaces — maybe"
-              data-tooltip="DigitalOcean Spaces · maybe">
-              <img src="https://cdn.simpleicons.org/digitalocean" alt="" />
-            </span>
-            <span class="integration-logo is-roadmap" tabindex="0" aria-label="Google Cloud Storage — on the roadmap"
-              data-tooltip="Google Cloud Storage · on the roadmap">
-              <img src="https://cdn.simpleicons.org/googlecloud" alt="" />
-            </span>
-            <span class="integration-logo is-roadmap" tabindex="0" aria-label="Azure Blob Storage — on the roadmap"
-              data-tooltip="Azure Blob Storage · on the roadmap">
-              <img src="https://unpkg.com/@lobehub/icons-static-svg@1.94.0/icons/azure-color.svg" alt="" />
-            </span>
-            <span class="integration-logo is-roadmap" tabindex="0" aria-label="Supabase Storage — maybe"
-              data-tooltip="Supabase Storage · maybe">
-              <img src="https://cdn.simpleicons.org/supabase" alt="" />
-            </span>
-            <span class="integration-logo is-roadmap" tabindex="0" aria-label="Wasabi Object Storage — maybe"
-              data-tooltip="Wasabi Object Storage · maybe">
-              <img src="https://cdn.simpleicons.org/wasabi" alt="" />
-            </span>
-            <span class="integration-logo is-roadmap" tabindex="0" aria-label="Vultr Object Storage — maybe"
-              data-tooltip="Vultr Object Storage · maybe">
-              <img src="https://cdn.simpleicons.org/vultr" alt="" />
-            </span>
-            <span class="integration-logo is-roadmap" tabindex="0" aria-label="Scaleway Object Storage — maybe"
-              data-tooltip="Scaleway Object Storage · maybe">
-              <img src="https://cdn.simpleicons.org/scaleway" alt="" />
-            </span>
-          </div>
-        </div>
-      </div>
-
-      <!-- runtime packages -->
-      <p class="reveal mt-14 font-mono text-[11px] uppercase tracking-wider text-muted">runtime packages</p>
-      <div class="mt-5 grid gap-5 md:grid-cols-2 lg:grid-cols-3">
-        <article class="magnetic-card reveal card-hover rounded-2xl border border-line bg-surface p-6">
-          <p class="font-mono text-[11px] uppercase tracking-wider text-agent">agent</p>
-          <h3 class="mt-2 font-mono text-[15px] font-semibold">@aml/agent-opencode</h3>
-          <p class="mt-2.5 text-[14px] leading-relaxed text-ink-soft">
-            Runs OpenCode sessions with model overrides, JavaScript tools, MCP grants, follow-ups, cancellation, and
-            structured output.
-          </p>
-          <p class="mt-4 font-mono text-[12px] text-muted">opencodeAgent({})</p>
-        </article>
-
-        <article class="magnetic-card reveal card-hover rounded-2xl border border-line bg-surface p-6"
-          style="--reveal-delay: 60ms">
-          <p class="font-mono text-[11px] uppercase tracking-wider text-agent">agent</p>
-          <h3 class="mt-2 font-mono text-[15px] font-semibold">@aml/agent-codex</h3>
-          <p class="mt-2.5 text-[14px] leading-relaxed text-ink-soft">
-            Runs Codex SDK threads with model overrides, read-only host tools, JavaScript tools, MCP grants, and
-            follow-ups.
-          </p>
-          <p class="mt-4 font-mono text-[12px] text-muted">codexAgent({})</p>
-        </article>
-
-        <article class="magnetic-card reveal card-hover rounded-2xl border border-line bg-surface p-6"
-          style="--reveal-delay: 120ms">
-          <p class="font-mono text-[11px] uppercase tracking-wider text-signal">sandbox</p>
-          <h3 class="mt-2 font-mono text-[15px] font-semibold">@aml/sandbox-docker</h3>
-          <p class="mt-2.5 text-[14px] leading-relaxed text-ink-soft">
-            Confined Docker container leases with explicit filesystem, network, identity, capability, and resource
-            policies.
-          </p>
-          <p class="mt-4 font-mono text-[12px] text-muted">dockerSandbox({})</p>
-        </article>
-
-        <article class="magnetic-card reveal card-hover rounded-2xl border border-line bg-surface p-6"
-          style="--reveal-delay: 180ms">
-          <p class="font-mono text-[11px] uppercase tracking-wider text-ok">workspace</p>
-          <h3 class="mt-2 font-mono text-[15px] font-semibold">@aml/workspace-local</h3>
-          <p class="mt-2.5 text-[14px] leading-relaxed text-ink-soft">
-            Uses an existing local directory as a durable workspace with cross-process writer locking.
-          </p>
-          <p class="mt-4 font-mono text-[12px] text-muted">localWorkspace({})</p>
-        </article>
-
-        <article class="magnetic-card reveal card-hover rounded-2xl border border-line bg-surface p-6"
-          style="--reveal-delay: 240ms">
-          <p class="font-mono text-[11px] uppercase tracking-wider text-resolve">testing</p>
-          <h3 class="mt-2 font-mono text-[15px] font-semibold">@aml/sdk/testing</h3>
-          <p class="mt-2.5 text-[14px] leading-relaxed text-ink-soft">
-            Deterministic Agent, Sandbox, and Workspace providers plus reusable conformance suites for examples,
-            adapter development, and tests.
-          </p>
-          <p class="mt-4 font-mono text-[12px] text-muted">DeterministicAgentProvider</p>
-        </article>
-
-        <article
-          class="magnetic-card reveal card-hover flex flex-col justify-between rounded-2xl border border-dashed border-line-strong bg-paper p-6"
-          style="--reveal-delay: 300ms">
-          <div>
-            <p class="font-mono text-[11px] uppercase tracking-wider text-muted">yours?</p>
-            <h3 class="mt-2 font-mono text-[15px] font-semibold">defineAgentProvider()</h3>
-            <p class="mt-2.5 text-[14px] leading-relaxed text-ink-soft">
-              Implement the provider contract and any agent harness — yours included — can run inside an AML tree.
-            </p>
-          </div>
-          <a href="https://github.com/we-are-singular/aml/blob/main/SPEC.md#151-agent-session-contract" target="_blank"
-            rel="noreferrer"
-            class="mt-4 font-mono text-[12px] text-resolve link-underline">
-            read the contract ↗
-          </a>
-        </article>
-      </div>
-    </section>
-
-    <!-- ============================== reference ============================== -->
-    <section id="reference" class="scroll-mt-20 border-y border-line bg-surface">
-      <div class="mx-auto max-w-6xl px-5 py-24 sm:py-32">
-        <p class="reveal font-mono text-[12px] uppercase tracking-[0.2em] text-resolve">reference</p>
-        <h2 class="reveal mt-3 text-3xl font-bold tracking-tight sm:text-5xl" style="--reveal-delay: 60ms">
-          Small enough to learn in one sitting
-        </h2>
-        <p class="reveal mt-5 text-[15px] leading-relaxed text-ink-soft" style="--reveal-delay: 120ms">
-          Nine primitives and a handful of runtime APIs. Everything else is ordinary JavaScript — control flow,
-          concurrency, and data flow included.
-        </p>
-
-        <div class="mt-14 grid gap-8 lg:grid-cols-[minmax(220px,0.8fr)_2.2fr]">
-          <!-- Bounded index: it stays useful without making the whole page as tall as the API list. -->
-          <div class="reveal lg:sticky lg:top-20 lg:self-start">
-            <div id="ref-list" class="ref-list-scroll space-y-6 lg:pr-3" role="tree" aria-label="AML reference"></div>
-          </div>
-
-          <!-- The selected concept remains alongside the independently scrolling index. -->
-          <div class="reveal min-w-0 lg:sticky lg:top-20 lg:self-start" style="--reveal-delay: 120ms">
-            <div class="overflow-hidden rounded-2xl border border-line bg-paper">
-              <div class="flex flex-wrap items-center justify-between gap-3 border-b border-line bg-surface px-6 py-4">
-                <div>
-                  <h3 id="ref-name" class="font-mono text-xl font-semibold"></h3>
-                  <p id="ref-kind" class="mt-0.5 font-mono text-[11px] uppercase tracking-wider text-muted"></p>
-                </div>
-                <code id="ref-signature"
-                  class="rounded-lg border border-line bg-paper px-3 py-1.5 font-mono text-[11.5px] text-ink-soft"></code>
+              <div
+                class="absolute -right-3 top-20 hidden rounded-lg border border-line bg-surface px-3 py-1.5 font-mono text-[11px] text-ink-soft shadow-md sm:block"
+                data-float="2"
+              >
+                Promise.all(<span class="text-signal">gatherers</span>)
               </div>
-              <div class="px-6 py-5">
-                <p id="ref-description" class="max-w-prose text-[15px] leading-relaxed text-ink-soft"></p>
-                <p id="ref-note"
-                  class="mt-3 hidden max-w-prose rounded-lg border border-resolve/25 bg-resolve-soft px-3.5 py-2.5 text-[13px] leading-relaxed text-ink-soft">
+              <!-- The elevator pitch stays visible on mobile: it is the first concrete glimpse of AML syntax. -->
+              <div
+                class="relative z-10 ml-auto mt-3 w-full max-w-sm rounded-xl border border-line bg-surface/95 px-4 py-3 font-mono text-[11.5px] leading-[1.75] shadow-lg backdrop-blur-sm sm:absolute sm:-bottom-4 sm:-right-10 sm:mt-0 sm:w-56"
+                data-float="3"
+              >
+                <p>
+                  <span class="text-muted">&lt;</span><span class="text-agent">Agent</span>
+                  <span class="text-resolve">provider</span><span class="text-muted">=</span>{codex}<span
+                    class="text-muted"
+                    >&gt;</span
+                  >
+                </p>
+                <p class="pl-4">
+                  <span class="text-muted">&lt;</span><span class="text-ok">Mcp</span>
+                  <span class="text-resolve">use</span><span class="text-muted">=</span>{slack}
+                  <span class="text-muted">/&gt;</span>
+                </p>
+                <p class="pl-4 text-ink">post our weekly standup:</p>
+                <p class="pl-4 text-ink"><span class="text-signal">{synthesis}</span></p>
+                <p>
+                  <span class="text-muted">&lt;/</span><span class="text-agent">Agent</span
+                  ><span class="text-muted">&gt;</span>
                 </p>
               </div>
-              <div class="border-t border-line">
-                <div class="flex items-center justify-between bg-[#12110d] px-4 py-2">
-                  <span id="ref-example-file" class="font-mono text-[11px] text-white/40"></span>
-                  <button id="ref-copy"
-                    class="rounded-md border border-white/15 px-2.5 py-1 font-mono text-[11px] text-white/70 transition-colors hover:border-white/40 hover:text-white">
-                    copy
-                  </button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============================== product thesis ============================== -->
+      <section class="border-y border-ink bg-ink text-paper">
+        <div class="mx-auto max-w-6xl px-5 py-5">
+          <p class="text-lg font-semibold">A framework for building complex, provider-agnostic agent workflows.</p>
+        </div>
+      </section>
+
+      <!-- ============================== why ============================== -->
+      <section id="why" class="mx-auto max-w-6xl scroll-mt-20 px-5 py-24 sm:py-32">
+        <div>
+          <p class="reveal font-mono text-[12px] uppercase tracking-[0.2em] text-resolve">why aml</p>
+          <h2 class="reveal mt-3 text-3xl font-bold tracking-tight sm:text-5xl" style="--reveal-delay: 60ms">
+            Your agent isn’t enough.
+          </h2>
+          <p class="reveal mt-5 text-[15px] leading-relaxed text-ink-soft" style="--reveal-delay: 120ms">
+            Most AI SDKs are designed around chat: send a message, call a model, stream a response. Agentic workflows
+            need much more around that conversation — tools, permissions, sandboxed execution, persistent files,
+            multiple agents, and clear control over how work moves between them. AML brings those pieces into one
+            provider-agnostic runtime, expressed as composable, human-readable XML trees that developers can read,
+            reason about, and reuse.
+          </p>
+        </div>
+
+        <div class="mt-14 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+          <article class="magnetic-card reveal card-hover rounded-2xl border border-line bg-surface p-6">
+            <div
+              class="grid size-10 place-items-center rounded-xl bg-resolve-soft font-mono text-[15px] font-semibold text-resolve"
+            >
+              &lt;/&gt;
+            </div>
+            <h3 class="mt-5 text-lg font-semibold">Write the workflow as reusable components</h3>
+            <p class="mt-2 text-[14.5px] leading-relaxed text-ink-soft">
+              Package agents, prompts, capabilities, and control flow as ordinary async JSX components. Compose them
+              into larger workflows without hiding how data moves.
+            </p>
+          </article>
+
+          <article
+            class="magnetic-card reveal card-hover rounded-2xl border border-line bg-surface p-6"
+            style="--reveal-delay: 80ms"
+          >
+            <div class="grid size-10 place-items-center rounded-xl bg-agent-soft text-agent">
+              <svg viewBox="0 0 24 24" class="size-5" aria-hidden="true">
+                <path
+                  d="M4 8h14m0 0-3.5-3.5M18 8l-3.5 3.5M20 16H6m0 0 3.5-3.5M6 16l3.5 3.5"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                />
+              </svg>
+            </div>
+            <h3 class="mt-5 text-lg font-semibold">Change providers without starting over</h3>
+            <p class="mt-2 text-[14.5px] leading-relaxed text-ink-soft">
+              Move from OpenCode to Codex — or replace both with a deterministic test provider — without rebuilding the
+              workflow around a new SDK.
+            </p>
+          </article>
+
+          <article
+            class="magnetic-card reveal card-hover rounded-2xl border border-line bg-surface p-6"
+            style="--reveal-delay: 160ms"
+          >
+            <div class="grid size-10 place-items-center rounded-xl bg-signal-soft font-mono text-lg text-signal">▣</div>
+            <h3 class="mt-5 text-lg font-semibold">Give agents a real place to work</h3>
+            <p class="mt-2 text-[14.5px] leading-relaxed text-ink-soft">
+              Attach sandboxes and persistent workspaces exactly where they’re needed. AML manages their scope,
+              lifecycle, and cleanup.
+            </p>
+          </article>
+
+          <article
+            class="magnetic-card reveal card-hover rounded-2xl border border-line bg-surface p-6"
+            style="--reveal-delay: 240ms"
+          >
+            <div class="grid size-10 place-items-center rounded-xl bg-ok-soft text-ok">
+              <svg viewBox="0 0 24 24" class="size-5" aria-hidden="true">
+                <path
+                  d="m5 5 13 5-2 5L3 10l2-5ZM18 10l2-1M11 13l-4 8M12 13l3 8M11.5 13l7 7"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.8"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                />
+              </svg>
+            </div>
+            <h3 class="mt-5 text-lg font-semibold">See what happened</h3>
+            <p class="mt-2 text-[14.5px] leading-relaxed text-ink-soft">
+              Every run emits structured lifecycle and trace events, so you can inspect a workflow today and build
+              better tooling around it tomorrow.
+            </p>
+          </article>
+        </div>
+      </section>
+
+      <!-- ============================== how it works ============================== -->
+      <section id="how" class="scroll-mt-20 border-y border-line bg-surface">
+        <div class="mx-auto max-w-6xl px-5 py-24 sm:py-32">
+          <p class="reveal font-mono text-[12px] uppercase tracking-[0.2em] text-resolve">how it works</p>
+          <div class="mt-3">
+            <h2 class="reveal text-3xl font-bold tracking-tight sm:text-5xl" style="--reveal-delay: 60ms">
+              Start at the leaves. Work your way back.
+            </h2>
+            <p class="reveal mt-5 text-[15px] leading-relaxed text-ink-soft" style="--reveal-delay: 120ms">
+              AML gives JSX a new job. Instead of describing a user interface, the tree describes an agent workflow—and
+              the runtime resolves it from the leaves up. There’s no new DSL to learn: editors already understand JSX,
+              TypeScript already checks it, and language models already know how to write it.
+            </p>
+          </div>
+
+          <div class="reveal how-card mt-14" style="--reveal-delay: 180ms">
+            <div class="mb-3 flex justify-end" role="tablist" aria-label="How it works view">
+              <div class="inline-flex rounded-full border border-line-strong bg-paper p-1">
+                <button
+                  id="how-view-visual"
+                  role="tab"
+                  aria-selected="true"
+                  class="rounded-full bg-ink px-3.5 py-1.5 font-mono text-[11.5px] font-medium text-paper transition-colors"
+                >
+                  walkthrough
+                </button>
+                <button
+                  id="how-view-source"
+                  role="tab"
+                  aria-selected="false"
+                  class="source-attention relative rounded-full px-3.5 py-1.5 font-mono text-[11.5px] font-medium text-muted transition-colors hover:text-ink"
+                >
+                  view source
+                </button>
+              </div>
+            </div>
+
+            <div id="how-card-inner" class="how-card-inner">
+              <div
+                id="how-visual-face"
+                class="how-card-face overflow-hidden rounded-2xl border border-line bg-surface p-5 sm:p-6"
+              >
+                <div class="grid gap-8 lg:grid-cols-[1fr_1.2fr]">
+                  <ol id="how-steps" class="space-y-3"></ol>
+
+                  <div class="rounded-2xl border border-line bg-paper p-4">
+                    <div class="flex items-center justify-between px-2 pb-3">
+                      <p class="font-mono text-[11.5px] text-muted">&lt;Review /&gt; resolution order</p>
+                      <button
+                        id="how-replay"
+                        class="rounded-full border border-line-strong bg-surface px-3 py-1 font-mono text-[11.5px] font-medium transition-colors hover:border-resolve hover:text-resolve"
+                      >
+                        ↻ replay
+                      </button>
+                    </div>
+                    <svg
+                      id="how-tree"
+                      viewBox="0 0 560 340"
+                      class="w-full"
+                      role="img"
+                      aria-label="AML tree resolving leaves first"
+                    ></svg>
+                    <p
+                      id="how-caption"
+                      class="min-h-10 border-t border-line px-2 pt-3 font-mono text-[12px] leading-relaxed text-ink-soft"
+                    ></p>
+                  </div>
                 </div>
-                <pre id="ref-example"
-                  class="code-block max-h-[480px] overflow-auto px-4 py-3.5 text-[12.5px] leading-[1.7]"></pre>
+              </div>
+
+              <div
+                id="how-source-face"
+                class="how-card-face how-card-back overflow-hidden rounded-2xl border border-line bg-[#12110d]"
+                aria-hidden="true"
+              >
+                <div class="flex items-center justify-between border-b border-white/10 px-5 py-3">
+                  <p class="font-mono text-[11.5px] text-white/45">parallel-review.tsx</p>
+                  <p class="font-mono text-[10.5px] text-white/30">the same workflow, as AML</p>
+                </div>
+                <pre
+                  id="how-source"
+                  class="code-block overflow-auto rounded-none border-0 px-5 py-5 text-[12.5px] leading-[1.75]"
+                ></pre>
               </div>
             </div>
           </div>
         </div>
-      </div>
-    </section>
+      </section>
 
-    <!-- ============================== get started ============================== -->
-    <section id="start" class="scroll-mt-20 border-t border-line bg-ink text-paper">
-      <div class="mx-auto max-w-6xl px-5 py-24 sm:py-32">
-        <p class="reveal font-mono text-[12px] uppercase tracking-[0.2em] text-[#8aa2ff]">get started</p>
+      <!-- ============================== providers / integrations ============================== -->
+      <section id="providers" class="mx-auto max-w-6xl scroll-mt-20 px-5 py-24 sm:py-32">
+        <p class="reveal font-mono text-[12px] uppercase tracking-[0.2em] text-resolve">integrations</p>
         <div class="mt-3">
           <h2 class="reveal text-3xl font-bold tracking-tight sm:text-5xl" style="--reveal-delay: 60ms">
-            From install to first run in three files
+            Bring your own agent, sandbox, or storage.
           </h2>
-          <p class="reveal mt-5 text-[15px] leading-relaxed text-white/60" style="--reveal-delay: 120ms">
-            AML is under active development. These examples show the intended API shape and may differ from the
-            current implementation.
+          <p class="reveal mt-5 text-[15px] leading-relaxed text-ink-soft" style="--reveal-delay: 120ms">
+            AML defines the contracts and stays out of the way. Choose the implementations that fit your stack, then
+            swap them without rewriting the workflow.
           </p>
         </div>
 
-        <div class="mt-14 grid gap-5 lg:grid-cols-3">
-          <div class="magnetic-card reveal rounded-2xl border border-white/10 bg-white/[0.04] p-6">
-            <div class="flex items-center justify-between">
-              <p class="font-mono text-[12px] text-[#8aa2ff]">step 1</p>
-              <button data-copy="npm install @aml/sdk @aml/agent-opencode zod"
-                class="copy-btn rounded-md border border-white/15 px-2 py-0.5 font-mono text-[10.5px] text-white/60 transition-colors hover:border-white/40 hover:text-white">copy</button>
+        <!-- Logo chips use Lobe Icons for agent products and Simple Icons for infrastructure brands. -->
+        <div
+          class="reveal mt-14 divide-y divide-line rounded-2xl border border-line bg-surface"
+          style="--reveal-delay: 180ms"
+        >
+          <!-- agents -->
+          <div class="grid gap-4 p-5 sm:p-6 lg:grid-cols-[170px_1fr] lg:items-center">
+            <div>
+              <p class="font-mono text-[11px] uppercase tracking-wider text-agent">agents</p>
+              <p class="mt-1 text-[12.5px] text-muted">harnesses & model runtimes</p>
             </div>
-            <h3 class="mt-3 font-semibold">Install the runtime</h3>
-            <pre
-              class="mt-4 overflow-x-auto rounded-lg bg-black/40 px-4 py-3 font-mono text-[12.5px] text-[#e8e6df]"><code>$ npm install <span class="text-[#7ee0b8]">@aml/sdk</span></code></pre>
+            <div class="flex flex-wrap items-center gap-3">
+              <span class="integration-logo" tabindex="0" aria-label="OpenCode" data-tooltip="OpenCode">
+                <img src="https://unpkg.com/@lobehub/icons-static-svg@1.94.0/icons/opencode.svg" alt="" />
+              </span>
+              <span class="integration-logo" tabindex="0" aria-label="Codex" data-tooltip="Codex">
+                <img src="https://unpkg.com/@lobehub/icons-static-svg@1.94.0/icons/codex.svg" alt="" />
+              </span>
+              <span class="integration-roadmap-label">roadmap →</span>
+              <span
+                class="integration-logo is-roadmap"
+                tabindex="0"
+                aria-label="Pi — on the roadmap"
+                data-tooltip="Pi · on the roadmap"
+              >
+                <img src="https://unpkg.com/@lobehub/icons-static-svg@1.94.0/icons/pi.svg" alt="" />
+              </span>
+              <span
+                class="integration-logo is-roadmap"
+                tabindex="0"
+                aria-label="Claude Code — on the roadmap"
+                data-tooltip="Claude Code · on the roadmap"
+              >
+                <img src="https://unpkg.com/@lobehub/icons-static-svg@1.94.0/icons/claudecode.svg" alt="" />
+              </span>
+              <span
+                class="integration-logo is-roadmap"
+                tabindex="0"
+                aria-label="Cursor — on the roadmap"
+                data-tooltip="Cursor · on the roadmap"
+              >
+                <img src="https://unpkg.com/@lobehub/icons-static-svg@1.94.0/icons/cursor.svg" alt="" />
+              </span>
+              <span
+                class="integration-logo is-roadmap"
+                tabindex="0"
+                aria-label="GitHub Copilot — on the roadmap"
+                data-tooltip="GitHub Copilot · on the roadmap"
+              >
+                <img src="https://unpkg.com/@lobehub/icons-static-svg@1.94.0/icons/githubcopilot.svg" alt="" />
+              </span>
+              <span
+                class="integration-logo is-roadmap"
+                tabindex="0"
+                aria-label="Gemini CLI — on the roadmap"
+                data-tooltip="Gemini CLI · on the roadmap"
+              >
+                <img src="https://unpkg.com/@lobehub/icons-static-svg@1.94.0/icons/geminicli.svg" alt="" />
+              </span>
+              <span
+                class="integration-logo is-roadmap"
+                tabindex="0"
+                aria-label="Cline — on the roadmap"
+                data-tooltip="Cline · on the roadmap"
+              >
+                <img src="https://unpkg.com/@lobehub/icons-static-svg@1.94.0/icons/cline.svg" alt="" />
+              </span>
+              <span
+                class="integration-logo is-roadmap"
+                tabindex="0"
+                aria-label="Goose — on the roadmap"
+                data-tooltip="Goose · on the roadmap"
+              >
+                <img src="https://unpkg.com/@lobehub/icons-static-svg@1.94.0/icons/goose.svg" alt="" />
+              </span>
+              <span
+                class="integration-logo is-roadmap"
+                tabindex="0"
+                aria-label="OpenHands — on the roadmap"
+                data-tooltip="OpenHands · on the roadmap"
+              >
+                <img src="https://unpkg.com/@lobehub/icons-static-svg@1.94.0/icons/openhands-color.svg" alt="" />
+              </span>
+              <span
+                class="integration-logo is-roadmap"
+                tabindex="0"
+                aria-label="Windsurf — maybe"
+                data-tooltip="Windsurf · maybe"
+              >
+                <img src="https://unpkg.com/@lobehub/icons-static-svg@1.94.0/icons/windsurf.svg" alt="" />
+              </span>
+              <span
+                class="integration-logo is-roadmap"
+                tabindex="0"
+                aria-label="Roo Code — maybe"
+                data-tooltip="Roo Code · maybe"
+              >
+                <img src="https://unpkg.com/@lobehub/icons-static-svg@1.94.0/icons/roocode.svg" alt="" />
+              </span>
+              <span
+                class="integration-logo is-roadmap"
+                tabindex="0"
+                aria-label="Devin — maybe"
+                data-tooltip="Devin · maybe"
+              >
+                <img src="https://unpkg.com/@lobehub/icons-static-svg@1.94.0/icons/devin-color.svg" alt="" />
+              </span>
+            </div>
           </div>
 
-          <div class="magnetic-card reveal rounded-2xl border border-white/10 bg-white/[0.04] p-6"
-            style="--reveal-delay: 80ms">
-            <div class="flex items-center justify-between">
-              <p class="font-mono text-[12px] text-[#8aa2ff]">step 2</p>
-              <button data-copy-target="start-tsconfig"
-                class="copy-btn rounded-md border border-white/15 px-2 py-0.5 font-mono text-[10.5px] text-white/60 transition-colors hover:border-white/40 hover:text-white">copy</button>
+          <!-- sandboxes -->
+          <div class="grid gap-4 p-5 sm:p-6 lg:grid-cols-[170px_1fr] lg:items-center">
+            <div>
+              <p class="font-mono text-[11px] uppercase tracking-wider text-signal">sandboxes</p>
+              <p class="mt-1 text-[12.5px] text-muted">ephemeral execution</p>
             </div>
-            <h3 class="mt-3 font-semibold">Point JSX at AML</h3>
-            <pre id="start-tsconfig"
-              class="mt-4 overflow-x-auto rounded-lg bg-black/40 px-4 py-3 font-mono text-[12.5px] leading-relaxed text-[#e8e6df]"><code>{
+            <div class="flex flex-wrap items-center gap-3">
+              <span class="integration-logo" tabindex="0" aria-label="Local process" data-tooltip="Local process">
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path
+                    d="m3 7 4 5-4 5M10 18h8"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2.2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  />
+                </svg>
+              </span>
+              <span class="integration-logo" tabindex="0" aria-label="Docker" data-tooltip="Docker">
+                <img src="https://cdn.simpleicons.org/docker" alt="" />
+              </span>
+              <span class="integration-roadmap-label">roadmap →</span>
+              <span
+                class="integration-logo is-roadmap"
+                tabindex="0"
+                aria-label="Cloudflare — on the roadmap"
+                data-tooltip="Cloudflare · on the roadmap"
+              >
+                <img src="https://cdn.simpleicons.org/cloudflare" alt="" />
+              </span>
+              <span
+                class="integration-logo is-roadmap"
+                tabindex="0"
+                aria-label="Modal — on the roadmap"
+                data-tooltip="Modal · on the roadmap"
+              >
+                <img src="https://cdn.simpleicons.org/modal" alt="" />
+              </span>
+              <span
+                class="integration-logo is-roadmap"
+                tabindex="0"
+                aria-label="Fly.io — on the roadmap"
+                data-tooltip="Fly.io · on the roadmap"
+              >
+                <img src="https://cdn.simpleicons.org/flydotio" alt="" />
+              </span>
+              <span
+                class="integration-logo is-roadmap"
+                tabindex="0"
+                aria-label="Kubernetes — on the roadmap"
+                data-tooltip="Kubernetes · on the roadmap"
+              >
+                <img src="https://cdn.simpleicons.org/kubernetes" alt="" />
+              </span>
+              <span
+                class="integration-logo is-roadmap"
+                tabindex="0"
+                aria-label="Gitpod — maybe"
+                data-tooltip="Gitpod · maybe"
+              >
+                <img src="https://cdn.simpleicons.org/gitpod" alt="" />
+              </span>
+              <span
+                class="integration-logo is-roadmap"
+                tabindex="0"
+                aria-label="CodeSandbox — maybe"
+                data-tooltip="CodeSandbox · maybe"
+              >
+                <img src="https://cdn.simpleicons.org/codesandbox" alt="" />
+              </span>
+              <span
+                class="integration-logo is-roadmap"
+                tabindex="0"
+                aria-label="Replit — maybe"
+                data-tooltip="Replit · maybe"
+              >
+                <img src="https://cdn.simpleicons.org/replit" alt="" />
+              </span>
+              <span
+                class="integration-logo is-roadmap"
+                tabindex="0"
+                aria-label="Railway — maybe"
+                data-tooltip="Railway · maybe"
+              >
+                <img src="https://cdn.simpleicons.org/railway" alt="" />
+              </span>
+              <span
+                class="integration-logo is-roadmap"
+                tabindex="0"
+                aria-label="Vercel Sandbox — on the roadmap"
+                data-tooltip="Vercel Sandbox · on the roadmap"
+              >
+                <img src="https://cdn.simpleicons.org/vercel" alt="" />
+              </span>
+              <span
+                class="integration-logo is-roadmap"
+                tabindex="0"
+                aria-label="GitHub Codespaces — on the roadmap"
+                data-tooltip="GitHub Codespaces · on the roadmap"
+              >
+                <img src="https://cdn.simpleicons.org/github" alt="" />
+              </span>
+              <span
+                class="integration-logo is-roadmap"
+                tabindex="0"
+                aria-label="AWS Fargate — maybe"
+                data-tooltip="AWS Fargate · maybe"
+              >
+                <img src="https://unpkg.com/@lobehub/icons-static-svg@1.94.0/icons/aws-color.svg" alt="" />
+              </span>
+            </div>
+          </div>
+
+          <!-- workspaces -->
+          <div class="grid gap-4 p-5 sm:p-6 lg:grid-cols-[170px_1fr] lg:items-center">
+            <div>
+              <p class="font-mono text-[11px] uppercase tracking-wider text-ok">workspaces</p>
+              <p class="mt-1 text-[12.5px] text-muted">durable object storage</p>
+            </div>
+            <div class="flex flex-wrap items-center gap-3">
+              <span class="integration-logo" tabindex="0" aria-label="Local disk" data-tooltip="Local disk">
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path
+                    d="M3.5 6.5h6l2 2h9v9a2 2 0 0 1-2 2h-15z"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linejoin="round"
+                  />
+                </svg>
+              </span>
+              <span class="integration-roadmap-label">roadmap →</span>
+              <span
+                class="integration-logo is-roadmap"
+                tabindex="0"
+                aria-label="Docker volumes — on the roadmap"
+                data-tooltip="Docker volumes · on the roadmap"
+              >
+                <img src="https://cdn.simpleicons.org/docker" alt="" />
+              </span>
+              <span
+                class="integration-logo is-roadmap"
+                tabindex="0"
+                aria-label="Amazon S3 — on the roadmap"
+                data-tooltip="Amazon S3 · on the roadmap"
+              >
+                <img src="https://unpkg.com/@lobehub/icons-static-svg@1.94.0/icons/aws-color.svg" alt="" />
+              </span>
+              <span
+                class="integration-logo is-roadmap"
+                tabindex="0"
+                aria-label="Cloudflare R2 — on the roadmap"
+                data-tooltip="Cloudflare R2 · on the roadmap"
+              >
+                <img src="https://cdn.simpleicons.org/cloudflare" alt="" />
+              </span>
+              <span
+                class="integration-logo is-roadmap"
+                tabindex="0"
+                aria-label="Backblaze B2 — on the roadmap"
+                data-tooltip="Backblaze B2 · on the roadmap"
+              >
+                <img src="https://cdn.simpleicons.org/backblaze" alt="" />
+              </span>
+              <span
+                class="integration-logo is-roadmap"
+                tabindex="0"
+                aria-label="MinIO — on the roadmap"
+                data-tooltip="MinIO · on the roadmap"
+              >
+                <img src="https://cdn.simpleicons.org/minio" alt="" />
+              </span>
+              <span
+                class="integration-logo is-roadmap"
+                tabindex="0"
+                aria-label="DigitalOcean Spaces — maybe"
+                data-tooltip="DigitalOcean Spaces · maybe"
+              >
+                <img src="https://cdn.simpleicons.org/digitalocean" alt="" />
+              </span>
+              <span
+                class="integration-logo is-roadmap"
+                tabindex="0"
+                aria-label="Google Cloud Storage — on the roadmap"
+                data-tooltip="Google Cloud Storage · on the roadmap"
+              >
+                <img src="https://cdn.simpleicons.org/googlecloud" alt="" />
+              </span>
+              <span
+                class="integration-logo is-roadmap"
+                tabindex="0"
+                aria-label="Azure Blob Storage — on the roadmap"
+                data-tooltip="Azure Blob Storage · on the roadmap"
+              >
+                <img src="https://unpkg.com/@lobehub/icons-static-svg@1.94.0/icons/azure-color.svg" alt="" />
+              </span>
+              <span
+                class="integration-logo is-roadmap"
+                tabindex="0"
+                aria-label="Supabase Storage — maybe"
+                data-tooltip="Supabase Storage · maybe"
+              >
+                <img src="https://cdn.simpleicons.org/supabase" alt="" />
+              </span>
+              <span
+                class="integration-logo is-roadmap"
+                tabindex="0"
+                aria-label="Wasabi Object Storage — maybe"
+                data-tooltip="Wasabi Object Storage · maybe"
+              >
+                <img src="https://cdn.simpleicons.org/wasabi" alt="" />
+              </span>
+              <span
+                class="integration-logo is-roadmap"
+                tabindex="0"
+                aria-label="Vultr Object Storage — maybe"
+                data-tooltip="Vultr Object Storage · maybe"
+              >
+                <img src="https://cdn.simpleicons.org/vultr" alt="" />
+              </span>
+              <span
+                class="integration-logo is-roadmap"
+                tabindex="0"
+                aria-label="Scaleway Object Storage — maybe"
+                data-tooltip="Scaleway Object Storage · maybe"
+              >
+                <img src="https://cdn.simpleicons.org/scaleway" alt="" />
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <!-- runtime packages -->
+        <p class="reveal mt-14 font-mono text-[11px] uppercase tracking-wider text-muted">runtime packages</p>
+        <div class="mt-5 grid gap-5 md:grid-cols-2 lg:grid-cols-3">
+          <article class="magnetic-card reveal card-hover rounded-2xl border border-line bg-surface p-6">
+            <p class="font-mono text-[11px] uppercase tracking-wider text-agent">agent</p>
+            <h3 class="mt-2 font-mono text-[15px] font-semibold">opencodeAgent({})</h3>
+            <p class="mt-2.5 text-[14px] leading-relaxed text-ink-soft">
+              Runs OpenCode sessions with model overrides, JavaScript tools, MCP grants, follow-ups, cancellation, and
+              structured output.
+            </p>
+            <p class="mt-4 font-mono text-[12px] text-muted">from @aml-jsx/sdk</p>
+          </article>
+
+          <article
+            class="magnetic-card reveal card-hover rounded-2xl border border-line bg-surface p-6"
+            style="--reveal-delay: 60ms"
+          >
+            <p class="font-mono text-[11px] uppercase tracking-wider text-agent">agent</p>
+            <h3 class="mt-2 font-mono text-[15px] font-semibold">codexAgent({})</h3>
+            <p class="mt-2.5 text-[14px] leading-relaxed text-ink-soft">
+              Runs Codex SDK threads with model overrides, read-only host tools, JavaScript tools, MCP grants, and
+              follow-ups.
+            </p>
+            <p class="mt-4 font-mono text-[12px] text-muted">from @aml-jsx/sdk</p>
+          </article>
+
+          <article
+            class="magnetic-card reveal card-hover rounded-2xl border border-line bg-surface p-6"
+            style="--reveal-delay: 120ms"
+          >
+            <p class="font-mono text-[11px] uppercase tracking-wider text-signal">sandbox</p>
+            <h3 class="mt-2 font-mono text-[15px] font-semibold">dockerSandbox({})</h3>
+            <p class="mt-2.5 text-[14px] leading-relaxed text-ink-soft">
+              Confined Docker container leases with explicit filesystem, network, identity, capability, and resource
+              policies.
+            </p>
+            <p class="mt-4 font-mono text-[12px] text-muted">from @aml-jsx/sdk</p>
+          </article>
+
+          <article
+            class="magnetic-card reveal card-hover rounded-2xl border border-line bg-surface p-6"
+            style="--reveal-delay: 180ms"
+          >
+            <p class="font-mono text-[11px] uppercase tracking-wider text-ok">workspace</p>
+            <h3 class="mt-2 font-mono text-[15px] font-semibold">localWorkspace({})</h3>
+            <p class="mt-2.5 text-[14px] leading-relaxed text-ink-soft">
+              Uses an existing local directory as a durable workspace with cross-process writer locking.
+            </p>
+            <p class="mt-4 font-mono text-[12px] text-muted">from @aml-jsx/sdk</p>
+          </article>
+
+          <article
+            class="magnetic-card reveal card-hover rounded-2xl border border-line bg-surface p-6"
+            style="--reveal-delay: 240ms"
+          >
+            <p class="font-mono text-[11px] uppercase tracking-wider text-resolve">testing</p>
+            <h3 class="mt-2 font-mono text-[15px] font-semibold">@aml-jsx/sdk/testing</h3>
+            <p class="mt-2.5 text-[14px] leading-relaxed text-ink-soft">
+              Deterministic Agent, Sandbox, and Workspace providers plus reusable conformance suites for examples,
+              adapter development, and tests.
+            </p>
+            <p class="mt-4 font-mono text-[12px] text-muted">DeterministicAgentProvider</p>
+          </article>
+
+          <article
+            class="magnetic-card reveal card-hover flex flex-col justify-between rounded-2xl border border-dashed border-line-strong bg-paper p-6"
+            style="--reveal-delay: 300ms"
+          >
+            <div>
+              <p class="font-mono text-[11px] uppercase tracking-wider text-muted">yours?</p>
+              <h3 class="mt-2 font-mono text-[15px] font-semibold">defineAgentProvider()</h3>
+              <p class="mt-2.5 text-[14px] leading-relaxed text-ink-soft">
+                Implement the provider contract and any agent harness — yours included — can run inside an AML tree.
+              </p>
+            </div>
+            <a
+              href="https://github.com/we-are-singular/aml/blob/main/SPEC.md#151-agent-session-contract"
+              target="_blank"
+              rel="noreferrer"
+              class="mt-4 font-mono text-[12px] text-resolve link-underline"
+            >
+              read the contract ↗
+            </a>
+          </article>
+        </div>
+      </section>
+
+      <!-- ============================== reference ============================== -->
+      <section id="reference" class="scroll-mt-20 border-y border-line bg-surface">
+        <div class="mx-auto max-w-6xl px-5 py-24 sm:py-32">
+          <p class="reveal font-mono text-[12px] uppercase tracking-[0.2em] text-resolve">reference</p>
+          <h2 class="reveal mt-3 text-3xl font-bold tracking-tight sm:text-5xl" style="--reveal-delay: 60ms">
+            Small enough to learn in one sitting
+          </h2>
+          <p class="reveal mt-5 text-[15px] leading-relaxed text-ink-soft" style="--reveal-delay: 120ms">
+            Nine primitives and a handful of runtime APIs. Everything else is ordinary JavaScript — control flow,
+            concurrency, and data flow included.
+          </p>
+
+          <div class="mt-14 grid gap-8 lg:grid-cols-[minmax(220px,0.8fr)_2.2fr]">
+            <!-- Bounded index: it stays useful without making the whole page as tall as the API list. -->
+            <div class="reveal lg:sticky lg:top-20 lg:self-start">
+              <div id="ref-list" class="ref-list-scroll space-y-6 lg:pr-3" role="tree" aria-label="AML reference"></div>
+            </div>
+
+            <!-- The selected concept remains alongside the independently scrolling index. -->
+            <div class="reveal min-w-0 lg:sticky lg:top-20 lg:self-start" style="--reveal-delay: 120ms">
+              <div class="overflow-hidden rounded-2xl border border-line bg-paper">
+                <div
+                  class="flex flex-wrap items-center justify-between gap-3 border-b border-line bg-surface px-6 py-4"
+                >
+                  <div>
+                    <h3 id="ref-name" class="font-mono text-xl font-semibold"></h3>
+                    <p id="ref-kind" class="mt-0.5 font-mono text-[11px] uppercase tracking-wider text-muted"></p>
+                  </div>
+                  <code
+                    id="ref-signature"
+                    class="rounded-lg border border-line bg-paper px-3 py-1.5 font-mono text-[11.5px] text-ink-soft"
+                  ></code>
+                </div>
+                <div class="px-6 py-5">
+                  <p id="ref-description" class="max-w-prose text-[15px] leading-relaxed text-ink-soft"></p>
+                  <p
+                    id="ref-note"
+                    class="mt-3 hidden max-w-prose rounded-lg border border-resolve/25 bg-resolve-soft px-3.5 py-2.5 text-[13px] leading-relaxed text-ink-soft"
+                  ></p>
+                </div>
+                <div class="border-t border-line">
+                  <div class="flex items-center justify-between bg-[#12110d] px-4 py-2">
+                    <span id="ref-example-file" class="font-mono text-[11px] text-white/40"></span>
+                    <button
+                      id="ref-copy"
+                      class="rounded-md border border-white/15 px-2.5 py-1 font-mono text-[11px] text-white/70 transition-colors hover:border-white/40 hover:text-white"
+                    >
+                      copy
+                    </button>
+                  </div>
+                  <pre
+                    id="ref-example"
+                    class="code-block max-h-[480px] overflow-auto px-4 py-3.5 text-[12.5px] leading-[1.7]"
+                  ></pre>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============================== get started ============================== -->
+      <section id="start" class="scroll-mt-20 border-t border-line bg-ink text-paper">
+        <div class="mx-auto max-w-6xl px-5 py-24 sm:py-32">
+          <p class="reveal font-mono text-[12px] uppercase tracking-[0.2em] text-[#8aa2ff]">get started</p>
+          <div class="mt-3">
+            <h2 class="reveal text-3xl font-bold tracking-tight sm:text-5xl" style="--reveal-delay: 60ms">
+              From install to first run in three files
+            </h2>
+            <p class="reveal mt-5 text-[15px] leading-relaxed text-white/60" style="--reveal-delay: 120ms">
+              AML is under active development. These examples show the intended API shape and may differ from the
+              current implementation.
+            </p>
+          </div>
+
+          <div class="mt-14 grid gap-5 lg:grid-cols-3">
+            <div class="magnetic-card reveal rounded-2xl border border-white/10 bg-white/[0.04] p-6">
+              <div class="flex items-center justify-between">
+                <p class="font-mono text-[12px] text-[#8aa2ff]">step 1</p>
+                <button
+                  data-copy="npm install @aml-jsx/sdk"
+                  class="copy-btn rounded-md border border-white/15 px-2 py-0.5 font-mono text-[10.5px] text-white/60 transition-colors hover:border-white/40 hover:text-white"
+                >
+                  copy
+                </button>
+              </div>
+              <h3 class="mt-3 font-semibold">Install the runtime</h3>
+              <pre
+                class="mt-4 overflow-x-auto rounded-lg bg-black/40 px-4 py-3 font-mono text-[12.5px] text-[#e8e6df]"
+              ><code>$ npm install <span class="text-[#7ee0b8]">@aml-jsx/sdk</span></code></pre>
+            </div>
+
+            <div
+              class="magnetic-card reveal rounded-2xl border border-white/10 bg-white/[0.04] p-6"
+              style="--reveal-delay: 80ms"
+            >
+              <div class="flex items-center justify-between">
+                <p class="font-mono text-[12px] text-[#8aa2ff]">step 2</p>
+                <button
+                  data-copy-target="start-tsconfig"
+                  class="copy-btn rounded-md border border-white/15 px-2 py-0.5 font-mono text-[10.5px] text-white/60 transition-colors hover:border-white/40 hover:text-white"
+                >
+                  copy
+                </button>
+              </div>
+              <h3 class="mt-3 font-semibold">Point JSX at AML</h3>
+              <pre
+                id="start-tsconfig"
+                class="mt-4 overflow-x-auto rounded-lg bg-black/40 px-4 py-3 font-mono text-[12.5px] leading-relaxed text-[#e8e6df]"
+              ><code>{
   <span class="text-[#9dd6ff]">"compilerOptions"</span>: {
     <span class="text-[#9dd6ff]">"jsx"</span>: <span class="text-[#ffc093]">"react-jsx"</span>,
-    <span class="text-[#9dd6ff]">"jsxImportSource"</span>: <span class="text-[#ffc093]">"@aml/sdk"</span>
+    <span class="text-[#9dd6ff]">"jsxImportSource"</span>: <span class="text-[#ffc093]">"@aml-jsx/sdk"</span>
   }
 }</code></pre>
-          </div>
-
-          <div class="magnetic-card reveal rounded-2xl border border-white/10 bg-white/[0.04] p-6"
-            style="--reveal-delay: 160ms">
-            <div class="flex items-center justify-between">
-              <p class="font-mono text-[12px] text-[#8aa2ff]">step 3</p>
-              <button data-copy-target="start-agent"
-                class="copy-btn rounded-md border border-white/15 px-2 py-0.5 font-mono text-[10.5px] text-white/60 transition-colors hover:border-white/40 hover:text-white">copy</button>
             </div>
-            <h3 class="mt-3 font-semibold">Evaluate a tree</h3>
-            <pre id="start-agent"
-              class="mt-4 overflow-x-auto rounded-lg bg-[#1e1e1e] px-4 py-3 font-mono text-[12.5px] leading-relaxed text-[#d4d4d4]"><code>import { opencodeAgent } from "@aml/agent-opencode"
-import { Agent, AmlRuntime } from "@aml/sdk"
+
+            <div
+              class="magnetic-card reveal rounded-2xl border border-white/10 bg-white/[0.04] p-6"
+              style="--reveal-delay: 160ms"
+            >
+              <div class="flex items-center justify-between">
+                <p class="font-mono text-[12px] text-[#8aa2ff]">step 3</p>
+                <button
+                  data-copy-target="start-agent"
+                  class="copy-btn rounded-md border border-white/15 px-2 py-0.5 font-mono text-[10.5px] text-white/60 transition-colors hover:border-white/40 hover:text-white"
+                >
+                  copy
+                </button>
+              </div>
+              <h3 class="mt-3 font-semibold">Evaluate a tree</h3>
+              <pre
+                id="start-agent"
+                class="mt-4 overflow-x-auto rounded-lg bg-[#1e1e1e] px-4 py-3 font-mono text-[12.5px] leading-relaxed text-[#d4d4d4]"
+              ><code>import { Agent, AmlRuntime, opencodeAgent } from "@aml-jsx/sdk"
 
 const OpenCode = opencodeAgent({})
 const runtime = new AmlRuntime()
 await runtime.evaluate(
   &lt;Agent provider={OpenCode}&gt;Summarize this repository.&lt;/Agent&gt;,
 )</code></pre>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <!-- ============================== contributing ============================== -->
-    <section id="contributing" class="scroll-mt-20 border-t border-white/10 bg-ink text-paper">
-      <div class="mx-auto max-w-6xl px-5 py-24 sm:py-32">
-        <div class="contributing-card reveal relative isolate overflow-hidden rounded-3xl border border-white/12">
-          <div class="contributing-stars" aria-hidden="true"></div>
-          <div class="contributing-orbit" aria-hidden="true"></div>
-          <div class="relative z-10 p-7 sm:p-10 lg:p-12">
-            <p class="font-mono text-[12px] uppercase tracking-[0.2em] text-[#8aa2ff]">contributing</p>
-            <h2 class="mt-3 text-3xl font-bold tracking-tight sm:text-5xl">
-              AML is early. Help shape what it becomes.
-            </h2>
-            <p class="mt-5 text-[15px] leading-relaxed text-white/65">
-              Want to build a provider, sharpen the runtime semantics, improve the developer experience, or argue
-              for a better API? This is the useful stage to show up: the important decisions are still being made.
-            </p>
-            <div
-              class="mt-10 flex flex-col gap-6 border-t border-white/10 pt-6 sm:flex-row sm:items-center sm:justify-between">
-              <p class="font-mono text-[11.5px] leading-relaxed text-white/40">
-                help create provider adapters · shape the runtime · improve examples, docs, and tooling
-              </p>
-              <a href="https://github.com/we-are-singular/aml" target="_blank" rel="noreferrer"
-                class="inline-flex w-fit items-center gap-2 rounded-full bg-paper px-6 py-3 text-[15px] font-semibold text-ink transition-colors hover:bg-[#8aa2ff]">
-                Help build AML
-                <span aria-hidden="true">↗</span>
-              </a>
             </div>
           </div>
         </div>
-      </div>
-    </section>
-  </main>
+      </section>
 
-  <!-- ============================== footer ============================== -->
-  <footer class="border-t border-white/10 bg-ink pb-10 pt-14 text-paper">
-    <div class="mx-auto max-w-6xl px-5">
-      <div class="flex flex-wrap items-start justify-between gap-10">
-        <div class="max-w-sm">
-          <p class="select-none font-mono text-lg font-semibold" aria-label="AML">
-            <span class="text-white/40">&lt;</span>aml<span class="text-resolve"> /</span><span
-              class="text-white/40">&gt;</span>
-          <p class="mt-3 text-[13.5px] leading-relaxed text-white/50">
-            Agent Markup Language — an asynchronous TypeScript and JSX runtime for composing provider-agnostic agent
-            workflows. AML is under active development, and its API is still taking shape.
-          </p>
+      <!-- ============================== contributing ============================== -->
+      <section id="contributing" class="scroll-mt-20 border-t border-white/10 bg-ink text-paper">
+        <div class="mx-auto max-w-6xl px-5 py-24 sm:py-32">
+          <div class="contributing-card reveal relative isolate overflow-hidden rounded-3xl border border-white/12">
+            <div class="contributing-stars" aria-hidden="true"></div>
+            <div class="contributing-orbit" aria-hidden="true"></div>
+            <div class="relative z-10 p-7 sm:p-10 lg:p-12">
+              <p class="font-mono text-[12px] uppercase tracking-[0.2em] text-[#8aa2ff]">contributing</p>
+              <h2 class="mt-3 text-3xl font-bold tracking-tight sm:text-5xl">
+                AML is early. Help shape what it becomes.
+              </h2>
+              <p class="mt-5 text-[15px] leading-relaxed text-white/65">
+                Want to build a provider, sharpen the runtime semantics, improve the developer experience, or argue for
+                a better API? This is the useful stage to show up: the important decisions are still being made.
+              </p>
+              <div
+                class="mt-10 flex flex-col gap-6 border-t border-white/10 pt-6 sm:flex-row sm:items-center sm:justify-between"
+              >
+                <p class="font-mono text-[11.5px] leading-relaxed text-white/40">
+                  help create provider adapters · shape the runtime · improve examples, docs, and tooling
+                </p>
+                <a
+                  href="https://github.com/we-are-singular/aml"
+                  target="_blank"
+                  rel="noreferrer"
+                  class="inline-flex w-fit items-center gap-2 rounded-full bg-paper px-6 py-3 text-[15px] font-semibold text-ink transition-colors hover:bg-[#8aa2ff]"
+                >
+                  Help build AML
+                  <span aria-hidden="true">↗</span>
+                </a>
+              </div>
+            </div>
+          </div>
         </div>
-        <nav class="flex gap-16 font-mono text-[13px]">
-          <div class="space-y-2.5">
-            <p class="text-[11px] uppercase tracking-wider text-white/35">docs</p>
-            <a class="block text-white/60 transition-colors hover:text-white"
-              href="https://github.com/we-are-singular/aml/blob/main/SPEC.md"
-              target="_blank" rel="noreferrer">SPEC.md</a>
-            <a class="block text-white/60 transition-colors hover:text-white" href="#reference">Reference</a>
-          </div>
-          <div class="space-y-2.5">
-            <p class="text-[11px] uppercase tracking-wider text-white/35">project</p>
-            <a class="block text-white/60 transition-colors hover:text-white"
-              href="https://github.com/we-are-singular/aml"
-              target="_blank" rel="noreferrer">GitHub</a>
-            <a class="block text-white/60 transition-colors hover:text-white" href="https://www.npmjs.com/package/@aml/core"
-              target="_blank" rel="noreferrer">npm</a>
-            <a class="block text-white/60 transition-colors hover:text-white" href="./llms.txt">llms.txt</a>
-          </div>
-        </nav>
-      </div>
-      <div
-        class="mt-12 flex flex-wrap items-center justify-between gap-4 border-t border-white/10 pt-6 font-mono text-[11.5px] text-white/35">
-        <p>
-          Made with <span class="text-[#ff7a59]">♥</span> by
-          <a class="transition-colors hover:text-white" href="https://wearesingular.com" target="_blank"
-            rel="noreferrer">we are singular</a>
-        </p>
-        <p>MIT License</p>
-      </div>
-    </div>
-  </footer>
-</body>
+      </section>
+    </main>
 
+    <!-- ============================== footer ============================== -->
+    <footer class="border-t border-white/10 bg-ink pb-10 pt-14 text-paper">
+      <div class="mx-auto max-w-6xl px-5">
+        <div class="flex flex-wrap items-start justify-between gap-10">
+          <div class="max-w-sm">
+            <p class="select-none font-mono text-lg font-semibold" aria-label="AML">
+              <span class="text-white/40">&lt;</span>aml<span class="text-resolve"> /</span
+              ><span class="text-white/40">&gt;</span>
+            </p>
+
+            <p class="mt-3 text-[13.5px] leading-relaxed text-white/50">
+              Agent Markup Language — an asynchronous TypeScript and JSX runtime for composing provider-agnostic agent
+              workflows. AML is under active development, and its API is still taking shape.
+            </p>
+          </div>
+          <nav class="flex gap-16 font-mono text-[13px]">
+            <div class="space-y-2.5">
+              <p class="text-[11px] uppercase tracking-wider text-white/35">docs</p>
+              <a
+                class="block text-white/60 transition-colors hover:text-white"
+                href="https://github.com/we-are-singular/aml/blob/main/SPEC.md"
+                target="_blank"
+                rel="noreferrer"
+                >SPEC.md</a
+              >
+              <a class="block text-white/60 transition-colors hover:text-white" href="#reference">Reference</a>
+            </div>
+            <div class="space-y-2.5">
+              <p class="text-[11px] uppercase tracking-wider text-white/35">project</p>
+              <a
+                class="block text-white/60 transition-colors hover:text-white"
+                href="https://github.com/we-are-singular/aml"
+                target="_blank"
+                rel="noreferrer"
+                >GitHub</a
+              >
+              <a
+                class="block text-white/60 transition-colors hover:text-white"
+                href="https://www.npmjs.com/package/@aml-jsx/sdk"
+                target="_blank"
+                rel="noreferrer"
+                >npm</a
+              >
+              <a class="block text-white/60 transition-colors hover:text-white" href="./llms.txt">llms.txt</a>
+            </div>
+          </nav>
+        </div>
+        <div
+          class="mt-12 flex flex-wrap items-center justify-between gap-4 border-t border-white/10 pt-6 font-mono text-[11.5px] text-white/35"
+        >
+          <p>
+            Made with <span class="text-[#ff7a59]">♥</span> by
+            <a
+              class="transition-colors hover:text-white"
+              href="https://wearesingular.com"
+              target="_blank"
+              rel="noreferrer"
+              >we are singular</a
+            >
+          </p>
+          <p>MIT License</p>
+        </div>
+      </div>
+    </footer>
+  </body>
 </html>

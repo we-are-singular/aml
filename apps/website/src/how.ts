@@ -102,7 +102,7 @@ const STEPS: readonly HowStep[] = [
 
 const SVG_NS = "http://www.w3.org/2000/svg"
 
-const REVIEW_SOURCE = `import { Agent, evaluate, System, Tool } from "@aml/sdk"
+const REVIEW_SOURCE = `import { Agent, evaluate, System, Tool } from "@aml-jsx/sdk"
 
 async function Review() {
   const [correctness, maintainability] = await Promise.all([
@@ -153,7 +153,8 @@ export async function initHow(): Promise<void> {
     !queriedVisualButton ||
     !queriedSourceButton ||
     !queriedSource
-  ) return
+  )
+    return
   // Aliased so nested closures keep the non-null types.
   const list = queriedList
   const svg = queriedSvg
@@ -168,7 +169,7 @@ export async function initHow(): Promise<void> {
   queriedSource.innerHTML = await highlightTsx(REVIEW_SOURCE)
 
   // Build the SVG tree once; steps only flip state attributes.
-  const nodeById = new Map(NODES.map((node) => [node.id, node]))
+  const nodeById = new Map(NODES.map(node => [node.id, node]))
 
   for (const [edgeId, from, to] of EDGES) {
     const a = nodeById.get(from)!
@@ -207,10 +208,7 @@ export async function initHow(): Promise<void> {
     text.setAttribute("x", String(node.x))
     text.setAttribute("y", String(node.y + 3.5))
     text.setAttribute("text-anchor", "middle")
-    text.setAttribute(
-      "style",
-      "font: 600 10.5px 'IBM Plex Mono', monospace; fill: var(--color-ink-soft)",
-    )
+    text.setAttribute("style", "font: 600 10.5px 'IBM Plex Mono', monospace; fill: var(--color-ink-soft)")
     text.textContent = node.label
 
     const badge = document.createElementNS(SVG_NS, "g")
@@ -274,7 +272,7 @@ export async function initHow(): Promise<void> {
         ;(badge.lastChild as SVGTextElement).textContent = value
       }
     }
-    svg.querySelectorAll<SVGLineElement>("[data-edge]").forEach((edge) => {
+    svg.querySelectorAll<SVGLineElement>("[data-edge]").forEach(edge => {
       const id = edge.dataset.edge ?? ""
       edge.classList.toggle("is-hot", step.hotEdges.includes(id))
       edge.classList.toggle("is-done", step.doneEdges.includes(id))
@@ -368,6 +366,6 @@ export async function initHow(): Promise<void> {
         show(0)
       }
     },
-    { threshold: 0.3 },
+    { threshold: 0.3 }
   ).observe(svg)
 }

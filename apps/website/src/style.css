@@ -28,16 +28,33 @@
   --animate-spin-slow: spin 14s linear infinite;
 
   @keyframes marquee {
-    from { transform: translateX(0); }
-    to { transform: translateX(-50%); }
+    from {
+      transform: translateX(0);
+    }
+    to {
+      transform: translateX(-50%);
+    }
   }
   @keyframes pulse-dot {
-    0%, 100% { opacity: 1; transform: scale(1); }
-    50% { opacity: 0.45; transform: scale(0.8); }
+    0%,
+    100% {
+      opacity: 1;
+      transform: scale(1);
+    }
+    50% {
+      opacity: 0.45;
+      transform: scale(0.8);
+    }
   }
   @keyframes caret {
-    0%, 49% { opacity: 1; }
-    50%, 100% { opacity: 0; }
+    0%,
+    49% {
+      opacity: 1;
+    }
+    50%,
+    100% {
+      opacity: 0;
+    }
   }
 }
 
@@ -75,8 +92,7 @@ body {
 .contributing-card {
   background:
     radial-gradient(circle at 78% 28%, rgb(46 75 255 / 0.24), transparent 28rem),
-    radial-gradient(circle at 12% 115%, rgb(124 58 237 / 0.16), transparent 24rem),
-    #211f2a;
+    radial-gradient(circle at 12% 115%, rgb(124 58 237 / 0.16), transparent 24rem), #211f2a;
 }
 
 .contributing-stars {
@@ -86,8 +102,14 @@ body {
     radial-gradient(circle, rgb(255 255 255 / 0.75) 0 1px, transparent 1.3px),
     radial-gradient(circle, rgb(138 162 255 / 0.72) 0 1px, transparent 1.4px),
     radial-gradient(circle, rgb(255 255 255 / 0.35) 0 0.7px, transparent 1px);
-  background-position: 0 0, 19px 31px, 11px 7px;
-  background-size: 83px 83px, 137px 137px, 47px 47px;
+  background-position:
+    0 0,
+    19px 31px,
+    11px 7px;
+  background-size:
+    83px 83px,
+    137px 137px,
+    47px 47px;
   opacity: 0.42;
   animation: contributing-stars-orbit 90s linear infinite;
 }
@@ -108,12 +130,21 @@ body {
 }
 
 @keyframes contributing-stars-orbit {
-  to { rotate: 360deg; }
+  to {
+    rotate: 360deg;
+  }
 }
 
 @keyframes contributing-orbit-pulse {
-  0%, 100% { scale: 0.96; opacity: 0.65; }
-  50% { scale: 1.04; opacity: 1; }
+  0%,
+  100% {
+    scale: 0.96;
+    opacity: 0.65;
+  }
+  50% {
+    scale: 1.04;
+    opacity: 1;
+  }
 }
 
 /* ---------- scroll reveal ---------- */
@@ -133,10 +164,22 @@ body {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  html { scroll-behavior: auto; }
-  .reveal { opacity: 1; translate: none; transition: none; }
-  .animate-marquee, .animate-ticker { animation: none !important; }
-  .contributing-stars, .contributing-orbit { animation: none; }
+  html {
+    scroll-behavior: auto;
+  }
+  .reveal {
+    opacity: 1;
+    translate: none;
+    transition: none;
+  }
+  .animate-marquee,
+  .animate-ticker {
+    animation: none !important;
+  }
+  .contributing-stars,
+  .contributing-orbit {
+    animation: none;
+  }
 }
 
 /* ---------- code blocks ---------- */
@@ -145,36 +188,75 @@ body {
   @apply rounded-xl border border-line bg-[#1e1e1e] text-[#d4d4d4] font-mono text-[13px] leading-relaxed overflow-x-auto;
 }
 
-.code-block .tok-k { color: #8aa2ff; }            /* keywords */
-.code-block .tok-s { color: #ffc093; }            /* strings */
-.code-block .tok-t { color: #7ee0b8; }            /* tags / types */
-.code-block .tok-c { color: #6f6b5e; font-style: italic; } /* comments */
-.code-block .tok-n { color: #d9a6ff; }            /* numbers */
-.code-block .tok-f { color: #ffd479; }            /* function calls */
-.code-block .tok-a { color: #9dd6ff; }            /* attributes */
-.code-block .tok-p { color: #b9b5a8; }            /* punctuation */
-.code-block .tok-x { color: #e8e6df; }            /* JSX text children */
+.code-block .tok-k {
+  color: #8aa2ff;
+} /* keywords */
+.code-block .tok-s {
+  color: #ffc093;
+} /* strings */
+.code-block .tok-t {
+  color: #7ee0b8;
+} /* tags / types */
+.code-block .tok-c {
+  color: #6f6b5e;
+  font-style: italic;
+} /* comments */
+.code-block .tok-n {
+  color: #d9a6ff;
+} /* numbers */
+.code-block .tok-f {
+  color: #ffd479;
+} /* function calls */
+.code-block .tok-a {
+  color: #9dd6ff;
+} /* attributes */
+.code-block .tok-p {
+  color: #b9b5a8;
+} /* punctuation */
+.code-block .tok-x {
+  color: #e8e6df;
+} /* JSX text children */
 
 .code-light {
   @apply bg-surface text-ink-soft;
 }
 
-.code-light .tok-k { color: var(--color-resolve); }
-.code-light .tok-s { color: #b34a00; }
-.code-light .tok-t { color: #0b7a54; }
-.code-light .tok-c { color: #9b968a; }
-.code-light .tok-n { color: #7c3aed; }
-.code-light .tok-f { color: #1d4ed8; }
-.code-light .tok-a { color: #0e7490; }
-.code-light .tok-p { color: #8a867a; }
-.code-light .tok-x { color: var(--color-ink-soft); }
+.code-light .tok-k {
+  color: var(--color-resolve);
+}
+.code-light .tok-s {
+  color: #b34a00;
+}
+.code-light .tok-t {
+  color: #0b7a54;
+}
+.code-light .tok-c {
+  color: #9b968a;
+}
+.code-light .tok-n {
+  color: #7c3aed;
+}
+.code-light .tok-f {
+  color: #1d4ed8;
+}
+.code-light .tok-a {
+  color: #0e7490;
+}
+.code-light .tok-p {
+  color: #8a867a;
+}
+.code-light .tok-x {
+  color: var(--color-ink-soft);
+}
 
 /* highlighted code line inside the playground */
 .code-line {
   display: block;
   padding-inline: 1rem;
   border-left: 2px solid transparent;
-  transition: background-color 0.25s ease, border-color 0.25s ease;
+  transition:
+    background-color 0.25s ease,
+    border-color 0.25s ease;
 }
 
 .code-line.is-active {
@@ -188,8 +270,12 @@ body {
 
 /* ---------- playground tree states ---------- */
 
-.pg-node rect, .pg-node circle {
-  transition: fill 0.3s ease, stroke 0.3s ease, opacity 0.3s ease;
+.pg-node rect,
+.pg-node circle {
+  transition:
+    fill 0.3s ease,
+    stroke 0.3s ease,
+    opacity 0.3s ease;
 }
 
 .pg-node[data-state="idle"] .node-box {
@@ -227,8 +313,14 @@ body {
 }
 
 @keyframes halo {
-  from { opacity: 0.65; transform: scale(1); }
-  to { opacity: 0; transform: scale(1.28); }
+  from {
+    opacity: 0.65;
+    transform: scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: scale(1.28);
+  }
 }
 
 .pg-edge {
@@ -251,7 +343,9 @@ body {
 }
 
 @keyframes edge-flow {
-  to { stroke-dashoffset: -9; }
+  to {
+    stroke-dashoffset: -9;
+  }
 }
 
 /* ---------- misc ---------- */
@@ -267,7 +361,10 @@ body {
 }
 
 .card-hover {
-  transition: translate 0.35s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.35s ease, border-color 0.35s ease;
+  transition:
+    translate 0.35s cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 0.35s ease,
+    border-color 0.35s ease;
 }
 
 .card-hover:hover {
@@ -312,11 +409,7 @@ body {
   }
 
   .magnetic-card:hover {
-    transform:
-      perspective(900px)
-      rotateX(var(--card-rotate-x))
-      rotateY(var(--card-rotate-y))
-      scale(1.008);
+    transform: perspective(900px) rotateX(var(--card-rotate-x)) rotateY(var(--card-rotate-y)) scale(1.008);
   }
 
   .magnetic-card:hover::after {
@@ -336,8 +429,13 @@ body {
   border-radius: 0.8rem;
   background: linear-gradient(to bottom, #fff, var(--color-paper));
   color: var(--color-ok);
-  box-shadow: inset 0 1px 0 #fff, 0 1px 2px rgb(26 25 20 / 0.08);
-  transition: border-color 160ms ease, box-shadow 160ms ease, translate 160ms ease;
+  box-shadow:
+    inset 0 1px 0 #fff,
+    0 1px 2px rgb(26 25 20 / 0.08);
+  transition:
+    border-color 160ms ease,
+    box-shadow 160ms ease,
+    translate 160ms ease;
 }
 
 .integration-logo img,
@@ -387,7 +485,9 @@ body {
   opacity: 0;
   pointer-events: none;
   transform: translate(-50%, 0.25rem);
-  transition: opacity 140ms ease, transform 140ms ease;
+  transition:
+    opacity 140ms ease,
+    transform 140ms ease;
   text-align: center;
   white-space: normal;
 }
@@ -480,7 +580,8 @@ body {
 }
 
 @keyframes source-ripple {
-  0%, 35% {
+  0%,
+  35% {
     opacity: 0;
     scale: 1;
   }

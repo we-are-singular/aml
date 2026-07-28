@@ -63,7 +63,7 @@ class PlaygroundRunner {
           this.run()
         }
       },
-      { threshold: 0.35 },
+      { threshold: 0.35 }
     ).observe(this.tree)
   }
 
@@ -78,7 +78,7 @@ class PlaygroundRunner {
     this.output.classList.remove("caret")
     this.renderTree()
     this.resetVisualState()
-    this.tabs.querySelectorAll<HTMLButtonElement>("[data-scenario]").forEach((tab) => {
+    this.tabs.querySelectorAll<HTMLButtonElement>("[data-scenario]").forEach(tab => {
       const isActive = tab.dataset.scenario === scenario.id
       // Active and inactive backgrounds conflict as classes; Tailwind's
       // stylesheet order (not class-list order) decides, so swap explicitly.
@@ -93,7 +93,7 @@ class PlaygroundRunner {
 
   private renderTree(): void {
     this.tree.innerHTML = ""
-    const nodeById = new Map(this.scenario.nodes.map((node) => [node.id, node]))
+    const nodeById = new Map(this.scenario.nodes.map(node => [node.id, node]))
 
     for (const edge of this.scenario.edges) {
       const from = nodeById.get(edge.from)!
@@ -130,10 +130,7 @@ class PlaygroundRunner {
       text.setAttribute("x", String(node.x))
       text.setAttribute("y", String(node.y + 3.5))
       text.setAttribute("text-anchor", "middle")
-      text.setAttribute(
-        "style",
-        "font: 600 10.5px 'IBM Plex Mono', monospace; fill: var(--color-ink-soft)",
-      )
+      text.setAttribute("style", "font: 600 10.5px 'IBM Plex Mono', monospace; fill: var(--color-ink-soft)")
       text.textContent = node.label
 
       group.append(halo, box, text)
@@ -142,13 +139,13 @@ class PlaygroundRunner {
   }
 
   private resetVisualState(): void {
-    this.tree.querySelectorAll<SVGGElement>("[data-node]").forEach((node) => {
+    this.tree.querySelectorAll<SVGGElement>("[data-node]").forEach(node => {
       node.dataset.state = "idle"
     })
-    this.tree.querySelectorAll<SVGLineElement>("[data-edge]").forEach((edge) => {
+    this.tree.querySelectorAll<SVGLineElement>("[data-edge]").forEach(edge => {
       edge.classList.remove("is-hot", "is-done")
     })
-    this.code.querySelectorAll(".code-line.is-active").forEach((line) => {
+    this.code.querySelectorAll(".code-line.is-active").forEach(line => {
       line.classList.remove("is-active")
     })
   }
@@ -195,7 +192,7 @@ class PlaygroundRunner {
   private apply(event: PlayEvent): void {
     switch (event.kind) {
       case "code": {
-        this.code.querySelectorAll(".code-line.is-active").forEach((line) => {
+        this.code.querySelectorAll(".code-line.is-active").forEach(line => {
           line.classList.remove("is-active")
         })
         for (const line of event.lines) {
@@ -221,8 +218,7 @@ class PlaygroundRunner {
         time.className = "text-line-strong"
         time.textContent = `+${(event.at / 1000).toFixed(1)}s `
         const text = document.createElement("span")
-        text.className =
-          event.tone === "ok" ? "text-ok" : event.tone === "warn" ? "text-signal" : "text-muted"
+        text.className = event.tone === "ok" ? "text-ok" : event.tone === "warn" ? "text-signal" : "text-muted"
         text.textContent = event.text
         item.append(time, text)
         this.trace.append(item)

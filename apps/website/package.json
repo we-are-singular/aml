@@ -1,5 +1,5 @@
 {
-  "name": "@aml/website",
+  "name": "@aml-jsx/website",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -9,13 +9,13 @@
     "preview": "vite preview",
     "typecheck": "tsc --noEmit"
   },
+  "dependencies": {
+    "shiki": "^4.3.1"
+  },
   "devDependencies": {
     "@tailwindcss/vite": "^4.1.11",
     "tailwindcss": "^4.1.11",
     "typescript": "^7.0.2",
     "vite": "^8.1.5"
-  },
-  "dependencies": {
-    "shiki": "^4.3.1"
   }
 }

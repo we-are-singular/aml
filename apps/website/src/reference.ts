@@ -23,7 +23,7 @@ export async function initReference(): Promise<void> {
   const groups = ["Concepts", "Components", "Runtime APIs"] as const
 
   for (const group of groups) {
-    const concepts = CONCEPTS.filter((concept) => concept.group === group)
+    const concepts = CONCEPTS.filter(concept => concept.group === group)
     const section = document.createElement("div")
     section.className = "ref-tree-group"
     section.setAttribute("role", "group")
@@ -53,11 +53,7 @@ export async function initReference(): Promise<void> {
   async function select(concept: Concept, updateHash: boolean): Promise<void> {
     name.textContent = concept.name
     kind.textContent =
-      concept.group === "Concepts"
-        ? "concept"
-        : concept.group === "Components"
-          ? "component"
-          : "runtime api"
+      concept.group === "Concepts" ? "concept" : concept.group === "Components" ? "component" : "runtime api"
     signature.textContent = concept.signature
     description.textContent = concept.description
     if (concept.note) {
@@ -86,16 +82,14 @@ export async function initReference(): Promise<void> {
   }
 
   copy.addEventListener("click", async () => {
-    const active = [...buttons.entries()].find(([, button]) =>
-      button.classList.contains("border-resolve"),
-    )
-    const concept = CONCEPTS.find((candidate) => candidate.id === active?.[0])
+    const active = [...buttons.entries()].find(([, button]) => button.classList.contains("border-resolve"))
+    const concept = CONCEPTS.find(candidate => candidate.id === active?.[0])
     if (!concept) return
     await navigator.clipboard.writeText(concept.code)
     copy.textContent = "copied ✓"
     window.setTimeout(() => (copy.textContent = "copy"), 1200)
   })
 
-  const fromHash = CONCEPTS.find((concept) => location.hash === `#ref-${concept.id}`)
+  const fromHash = CONCEPTS.find(concept => location.hash === `#ref-${concept.id}`)
   await select(fromHash ?? CONCEPTS[0]!, false)
 }
