@@ -264,6 +264,7 @@ Turborepo orchestrates workspace checks and builds. Provider workspaces keep the
 | `sdk`                        | `@aml-jsx/sdk`             | Public AML package: JSX runtime, evaluator, primitives, provider contracts, built-in adapters, and conformance utilities |
 | `providers/agents/opencode`  | `@aml-jsx/agent-opencode`  | Private OpenCode adapter boundary                                                                                        |
 | `providers/agents/codex`     | `@aml-jsx/agent-codex`     | Private Codex adapter boundary                                                                                           |
+| `providers/agents/pi`        | `@aml-jsx/agent-pi`        | Private Pi SDK adapter boundary                                                                                          |
 | `providers/sandboxes/docker` | `@aml-jsx/sandbox-docker`  | Private Docker Sandbox boundary                                                                                          |
 | `providers/workspaces/local` | `@aml-jsx/workspace-local` | Private local Workspace boundary                                                                                         |
 
@@ -818,6 +819,21 @@ Status: Done on 2026-07-27. `createContext()` now defines an exact-identity requ
 
 The deterministic proof captures a session repository in a JavaScript Tool closure and verifies that neither the repository nor its private data enters Agent prompt or trace content. Singular review found duplicated Provider validation and a stateful-accessor ordering regression introduced while centralizing it. The corrected `ContextRegistry.captureProvider()` owns exact registration, missing-value validation, and one-time value-before-children capture for both evaluator paths. Two hundred fourteen SDK tests, all workspace type checks, all package builds and tests, SDK package and cross-copy validation, the dist-backed Context example, and diff validation pass. Final correctness, skeptical intent, and maintainability review lanes reported no actionable findings.
 
+#### Slice 17 — Pi Agent package
+
+- create the private Pi provider workspace and export `piAgent()` from `@aml-jsx/sdk`
+- embed `@earendil-works/pi-coding-agent` without requiring a global Pi installation
+- support provider/model selection, exact host and JavaScript Tool grants, FollowUps, cancellation, and structured JSON validation
+- keep unsupported MCP behavior explicit and prove the fresh-user credential path with OpenCode Go
+
+Proof: a deterministic conformance suite and a credentialed OpenCode Go run exercise conversation history, a process-local JavaScript Tool, and schema-validated structured output through Pi.
+
+Status: Done on 2026-07-29. The adapter constructs one isolated in-memory Pi SDK session per AML Agent, disables ambient Pi extensions and project resources, maps only declared host and JavaScript Tools, executes FollowUps in the retained session, aborts with the AML signal, and disposes the session on every settled path. `provider/model` identities map through Pi's `ModelRuntime`; explicit keys remain runtime-only while normal provider environment variables remain available. Pi lacks a compatible MCP attachment API and native turn-level JSON Schema output, so the adapter rejects MCP grants before construction and uses schema-guided JSON text plus AML's authoritative Standard Schema validation.
+
+The public factory boundary now preserves vendor-native configuration rather than inventing an AML provider schema: Pi accepts its exported `ProviderConfig` entries through `providers`, and OpenCode accepts its SDK `Config` through `config`. Explicit keys, custom endpoints, headers, and model catalogs therefore work without requiring either local profile, while ambient credential discovery remains available.
+
+The fresh-user benchmark required no global Pi install or Pi configuration. Installing the SDK package was sufficient. An existing `OPENCODE_API_KEY` authenticated Pi's built-in `opencode-go` provider. The first MiniMax-M3 Tool test fabricated a result rather than calling the granted Tool; the same adapter passed with GLM-5.1 after registering Pi's explicit custom-Tool prompt snippet. Three credentialed GLM-5.1 integrations for FollowUps, a JavaScript Tool, and structured JSON output pass alongside deterministic adapter tests and package conformance. The published Pi package also installs a shrinkwrapped `brace-expansion@5.0.7` through `minimatch`; npm reports its unbounded-expansion denial-of-service advisory and does not honor a consumer override inside that shrinkwrapped subtree, so this remains explicit upstream dependency debt.
+
 Claude, Daytona, Cloudflare, S3, the CLI, and the website receive separate slices only when their requirements are approved. Their target directories document intended ownership, not committed implementation.
 
 ## Definition of done
@@ -841,7 +857,7 @@ Before marking a slice `Done`:
 
 ## Immediate implementation boundary
 
-Slices 0 through 16 and the approved Phase 1 plan are complete. No next implementation slice is currently approved. A new primitive, provider, CLI, website, Sandbox or Workspace expansion, OpenTelemetry exporter, or mutable-state design must begin as an explicit SPEC and PRD change rather than leaking into the completed runtime.
+Slices 0 through 17 and the approved Phase 1 plan are complete. No next implementation slice is currently approved. A new primitive, provider, CLI, website, Sandbox or Workspace expansion, OpenTelemetry exporter, or mutable-state design must begin as an explicit SPEC and PRD change rather than leaking into the completed runtime.
 
 ## Explicitly deferred
 
@@ -902,4 +918,5 @@ Items in this section are not commitments and must not shape implementation unti
 - [p-limit](https://github.com/sindresorhus/p-limit)
 - [Execa](https://github.com/sindresorhus/execa)
 - [Hookable](https://github.com/unjs/hookable)
+- [Pi SDK](https://github.com/earendil-works/pi/blob/main/packages/coding-agent/docs/sdk.md)
 - [vite-node](https://github.com/antfu-collective/vite-node)

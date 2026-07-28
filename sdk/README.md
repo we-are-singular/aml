@@ -26,6 +26,23 @@ const runtime = new AmlRuntime()
 const result = await runtime.evaluate(<Agent provider={opencodeAgent({})}>Summarize this repository.</Agent>)
 ```
 
+AML also embeds Pi without requiring a global Pi installation:
+
+```tsx
+import { Agent, AmlRuntime, piAgent } from "@aml-jsx/sdk"
+
+const Pi = piAgent({
+  model: "opencode-go/glm-5.1",
+  providers: {
+    "opencode-go": { apiKey: process.env.OPENCODE_API_KEY },
+  },
+})
+
+const result = await new AmlRuntime().evaluate(<Agent provider={Pi}>Say hello.</Agent>)
+```
+
+`piAgent({ providers })` accepts Pi's native provider configuration. You can supply another provider, endpoint, model catalog, headers, or key instead of OpenCode Go, or omit `providers` to use Pi's normal credential discovery.
+
 ## Coding agents
 
 Install AML's coding-agent skill for current workflow patterns, runtime semantics, providers, and testing guidance:

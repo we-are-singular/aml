@@ -2,10 +2,10 @@
 
 ## Built-in agent providers
 
-The package exports both bundled Agent factories from `@aml-jsx/sdk`:
+The package exports three bundled Agent factories from `@aml-jsx/sdk`:
 
 ```tsx
-import { codexAgent, opencodeAgent } from "@aml-jsx/sdk"
+import { codexAgent, opencodeAgent, piAgent } from "@aml-jsx/sdk"
 
 const OpenCode = opencodeAgent({
   directory: process.cwd(),
@@ -15,9 +15,20 @@ const Codex = codexAgent({
   reasoningEffort: "high",
   workingDirectory: process.cwd(),
 })
+
+const Pi = piAgent({
+  model: "opencode-go/glm-5.1",
+  providers: {
+    "opencode-go": { apiKey: process.env.OPENCODE_API_KEY },
+  },
+})
 ```
 
 Only set options needed by the application. Let each provider use its normal credential discovery unless the surrounding project deliberately injects credentials.
+
+`opencodeAgent({ config })` accepts OpenCode's SDK config. `piAgent({ providers })` accepts a map of Pi's exported `ProviderConfig`; entries may define keys, endpoints, headers, models, or callback-backed providers. Preserve these vendor-native shapes instead of inventing a portable provider config. Pi runs through AML's installed `@earendil-works/pi-coding-agent` dependency and needs no global executable or existing Pi profile.
+
+Pi supports host and JavaScript Tools, FollowUps, cancellation, and schema-guided structured JSON. It currently rejects AML MCP grants because Pi does not expose a compatible attachment boundary.
 
 Keep reusable workflows provider-agnostic:
 

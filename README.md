@@ -87,7 +87,20 @@ runtime.on("trace", createConsoleTracer())
 console.log(await runtime.evaluate(<Review />))
 ```
 
-The workflow stays the same when the provider changes. Replace `OpenCode` with a Codex provider or another `AgentProvider` implementation without rewriting the AML tree.
+The workflow stays the same when the provider changes. Replace `OpenCode` with a Codex or Pi provider without rewriting the AML tree:
+
+```tsx
+import { piAgent } from "@aml-jsx/sdk"
+
+const Pi = piAgent({
+  model: "opencode-go/glm-5.1",
+  providers: {
+    "opencode-go": { apiKey: process.env.OPENCODE_API_KEY },
+  },
+})
+```
+
+Pi is embedded through `@earendil-works/pi-coding-agent`; it does not require a global Pi installation or local Pi configuration. Its `providers` option uses Pi's native provider shape, while omitted configuration falls back to Pi's normal credential discovery.
 
 ## Coding agents
 
@@ -140,11 +153,14 @@ The public SDK includes the runtime, built-in integrations, and testing utilitie
 | --------- | ----------------------------------------------- | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Agent     | [OpenCode adapter](./providers/agents/opencode) | `opencodeAgent()`      | Runs OpenCode sessions with model overrides, JavaScript Tools, MCP grants, FollowUps, cancellation, and structured output.                              |
 | Agent     | [Codex adapter](./providers/agents/codex)       | `codexAgent()`         | Runs Codex SDK threads with model overrides, read-only host Tools, JavaScript Tools, MCP grants, FollowUps, and structured output.                      |
+| Agent     | [Pi adapter](./providers/agents/pi)             | `piAgent()`            | Embeds Pi SDK sessions with provider/model selection, host and JavaScript Tools, FollowUps, cancellation, and schema-validated JSON output.             |
 | Sandbox   | [Docker adapter](./providers/sandboxes/docker)  | `dockerSandbox()`      | Provides confined Docker container leases to compatible Agent providers with explicit filesystem, network, identity, capability, and resource policies. |
 | Workspace | [Local adapter](./providers/workspaces/local)   | `localWorkspace()`     | Uses an existing local directory as a durable Workspace with cross-process writer locking.                                                              |
 | Testing   | [Testing entry](./sdk/src/testing.ts)           | `@aml-jsx/sdk/testing` | Supplies deterministic Agent, Sandbox, and Workspace providers plus reusable conformance suites.                                                        |
 
-`<System>`, `<Skill>`, `<FollowUp>`, `<Loop>`, Context, and tree evaluation are runtime-owned and work independently of the selected Agent provider. JavaScript Tool and MCP execution ultimately depend on the Agent provider; both bundled Agent adapters implement those capability bridges.
+`<System>`, `<Skill>`, `<FollowUp>`, `<Loop>`, Context, and tree evaluation are runtime-owned and work independently of the selected Agent provider. JavaScript Tool and MCP execution ultimately depend on the Agent provider. OpenCode and Codex implement both bridges; Pi currently implements host and JavaScript Tools and rejects MCP grants.
+
+Provider factories retain their vendor configuration shapes: `opencodeAgent({ config })` accepts OpenCode's SDK config, while `piAgent({ providers })` accepts Pi's provider map. Both still support their vendor's ambient credential discovery, but neither requires a local profile when configuration is supplied explicitly.
 
 ## Examples
 
@@ -164,6 +180,7 @@ Every example is one self-contained AML component. Run one with `npm run example
 | [`sandbox`](./examples/src/resources/sandbox.tsx)                        | Narrows nested Sandbox access while sharing one deterministic outer lease.                             |
 | [`workspace`](./examples/src/resources/workspace.tsx)                    | Shares one durable materialization across disposable Sandbox leases.                                   |
 | [`opencode`](./examples/src/integrations/opencode.tsx)                   | Uses a credentialed OpenCode model to call a process-local JavaScript Tool.                            |
+| [`pi`](./examples/src/integrations/pi.tsx)                               | Embeds Pi with an OpenCode Go model and calls a process-local JavaScript Tool.                         |
 | [`review`](./examples/src/integrations/review.tsx)                       | Runs a parallel multi-agent code review through deterministic, OpenCode, or Codex providers.           |
 | [`docker`](./examples/src/integrations/docker.tsx)                       | Inspects a real Docker Sandbox's working directory and confinement settings.                           |
 | [`workspace-local`](./examples/src/integrations/workspace-local.tsx)     | Persists a file across disposable Sandbox runs through the local Workspace provider.                   |
@@ -190,7 +207,7 @@ Requirements:
 - Node.js 26 or newer
 - npm 11 or newer
 - Docker only for Docker integration tests and examples
-- Configured OpenCode or Codex credentials only for live Agent examples
+- Configured OpenCode, Pi-supported model-provider, or Codex credentials only for live Agent examples
 
 Install dependencies:
 
@@ -213,6 +230,7 @@ Common commands:
 | `npm run example -- review`                              | Run the review workflow with its deterministic provider.        |
 | `AML_REVIEW_PROVIDER=opencode npm run example -- review` | Run the review workflow through OpenCode.                       |
 | `AML_REVIEW_PROVIDER=codex npm run example -- review`    | Run the review workflow through Codex.                          |
+| `npm run example -- pi`                                  | Run embedded Pi through `OPENCODE_API_KEY`.                     |
 | `npm run example -- docker`                              | Run the real Docker Sandbox example.                            |
 
 Package-specific integration suites are available through their workspace scripts:
@@ -220,6 +238,7 @@ Package-specific integration suites are available through their workspace script
 ```sh
 npm run test:integration --workspace=@aml-jsx/agent-opencode
 npm run test:integration --workspace=@aml-jsx/agent-codex
+npm run test:integration --workspace=@aml-jsx/agent-pi
 npm run test:integration --workspace=@aml-jsx/sandbox-docker
 ```
 

@@ -1,6 +1,6 @@
 ---
 name: aml-jsx
-description: Build, explain, test, or debug TypeScript agent workflows with Agent Markup Language and the @aml-jsx/sdk package. Use when a coding task involves AML, AML JSX/TSX trees, Agent/System/Tool/Skill/Mcp/FollowUp components, provider-agnostic multi-agent orchestration, explicit parallel agents, structured agent output, Sandboxes, Workspaces, OpenCode or Codex providers, or custom AML providers.
+description: Build, explain, test, or debug TypeScript agent workflows with Agent Markup Language and the @aml-jsx/sdk package. Use when a coding task involves AML, AML JSX/TSX trees, Agent/System/Tool/Skill/Mcp/FollowUp components, provider-agnostic multi-agent orchestration, explicit parallel agents, structured agent output, Sandboxes, Workspaces, OpenCode, Codex, or Pi providers, or custom AML providers.
 ---
 
 # Build with AML JSX
@@ -89,13 +89,16 @@ Read [capabilities-and-resources.md](references/capabilities-and-resources.md) b
 The public package currently exports built-in factories from one entry point:
 
 ```tsx
-import { codexAgent, opencodeAgent } from "@aml-jsx/sdk"
+import { codexAgent, opencodeAgent, piAgent } from "@aml-jsx/sdk"
 
 const Codex = codexAgent({})
 const OpenCode = opencodeAgent({})
+const Pi = piAgent({ model: "opencode-go/glm-5.1" })
 ```
 
 Keep provider selection outside reusable workflow components when practical. Use `Agent` props such as `model` and `cwd` only for invocation-level overrides; keep provider-owned credentials and defaults in the provider factory.
+
+OpenCode's `config` and Pi's `providers` options deliberately retain their vendor SDK shapes. Do not translate them into a generic AML credential object. Pi is embedded as a package dependency and does not require a global Pi installation; it can use explicit provider configuration or Pi's ambient credential discovery.
 
 Read [providers-and-testing.md](references/providers-and-testing.md) for runtime defaults, tracing, deterministic tests, and provider conformance.
 
