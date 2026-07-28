@@ -1,8 +1,5 @@
-import { Agent, Sandbox } from "@aml/sdk"
-import {
-  DeterministicAgentProvider,
-  DeterministicSandboxProvider,
-} from "@aml/sdk/testing"
+import { Agent, Sandbox } from "@aml-jsx/sdk"
+import { DeterministicAgentProvider, DeterministicSandboxProvider } from "@aml-jsx/sdk/testing"
 
 /**
  * Represents the one physical environment leased by the outer Sandbox.
@@ -34,11 +31,7 @@ const ExampleProvider = new DeterministicAgentProvider({
  */
 export default function SandboxExample() {
   return (
-    <Sandbox
-      access="read-write"
-      provider={ExampleSandbox}
-      root="repository"
-    >
+    <Sandbox access="read-write" provider={ExampleSandbox} root="repository">
       <Sandbox access="read-only" root="packages/api">
         <Agent provider={ExampleProvider} cwd="src">
           Inspect without modifying files.

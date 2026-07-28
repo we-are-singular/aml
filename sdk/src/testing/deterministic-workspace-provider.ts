@@ -18,16 +18,8 @@ export interface DeterministicWorkspaceHandle {
  * Configuration hooks for deterministic materialization and persistence.
  */
 export interface DeterministicWorkspaceProviderOptions<Handle> {
-  readonly createHandle?: (
-    request: WorkspaceAcquireRequest,
-    acquisition: number,
-  ) => Handle | PromiseLike<Handle>
-  readonly directory?:
-    | string
-    | ((
-        request: WorkspaceAcquireRequest,
-        acquisition: number,
-      ) => string)
+  readonly createHandle?: (request: WorkspaceAcquireRequest, acquisition: number) => Handle | PromiseLike<Handle>
+  readonly directory?: string | ((request: WorkspaceAcquireRequest, acquisition: number) => string)
   readonly name?: string
   readonly release?: (
     lease: Readonly<{
@@ -35,7 +27,7 @@ export interface DeterministicWorkspaceProviderOptions<Handle> {
       handle: Handle
       id: string
     }>,
-    acquisition: number,
+    acquisition: number
   ) => void | PromiseLike<void>
   readonly save?: (
     lease: Readonly<{
@@ -43,7 +35,7 @@ export interface DeterministicWorkspaceProviderOptions<Handle> {
       handle: Handle
       id: string
     }>,
-    acquisition: number,
+    acquisition: number
   ) => void | PromiseLike<void>
 }
 
@@ -52,47 +44,29 @@ export interface DeterministicWorkspaceProviderOptions<Handle> {
  */
 export class DeterministicWorkspaceProvider<
   Handle = DeterministicWorkspaceHandle,
-> implements WorkspaceProvider<Handle>
-{
+> implements WorkspaceProvider<Handle> {
   readonly #acquisitions: WorkspaceAcquireRequest[] = []
   readonly #activeIds = new Map<string, symbol>()
-  readonly #createHandle: (
-    request: WorkspaceAcquireRequest,
-    acquisition: number,
-  ) => Handle | PromiseLike<Handle>
-  readonly #directory:
-    | string
-    | ((
-        request: WorkspaceAcquireRequest,
-        acquisition: number,
-      ) => string)
-  readonly #release: NonNullable<
-    DeterministicWorkspaceProviderOptions<Handle>["release"]
-  >
+  readonly #createHandle: (request: WorkspaceAcquireRequest, acquisition: number) => Handle | PromiseLike<Handle>
+  readonly #directory: string | ((request: WorkspaceAcquireRequest, acquisition: number) => string)
+  readonly #release: NonNullable<DeterministicWorkspaceProviderOptions<Handle>["release"]>
   readonly #releases: string[] = []
-  readonly #save: NonNullable<
-    DeterministicWorkspaceProviderOptions<Handle>["save"]
-  >
+  readonly #save: NonNullable<DeterministicWorkspaceProviderOptions<Handle>["save"]>
   readonly #saves: string[] = []
   readonly name: string
 
   /**
    * Captures deterministic hooks without materializing a Workspace.
    */
-  constructor(
-    options: DeterministicWorkspaceProviderOptions<Handle> = {},
-  ) {
+  constructor(options: DeterministicWorkspaceProviderOptions<Handle> = {}) {
     const name = options.name ?? "deterministic-workspace"
 
     if (name.length === 0 || name !== name.trim()) {
-      throw new TypeError(
-        "Deterministic Workspace provider name must be non-empty and normalized",
-      )
+      throw new TypeError("Deterministic Workspace provider name must be non-empty and normalized")
     }
 
     this.name = name
-    this.#directory =
-      options.directory ?? "/deterministic-workspace"
+    this.#directory = options.directory ?? "/deterministic-workspace"
     this.#createHandle =
       options.createHandle ??
       ((request, acquisition) =>
@@ -129,9 +103,7 @@ export class DeterministicWorkspaceProvider<
   /**
    * Acquires one deterministic exclusive writer lease.
    */
-  async acquire(
-    request: WorkspaceAcquireRequest,
-  ): Promise<WorkspaceLease<Handle>> {
+  async acquire(request: WorkspaceAcquireRequest): Promise<WorkspaceLease<Handle>> {
     if (this.#activeIds.has(request.id)) {
       throw new WorkspaceConflictError(request.id)
     }
@@ -145,10 +117,7 @@ export class DeterministicWorkspaceProvider<
 
     try {
       handle = await this.#createHandle(request, acquisition)
-      directory =
-        typeof this.#directory === "function"
-          ? this.#directory(request, acquisition)
-          : this.#directory
+      directory = typeof this.#directory === "function" ? this.#directory(request, acquisition) : this.#directory
     } catch (error) {
       // Acquisition has not returned a lease yet, so the provider—not the
       // caller—must roll back writer ownership when any fixture hook fails.

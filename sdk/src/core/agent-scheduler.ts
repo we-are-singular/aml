@@ -20,10 +20,7 @@ export class AgentScheduler {
    */
   constructor(maxConcurrentAgents: number, signal: AbortSignal) {
     this.#limit = pLimit({
-      concurrency:
-        maxConcurrentAgents === 0
-          ? Number.POSITIVE_INFINITY
-          : maxConcurrentAgents,
+      concurrency: maxConcurrentAgents === 0 ? Number.POSITIVE_INFINITY : maxConcurrentAgents,
       // Cleared p-limit tasks otherwise remain pending forever. The scheduler
       // translates this internal AbortError back to the caller's exact reason.
       rejectOnClear: true,
@@ -38,9 +35,7 @@ export class AgentScheduler {
   /**
    * Runs one provider call when a domain slot becomes available.
    */
-  async run<Result>(
-    operation: () => PromiseLike<Result> | Result,
-  ): Promise<Result> {
+  async run<Result>(operation: () => PromiseLike<Result> | Result): Promise<Result> {
     if (this.#closed) {
       throw new EvaluationError("AML Agent scheduler is closed")
     }
@@ -55,11 +50,7 @@ export class AgentScheduler {
         return await operation()
       })
     } catch (error) {
-      if (
-        this.#signal.aborted &&
-        error instanceof DOMException &&
-        error.name === "AbortError"
-      ) {
+      if (this.#signal.aborted && error instanceof DOMException && error.name === "AbortError") {
         this.#signal.throwIfAborted()
       }
 

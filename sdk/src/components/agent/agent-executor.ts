@@ -4,16 +4,14 @@ import { EvaluationError } from "../../core/evaluation-error.js"
 import type { AmlTraceIdentity } from "../../core/trace-identity.js"
 import type { SandboxSession } from "../sandbox/sandbox-provider.js"
 import type { AgentMcpServer } from "../mcp/aml-mcp-server.js"
+import type { AgentTool } from "../tool/agent-tool.js"
 import { AgentExecutionResult } from "./agent-execution-result.js"
 import type { ModelSchema } from "./model-schema.js"
 import type { AgentProps } from "./agent.js"
 import type { AgentProvider } from "./agent-provider.js"
 import { AgentRequestPlan } from "./agent-request-plan.js"
 import type { AgentResponse } from "./agent-response.js"
-import {
-  type ValidatedAgentProvider,
-  validateAgentProvider,
-} from "./validate-agent-provider.js"
+import { type ValidatedAgentProvider, validateAgentProvider } from "./validate-agent-provider.js"
 
 /**
  * Coordinates Agent validation, provider execution, and response resolution.
@@ -35,10 +33,7 @@ export class AgentExecutor {
       throw new TypeError("system must be a string")
     }
 
-    this.#agentProvider =
-      options.agentProvider === undefined
-        ? undefined
-        : validateAgentProvider(options.agentProvider)
+    this.#agentProvider = options.agentProvider === undefined ? undefined : validateAgentProvider(options.agentProvider)
     this.#maxTurnsPerAgent = options.maxTurnsPerAgent
     this.#system = options.system ?? ""
   }
@@ -46,9 +41,7 @@ export class AgentExecutor {
   /**
    * Validates portable Agent props before any descendants execute.
    */
-  validateProps(
-    props: Readonly<AgentProps>,
-  ): Readonly<ValidatedAgentProvider> | undefined {
+  validateProps(props: Readonly<AgentProps>): Readonly<ValidatedAgentProvider> | undefined {
     if (props.model !== undefined && typeof props.model !== "string") {
       throw new EvaluationError("<Agent> model must be a string")
     }
@@ -61,9 +54,7 @@ export class AgentExecutor {
 
     return explicitProvider === undefined
       ? this.#agentProvider
-      : ComponentEvaluationContext.withoutAccess(() =>
-          validateAgentProvider(explicitProvider),
-        )
+      : ComponentEvaluationContext.withoutAccess(() => validateAgentProvider(explicitProvider))
   }
 
   /**
@@ -79,13 +70,11 @@ export class AgentExecutor {
     readonly props: Readonly<AgentProps>
     readonly sandbox: Readonly<SandboxSession> | undefined
     readonly systemFragments: readonly string[]
-    readonly tools: readonly import("../tool/agent-tool.js").AgentTool[]
+    readonly tools: readonly AgentTool[]
     readonly trace: AmlTraceIdentity
   }): Promise<Readonly<AgentExecutionResult>> {
     if (!input.provider) {
-      throw new EvaluationError(
-        `Agent ${input.trace.spanId} has no provider`,
-      )
+      throw new EvaluationError(`Agent ${input.trace.spanId} has no provider`)
     }
 
     const provider = input.provider
@@ -100,22 +89,17 @@ export class AgentExecutor {
         supported =
           supportsSandbox !== undefined &&
           ComponentEvaluationContext.withoutAccess(() =>
-            Reflect.apply(
-              supportsSandbox,
-              provider.provider,
-              [input.sandbox],
-            ),
+            Reflect.apply(supportsSandbox, provider.provider, [input.sandbox])
           ) === true
       } catch (cause) {
-        throw new EvaluationError(
-          `Agent provider "${input.provider.name}" failed its Sandbox compatibility check`,
-          { cause },
-        )
+        throw new EvaluationError(`Agent provider "${input.provider.name}" failed its Sandbox compatibility check`, {
+          cause,
+        })
       }
 
       if (!supported) {
         throw new EvaluationError(
-          `Agent provider "${input.provider.name}" cannot run inside Sandbox provider "${input.sandbox.provider.name}"`,
+          `Agent provider "${input.provider.name}" cannot run inside Sandbox provider "${input.sandbox.provider.name}"`
         )
       }
     }
@@ -146,50 +130,38 @@ export class AgentExecutor {
       // Scheduling begins only after the complete Agent plan exists. The slot
       // covers provider-owned session and capability cleanup because run()
       // cannot settle until the adapter has finished that lifecycle.
-      response = await input.context.scheduleAgent(
-        () => {
-          providerStarted = true
+      response = await input.context.scheduleAgent(() => {
+        providerStarted = true
 
-          // AML cannot observe provider-internal per-turn timing, so publish
-          // the complete authored order at the exact provider handoff.
-          for (const [index, turn] of [
-            plan.prompt,
-            ...plan.followUps,
-          ].entries()) {
-            input.context.traceEvent(
-              input.trace,
-              "agent.turn",
-              {
-                index: index + 1,
-                kind: index === 0 ? "initial" : "follow-up",
-              },
-              { content: turn },
-            )
-          }
-
-          // The async wrapper is created inside exit(), so Promise/thenable
-          // assimilation and every provider-created continuation remain masked.
-          return ComponentEvaluationContext.withoutAccess(async () =>
-            await Reflect.apply(
-              provider.run,
-              provider.provider,
-              [plan.request, plan.context],
-            ),
+        // AML cannot observe provider-internal per-turn timing, so publish
+        // the complete authored order at the exact provider handoff.
+        for (const [index, turn] of [plan.prompt, ...plan.followUps].entries()) {
+          input.context.traceEvent(
+            input.trace,
+            "agent.turn",
+            {
+              index: index + 1,
+              kind: index === 0 ? "initial" : "follow-up",
+            },
+            { content: turn }
           )
-        },
-      )
+        }
+
+        // The async wrapper is created inside exit(), so Promise/thenable
+        // assimilation and every provider-created continuation remain masked.
+        return ComponentEvaluationContext.withoutAccess(
+          async () => await Reflect.apply(provider.run, provider.provider, [plan.request, plan.context])
+        )
+      })
     } catch (cause) {
       if (!providerStarted && input.context.signal.aborted) {
         throw new EvaluationError(
           `Agent "${provider.name}" (${input.trace.spanId}) was cancelled before provider execution`,
-          { cause },
+          { cause }
         )
       }
 
-      throw new EvaluationError(
-        `Agent "${provider.name}" (${input.trace.spanId}) failed`,
-        { cause },
-      )
+      throw new EvaluationError(`Agent "${provider.name}" (${input.trace.spanId}) failed`, { cause })
     }
 
     return await AgentExecutionResult.from({

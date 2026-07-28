@@ -40,10 +40,7 @@ export class SandboxEvaluator {
    * Captures the optional runtime-wide provider without acquiring resources.
    */
   constructor(provider?: SandboxProvider) {
-    this.#provider =
-      provider === undefined
-        ? undefined
-        : validateSandboxProvider(provider)
+    this.#provider = provider === undefined ? undefined : validateSandboxProvider(provider)
   }
 
   /**
@@ -52,46 +49,30 @@ export class SandboxEvaluator {
   async enter(
     props: Readonly<SandboxProps>,
     parent: Readonly<SandboxSession> | undefined,
-    workspace:
-      | Readonly<WorkspaceMaterializationReference>
-      | undefined,
+    workspace: Readonly<WorkspaceMaterializationReference> | undefined,
     evaluationId: string,
-    signal: AbortSignal,
+    signal: AbortSignal
   ): Promise<Readonly<SandboxEvaluationScope>> {
     return parent === undefined
-      ? await this.#acquireRoot(
-          props,
-          workspace,
-          evaluationId,
-          signal,
-        )
+      ? await this.#acquireRoot(props, workspace, evaluationId, signal)
       : this.#enterNested(props, parent)
   }
 
   /**
    * Applies an Agent-local working directory without widening Sandbox scope.
    */
-  forAgent(
-    session: Readonly<SandboxSession> | undefined,
-    cwd: unknown,
-  ): Readonly<SandboxSession> | undefined {
+  forAgent(session: Readonly<SandboxSession> | undefined, cwd: unknown): Readonly<SandboxSession> | undefined {
     if (cwd === undefined) {
       return session
     }
 
     if (session === undefined) {
-      throw new EvaluationError(
-        "<Agent> cwd requires an enclosing <Sandbox>",
-      )
+      throw new EvaluationError("<Agent> cwd requires an enclosing <Sandbox>")
     }
 
     return Object.freeze({
       ...session,
-      cwd: resolveSandboxPath(
-        session.root,
-        cwd,
-        "<Agent> cwd",
-      ),
+      cwd: resolveSandboxPath(session.root, cwd, "<Agent> cwd"),
     })
   }
 
@@ -100,45 +81,26 @@ export class SandboxEvaluator {
    */
   async #acquireRoot(
     props: Readonly<SandboxProps>,
-    workspace:
-      | Readonly<WorkspaceMaterializationReference>
-      | undefined,
+    workspace: Readonly<WorkspaceMaterializationReference> | undefined,
     evaluationId: string,
-    signal: AbortSignal,
+    signal: AbortSignal
   ): Promise<Readonly<SandboxEvaluationScope>> {
-    const provider =
-      props.provider === undefined
-        ? this.#provider
-        : validateSandboxProvider(props.provider)
+    const provider = props.provider === undefined ? this.#provider : validateSandboxProvider(props.provider)
 
     if (provider === undefined) {
-      throw new EvaluationError(
-        "<Sandbox> requires a provider or AmlRuntime sandboxProvider",
-      )
+      throw new EvaluationError("<Sandbox> requires a provider or AmlRuntime sandboxProvider")
     }
 
-    const request = createRootRequest(
-      props,
-      workspace,
-      evaluationId,
-      signal,
-    )
+    const request = createRootRequest(props, workspace, evaluationId, signal)
     let value: unknown
 
     try {
-      value = await Reflect.apply(
-        provider.acquire,
-        provider.provider,
-        [Object.freeze(request)],
-      )
+      value = await Reflect.apply(provider.acquire, provider.provider, [Object.freeze(request)])
     } catch (cause) {
       // Cancellation is caller-owned control flow, not an attributed provider
       // failure. Cooperative providers reject pending acquisition with it.
       signal.throwIfAborted()
-      throw new EvaluationError(
-        `Sandbox provider "${provider.name}" failed to acquire`,
-        { cause },
-      )
+      throw new EvaluationError(`Sandbox provider "${provider.name}" failed to acquire`, { cause })
     }
 
     const capture = captureSandboxLease(value, provider.name)
@@ -154,7 +116,7 @@ export class SandboxEvaluator {
       } catch (releaseError) {
         throw new AggregateError(
           [leaseError, releaseError],
-          `Sandbox provider "${provider.name}" returned an invalid lease and cleanup failed`,
+          `Sandbox provider "${provider.name}" returned an invalid lease and cleanup failed`
         )
       }
 
@@ -180,11 +142,7 @@ export class SandboxEvaluator {
       release() {
         // Cache the complete release operation so every runtime cleanup path
         // converges on one provider call, even when failures race.
-        releasePromise ??= releaseSandboxLease(
-          provider.name,
-          lease.lease.id,
-          lease.release,
-        )
+        releasePromise ??= releaseSandboxLease(provider.name, lease.lease.id, lease.release)
         return releasePromise
       },
     })
@@ -193,37 +151,18 @@ export class SandboxEvaluator {
   /**
    * Creates a narrower policy view without acquiring new infrastructure.
    */
-  #enterNested(
-    props: Readonly<SandboxProps>,
-    parent: Readonly<SandboxSession>,
-  ): Readonly<SandboxEvaluationScope> {
+  #enterNested(props: Readonly<SandboxProps>, parent: Readonly<SandboxSession>): Readonly<SandboxEvaluationScope> {
     if (props.provider !== undefined) {
-      throw new EvaluationError(
-        "A nested <Sandbox> cannot select a provider; it inherits the parent lease",
-      )
+      throw new EvaluationError("A nested <Sandbox> cannot select a provider; it inherits the parent lease")
     }
 
-    const access = validateSandboxAccess(
-      props.access ?? parent.access,
-    )
+    const access = validateSandboxAccess(props.access ?? parent.access)
 
-    if (
-      parent.access === "read-only" &&
-      access === "read-write"
-    ) {
-      throw new EvaluationError(
-        "A nested <Sandbox> cannot widen read-only access to read-write",
-      )
+    if (parent.access === "read-only" && access === "read-write") {
+      throw new EvaluationError("A nested <Sandbox> cannot widen read-only access to read-write")
     }
 
-    const root =
-      props.root === undefined
-        ? parent.root
-        : resolveSandboxPath(
-            parent.root,
-            props.root,
-            "<Sandbox> root",
-          )
+    const root = props.root === undefined ? parent.root : resolveSandboxPath(parent.root, props.root, "<Sandbox> root")
     const cwd =
       props.cwd !== undefined
         ? resolveSandboxPath(root, props.cwd, "<Sandbox> cwd")
@@ -252,25 +191,15 @@ export class SandboxEvaluator {
  */
 function createRootRequest(
   props: Readonly<SandboxProps>,
-  workspace:
-    | Readonly<WorkspaceMaterializationReference>
-    | undefined,
+  workspace: Readonly<WorkspaceMaterializationReference> | undefined,
   evaluationId: string,
-  signal: AbortSignal,
+  signal: AbortSignal
 ): SandboxAcquireRequest {
-  const root = resolveSandboxPath(
-    ".",
-    props.root ?? ".",
-    "<Sandbox> root",
-  )
+  const root = resolveSandboxPath(".", props.root ?? ".", "<Sandbox> root")
 
   return {
     access: validateSandboxAccess(props.access ?? "read-only"),
-    cwd: resolveSandboxPath(
-      root,
-      props.cwd ?? ".",
-      "<Sandbox> cwd",
-    ),
+    cwd: resolveSandboxPath(root, props.cwd ?? ".", "<Sandbox> cwd"),
     evaluationId,
     root,
     signal,
@@ -283,9 +212,7 @@ function createRootRequest(
  */
 function validateSandboxAccess(value: unknown): SandboxAccess {
   if (value !== "read-only" && value !== "read-write") {
-    throw new EvaluationError(
-      '<Sandbox> access must be "read-only" or "read-write"',
-    )
+    throw new EvaluationError('<Sandbox> access must be "read-only" or "read-write"')
   }
 
   return value
@@ -296,49 +223,31 @@ function validateSandboxAccess(value: unknown): SandboxAccess {
  *
  * Providers remain responsible for real-path and symlink confinement.
  */
-function resolveSandboxPath(
-  base: string,
-  value: unknown,
-  label: string,
-): string {
+function resolveSandboxPath(base: string, value: unknown, label: string): string {
   if (typeof value !== "string" || value.trim().length === 0) {
     throw new EvaluationError(`${label} must be a non-empty string`)
   }
 
-  if (
-    value.includes("\\") ||
-    path.posix.isAbsolute(value) ||
-    path.win32.isAbsolute(value)
-  ) {
-    throw new EvaluationError(
-      `${label} must be a relative forward-slash path`,
-    )
+  if (value.includes("\\") || path.posix.isAbsolute(value) || path.win32.isAbsolute(value)) {
+    throw new EvaluationError(`${label} must be a relative forward-slash path`)
   }
 
   // Reject lexical traversal before normalization. Even a segment that later
   // cancels out creates a provider-dependent and therefore non-portable policy.
   if (value.split("/").includes("..")) {
-    throw new EvaluationError(
-      `${label} cannot contain parent traversal`,
-    )
+    throw new EvaluationError(`${label} cannot contain parent traversal`)
   }
 
   const normalized = path.posix.normalize(value)
 
   if (normalized === ".." || normalized.startsWith("../")) {
-    throw new EvaluationError(
-      `${label} cannot escape its parent root`,
-    )
+    throw new EvaluationError(`${label} cannot escape its parent root`)
   }
 
-  const resolved = path.posix.normalize(
-    path.posix.join(base, normalized),
-  )
+  const resolved = path.posix.normalize(path.posix.join(base, normalized))
 
   if (resolved === ".." || resolved.startsWith("../")) {
-    throw new EvaluationError(
-      `${label} cannot escape its parent root`,
-    )
+    throw new EvaluationError(`${label} cannot escape its parent root`)
   }
 
   return resolved
@@ -347,17 +256,10 @@ function resolveSandboxPath(
 /**
  * Attributes a provider cleanup failure without hiding its original cause.
  */
-async function releaseSandboxLease(
-  providerName: string,
-  leaseId: string,
-  release: () => Promise<void>,
-): Promise<void> {
+async function releaseSandboxLease(providerName: string, leaseId: string, release: () => Promise<void>): Promise<void> {
   try {
     await release()
   } catch (cause) {
-    throw new EvaluationError(
-      `Sandbox provider "${providerName}" failed to release lease "${leaseId}"`,
-      { cause },
-    )
+    throw new EvaluationError(`Sandbox provider "${providerName}" failed to release lease "${leaseId}"`, { cause })
   }
 }

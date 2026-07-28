@@ -1,9 +1,5 @@
-import {
-  Agent,
-  Loop,
-  type AgentJavaScriptTool,
-} from "@aml/sdk"
-import { DeterministicAgentProvider } from "@aml/sdk/testing"
+import { Agent, Loop, type AgentJavaScriptTool } from "@aml-jsx/sdk"
+import { DeterministicAgentProvider } from "@aml-jsx/sdk/testing"
 import { z } from "zod"
 
 const ResearchState = z.object({
@@ -19,8 +15,7 @@ const ExampleProvider = new DeterministicAgentProvider({
   async respond(request, context) {
     if (request.prompt === "investigate") {
       const stateTool = request.tools.find(
-        (tool): tool is AgentJavaScriptTool =>
-          tool.kind === "javascript" && tool.name === "aml_set_state",
+        (tool): tool is AgentJavaScriptTool => tool.kind === "javascript" && tool.name === "aml_set_state"
       )
 
       if (stateTool === undefined) {
@@ -37,7 +32,7 @@ const ExampleProvider = new DeterministicAgentProvider({
         {
           signal: context.signal,
           trace: context.trace,
-        },
+        }
       )
       return { text: "stale output" }
     }
@@ -55,9 +50,7 @@ export default function LoopExample() {
       initial={{ done: false, findings: [] }}
       name="research"
       render={({ state }) => (
-        <Agent provider={ExampleProvider}>
-          {state.done ? state.findings.join(", ") : "investigate"}
-        </Agent>
+        <Agent provider={ExampleProvider}>{state.done ? state.findings.join(", ") : "investigate"}</Agent>
       )}
       schema={ResearchState}
     />

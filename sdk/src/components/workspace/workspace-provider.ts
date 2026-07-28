@@ -41,9 +41,7 @@ export interface WorkspaceProvider<Handle = unknown> {
   /**
    * Materializes one durable Workspace or rejects an active-writer conflict.
    */
-  acquire(
-    request: WorkspaceAcquireRequest,
-  ): Promise<WorkspaceLease<Handle>>
+  acquire(request: WorkspaceAcquireRequest): Promise<WorkspaceLease<Handle>>
 }
 
 /**

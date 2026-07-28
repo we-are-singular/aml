@@ -1,15 +1,8 @@
 import { execFileSync } from "node:child_process"
-import {
-  cpSync,
-  mkdirSync,
-  mkdtempSync,
-  readFileSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs"
+import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { fileURLToPath, pathToFileURL } from "node:url"
-import { join, resolve } from "node:path"
+import { dirname, join, resolve } from "node:path"
 
 interface PackFile {
   path: string
@@ -38,15 +31,12 @@ interface BuiltSdk {
           }
           readonly prompt: string
           readonly tools: readonly {
-            execute?(
-              input: unknown,
-              context: unknown,
-            ): Promise<unknown>
+            execute?(input: unknown, context: unknown): Promise<unknown>
             readonly kind: string
             readonly name: string
           }[]
         },
-        context: unknown,
+        context: unknown
       ): Promise<{ structured?: unknown; text: string }>
     }
     workspaceProvider?: unknown
@@ -59,6 +49,10 @@ interface BuiltSdk {
   readonly Mcp: unknown
   readonly Tool: unknown
   readonly Workspace: unknown
+  readonly codexAgent: unknown
+  readonly dockerSandbox: unknown
+  readonly localWorkspace: unknown
+  readonly opencodeAgent: unknown
   readonly WorkspaceConflictError: {
     is(value: unknown, workspaceId?: string): boolean
     new (workspaceId: string): {
@@ -68,7 +62,7 @@ interface BuiltSdk {
   }
   createContext<Value>(
     name: string,
-    defaultValue?: Value,
+    defaultValue?: Value
   ): {
     readonly name: string
     readonly Provider: unknown
@@ -98,70 +92,57 @@ interface BuiltTesting {
 }
 
 const packageDirectory = resolve(import.meta.dirname, "..")
-const packageJson = JSON.parse(
-  readFileSync(resolve(packageDirectory, "package.json"), "utf8"),
-) as {
+const packageJson = JSON.parse(readFileSync(resolve(packageDirectory, "package.json"), "utf8")) as {
   exports: Record<string, { import: string; types: string }>
   files: string[]
-  imports: Record<
-    string,
-    { "aml-source": string; default: string; types: string }
-  >
+  imports: Record<string, { "aml-source": string; default: string; types: string }>
 }
 
 const expectedExports = {
   ".": {
     import: "./dist/index.js",
-    types: "./dist/index.d.ts",
+    types: "./dist/sdk/src/index.d.ts",
   },
   "./jsx-runtime": {
     import: "./dist/jsx-runtime.js",
-    types: "./dist/jsx-runtime.d.ts",
+    types: "./dist/sdk/src/jsx-runtime.d.ts",
   },
   "./jsx-dev-runtime": {
     import: "./dist/jsx-dev-runtime.js",
-    types: "./dist/jsx-dev-runtime.d.ts",
+    types: "./dist/sdk/src/jsx-dev-runtime.d.ts",
   },
   "./testing": {
     import: "./dist/testing.js",
-    types: "./dist/testing.d.ts",
+    types: "./dist/sdk/src/testing.d.ts",
   },
 }
 const expectedImports = {
   "#aml/jsx-dev-runtime": {
     "aml-source": "./src/jsx-dev-runtime.ts",
-    types: "./dist/jsx-dev-runtime.d.ts",
+    types: "./dist/sdk/src/jsx-dev-runtime.d.ts",
     default: "./dist/jsx-dev-runtime.js",
   },
   "#aml/jsx-runtime": {
     "aml-source": "./src/jsx-runtime.ts",
-    types: "./dist/jsx-runtime.d.ts",
+    types: "./dist/sdk/src/jsx-runtime.d.ts",
     default: "./dist/jsx-runtime.js",
   },
 }
 
-if (
-  Object.keys(packageJson.exports).sort().join("\n") !==
-  Object.keys(expectedExports).sort().join("\n")
-) {
+if (Object.keys(packageJson.exports).sort().join("\n") !== Object.keys(expectedExports).sort().join("\n")) {
   throw new Error("SDK exports do not match the reviewed dist-only contract")
 }
 
 for (const [name, expected] of Object.entries(expectedExports)) {
   const actual = packageJson.exports[name]
 
-  if (
-    actual?.import !== expected.import ||
-    actual.types !== expected.types
-  ) {
+  if (actual?.import !== expected.import || actual.types !== expected.types) {
     throw new Error(`SDK export ${name} does not resolve through dist`)
   }
 }
 
 if (JSON.stringify(packageJson.imports) !== JSON.stringify(expectedImports)) {
-  throw new Error(
-    "SDK private JSX imports do not preserve source and dist conditions",
-  )
+  throw new Error("SDK private JSX imports do not preserve source and dist conditions")
 }
 
 if (JSON.stringify(packageJson.files) !== JSON.stringify(["dist"])) {
@@ -169,12 +150,10 @@ if (JSON.stringify(packageJson.files) !== JSON.stringify(["dist"])) {
 }
 
 const resolvedEntries = {
-  index: fileURLToPath(import.meta.resolve("@aml/sdk")),
-  jsxDevRuntime: fileURLToPath(
-    import.meta.resolve("@aml/sdk/jsx-dev-runtime"),
-  ),
-  jsxRuntime: fileURLToPath(import.meta.resolve("@aml/sdk/jsx-runtime")),
-  testing: fileURLToPath(import.meta.resolve("@aml/sdk/testing")),
+  index: fileURLToPath(import.meta.resolve("@aml-jsx/sdk")),
+  jsxDevRuntime: fileURLToPath(import.meta.resolve("@aml-jsx/sdk/jsx-dev-runtime")),
+  jsxRuntime: fileURLToPath(import.meta.resolve("@aml-jsx/sdk/jsx-runtime")),
+  testing: fileURLToPath(import.meta.resolve("@aml-jsx/sdk/testing")),
 }
 
 for (const entry of Object.values(resolvedEntries)) {
@@ -186,19 +165,20 @@ for (const entry of Object.values(resolvedEntries)) {
 const {
   Agent: publicAgent,
   AmlRuntime,
+  codexAgent,
   defineMcpServer,
   defineWorkspaceProvider,
+  dockerSandbox,
   evaluate: componentEvaluate,
   Fragment: publicFragment,
   FollowUp: publicFollowUp,
+  localWorkspace,
   Loop: publicLoop,
+  opencodeAgent,
   Workspace: publicWorkspace,
   WorkspaceConflictError,
 } = (await import(pathToFileURL(resolvedEntries.index).href)) as BuiltSdk
-const {
-  Fragment: runtimeFragment,
-  jsx: runtimeJsx,
-} = (await import(
+const { Fragment: runtimeFragment, jsx: runtimeJsx } = (await import(
   pathToFileURL(resolvedEntries.jsxRuntime).href
 )) as BuiltJsxRuntime
 const {
@@ -206,9 +186,16 @@ const {
   DeterministicWorkspaceProvider,
   agentProviderConformance,
   workspaceProviderConformance,
-} = (await import(
-  pathToFileURL(resolvedEntries.testing).href
-)) as BuiltTesting
+} = (await import(pathToFileURL(resolvedEntries.testing).href)) as BuiltTesting
+
+if (
+  typeof codexAgent !== "function" ||
+  typeof opencodeAgent !== "function" ||
+  typeof dockerSandbox !== "function" ||
+  typeof localWorkspace !== "function"
+) {
+  throw new Error("SDK root does not expose its configured provider factories")
+}
 
 if (publicFragment !== runtimeFragment) {
   throw new Error("SDK root and JSX runtime export different Fragments")
@@ -217,7 +204,7 @@ if (publicFragment !== runtimeFragment) {
 const builtOutput = await new AmlRuntime().evaluate(
   runtimeJsx(runtimeFragment, {
     children: ["built ", runtimeJsx(() => Promise.resolve("runtime"), {})],
-  }),
+  })
 )
 
 if (builtOutput !== "built runtime") {
@@ -228,10 +215,7 @@ const followUpOutput = await new AmlRuntime({
   agentProvider: {
     name: "follow-up-package-check",
     async run(request) {
-      if (
-        !Array.isArray(request.followUps) ||
-        request.followUps.join("|") !== "challenge|final"
-      ) {
+      if (!Array.isArray(request.followUps) || request.followUps.join("|") !== "challenge|final") {
         throw new Error("Built SDK omitted its FollowUp turn plan")
       }
 
@@ -245,22 +229,17 @@ const followUpOutput = await new AmlRuntime({
       runtimeJsx(publicFollowUp, { children: "challenge" }),
       runtimeJsx(publicFollowUp, { children: "final" }),
     ],
-  }),
+  })
 )
 
 if (followUpOutput !== "final") {
-  throw new Error(
-    `Unexpected built SDK FollowUp output: ${followUpOutput}`,
-  )
+  throw new Error(`Unexpected built SDK FollowUp output: ${followUpOutput}`)
 }
 
 const loopSchema = {
   "~standard": {
     validate: (value: unknown) => {
-      const status =
-        typeof value === "object" && value !== null
-          ? Reflect.get(value, "status")
-          : undefined
+      const status = typeof value === "object" && value !== null ? Reflect.get(value, "status") : undefined
 
       return status === "pending" || status === "complete"
         ? { value: { status } }
@@ -278,22 +257,13 @@ const loopOutput = await new AmlRuntime({
       loopPrompts.push(request.prompt)
 
       if (request.prompt === "pending") {
-        const stateTool = request.tools.find(
-          (tool) =>
-            tool.kind === "javascript" &&
-            tool.name === "aml_set_state",
-        )
+        const stateTool = request.tools.find(tool => tool.kind === "javascript" && tool.name === "aml_set_state")
 
         if (!stateTool?.execute) {
-          throw new Error(
-            "Built SDK Loop omitted its state capability",
-          )
+          throw new Error("Built SDK Loop omitted its state capability")
         }
 
-        await stateTool.execute(
-          { updates: { status: "complete" } },
-          context,
-        )
+        await stateTool.execute({ updates: { status: "complete" } }, context)
         return { text: "stale" }
       }
 
@@ -303,25 +273,16 @@ const loopOutput = await new AmlRuntime({
 }).evaluate(
   runtimeJsx(publicLoop, {
     initial: { status: "pending" },
-    render: ({
-      state,
-    }: {
-      state: { readonly status: string }
-    }) =>
+    render: ({ state }: { state: { readonly status: string } }) =>
       runtimeJsx(publicAgent, {
         children: state.status,
       }),
     schema: loopSchema,
-  }),
+  })
 )
 
-if (
-  loopOutput !== "current" ||
-  loopPrompts.join("|") !== "pending|complete"
-) {
-  throw new Error(
-    "Built SDK Loop did not commit into a fresh Agent session",
-  )
+if (loopOutput !== "current" || loopPrompts.join("|") !== "pending|complete") {
+  throw new Error("Built SDK Loop did not commit into a fresh Agent session")
 }
 
 const modelSchema = {
@@ -334,9 +295,7 @@ const modelSchema = {
       }),
     },
     validate: (value: unknown) =>
-      typeof value === "object" &&
-      value !== null &&
-      typeof Reflect.get(value, "answer") === "number"
+      typeof value === "object" && value !== null && typeof Reflect.get(value, "answer") === "number"
         ? { value: Reflect.get(value, "answer") }
         : { issues: [{ message: "answer must be a number" }] },
     vendor: "package-check",
@@ -347,16 +306,8 @@ const structuredOutput = await new AmlRuntime({
   agentProvider: {
     name: "structured-package-check",
     async run(request) {
-      if (
-        request.output?.type !== "json" ||
-        Reflect.get(
-          request.output.jsonSchema,
-          "type",
-        ) !== "object"
-      ) {
-        throw new Error(
-          "Built SDK omitted its structured output declaration",
-        )
+      if (request.output?.type !== "json" || Reflect.get(request.output.jsonSchema, "type") !== "object") {
+        throw new Error("Built SDK omitted its structured output declaration")
       }
 
       return { structured: { answer: 42 }, text: "" }
@@ -364,18 +315,13 @@ const structuredOutput = await new AmlRuntime({
   },
 }).evaluate(
   runtimeJsx(async () => {
-    const answer = await componentEvaluate(
-      runtimeJsx(publicAgent, { children: "Return an answer." }),
-      modelSchema,
-    )
+    const answer = await componentEvaluate(runtimeJsx(publicAgent, { children: "Return an answer." }), modelSchema)
     return `answer:${String(answer)}`
-  }, {}),
+  }, {})
 )
 
 if (structuredOutput !== "answer:42") {
-  throw new Error(
-    `Unexpected built SDK structured output: ${structuredOutput}`,
-  )
+  throw new Error(`Unexpected built SDK structured output: ${structuredOutput}`)
 }
 
 const deterministicProvider = new DeterministicAgentProvider()
@@ -385,22 +331,12 @@ if (deterministicProvider.calls.length !== 1) {
   throw new Error("SDK testing entry point did not exercise its provider")
 }
 
-await workspaceProviderConformance(
-  new DeterministicWorkspaceProvider(),
-)
-const deterministicWorkspaceProvider =
-  new DeterministicWorkspaceProvider()
-const definedWorkspaceProvider = defineWorkspaceProvider(
-  deterministicWorkspaceProvider,
-)
+await workspaceProviderConformance(new DeterministicWorkspaceProvider())
+const deterministicWorkspaceProvider = new DeterministicWorkspaceProvider()
+const definedWorkspaceProvider = defineWorkspaceProvider(deterministicWorkspaceProvider)
 
-if (
-  definedWorkspaceProvider !== deterministicWorkspaceProvider ||
-  !Object.isFrozen(definedWorkspaceProvider)
-) {
-  throw new Error(
-    "SDK dist defineWorkspaceProvider contract is invalid",
-  )
+if (definedWorkspaceProvider !== deterministicWorkspaceProvider || !Object.isFrozen(definedWorkspaceProvider)) {
+  throw new Error("SDK dist defineWorkspaceProvider contract is invalid")
 }
 
 const conflict = new WorkspaceConflictError("package-check")
@@ -410,9 +346,7 @@ if (
   conflict.workspaceId !== "package-check" ||
   !WorkspaceConflictError.is(conflict, "package-check")
 ) {
-  throw new Error(
-    "SDK dist WorkspaceConflictError contract is invalid",
-  )
+  throw new Error("SDK dist WorkspaceConflictError contract is invalid")
 }
 
 const definedMcpServer = defineMcpServer({
@@ -440,7 +374,7 @@ const workspaceOutput = await new AmlRuntime({
   runtimeJsx(publicWorkspace, {
     children: "built Workspace",
     id: "package-check",
-  }),
+  })
 )
 
 if (
@@ -448,9 +382,7 @@ if (
   deterministicWorkspaceProvider.saves.length !== 1 ||
   deterministicWorkspaceProvider.releases.length !== 1
 ) {
-  throw new Error(
-    "SDK dist Workspace lifecycle or testing export is invalid",
-  )
+  throw new Error("SDK dist Workspace lifecycle or testing export is invalid")
 }
 
 // Compile and execute one tree across two physical SDK copies. Runtime brands
@@ -459,8 +391,8 @@ const copyFixtureDirectory = mkdtempSync(join(tmpdir(), "aml-sdk-copies-"))
 
 try {
   const copyDirectories = {
-    a: join(copyFixtureDirectory, "node_modules/@aml/sdk-a"),
-    b: join(copyFixtureDirectory, "node_modules/@aml/sdk-b"),
+    a: join(copyFixtureDirectory, "node_modules/@aml-jsx/sdk-a"),
+    b: join(copyFixtureDirectory, "node_modules/@aml-jsx/sdk-b"),
   }
 
   for (const [copy, directory] of Object.entries(copyDirectories)) {
@@ -472,32 +404,35 @@ try {
       join(directory, "package.json"),
       JSON.stringify({
         exports: packageJson.exports,
-        name: `@aml/sdk-${copy}`,
+        name: `@aml-jsx/sdk-${copy}`,
         type: "module",
         version: "0.0.0",
-      }),
+      })
     )
   }
 
-  const standardSchemaDirectory = join(
-    copyFixtureDirectory,
-    "node_modules/@standard-schema/spec",
-  )
-  mkdirSync(standardSchemaDirectory, { recursive: true })
-  cpSync(
-    resolve(packageDirectory, "../node_modules/@standard-schema/spec"),
-    standardSchemaDirectory,
-    { recursive: true },
-  )
+  for (const dependency of [
+    "@modelcontextprotocol/sdk",
+    "@openai/codex-sdk",
+    "@opencode-ai/sdk",
+    "@standard-schema/spec",
+    "dockerode",
+    "execa",
+    "proper-lockfile",
+  ]) {
+    const fixtureDependency = join(copyFixtureDirectory, "node_modules", dependency)
+    mkdirSync(dirname(fixtureDependency), { recursive: true })
+    symlinkSync(resolve(packageDirectory, "../node_modules", dependency), fixtureDependency, "dir")
+  }
 
   writeFileSync(
     join(copyFixtureDirectory, "consumer.mts"),
     [
-      'import { AmlRuntime, type AmlRenderable } from "@aml/sdk-a"',
-      'import type { McpProps, ToolProps } from "@aml/sdk-a"',
-      'import { defineMcpServer, defineTool, evaluate } from "@aml/sdk-b"',
-      'import { createContext, useContext } from "@aml/sdk-b"',
-      'import { jsx } from "@aml/sdk-b/jsx-runtime"',
+      'import { AmlRuntime, type AmlRenderable } from "@aml-jsx/sdk-a"',
+      'import type { McpProps, ToolProps } from "@aml-jsx/sdk-a"',
+      'import { defineMcpServer, defineTool, evaluate } from "@aml-jsx/sdk-b"',
+      'import { createContext, useContext } from "@aml-jsx/sdk-b"',
+      'import { jsx } from "@aml-jsx/sdk-b/jsx-runtime"',
       "",
       'const foreignNode = jsx(() => "cross-copy", {})',
       "const renderable: AmlRenderable = foreignNode",
@@ -515,7 +450,7 @@ try {
       "",
       "const schema = {",
       '  "~standard": {',
-      "    jsonSchema: { input: () => ({ type: \"object\" }) },",
+      '    jsonSchema: { input: () => ({ type: "object" }) },',
       "    validate: (value: unknown) => ({ value }),",
       '    vendor: "fixture",',
       "    version: 1 as const,",
@@ -539,7 +474,7 @@ try {
       "const mcpProps: McpProps = { use: foreignMcp }",
       "void mcpProps",
       "",
-    ].join("\n"),
+    ].join("\n")
   )
   writeFileSync(
     join(copyFixtureDirectory, "tsconfig.json"),
@@ -548,11 +483,12 @@ try {
         module: "NodeNext",
         moduleResolution: "NodeNext",
         noEmit: true,
+        skipLibCheck: true,
         strict: true,
         target: "ES2022",
       },
       files: ["consumer.mts"],
-    }),
+    })
   )
 
   execFileSync(
@@ -562,61 +498,39 @@ try {
       "--project",
       join(copyFixtureDirectory, "tsconfig.json"),
     ],
-    { stdio: "pipe" },
+    { stdio: "inherit" }
   )
 
-  const copyA = (await import(
-    pathToFileURL(join(copyDirectories.a, "dist/index.js")).href
-  )) as BuiltSdk
-  const copyB = (await import(
-    pathToFileURL(join(copyDirectories.b, "dist/jsx-runtime.js")).href
-  )) as BuiltJsxRuntime
-  const copyBPackage = (await import(
-    pathToFileURL(join(copyDirectories.b, "dist/index.js")).href
-  )) as BuiltSdk
-  const crossCopyOutput = await new copyA.AmlRuntime().evaluate(
-    copyB.jsx(() => "cross-copy", {}),
-  )
+  const copyA = (await import(pathToFileURL(join(copyDirectories.a, "dist/index.js")).href)) as BuiltSdk
+  const copyB = (await import(pathToFileURL(join(copyDirectories.b, "dist/jsx-runtime.js")).href)) as BuiltJsxRuntime
+  const copyBPackage = (await import(pathToFileURL(join(copyDirectories.b, "dist/index.js")).href)) as BuiltSdk
+  const crossCopyOutput = await new copyA.AmlRuntime().evaluate(copyB.jsx(() => "cross-copy", {}))
 
   if (crossCopyOutput !== "cross-copy") {
     throw new Error(`Unexpected cross-copy output: ${crossCopyOutput}`)
   }
 
   const crossCopyNestedOutput = await new copyA.AmlRuntime().evaluate(
-    copyB.jsx(
-      async () =>
-        `nested:${String(await copyBPackage.evaluate("data"))}`,
-      {},
-    ),
+    copyB.jsx(async () => `nested:${String(await copyBPackage.evaluate("data"))}`, {})
   )
 
   if (crossCopyNestedOutput !== "nested:data") {
-    throw new Error(
-      `Unexpected cross-copy nested output: ${crossCopyNestedOutput}`,
-    )
+    throw new Error(`Unexpected cross-copy nested output: ${crossCopyNestedOutput}`)
   }
 
   // Context uses the same realm-wide exact-identity contract as AML nodes.
   // The Provider and useContext() may come from copy B while copy A owns the
   // evaluator and active component invocation.
-  const crossCopyContext =
-    copyBPackage.createContext<string>("CrossCopy")
-  const crossCopyContextOutput =
-    await new copyA.AmlRuntime().evaluate(
-      copyB.jsx(crossCopyContext.Provider, {
-        children: copyB.jsx(
-          () =>
-            copyBPackage.useContext<string>(crossCopyContext),
-          {},
-        ),
-        value: "cross-copy-context",
-      }),
-    )
+  const crossCopyContext = copyBPackage.createContext<string>("CrossCopy")
+  const crossCopyContextOutput = await new copyA.AmlRuntime().evaluate(
+    copyB.jsx(crossCopyContext.Provider, {
+      children: copyB.jsx(() => copyBPackage.useContext<string>(crossCopyContext), {}),
+      value: "cross-copy-context",
+    })
+  )
 
   if (crossCopyContextOutput !== "cross-copy-context") {
-    throw new Error(
-      `Unexpected cross-copy Context output: ${crossCopyContextOutput}`,
-    )
+    throw new Error(`Unexpected cross-copy Context output: ${crossCopyContextOutput}`)
   }
 
   // Tool authenticity uses a global exact-identity registry. Prove a Tool
@@ -631,9 +545,7 @@ try {
         }),
       },
       validate: (value: unknown) =>
-        typeof value === "object" &&
-        value !== null &&
-        typeof Reflect.get(value, "id") === "number"
+        typeof value === "object" && value !== null && typeof Reflect.get(value, "id") === "number"
           ? { value }
           : { issues: [{ message: "id must be a number" }] },
       vendor: "package-check",
@@ -663,11 +575,8 @@ try {
     },
   }).evaluate(
     copyB.jsx(copyBPackage.Agent, {
-      children: [
-        copyB.jsx(copyBPackage.Tool, { use: foreignTool }),
-        "Use the Tool.",
-      ],
-    }),
+      children: [copyB.jsx(copyBPackage.Tool, { use: foreignTool }), "Use the Tool."],
+    })
   )
 
   if (toolOutput !== "42") {
@@ -688,10 +597,7 @@ try {
       name: "cross-copy-mcp-provider",
       async run(request) {
         const [server] = request.mcpServers
-        const name =
-          server?.kind === "named"
-            ? server.name
-            : server?.definition?.name
+        const name = server?.kind === "named" ? server.name : server?.definition?.name
 
         return { text: name ?? "missing" }
       },
@@ -699,7 +605,7 @@ try {
   }).evaluate(
     copyB.jsx(copyBPackage.Agent, {
       children: copyB.jsx(copyBPackage.Mcp, { use: foreignMcp }),
-    }),
+    })
   )
 
   if (mcpOutput !== "cross_copy_mcp") {
@@ -716,22 +622,13 @@ try {
         crossCopyLoopPrompts.push(request.prompt)
 
         if (request.prompt === "pending") {
-          const stateTool = request.tools.find(
-            (tool) =>
-              tool.kind === "javascript" &&
-              tool.name === "aml_set_state",
-          )
+          const stateTool = request.tools.find(tool => tool.kind === "javascript" && tool.name === "aml_set_state")
 
           if (!stateTool?.execute) {
-            throw new Error(
-              "Cross-copy Loop omitted its state capability",
-            )
+            throw new Error("Cross-copy Loop omitted its state capability")
           }
 
-          await stateTool.execute(
-            { updates: { status: "complete" } },
-            context,
-          )
+          await stateTool.execute({ updates: { status: "complete" } }, context)
           return { text: "stale" }
         }
 
@@ -741,49 +638,40 @@ try {
   }).evaluate(
     copyB.jsx(copyBPackage.Loop, {
       initial: { status: "pending" },
-      render: ({
-        state,
-      }: {
-        state: { readonly status: string }
-      }) =>
+      render: ({ state }: { state: { readonly status: string } }) =>
         copyB.jsx(copyBPackage.Agent, {
           children: state.status,
         }),
       schema: loopSchema,
-    }),
+    })
   )
 
-  if (
-    crossCopyLoopOutput !== "cross-copy-current" ||
-    crossCopyLoopPrompts.join("|") !== "pending|complete"
-  ) {
-    throw new Error(
-      "Cross-copy Loop did not retain primitive and state semantics",
-    )
+  if (crossCopyLoopOutput !== "cross-copy-current" || crossCopyLoopPrompts.join("|") !== "pending|complete") {
+    throw new Error("Cross-copy Loop did not retain primitive and state semantics")
   }
 } finally {
   rmSync(copyFixtureDirectory, { force: true, recursive: true })
 }
 
-const packOutput = execFileSync(
-  "npm",
-  ["pack", "--dry-run", "--ignore-scripts", "--json"],
-  {
-    cwd: packageDirectory,
-    encoding: "utf8",
-  },
-)
+const packOutput = execFileSync("npm", ["pack", "--dry-run", "--ignore-scripts", "--json"], {
+  cwd: packageDirectory,
+  encoding: "utf8",
+})
 const [packResult] = JSON.parse(packOutput) as PackResult[]
-const packedFiles = new Set(packResult?.files.map((file) => file.path))
+const packedFiles = new Set(packResult?.files.map(file => file.path))
 
 for (const expectedFile of [
-  "dist/index.d.ts",
   "dist/index.js",
-  "dist/jsx-dev-runtime.d.ts",
   "dist/jsx-dev-runtime.js",
-  "dist/jsx-runtime.d.ts",
   "dist/jsx-runtime.js",
-  "dist/testing.d.ts",
+  "dist/providers/agents/codex/src/index.d.ts",
+  "dist/providers/agents/opencode/src/index.d.ts",
+  "dist/providers/sandboxes/docker/src/index.d.ts",
+  "dist/providers/workspaces/local/src/index.d.ts",
+  "dist/sdk/src/index.d.ts",
+  "dist/sdk/src/jsx-dev-runtime.d.ts",
+  "dist/sdk/src/jsx-runtime.d.ts",
+  "dist/sdk/src/testing.d.ts",
   "dist/testing.js",
 ]) {
   if (!packedFiles.has(expectedFile)) {

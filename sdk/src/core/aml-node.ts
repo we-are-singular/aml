@@ -1,5 +1,5 @@
-const AML_NODE_BRAND = Symbol.for("@aml/sdk/node")
-const AML_PRIMITIVE_KIND = Symbol.for("@aml/sdk/primitive-kind")
+const AML_NODE_BRAND = Symbol.for("@aml-jsx/sdk/node")
+const AML_PRIMITIVE_KIND = Symbol.for("@aml-jsx/sdk/primitive-kind")
 type AmlPrimitiveKind =
   | "agent"
   | "context"
@@ -31,9 +31,7 @@ export type AmlRenderable =
 /**
  * Function-component contract used by the AML JSX runtime.
  */
-export type AmlComponent<Props = Record<string, unknown>> = (
-  props: Props,
-) => AmlRenderable
+export type AmlComponent<Props = Record<string, unknown>> = (props: Props) => AmlRenderable
 
 /**
  * Immutable component props after JSX child normalization.
@@ -58,10 +56,7 @@ export class AmlNode<Props = Record<string, unknown>> {
   /**
    * Captures a component reference and immutable props without invoking it.
    */
-  constructor(
-    type: AmlComponent<Props>,
-    props: Props & { children?: AmlRenderable },
-  ) {
+  constructor(type: AmlComponent<Props>, props: Props & { children?: AmlRenderable }) {
     this.type = type
     this.props = Object.freeze({ ...props })
     Object.defineProperty(this, "$$typeof", { value: AML_NODE_BRAND })
@@ -72,20 +67,13 @@ export class AmlNode<Props = Record<string, unknown>> {
    * Recognizes AML nodes across physical copies of the SDK package.
    */
   static is(value: unknown): value is AmlNode {
-    return (
-      typeof value === "object" &&
-      value !== null &&
-      Reflect.get(value, "$$typeof") === AML_NODE_BRAND
-    )
+    return typeof value === "object" && value !== null && Reflect.get(value, "$$typeof") === AML_NODE_BRAND
   }
 
   /**
    * Marks a built-in component for runtime-owned primitive evaluation.
    */
-  static markPrimitive(
-    component: AmlComponent<any>,
-    kind: AmlPrimitiveKind,
-  ): void {
+  static markPrimitive(component: AmlComponent<any>, kind: AmlPrimitiveKind): void {
     Object.defineProperty(component, AML_PRIMITIVE_KIND, {
       value: kind,
     })
@@ -94,9 +82,7 @@ export class AmlNode<Props = Record<string, unknown>> {
   /**
    * Returns a previously registered primitive kind without invoking the component.
    */
-  static primitiveKind(
-    component: AmlComponent<any>,
-  ): AmlPrimitiveKind | undefined {
+  static primitiveKind(component: AmlComponent<any>): AmlPrimitiveKind | undefined {
     const kind = (
       component as AmlComponent<any> & {
         readonly [AML_PRIMITIVE_KIND]?: unknown

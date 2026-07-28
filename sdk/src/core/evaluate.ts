@@ -11,15 +11,10 @@ import { ComponentEvaluationContext } from "./component-evaluation-context.js"
  * component, and detached calls reject after AML observes its completion.
  */
 export function evaluate(value: AmlRenderable): Promise<string>
-export function evaluate<
-  Schema extends AmlModelSchema<unknown, unknown>,
->(
+export function evaluate<Schema extends AmlModelSchema<unknown, unknown>>(
   value: AmlRenderable,
-  schema: Schema,
+  schema: Schema
 ): Promise<StandardSchemaV1.InferOutput<Schema>>
-export function evaluate(
-  value: AmlRenderable,
-  schema?: AmlModelSchema<unknown, unknown>,
-): Promise<unknown> {
+export function evaluate(value: AmlRenderable, schema?: AmlModelSchema<unknown, unknown>): Promise<unknown> {
   return ComponentEvaluationContext.evaluate(value, schema)
 }

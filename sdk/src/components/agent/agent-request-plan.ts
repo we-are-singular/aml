@@ -57,10 +57,7 @@ export class AgentRequestPlan {
     const systemFragments: string[] = []
 
     // Runtime and Agent system text precede resolved <System> descendants.
-    for (const fixedSystem of [
-      input.runtimeSystem,
-      input.props.system,
-    ]) {
+    for (const fixedSystem of [input.runtimeSystem, input.props.system]) {
       const text = fixedSystem?.trim()
 
       if (text) {
@@ -71,13 +68,11 @@ export class AgentRequestPlan {
     systemFragments.push(...input.systemFragments)
 
     const prompt = input.prompt.trim()
-    const followUps = input.followUps.map((followUp) => {
+    const followUps = input.followUps.map(followUp => {
       const text = followUp.trim()
 
       if (text.length === 0) {
-        throw new EvaluationError(
-          "<FollowUp> must resolve to non-empty text",
-        )
+        throw new EvaluationError("<FollowUp> must resolve to non-empty text")
       }
 
       return text
@@ -85,23 +80,13 @@ export class AgentRequestPlan {
     const turnCount = 1 + followUps.length
 
     if (input.maxTurns !== 0 && turnCount > input.maxTurns) {
-      throw new EvaluationError(
-        `Agent ${input.trace.spanId} exceeded maxTurnsPerAgent ${input.maxTurns}`,
-      )
+      throw new EvaluationError(`Agent ${input.trace.spanId} exceeded maxTurnsPerAgent ${input.maxTurns}`)
     }
 
-    const tools = instrumentAgentTools(
-      input.tools,
-      input.context,
-      input.trace,
-    )
+    const tools = instrumentAgentTools(input.tools, input.context, input.trace)
     const request: AgentRequest = Object.freeze({
-      ...(followUps.length === 0
-        ? {}
-        : { followUps: Object.freeze(followUps) }),
-      ...(input.props.model === undefined
-        ? {}
-        : { model: input.props.model }),
+      ...(followUps.length === 0 ? {} : { followUps: Object.freeze(followUps) }),
+      ...(input.props.model === undefined ? {} : { model: input.props.model }),
       mcpServers: input.mcpServers,
       ...(input.output === undefined
         ? {}
@@ -118,9 +103,7 @@ export class AgentRequestPlan {
     })
     const context: AgentExecutionContext = Object.freeze({
       events: input.context.events,
-      ...(input.sandbox === undefined
-        ? {}
-        : { sandbox: input.sandbox }),
+      ...(input.sandbox === undefined ? {} : { sandbox: input.sandbox }),
       signal: input.context.signal,
       trace: input.trace,
     })
@@ -135,14 +118,8 @@ export class AgentRequestPlan {
 
     for (const server of input.mcpServers) {
       input.context.traceEvent(input.trace, "capability.mcp", {
-        kind:
-          server.kind === "named"
-            ? "named"
-            : server.definition.transport.type,
-        name:
-          server.kind === "named"
-            ? server.name
-            : server.definition.name,
+        kind: server.kind === "named" ? "named" : server.definition.transport.type,
+        name: server.kind === "named" ? server.name : server.definition.name,
       })
     }
 

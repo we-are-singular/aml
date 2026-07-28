@@ -1,34 +1,45 @@
 {
   "name": "agent-markup-language",
   "private": true,
-  "type": "module",
   "workspaces": [
     "apps/*",
     "examples",
     "sdk",
     "providers/*/*"
   ],
+  "type": "module",
   "scripts": {
     "build": "turbo run build",
-    "example": "turbo run example --filter=@aml/examples --",
+    "example": "turbo run example --filter=@aml-jsx/examples --",
+    "format": "oxfmt",
+    "format:check": "oxfmt --check",
+    "lint": "npm run typecheck && oxlint .",
+    "lint:fix": "oxlint --fix .",
     "pack:check": "turbo run package:check",
+    "prepare": "husky",
     "test": "turbo run test",
     "typecheck": "turbo run typecheck"
   },
-  "engines": {
-    "node": ">=26.0.0",
-    "npm": ">=11.0.0"
-  },
-  "packageManager": "npm@11.18.0",
-  "overrides": {
-    "@hono/node-server": "2.0.12"
-  },
   "devDependencies": {
+    "@commitlint/cli": "^21.2.1",
+    "@commitlint/config-conventional": "^21.2.0",
     "@types/node": "^26.1.1",
+    "husky": "^9.1.7",
+    "lint-staged": "^17.2.0",
+    "oxfmt": "^0.61.0",
+    "oxlint": "^1.76.0",
     "turbo": "^2.10.7",
     "typescript": "^7.0.2",
     "vite": "^8.1.5",
     "vite-node": "^6.0.0",
     "vitest": "^4.1.10"
-  }
+  },
+  "overrides": {
+    "@hono/node-server": "2.0.12"
+  },
+  "engines": {
+    "node": ">=26.0.0",
+    "npm": ">=11.0.0"
+  },
+  "packageManager": "npm@11.18.0"
 }

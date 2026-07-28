@@ -1,7 +1,4 @@
-import {
-  AmlNode,
-  type AmlRenderable,
-} from "../../core/aml-node.js"
+import { AmlNode, type AmlRenderable } from "../../core/aml-node.js"
 import type { AgentProvider } from "./agent-provider.js"
 
 /**

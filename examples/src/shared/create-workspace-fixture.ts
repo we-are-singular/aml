@@ -1,13 +1,5 @@
-import {
-  type AgentExecutionContext,
-  type AgentProvider,
-  type AgentRequest,
-  type SandboxSession,
-} from "@aml/sdk"
-import {
-  DeterministicSandboxProvider,
-  DeterministicWorkspaceProvider,
-} from "@aml/sdk/testing"
+import { type AgentExecutionContext, type AgentProvider, type AgentRequest, type SandboxSession } from "@aml-jsx/sdk"
+import { DeterministicSandboxProvider, DeterministicWorkspaceProvider } from "@aml-jsx/sdk/testing"
 
 interface ReviewWorkspace {
   readonly findings: string[]
@@ -26,30 +18,24 @@ export function createWorkspaceFixture() {
   const workspace = new DeterministicWorkspaceProvider({
     createHandle: () => durable,
   })
-  const sandbox =
-    new DeterministicSandboxProvider<AttachedSandboxHandle>({
-      createHandle(request, acquisition) {
-        if (request.workspace?.handle !== durable) {
-          throw new Error(
-            "Sandbox did not receive the active Workspace materialization",
-          )
-        }
+  const sandbox = new DeterministicSandboxProvider<AttachedSandboxHandle>({
+    createHandle(request, acquisition) {
+      if (request.workspace?.handle !== durable) {
+        throw new Error("Sandbox did not receive the active Workspace materialization")
+      }
 
-        return {
-          acquisition,
-          workspace: request.workspace.handle as ReviewWorkspace,
-        }
-      },
-    })
+      return {
+        acquisition,
+        workspace: request.workspace.handle as ReviewWorkspace,
+      }
+    },
+  })
 
   class WorkspaceAgent implements AgentProvider {
     readonly name = "workspace-example"
 
-    supportsSandbox(
-      session: SandboxSession,
-    ): session is SandboxSession<AttachedSandboxHandle> {
-      const handle =
-        session.lease.handle as Partial<AttachedSandboxHandle>
+    supportsSandbox(session: SandboxSession): session is SandboxSession<AttachedSandboxHandle> {
+      const handle = session.lease.handle as Partial<AttachedSandboxHandle>
       return (
         typeof handle === "object" &&
         handle !== null &&
@@ -58,10 +44,7 @@ export function createWorkspaceFixture() {
       )
     }
 
-    async run(
-      request: AgentRequest,
-      context: AgentExecutionContext,
-    ): Promise<{ text: string }> {
+    async run(request: AgentRequest, context: AgentExecutionContext): Promise<{ text: string }> {
       const session = context.sandbox
 
       if (session === undefined || !this.supportsSandbox(session)) {

@@ -1,32 +1,21 @@
 import { randomUUID } from "node:crypto"
 
-import {
-  Agent,
-  AmlRuntime,
-  defineMcpServer,
-  defineTool,
-  evaluate,
-  FollowUp,
-  Mcp,
-  Tool,
-} from "@aml/sdk"
-import { createAgentExecutionContext } from "@aml/sdk/testing"
+import { Agent, AmlRuntime, defineMcpServer, defineTool, evaluate, FollowUp, Mcp, Tool } from "@aml-jsx/sdk"
+import { createAgentExecutionContext } from "@aml-jsx/sdk/testing"
 import { expect, it } from "vitest"
 import { z } from "zod"
 
 import { opencodeAgent } from "../src/index.js"
 import { OpenCodeToolBridge } from "../src/opencode-tool-bridge.js"
 
-const liveTest =
-  process.env.AML_OPENCODE_LIVE === "1" ? it : it.skip
+const liveTest = process.env.AML_OPENCODE_LIVE === "1" ? it : it.skip
 
 liveTest(
   "retains conversation history across real OpenCode FollowUps",
   async () => {
     const secret = randomUUID()
     const provider = opencodeAgent({
-      model:
-        process.env.AML_OPENCODE_MODEL ?? "opencode-go/minimax-m3",
+      model: process.env.AML_OPENCODE_MODEL ?? "opencode-go/minimax-m3",
       server: { port: 0, timeout: 15_000 },
     })
 
@@ -36,10 +25,8 @@ liveTest(
       }).evaluate(
         <Agent>
           Remember the exact token "{secret}". Reply only with acknowledged.
-          <FollowUp>
-            Return only the exact token from the preceding message.
-          </FollowUp>
-        </Agent>,
+          <FollowUp>Return only the exact token from the preceding message.</FollowUp>
+        </Agent>
       )
 
       expect(output.trim()).toBe(secret)
@@ -47,7 +34,7 @@ liveTest(
       await provider.close()
     }
   },
-  120_000,
+  120_000
 )
 
 liveTest(
@@ -65,8 +52,7 @@ liveTest(
       },
     })
     const provider = opencodeAgent({
-      model:
-        process.env.AML_OPENCODE_MODEL ?? "opencode-go/minimax-m3",
+      model: process.env.AML_OPENCODE_MODEL ?? "opencode-go/minimax-m3",
       server: { port: 0, timeout: 15_000 },
     })
 
@@ -76,9 +62,8 @@ liveTest(
       }).evaluate(
         <Agent>
           <Tool use={lookupLabel} />
-          Use lookup_aml_fixture_label to read the current integration
-          fixture label. Return only that label.
-        </Agent>,
+          Use lookup_aml_fixture_label to read the current integration fixture label. Return only that label.
+        </Agent>
       )
 
       expect(output.trim()).toBe(expectedLabel)
@@ -87,7 +72,7 @@ liveTest(
       await provider.close()
     }
   },
-  120_000,
+  120_000
 )
 
 liveTest(
@@ -99,34 +84,28 @@ liveTest(
       proof: z.string(),
     })
     const provider = opencodeAgent({
-      model:
-        process.env.AML_OPENCODE_MODEL ?? "opencode-go/minimax-m3",
+      model: process.env.AML_OPENCODE_MODEL ?? "opencode-go/minimax-m3",
       server: { port: 0, timeout: 15_000 },
     })
 
     async function StructuredProof() {
       const result = await evaluate(
-        <Agent>
-          Return proof "{secret}" and count 7 as the requested structured
-          result.
-        </Agent>,
-        Result,
+        <Agent>Return proof "{secret}" and count 7 as the requested structured result.</Agent>,
+        Result
       )
 
       return `${result.proof}:${result.count}`
     }
 
     try {
-      await expect(
-        new AmlRuntime({ agentProvider: provider }).evaluate(
-          <StructuredProof />,
-        ),
-      ).resolves.toBe(`${secret}:7`)
+      await expect(new AmlRuntime({ agentProvider: provider }).evaluate(<StructuredProof />)).resolves.toBe(
+        `${secret}:7`
+      )
     } finally {
       await provider.close()
     }
   },
-  120_000,
+  120_000
 )
 
 liveTest(
@@ -154,7 +133,7 @@ liveTest(
           runId: "mcp-live",
           spanId: "mcp-live-1",
         },
-      }),
+      })
     )
     const connection = await bridge.start(controller.signal)
     const server = defineMcpServer({
@@ -166,8 +145,7 @@ liveTest(
       },
     })
     const provider = opencodeAgent({
-      model:
-        process.env.AML_OPENCODE_MODEL ?? "opencode-go/minimax-m3",
+      model: process.env.AML_OPENCODE_MODEL ?? "opencode-go/minimax-m3",
       server: { port: 0, timeout: 15_000 },
     })
 
@@ -177,10 +155,9 @@ liveTest(
       }).evaluate(
         <Agent>
           <Mcp use={server} />
-          Use the lookup_configured_mcp_label tool from the aml-proof MCP
-          server to read the current integration fixture label. Return only
-          that label.
-        </Agent>,
+          Use the lookup_configured_mcp_label tool from the aml-proof MCP server to read the current integration fixture
+          label. Return only that label.
+        </Agent>
       )
 
       expect(output.trim()).toBe(expectedLabel)
@@ -192,5 +169,5 @@ liveTest(
       await bridge.close()
     }
   },
-  120_000,
+  120_000
 )

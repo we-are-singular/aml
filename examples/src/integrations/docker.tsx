@@ -1,14 +1,7 @@
 import { resolve } from "node:path"
 
-import {
-  dockerSandbox,
-  supportsDockerSandbox,
-} from "@aml/sandbox-docker"
-import {
-  Agent,
-  Sandbox,
-} from "@aml/sdk"
-import { DeterministicAgentProvider } from "@aml/sdk/testing"
+import { Agent, dockerSandbox, Sandbox, supportsDockerSandbox } from "@aml-jsx/sdk"
+import { DeterministicAgentProvider } from "@aml-jsx/sdk/testing"
 
 /**
  * Creates the real Docker boundary shared by the example's AML tree.
@@ -46,13 +39,11 @@ const ExampleProvider = new DeterministicAgentProvider({
       {
         cwd: sandbox.cwd,
         signal: context.signal,
-      },
+      }
     )
 
     if (result.exitCode !== 0) {
-      throw new Error(
-        `Docker inspection failed: ${result.stderr || result.stdout}`,
-      )
+      throw new Error(`Docker inspection failed: ${result.stderr || result.stdout}`)
     }
 
     return { text: result.stdout.trim() }

@@ -13,7 +13,7 @@ const NOOP_EVENTS: AmlEventSubscriber = Object.freeze({
  * absorbs additions to the portable Agent execution contract.
  */
 export function createAgentExecutionContext(
-  overrides: Partial<AgentExecutionContext> = {},
+  overrides: Partial<AgentExecutionContext> = {}
 ): Readonly<AgentExecutionContext> {
   const trace = overrides.trace ?? {
     runId: "agent-test",
@@ -22,15 +22,10 @@ export function createAgentExecutionContext(
 
   return Object.freeze({
     events: overrides.events ?? NOOP_EVENTS,
-    ...(overrides.sandbox === undefined
-      ? {}
-      : { sandbox: overrides.sandbox }),
-    signal:
-      overrides.signal ?? new AbortController().signal,
+    ...(overrides.sandbox === undefined ? {} : { sandbox: overrides.sandbox }),
+    signal: overrides.signal ?? new AbortController().signal,
     trace: Object.freeze({
-      ...(trace.parentSpanId === undefined
-        ? {}
-        : { parentSpanId: trace.parentSpanId }),
+      ...(trace.parentSpanId === undefined ? {} : { parentSpanId: trace.parentSpanId }),
       runId: trace.runId,
       spanId: trace.spanId,
     }),

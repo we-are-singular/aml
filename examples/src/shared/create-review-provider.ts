@@ -1,7 +1,5 @@
-import { codexAgent } from "@aml/agent-codex"
-import { opencodeAgent } from "@aml/agent-opencode"
-import type { AgentProvider } from "@aml/sdk"
-import { DeterministicAgentProvider } from "@aml/sdk/testing"
+import { type AgentProvider, codexAgent, opencodeAgent } from "@aml-jsx/sdk"
+import { DeterministicAgentProvider } from "@aml-jsx/sdk/testing"
 
 /**
  * Selects one provider without changing the review workflow that consumes it.
@@ -9,15 +7,13 @@ import { DeterministicAgentProvider } from "@aml/sdk/testing"
 export function createReviewProvider(name: string): AgentProvider {
   if (name === "codex") {
     return codexAgent({
-      model:
-        process.env.AML_CODEX_MODEL ?? "gpt-5.3-codex-spark",
+      model: process.env.AML_CODEX_MODEL ?? "gpt-5.3-codex-spark",
     })
   }
 
   if (name === "opencode") {
     return opencodeAgent({
-      model:
-        process.env.AML_OPENCODE_MODEL ?? "opencode-go/minimax-m3",
+      model: process.env.AML_OPENCODE_MODEL ?? "opencode-go/minimax-m3",
       server: { port: 0, timeout: 15_000 },
     })
   }
@@ -36,7 +32,7 @@ export function createReviewProvider(name: string): AgentProvider {
           {
             signal: context.signal,
             trace: context.trace,
-          },
+          }
         )
 
         if (request.system.includes("correctness")) {
@@ -51,8 +47,7 @@ export function createReviewProvider(name: string): AgentProvider {
       }
 
       return {
-        text:
-          "calculateInvoiceTotal divides the sum by the line count, so callers receive an average. Remove the division or rename the API to match. AML_REVIEW_COMPLETE",
+        text: "calculateInvoiceTotal divides the sum by the line count, so callers receive an average. Remove the division or rename the API to match. AML_REVIEW_COMPLETE",
       }
     },
   })

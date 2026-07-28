@@ -36,10 +36,9 @@ export type AmlEventName = keyof AmlEventMap
  * TraceSink carries the per-listener content policy. Awaiting remains a
  * dispatch decision: lifecycle listeners are awaited, while traces are not.
  */
-export type AmlEventListener<Name extends AmlEventName> =
-  Name extends "trace"
-    ? TraceSink
-    : (event: AmlEventMap[Name]) => Promise<void> | void
+export type AmlEventListener<Name extends AmlEventName> = Name extends "trace"
+  ? TraceSink
+  : (event: AmlEventMap[Name]) => Promise<void> | void
 
 /**
  * Subscriber-only view of runtime events.
@@ -48,13 +47,7 @@ export type AmlEventListener<Name extends AmlEventName> =
  * events or observe concurrent evaluations through this boundary.
  */
 export interface AmlEventSubscriber {
-  on<Name extends AmlEventName>(
-    name: Name,
-    listener: AmlEventListener<Name>,
-  ): () => void
+  on<Name extends AmlEventName>(name: Name, listener: AmlEventListener<Name>): () => void
 
-  once<Name extends AmlEventName>(
-    name: Name,
-    listener: AmlEventListener<Name>,
-  ): () => void
+  once<Name extends AmlEventName>(name: Name, listener: AmlEventListener<Name>): () => void
 }

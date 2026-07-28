@@ -25,10 +25,7 @@ describe("Tool", () => {
     const provider = new DeterministicAgentProvider({
       async respond(request, context) {
         expect(request.prompt).toBe("Inspect the customer.")
-        expect(request.tools.map(({ name }) => name)).toEqual([
-          "read",
-          "lookup_customer",
-        ])
+        expect(request.tools.map(({ name }) => name)).toEqual(["read", "lookup_customer"])
 
         const tool = request.tools[1]
         expect(tool).toMatchObject({
@@ -47,10 +44,13 @@ describe("Tool", () => {
         }
 
         await expect(
-          tool.execute({ id: 42 }, {
-            signal: context.signal,
-            trace: context.trace,
-          }),
+          tool.execute(
+            { id: 42 },
+            {
+              signal: context.signal,
+              trace: context.trace,
+            }
+          )
         ).resolves.toEqual({ id: 42, status: "active" })
 
         return { text: "done" }
@@ -63,8 +63,8 @@ describe("Tool", () => {
           <Tool name="read" />
           <Tool use={lookup} />
           Inspect the customer.
-        </Agent>,
-      ),
+        </Agent>
+      )
     ).resolves.toBe("done")
   })
 
@@ -92,24 +92,22 @@ describe("Tool", () => {
           </Agent>
           <Tool name="parent" />
           parent prompt
-        </Agent>,
-      ),
+        </Agent>
+      )
     ).resolves.toBe("done")
   })
 
   it("rejects invalid placement, duplicates, and disallowed names before execution", async () => {
     const provider = new DeterministicAgentProvider()
 
-    await expect(new AmlRuntime().evaluate(<Tool name="read" />)).rejects.toThrow(
-      "<Tool> is only valid inside <Agent>",
-    )
+    await expect(new AmlRuntime().evaluate(<Tool name="read" />)).rejects.toThrow("<Tool> is only valid inside <Agent>")
     await expect(
       new AmlRuntime({ agentProvider: provider }).evaluate(
         <Agent>
           <Tool name="read" />
           <Tool name="read" />
-        </Agent>,
-      ),
+        </Agent>
+      )
     ).rejects.toThrow('Agent declares duplicate Tool "read"')
     await expect(
       new AmlRuntime({
@@ -119,8 +117,8 @@ describe("Tool", () => {
         <Agent>
           <Tool name="read" />
           prompt
-        </Agent>,
-      ),
+        </Agent>
+      )
     ).rejects.toThrow('Tool "read" is not allowed by this runtime')
     expect(provider.calls).toHaveLength(0)
   })
@@ -144,12 +142,7 @@ describe("Tool", () => {
     const derived = Object.assign(Object.create(legitimate), {
       execute: unsafeExecute,
     })
-    const lookalikes = [
-      structuralTool,
-      { ...legitimate, execute: unsafeExecute },
-      derived,
-      new Proxy(legitimate, {}),
-    ]
+    const lookalikes = [structuralTool, { ...legitimate, execute: unsafeExecute }, derived, new Proxy(legitimate, {})]
 
     expect(legitimate.__amlTool).toBe(true)
     expect(Object.keys(legitimate)).not.toContain("__amlTool")
@@ -160,8 +153,8 @@ describe("Tool", () => {
           <Agent>
             <Tool use={lookalike as never} />
             prompt
-          </Agent>,
-        ),
+          </Agent>
+        )
       ).rejects.toThrow("<Tool use> must be a JavaScript Tool")
     }
 
@@ -185,21 +178,17 @@ describe("defineTool", () => {
     }
 
     await expect(objectTool.execute({ id: 7 }, context)).resolves.toBe(7)
-    await expect(
-      objectTool.execute('{"id":8}', context),
-    ).resolves.toBe(8)
+    await expect(objectTool.execute('{"id":8}', context)).resolves.toBe(8)
     expect(objectExecute).toHaveBeenCalledTimes(2)
 
     const stringTool = defineTool({
       description: "Echo a string",
       input: z.string(),
       name: "echo",
-      execute: async (value) => value,
+      execute: async value => value,
     })
 
-    await expect(
-      stringTool.execute('{"not":"decoded"}', context),
-    ).resolves.toBe('{"not":"decoded"}')
+    await expect(stringTool.execute('{"not":"decoded"}', context)).resolves.toBe('{"not":"decoded"}')
 
     const emptyTool = defineTool({
       description: "Accept omitted input",
@@ -209,9 +198,7 @@ describe("defineTool", () => {
     })
 
     await expect(emptyTool.execute(undefined, context)).resolves.toBe("ok")
-    await expect(
-      objectTool.execute("not JSON", context),
-    ).rejects.toBeInstanceOf(ToolInputError)
+    await expect(objectTool.execute("not JSON", context)).rejects.toBeInstanceOf(ToolInputError)
     expect(objectExecute).toHaveBeenCalledTimes(2)
   })
 
@@ -220,9 +207,7 @@ describe("defineTool", () => {
       description: "Return a normalized record",
       input: z.object({}),
       name: "normalize",
-      output: z
-        .object({ value: z.string() })
-        .transform(({ value }) => ({ value: value.toUpperCase() })),
+      output: z.object({ value: z.string() }).transform(({ value }) => ({ value: value.toUpperCase() })),
       execute: async () => ({ value: "ready" }),
     })
     const context = {
@@ -241,9 +226,7 @@ describe("defineTool", () => {
       execute: async () => ({ value: Number.NaN }),
     })
 
-    await expect(invalid.execute({}, context)).rejects.toBeInstanceOf(
-      ToolOutputError,
-    )
+    await expect(invalid.execute({}, context)).rejects.toBeInstanceOf(ToolOutputError)
 
     const schemaRejected = defineTool({
       description: "Fail output validation",
@@ -253,9 +236,7 @@ describe("defineTool", () => {
       execute: async () => ({ value: "wrong" }) as never,
     })
 
-    await expect(
-      schemaRejected.execute({}, context),
-    ).rejects.toBeInstanceOf(ToolOutputError)
+    await expect(schemaRejected.execute({}, context)).rejects.toBeInstanceOf(ToolOutputError)
   })
 
   it("validates definition boundaries synchronously", () => {
@@ -265,7 +246,7 @@ describe("defineTool", () => {
         input: z.object({}),
         name: " invalid",
         execute: async () => "never",
-      }),
+      })
     ).toThrow("Tool name must be a non-empty normalized string")
 
     expect(() =>
@@ -280,7 +261,7 @@ describe("defineTool", () => {
         } as never,
         name: "missing_json_schema",
         execute: async () => "never",
-      }),
+      })
     ).toThrow("must implement Standard JSON Schema")
   })
 
@@ -291,11 +272,7 @@ describe("defineTool", () => {
       trace: { runId: "run", spanId: "span" },
     }
 
-    for (const result of [
-      {},
-      [],
-      { issues: [{}] },
-    ]) {
+    for (const result of [{}, [], { issues: [{}] }]) {
       const tool = defineTool({
         description: "Use a malformed schema",
         input: {
@@ -312,9 +289,7 @@ describe("defineTool", () => {
         execute,
       })
 
-      await expect(tool.execute({}, context)).rejects.toBeInstanceOf(
-        ToolInputError,
-      )
+      await expect(tool.execute({}, context)).rejects.toBeInstanceOf(ToolInputError)
     }
 
     const accessorError = new Error("value getter failed")
@@ -378,10 +353,7 @@ describe("defineTool", () => {
     }
 
     await expect(tool.execute({ ignored: true }, context)).resolves.toBe(42)
-    expect(execute).toHaveBeenCalledWith(
-      { id: 42 },
-      context,
-    )
+    expect(execute).toHaveBeenCalledWith({ id: 42 }, context)
   })
 
   it("attributes malformed generated input schemas to Tool definition", () => {
@@ -400,12 +372,8 @@ describe("defineTool", () => {
         } as never,
         name: "invalid_declaration",
         execute: async () => "never",
-      }),
-    ).toThrow(
-      new TypeError(
-        'Tool "invalid_declaration" input JSON Schema is invalid',
-      ),
-    )
+      })
+    ).toThrow(new TypeError('Tool "invalid_declaration" input JSON Schema is invalid'))
   })
 
   it("preserves prototype-sensitive keys and deeply nested JSON", async () => {
@@ -440,9 +408,7 @@ describe("defineTool", () => {
 
     expect(Object.getPrototypeOf(sensitiveResult)).toBe(Object.prototype)
     expect(Object.hasOwn(sensitiveResult as object, "__proto__")).toBe(true)
-    expect(JSON.stringify(sensitiveResult)).toBe(
-      '{"__proto__":{"polluted":true}}',
-    )
+    expect(JSON.stringify(sensitiveResult)).toBe('{"__proto__":{"polluted":true}}')
 
     let current: unknown = deepResult
 

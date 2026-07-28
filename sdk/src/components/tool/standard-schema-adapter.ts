@@ -1,7 +1,4 @@
-import type {
-  StandardJSONSchemaV1,
-  StandardSchemaV1,
-} from "@standard-schema/spec"
+import type { StandardJSONSchemaV1, StandardSchemaV1 } from "@standard-schema/spec"
 
 interface SchemaSuccess {
   readonly success: true
@@ -25,9 +22,7 @@ export type SchemaValidation = SchemaFailure | SchemaSuccess
  * and converts their structural result union into one AML-owned result type.
  */
 export class StandardSchemaAdapter {
-  readonly #jsonInput:
-    | StandardJSONSchemaV1.Converter["input"]
-    | undefined
+  readonly #jsonInput: StandardJSONSchemaV1.Converter["input"] | undefined
   readonly #jsonSchemaReceiver: object | undefined
   readonly #label: string
   readonly #standardReceiver: object
@@ -39,11 +34,7 @@ export class StandardSchemaAdapter {
    * Input schemas require JSON Schema because providers must advertise them;
    * output-only schemas need validation but are never sent to a model.
    */
-  constructor(
-    schema: StandardSchemaV1,
-    requireJsonSchema: boolean,
-    label = "Tool schema",
-  ) {
+  constructor(schema: StandardSchemaV1, requireJsonSchema: boolean, label = "Tool schema") {
     this.#label = label
 
     if (typeof schema !== "object" || schema === null) {
@@ -53,24 +44,15 @@ export class StandardSchemaAdapter {
     const standard = Reflect.get(schema, "~standard")
 
     if (typeof standard !== "object" || standard === null) {
-      throw new TypeError(
-        `${this.#label} must implement Standard Schema`,
-      )
+      throw new TypeError(`${this.#label} must implement Standard Schema`)
     }
 
     const version = Reflect.get(standard, "version")
     const vendor = Reflect.get(standard, "vendor")
     const validate = Reflect.get(standard, "validate")
 
-    if (
-      version !== 1 ||
-      typeof vendor !== "string" ||
-      vendor.length === 0 ||
-      typeof validate !== "function"
-    ) {
-      throw new TypeError(
-        `${this.#label} has an invalid Standard Schema contract`,
-      )
+    if (version !== 1 || typeof vendor !== "string" || vendor.length === 0 || typeof validate !== "function") {
+      throw new TypeError(`${this.#label} has an invalid Standard Schema contract`)
     }
 
     this.#standardReceiver = standard
@@ -85,18 +67,13 @@ export class StandardSchemaAdapter {
 
     const jsonSchema = Reflect.get(standard, "jsonSchema")
     const jsonInput =
-      typeof jsonSchema === "object" && jsonSchema !== null
-        ? Reflect.get(jsonSchema, "input")
-        : undefined
+      typeof jsonSchema === "object" && jsonSchema !== null ? Reflect.get(jsonSchema, "input") : undefined
 
     if (typeof jsonInput !== "function") {
-      throw new TypeError(
-        `${this.#label} must implement Standard JSON Schema`,
-      )
+      throw new TypeError(`${this.#label} must implement Standard JSON Schema`)
     }
 
-    this.#jsonInput =
-      jsonInput as StandardJSONSchemaV1.Converter["input"]
+    this.#jsonInput = jsonInput as StandardJSONSchemaV1.Converter["input"]
     this.#jsonSchemaReceiver = jsonSchema
   }
 
@@ -105,34 +82,23 @@ export class StandardSchemaAdapter {
    */
   inputJsonSchema(): Record<string, unknown> {
     if (!this.#jsonInput || !this.#jsonSchemaReceiver) {
-      throw new TypeError(
-        `${this.#label} has no input JSON Schema converter`,
-      )
+      throw new TypeError(`${this.#label} has no input JSON Schema converter`)
     }
 
-    return Reflect.apply(this.#jsonInput, this.#jsonSchemaReceiver, [
-      { target: "draft-2020-12" },
-    ]) as Record<string, unknown>
+    return Reflect.apply(this.#jsonInput, this.#jsonSchemaReceiver, [{ target: "draft-2020-12" }]) as Record<
+      string,
+      unknown
+    >
   }
 
   /**
    * Validates one unknown value and rejects malformed schema implementations.
    */
   async validate(value: unknown): Promise<SchemaValidation> {
-    const rawResult: unknown = await Reflect.apply(
-      this.#validate,
-      this.#standardReceiver,
-      [value],
-    )
+    const rawResult: unknown = await Reflect.apply(this.#validate, this.#standardReceiver, [value])
 
-    if (
-      typeof rawResult !== "object" ||
-      rawResult === null ||
-      Array.isArray(rawResult)
-    ) {
-      throw new TypeError(
-        `${this.#label} returned an invalid Standard Schema result`,
-      )
+    if (typeof rawResult !== "object" || rawResult === null || Array.isArray(rawResult)) {
+      throw new TypeError(`${this.#label} returned an invalid Standard Schema result`)
     }
 
     // Standard Schema uses the presence of issues to distinguish failure.
@@ -142,15 +108,10 @@ export class StandardSchemaAdapter {
       if (
         !Array.isArray(issues) ||
         issues.some(
-          (issue) =>
-            typeof issue !== "object" ||
-            issue === null ||
-            typeof Reflect.get(issue, "message") !== "string",
+          issue => typeof issue !== "object" || issue === null || typeof Reflect.get(issue, "message") !== "string"
         )
       ) {
-        throw new TypeError(
-          `${this.#label} returned invalid Standard Schema issues`,
-        )
+        throw new TypeError(`${this.#label} returned invalid Standard Schema issues`)
       }
 
       return Object.freeze({
@@ -162,9 +123,7 @@ export class StandardSchemaAdapter {
     // A missing value is not a successful validation of undefined. Reflect.has
     // still accepts conformant class results whose value getter is inherited.
     if (!Reflect.has(rawResult, "value")) {
-      throw new TypeError(
-        `${this.#label} returned a success result without a value`,
-      )
+      throw new TypeError(`${this.#label} returned a success result without a value`)
     }
 
     const resultValue = Reflect.get(rawResult, "value")

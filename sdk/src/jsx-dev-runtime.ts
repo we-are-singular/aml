@@ -1,8 +1,5 @@
-import {
-  type AmlComponent,
-  AmlNode,
-  type AmlRenderable,
-} from "./core/aml-node.js"
+import type { AmlNode } from "./core/aml-node.js"
+import { type AmlComponent, type AmlRenderable } from "./core/aml-node.js"
 import { Fragment, jsx } from "./jsx-runtime.js"
 
 /**
@@ -17,7 +14,7 @@ export function jsxDEV<Props>(
   _key?: string,
   _isStaticChildren?: boolean,
   _source?: unknown,
-  _self?: unknown,
+  _self?: unknown
 ): AmlNode<Props> {
   return jsx(type, props)
 }

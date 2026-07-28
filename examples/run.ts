@@ -1,25 +1,17 @@
 import { fileURLToPath } from "node:url"
 
-import {
-  AmlRuntime,
-  createConsoleTracer,
-  type AmlRenderable,
-} from "@aml/sdk"
+import { AmlRuntime, createConsoleTracer, type AmlRenderable } from "@aml-jsx/sdk"
 
 interface ExampleModule {
   readonly default: () => AmlRenderable
 }
 
-const exampleModules = import.meta.glob<ExampleModule>(
-  "./src/{capabilities,core,integrations,resources}/*.tsx",
-)
+const exampleModules = import.meta.glob<ExampleModule>("./src/{capabilities,core,integrations,resources}/*.tsx")
 
 /**
  * Evaluates one freshly built AML tree with the shared example instrumentation.
  */
-export async function evaluateExample(
-  factory: ExampleModule["default"],
-): Promise<string> {
+export async function evaluateExample(factory: ExampleModule["default"]): Promise<string> {
   const runtime = new AmlRuntime()
 
   // Every example uses the same public event API an application or tree UI
@@ -33,7 +25,7 @@ export async function evaluateExample(
  */
 export function listExamples(): readonly string[] {
   return Object.keys(exampleModules)
-    .map((path) => path.slice(path.lastIndexOf("/") + 1, -".tsx".length))
+    .map(path => path.slice(path.lastIndexOf("/") + 1, -".tsx".length))
     .sort()
 }
 
@@ -41,14 +33,10 @@ export function listExamples(): readonly string[] {
  * Loads and evaluates one example by its filename-derived title.
  */
 export async function runExample(title: string): Promise<string> {
-  const matches = Object.entries(exampleModules).filter(([path]) =>
-    path.endsWith(`/${title}.tsx`),
-  )
+  const matches = Object.entries(exampleModules).filter(([path]) => path.endsWith(`/${title}.tsx`))
 
   if (matches.length === 0) {
-    throw new TypeError(
-      `Unknown example "${title}". Available examples: ${listExamples().join(", ")}`,
-    )
+    throw new TypeError(`Unknown example "${title}". Available examples: ${listExamples().join(", ")}`)
   }
 
   // Filenames are the public titles, so duplicates across groups would make
@@ -82,9 +70,6 @@ async function main(): Promise<void> {
 
 // Vitest imports the orchestration functions above, so only direct execution
 // may consume argv and print to the terminal.
-if (
-  process.argv[1] !== undefined &&
-  fileURLToPath(import.meta.url) === process.argv[1]
-) {
+if (process.argv[1] !== undefined && fileURLToPath(import.meta.url) === process.argv[1]) {
   await main()
 }

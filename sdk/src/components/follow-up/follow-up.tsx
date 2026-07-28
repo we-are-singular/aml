@@ -1,7 +1,4 @@
-import {
-  AmlNode,
-  type AmlRenderable,
-} from "../../core/aml-node.js"
+import { AmlNode, type AmlRenderable } from "../../core/aml-node.js"
 
 /**
  * Authored content for one later input in its containing Agent session.

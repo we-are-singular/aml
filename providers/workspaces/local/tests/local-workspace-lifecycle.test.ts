@@ -2,14 +2,7 @@ import { mkdtemp, rm } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import path from "node:path"
 
-import {
-  afterEach,
-  beforeEach,
-  describe,
-  expect,
-  it,
-  vi,
-} from "vitest"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 const lockState = vi.hoisted(() => ({
   acquire: undefined as
@@ -19,7 +12,7 @@ const lockState = vi.hoisted(() => ({
           readonly onCompromised: (error: Error) => void
           readonly stale: number
           readonly update: number
-        },
+        }
       ) => Promise<() => Promise<void>>)
     | undefined,
   options: undefined as
@@ -40,7 +33,7 @@ vi.mock("proper-lockfile", () => ({
         readonly onCompromised: (error: Error) => void
         readonly stale: number
         readonly update: number
-      },
+      }
     ) {
       lockState.options = options
       return await lockState.acquire?.(directory, options)
@@ -61,11 +54,7 @@ beforeEach(() => {
 })
 
 afterEach(async () => {
-  await Promise.all(
-    temporaryDirectories.splice(0).map((directory) =>
-      rm(directory, { force: true, recursive: true }),
-    ),
-  )
+  await Promise.all(temporaryDirectories.splice(0).map(directory => rm(directory, { force: true, recursive: true })))
 })
 
 describe("Local Workspace lock lifecycle", () => {
@@ -76,10 +65,7 @@ describe("Local Workspace lock lifecycle", () => {
     const saveError = await lease.save().catch((error: unknown) => error)
 
     expect(saveError).toHaveProperty("cause", compromise)
-    expect(saveError).toHaveProperty(
-      "message",
-      expect.stringContaining("lock was compromised"),
-    )
+    expect(saveError).toHaveProperty("message", expect.stringContaining("lock was compromised"))
     await expect(lease.release()).resolves.toBeUndefined()
     expect(lockState.releaseCalls).toBe(0)
   })
@@ -90,10 +76,7 @@ describe("Local Workspace lock lifecycle", () => {
     const compromise = new Error("lock stolen after save")
     lockState.options?.onCompromised(compromise)
 
-    await expect(lease.release()).rejects.toHaveProperty(
-      "cause",
-      compromise,
-    )
+    await expect(lease.release()).rejects.toHaveProperty("cause", compromise)
     expect(lockState.releaseCalls).toBe(0)
   })
 
@@ -102,10 +85,7 @@ describe("Local Workspace lock lifecycle", () => {
     const compromise = new Error("cleanup lock compromised")
     lockState.options?.onCompromised(compromise)
 
-    await expect(cleanupLease.release()).rejects.toHaveProperty(
-      "cause",
-      compromise,
-    )
+    await expect(cleanupLease.release()).rejects.toHaveProperty("cause", compromise)
 
     const releaseFailure = new Error("lock directory removal failed")
     lockState.acquire = async () => async () => {
@@ -120,20 +100,15 @@ describe("Local Workspace lock lifecycle", () => {
   })
 
   it("releases a late lock before preserving cancellation", async () => {
-    for (const cleanupFailure of [
-      undefined,
-      new Error("late lock cleanup failed"),
-    ]) {
-      let finishLock:
-        | ((release: () => Promise<void>) => void)
-        | undefined
+    for (const cleanupFailure of [undefined, new Error("late lock cleanup failed")]) {
+      let finishLock: ((release: () => Promise<void>) => void) | undefined
       let markLockStarted: (() => void) | undefined
-      const lockStarted = new Promise<void>((resolve) => {
+      const lockStarted = new Promise<void>(resolve => {
         markLockStarted = resolve
       })
       lockState.acquire = async () => {
         markLockStarted?.()
-        return await new Promise<() => Promise<void>>((resolve) => {
+        return await new Promise<() => Promise<void>>(resolve => {
           finishLock = resolve
         })
       }
@@ -175,16 +150,14 @@ describe("Local Workspace lock lifecycle", () => {
   })
 
   it("attributes compromise during late-cancellation cleanup", async () => {
-    let finishLock:
-      | ((release: () => Promise<void>) => void)
-      | undefined
+    let finishLock: ((release: () => Promise<void>) => void) | undefined
     let markLockStarted: (() => void) | undefined
-    const lockStarted = new Promise<void>((resolve) => {
+    const lockStarted = new Promise<void>(resolve => {
       markLockStarted = resolve
     })
     lockState.acquire = async () => {
       markLockStarted?.()
-      return await new Promise<() => Promise<void>>((resolve) => {
+      return await new Promise<() => Promise<void>>(resolve => {
         finishLock = resolve
       })
     }
@@ -240,9 +213,7 @@ async function acquireLease() {
  * Creates one existing materialization for lifecycle setup.
  */
 async function createTemporaryDirectory(): Promise<string> {
-  const directory = await mkdtemp(
-    path.join(tmpdir(), "aml-local-lifecycle-"),
-  )
+  const directory = await mkdtemp(path.join(tmpdir(), "aml-local-lifecycle-"))
   temporaryDirectories.push(directory)
   return directory
 }

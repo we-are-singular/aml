@@ -58,17 +58,13 @@ describe("defineMcpServer()", () => {
     expect(Object.isFrozen(local.transport)).toBe(true)
     expect(local.__amlMcpServer).toBe(true)
     expect(Object.keys(local)).not.toContain("__amlMcpServer")
-    expect(
-      Object.isFrozen(
-        local.transport.type === "stdio"
-          ? local.transport.args
-          : undefined,
-      ),
-    ).toBe(true)
-    expectTypeOf(local).toMatchTypeOf<Readonly<{
-      name: string
-      transport: unknown
-    }>>()
+    expect(Object.isFrozen(local.transport.type === "stdio" ? local.transport.args : undefined)).toBe(true)
+    expectTypeOf(local).toMatchTypeOf<
+      Readonly<{
+        name: string
+        transport: unknown
+      }>
+    >()
   })
 
   it("captures authority-bearing definition getters exactly once", () => {
@@ -119,13 +115,13 @@ describe("defineMcpServer()", () => {
       defineMcpServer({
         name: " project",
         transport: { command: "node", type: "stdio" },
-      }),
+      })
     ).toThrow("MCP server name must be a non-empty normalized string")
     expect(() =>
       defineMcpServer({
         name: "project",
         transport: { command: "", type: "stdio" },
-      }),
+      })
     ).toThrow("MCP stdio command must be a non-empty normalized string")
     expect(() =>
       defineMcpServer({
@@ -135,7 +131,7 @@ describe("defineMcpServer()", () => {
           command: "node",
           type: "stdio",
         },
-      }),
+      })
     ).toThrow("MCP stdio args must be an array of strings")
     expect(() =>
       defineMcpServer({
@@ -144,7 +140,7 @@ describe("defineMcpServer()", () => {
           type: "streamable-http",
           url: "file:///tmp/server",
         },
-      }),
+      })
     ).toThrow("must use http or https")
   })
 })
@@ -179,25 +175,21 @@ describe("Mcp", () => {
           <Mcp name="github" />
           <Mcp use={configured} />
           Investigate.
-        </Agent>,
-      ),
+        </Agent>
+      )
     ).resolves.toBe("done")
   })
 
   it("scopes grants to the nearest Agent", async () => {
     const child = new DeterministicAgentProvider({
       respond(request) {
-        expect(request.mcpServers).toEqual([
-          { kind: "named", name: "child" },
-        ])
+        expect(request.mcpServers).toEqual([{ kind: "named", name: "child" }])
         return { text: "child output" }
       },
     })
     const parent = new DeterministicAgentProvider({
       respond(request) {
-        expect(request.mcpServers).toEqual([
-          { kind: "named", name: "parent" },
-        ])
+        expect(request.mcpServers).toEqual([{ kind: "named", name: "parent" }])
         expect(request.prompt).toBe("child outputparent prompt")
         return { text: "done" }
       },
@@ -212,20 +204,16 @@ describe("Mcp", () => {
           </Agent>
           <Mcp name="parent" />
           parent prompt
-        </Agent>,
-      ),
+        </Agent>
+      )
     ).resolves.toBe("done")
   })
 
   it("rejects invalid placement, shape, duplicates, and disallowed names", async () => {
     const provider = new DeterministicAgentProvider()
-    const McpWithChildren = Mcp as unknown as (
-      props: Readonly<{ children: string; name: string }>,
-    ) => never
+    const McpWithChildren = Mcp as unknown as (props: Readonly<{ children: string; name: string }>) => never
 
-    await expect(
-      new AmlRuntime().evaluate(<Mcp name="github" />),
-    ).rejects.toThrow("<Mcp> is only valid inside <Agent>")
+    await expect(new AmlRuntime().evaluate(<Mcp name="github" />)).rejects.toThrow("<Mcp> is only valid inside <Agent>")
     await expect(
       new AmlRuntime({ agentProvider: provider }).evaluate(
         <Agent>
@@ -233,16 +221,16 @@ describe("Mcp", () => {
             <Mcp name="github" />
           </System>
           prompt
-        </Agent>,
-      ),
+        </Agent>
+      )
     ).rejects.toThrow("<Mcp> is only valid inside <Agent>")
     await expect(
       new AmlRuntime({ agentProvider: provider }).evaluate(
         <Agent>
           <McpWithChildren name="github">invalid</McpWithChildren>
           prompt
-        </Agent>,
-      ),
+        </Agent>
+      )
     ).rejects.toThrow("<Mcp> does not accept children")
     await expect(
       new AmlRuntime({ agentProvider: provider }).evaluate(
@@ -250,8 +238,8 @@ describe("Mcp", () => {
           <Mcp name="github" />
           <Mcp name="github" />
           prompt
-        </Agent>,
-      ),
+        </Agent>
+      )
     ).rejects.toThrow('Agent declares duplicate MCP server "github"')
     await expect(
       new AmlRuntime({
@@ -261,11 +249,9 @@ describe("Mcp", () => {
         <Agent>
           <Mcp name="github" />
           prompt
-        </Agent>,
-      ),
-    ).rejects.toThrow(
-      'MCP server "github" is not allowed by this runtime',
-    )
+        </Agent>
+      )
+    ).rejects.toThrow('MCP server "github" is not allowed by this runtime')
     expect(provider.calls).toHaveLength(0)
   })
 
@@ -289,8 +275,8 @@ describe("Mcp", () => {
           <Agent>
             <Mcp use={lookalike as never} />
             prompt
-          </Agent>,
-        ),
+          </Agent>
+        )
       ).rejects.toThrow("<Mcp use> must be a defined MCP server")
     }
 
@@ -301,9 +287,7 @@ describe("Mcp", () => {
     const resolveComponent = vi.fn(async () => <Mcp name="project" />)
     const provider = new DeterministicAgentProvider({
       respond(request) {
-        expect(request.mcpServers).toEqual([
-          { kind: "named", name: "project" },
-        ])
+        expect(request.mcpServers).toEqual([{ kind: "named", name: "project" }])
         return { text: "done" }
       },
     })
@@ -313,8 +297,8 @@ describe("Mcp", () => {
         <Agent>
           {resolveComponent()}
           prompt
-        </Agent>,
-      ),
+        </Agent>
+      )
     ).resolves.toBe("done")
     expect(resolveComponent).toHaveBeenCalledOnce()
   })

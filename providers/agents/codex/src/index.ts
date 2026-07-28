@@ -1,9 +1,5 @@
 // Configured provider factory and Codex-specific options.
-export {
-  codexAgent,
-  type CodexAgentOptions,
-  type CodexAgentProvider,
-} from "./codex-agent.js"
+export { codexAgent, type CodexAgentOptions, type CodexAgentProvider } from "./codex-agent.js"
 
 // Narrow construction port for deterministic tests and custom SDK hosts.
 export type {

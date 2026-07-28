@@ -13,27 +13,15 @@ import { LoopEvaluator } from "../components/loop/loop-evaluator.js"
 import type { LoopProps } from "../components/loop/loop.js"
 import { McpCollection } from "../components/mcp/mcp-collection.js"
 import type { McpProps } from "../components/mcp/mcp.js"
-import {
-  type SandboxEvaluationScope,
-  SandboxEvaluator,
-} from "../components/sandbox/sandbox-evaluator.js"
-import type {
-  SandboxProvider,
-  SandboxSession,
-} from "../components/sandbox/sandbox-provider.js"
+import { type SandboxEvaluationScope, SandboxEvaluator } from "../components/sandbox/sandbox-evaluator.js"
+import type { SandboxProvider, SandboxSession } from "../components/sandbox/sandbox-provider.js"
 import type { SandboxProps } from "../components/sandbox/sandbox.js"
-import {
-  type SkillEvaluation,
-  SkillEvaluator,
-} from "../components/skill/skill-evaluator.js"
+import { type SkillEvaluation, SkillEvaluator } from "../components/skill/skill-evaluator.js"
 import type { SystemProps } from "../components/system/system.js"
 import { ToolCollection } from "../components/tool/tool-collection.js"
 import type { AgentJavaScriptTool } from "../components/tool/agent-tool.js"
 import type { ToolProps } from "../components/tool/tool.js"
-import {
-  type WorkspaceEvaluationScope,
-  WorkspaceEvaluator,
-} from "../components/workspace/workspace-evaluator.js"
+import { type WorkspaceEvaluationScope, WorkspaceEvaluator } from "../components/workspace/workspace-evaluator.js"
 import type {
   WorkspaceMaterializationReference,
   WorkspaceProvider,
@@ -42,18 +30,12 @@ import type { WorkspaceProps } from "../components/workspace/workspace.js"
 import { AmlNode, type AmlRenderable } from "./aml-node.js"
 import { ComponentEvaluationContext } from "./component-evaluation-context.js"
 import { AmlEventBus } from "./aml-event-bus.js"
-import type {
-  AmlEventListener,
-  AmlEventName,
-} from "./aml-event-subscriber.js"
+import type { AmlEventListener, AmlEventName } from "./aml-event-subscriber.js"
 import { EvaluationContext } from "./evaluation-context.js"
 import { EvaluationError } from "./evaluation-error.js"
 import type { AmlTraceIdentity } from "./trace-identity.js"
 import type { TraceSpan } from "../observability/trace-dispatcher.js"
-import type {
-  TraceErrorHandler,
-  TraceSink,
-} from "../observability/trace-sink.js"
+import type { TraceErrorHandler, TraceSink } from "../observability/trace-sink.js"
 
 // Resolution targets keep prompt assembly separate from ordinary text output.
 // That distinction lets descriptors such as <Tool> and <System> mutate only the
@@ -67,9 +49,7 @@ interface TextTarget {
   readonly source: "evaluation" | "follow-up" | "skill" | "system"
   readonly runtimeTool?: AgentJavaScriptTool
   readonly structured: StructuredEvaluation | undefined
-  readonly workspace:
-    | Readonly<WorkspaceMaterializationReference>
-    | undefined
+  readonly workspace: Readonly<WorkspaceMaterializationReference> | undefined
 }
 
 interface AgentTarget {
@@ -84,9 +64,7 @@ interface AgentTarget {
   readonly structured: StructuredEvaluation | undefined
   readonly systemFragments: string[]
   readonly tools: ToolCollection
-  readonly workspace:
-    | Readonly<WorkspaceMaterializationReference>
-    | undefined
+  readonly workspace: Readonly<WorkspaceMaterializationReference> | undefined
 }
 
 type ResolutionTarget = AgentTarget | TextTarget
@@ -120,9 +98,7 @@ interface EvaluationScope {
   readonly depth: number
   readonly parentSpanId: string | undefined
   readonly sandbox: Readonly<SandboxSession> | undefined
-  readonly workspace:
-    | Readonly<WorkspaceMaterializationReference>
-    | undefined
+  readonly workspace: Readonly<WorkspaceMaterializationReference> | undefined
 }
 
 // Evaluation frames encode the recursive AML algorithm as an explicit stack.
@@ -325,60 +301,32 @@ export class AmlRuntime {
     const maxDepth = options.maxDepth ?? 16
     const maxStateTransitions = options.maxStateTransitions ?? 16
     const maxTurnsPerAgent = options.maxTurnsPerAgent ?? 16
-    const trace = captureTraceOptions(
-      options.trace,
-      options.onTraceError,
-    )
+    const trace = captureTraceOptions(options.trace, options.onTraceError)
 
     if (!Number.isSafeInteger(maxAgentCalls) || maxAgentCalls < 0) {
-      throw new TypeError(
-        "maxAgentCalls must be a non-negative safe integer",
-      )
+      throw new TypeError("maxAgentCalls must be a non-negative safe integer")
     }
 
     if (!Number.isSafeInteger(maxDepth) || maxDepth < 0) {
       throw new TypeError("maxDepth must be a non-negative safe integer")
     }
 
-    if (
-      !Number.isSafeInteger(maxConcurrentAgents) ||
-      maxConcurrentAgents < 0
-    ) {
-      throw new TypeError(
-        "maxConcurrentAgents must be a non-negative safe integer",
-      )
+    if (!Number.isSafeInteger(maxConcurrentAgents) || maxConcurrentAgents < 0) {
+      throw new TypeError("maxConcurrentAgents must be a non-negative safe integer")
     }
 
-    if (
-      !Number.isSafeInteger(maxTurnsPerAgent) ||
-      maxTurnsPerAgent < 0
-    ) {
-      throw new TypeError(
-        "maxTurnsPerAgent must be a non-negative safe integer",
-      )
+    if (!Number.isSafeInteger(maxTurnsPerAgent) || maxTurnsPerAgent < 0) {
+      throw new TypeError("maxTurnsPerAgent must be a non-negative safe integer")
     }
 
-    if (
-      !Number.isSafeInteger(maxStateTransitions) ||
-      maxStateTransitions < 0
-    ) {
-      throw new TypeError(
-        "maxStateTransitions must be a non-negative safe integer",
-      )
+    if (!Number.isSafeInteger(maxStateTransitions) || maxStateTransitions < 0) {
+      throw new TypeError("maxStateTransitions must be a non-negative safe integer")
     }
 
-    this.#allowedMcpServers = captureAllowedNames(
-      options.allowedMcpServers,
-      "allowedMcpServers",
-    )
-    this.#allowedTools = captureAllowedNames(
-      options.allowedTools,
-      "allowedTools",
-    )
+    this.#allowedMcpServers = captureAllowedNames(options.allowedMcpServers, "allowedMcpServers")
+    this.#allowedTools = captureAllowedNames(options.allowedTools, "allowedTools")
     this.#agentExecutor = new AgentExecutor({
-      ...(options.agentProvider === undefined
-        ? {}
-        : { agentProvider: options.agentProvider }),
+      ...(options.agentProvider === undefined ? {} : { agentProvider: options.agentProvider }),
       maxTurnsPerAgent,
       ...(options.system === undefined ? {} : { system: options.system }),
     })
@@ -392,34 +340,22 @@ export class AmlRuntime {
       this.#events.on("trace", trace.sink)
     }
     this.#loopAgentSelector = new LoopAgentSelector(maxDepth)
-    this.#sandboxEvaluator = new SandboxEvaluator(
-      options.sandboxProvider,
-    )
-    this.#skillEvaluator = new SkillEvaluator(
-      options.cwd ?? process.cwd(),
-    )
-    this.#workspaceEvaluator = new WorkspaceEvaluator(
-      options.workspaceProvider,
-    )
+    this.#sandboxEvaluator = new SandboxEvaluator(options.sandboxProvider)
+    this.#skillEvaluator = new SkillEvaluator(options.cwd ?? process.cwd())
+    this.#workspaceEvaluator = new WorkspaceEvaluator(options.workspaceProvider)
   }
 
   /**
    * Registers one listener for every evaluation executed by this runtime.
    */
-  on<Name extends AmlEventName>(
-    name: Name,
-    listener: AmlEventListener<Name>,
-  ): () => void {
+  on<Name extends AmlEventName>(name: Name, listener: AmlEventListener<Name>): () => void {
     return this.#events.on(name, listener)
   }
 
   /**
    * Registers one listener for the next matching runtime event.
    */
-  once<Name extends AmlEventName>(
-    name: Name,
-    listener: AmlEventListener<Name>,
-  ): () => void {
+  once<Name extends AmlEventName>(name: Name, listener: AmlEventListener<Name>): () => void {
     return this.#events.once(name, listener)
   }
 
@@ -429,10 +365,7 @@ export class AmlRuntime {
    * The evaluator uses an explicit frame stack so asynchronous components and
    * deeply nested trees do not depend on JavaScript recursion.
    */
-  async evaluate(
-    value: AmlRenderable,
-    options: AmlEvaluationOptions = {},
-  ): Promise<string> {
+  async evaluate(value: AmlRenderable, options: AmlEvaluationOptions = {}): Promise<string> {
     const signal = options.signal ?? new AbortController().signal
     signal.throwIfAborted()
 
@@ -447,7 +380,7 @@ export class AmlRuntime {
         this.#events,
         {
           onError: this.#onTraceError,
-        },
+        }
       ),
       workspaceDeclared: false,
     }
@@ -468,7 +401,7 @@ export class AmlRuntime {
           sandbox: undefined,
           workspace: undefined,
         },
-        undefined,
+        undefined
       )) as string
     } catch (error) {
       evaluationFailed = true
@@ -492,7 +425,7 @@ export class AmlRuntime {
     scope: EvaluationScope,
     schema: ModelSchema<unknown> | undefined,
     activeAncestors: ReadonlySet<object> = new Set(),
-    runtimeTool?: AgentJavaScriptTool,
+    runtimeTool?: AgentJavaScriptTool
   ): Promise<unknown> {
     const context = domain.context
     // Component-local evaluate() starts a new frame stack, but it remains on
@@ -522,9 +455,7 @@ export class AmlRuntime {
       workspace: scope.workspace,
       ...(runtimeTool === undefined ? {} : { runtimeTool }),
     }
-    const frames: EvaluationFrame[] = [
-      { depth: scope.depth, kind: "resolve", target: output, value },
-    ]
+    const frames: EvaluationFrame[] = [{ depth: scope.depth, kind: "resolve", target: output, value }]
 
     try {
       // The loop has two phases. Structural frames finish work scheduled by a
@@ -562,9 +493,7 @@ export class AmlRuntime {
             const scope = activeSandboxScopes.pop()
 
             if (scope !== frame.scope) {
-              const error = new EvaluationError(
-                "Sandbox scopes completed out of lifecycle order",
-              )
+              const error = new EvaluationError("Sandbox scopes completed out of lifecycle order")
               context.failTraceSpan(frame.span, error)
               throw error
             }
@@ -581,7 +510,7 @@ export class AmlRuntime {
             if (context.signal.aborted) {
               throw new AggregateError(
                 [context.signal.reason, releaseError],
-                "AML evaluation was cancelled and Sandbox cleanup failed",
+                "AML evaluation was cancelled and Sandbox cleanup failed"
               )
             }
 
@@ -602,9 +531,7 @@ export class AmlRuntime {
           removeActiveTraceSpan(activeTraceSpans, frame.span)
 
           if (activeWorkspaceScope !== frame.scope) {
-            const error = new EvaluationError(
-              "Workspace scopes completed out of lifecycle order",
-            )
+            const error = new EvaluationError("Workspace scopes completed out of lifecycle order")
             context.failTraceSpan(frame.span, error)
             throw error
           }
@@ -621,7 +548,7 @@ export class AmlRuntime {
             if (context.signal.aborted) {
               throw new AggregateError(
                 [context.signal.reason, completionError],
-                "AML evaluation was cancelled and Workspace completion failed",
+                "AML evaluation was cancelled and Workspace completion failed"
               )
             }
 
@@ -665,9 +592,7 @@ export class AmlRuntime {
             text = frame.target.chunks.join("").trim()
 
             if (text.length === 0) {
-              throw new EvaluationError(
-                "<System> must resolve to non-empty text",
-              )
+              throw new EvaluationError("<System> must resolve to non-empty text")
             }
 
             frame.parent.systemFragments.push(text)
@@ -678,12 +603,7 @@ export class AmlRuntime {
           }
 
           removeActiveTraceSpan(activeTraceSpans, frame.span)
-          context.endTraceSpan(
-            frame.span,
-            "ok",
-            {},
-            { content: text },
-          )
+          context.endTraceSpan(frame.span, "ok", {}, { content: text })
           continue
         }
 
@@ -691,9 +611,7 @@ export class AmlRuntime {
           const text = frame.target.chunks.join("").trim()
 
           if (text.length === 0) {
-            throw new EvaluationError(
-              "<FollowUp> must resolve to non-empty text",
-            )
+            throw new EvaluationError("<FollowUp> must resolve to non-empty text")
           }
 
           frame.parent.followUps.push(text)
@@ -704,11 +622,7 @@ export class AmlRuntime {
           let content: string
 
           try {
-            content = await this.#skillEvaluator.complete(
-              frame.plan,
-              frame.text.chunks.join(""),
-              context.signal,
-            )
+            content = await this.#skillEvaluator.complete(frame.plan, frame.text.chunks.join(""), context.signal)
             appendText(frame.target, content)
           } catch (error) {
             removeActiveTraceSpan(activeTraceSpans, frame.span)
@@ -717,12 +631,7 @@ export class AmlRuntime {
           }
 
           removeActiveTraceSpan(activeTraceSpans, frame.span)
-          context.endTraceSpan(
-            frame.span,
-            "ok",
-            {},
-            { content },
-          )
+          context.endTraceSpan(frame.span, "ok", {}, { content })
           continue
         }
 
@@ -733,9 +642,7 @@ export class AmlRuntime {
             context,
             followUps: frame.plan.followUps,
             mcpServers: frame.plan.mcpServers.values(),
-            ...(frame.schema === undefined
-              ? {}
-              : { output: frame.schema }),
+            ...(frame.schema === undefined ? {} : { output: frame.schema }),
             prompt: frame.plan.promptChunks.join(""),
             provider: frame.provider,
             props: frame.props,
@@ -750,9 +657,7 @@ export class AmlRuntime {
             const collector = frame.target.structured
 
             if (collector === undefined) {
-              throw new EvaluationError(
-                "Structured Agent completed without an evaluation collector",
-              )
+              throw new EvaluationError("Structured Agent completed without an evaluation collector")
             }
 
             // AgentExecutor requires and validates this field whenever it
@@ -766,12 +671,7 @@ export class AmlRuntime {
           // Runtime owns the terminal span because successful provider output
           // is not complete until it has entered the parent AML result channel.
           removeActiveTraceSpan(activeTraceSpans, frame.span)
-          context.endTraceSpan(
-            frame.span,
-            "ok",
-            execution.traceAttributes,
-            execution.traceContent,
-          )
+          context.endTraceSpan(frame.span, "ok", execution.traceAttributes, execution.traceContent)
           continue
         }
 
@@ -789,11 +689,7 @@ export class AmlRuntime {
           continue
         }
 
-        if (
-          current === null ||
-          current === undefined ||
-          typeof current === "boolean"
-        ) {
+        if (current === null || current === undefined || typeof current === "boolean") {
           continue
         }
 
@@ -819,9 +715,7 @@ export class AmlRuntime {
           const nodeDepth = frame.depth + 1
 
           if (this.#maxDepth !== 0 && nodeDepth > this.#maxDepth) {
-            throw new EvaluationError(
-              `AML evaluation exceeded maxDepth ${this.#maxDepth}`,
-            )
+            throw new EvaluationError(`AML evaluation exceeded maxDepth ${this.#maxDepth}`)
           }
 
           if (activeValues.has(current)) {
@@ -829,9 +723,7 @@ export class AmlRuntime {
           }
 
           if (typeof current.type !== "function") {
-            throw new EvaluationError(
-              "AML does not support intrinsic or unknown JSX element types",
-            )
+            throw new EvaluationError("AML does not support intrinsic or unknown JSX element types")
           }
 
           const primitiveKind = AmlNode.primitiveKind(current.type)
@@ -845,32 +737,19 @@ export class AmlRuntime {
               collector.agentCount += 1
 
               if (collector.agentCount > 1) {
-                throw new EvaluationError(
-                  "Structured evaluate() must resolve to exactly one <Agent>",
-                )
+                throw new EvaluationError("Structured evaluate() must resolve to exactly one <Agent>")
               }
             }
 
             const props = current.props as Readonly<AgentProps>
-            const trace = context.createTrace(
-              frame.target.parentSpanId,
-            )
-            const span = context.startTraceSpan(
-              trace,
-              "agent",
-              "Agent",
-            )
-            let provider:
-              | Readonly<ValidatedAgentProvider>
-              | undefined
+            const trace = context.createTrace(frame.target.parentSpanId)
+            const span = context.startTraceSpan(trace, "agent", "Agent")
+            let provider: Readonly<ValidatedAgentProvider> | undefined
             let sandbox: Readonly<SandboxSession> | undefined
 
             try {
               provider = this.#agentExecutor.validateProps(props)
-              sandbox = this.#sandboxEvaluator.forAgent(
-                frame.target.sandbox,
-                props.cwd,
-              )
+              sandbox = this.#sandboxEvaluator.forAgent(frame.target.sandbox, props.cwd)
             } catch (error) {
               context.failTraceSpan(span, error)
               throw error
@@ -891,10 +770,7 @@ export class AmlRuntime {
               workspace: frame.target.workspace,
             }
 
-            if (
-              frame.target.kind === "text" &&
-              frame.target.runtimeTool !== undefined
-            ) {
+            if (frame.target.kind === "text" && frame.target.runtimeTool !== undefined) {
               plan.tools.addRuntime(frame.target.runtimeTool)
             }
 
@@ -909,9 +785,7 @@ export class AmlRuntime {
               props,
               provider,
               schema:
-                collector !== undefined &&
-                frame.target.kind === "text" &&
-                frame.target.source === "evaluation"
+                collector !== undefined && frame.target.kind === "text" && frame.target.source === "evaluation"
                   ? collector.schema
                   : undefined,
               sandbox,
@@ -932,16 +806,10 @@ export class AmlRuntime {
           // the binding map inherited by descendants and preserves the current
           // text or Agent descriptor channel exactly.
           if (primitiveKind === "context") {
-            const binding = ContextRegistry.captureProvider(
-              current.type,
-              current.props,
-            )
+            const binding = ContextRegistry.captureProvider(current.type, current.props)
             const scopedTarget: ResolutionTarget = {
               ...frame.target,
-              contextScope: frame.target.contextScope.provide(
-                binding.definition,
-                binding.value,
-              ),
+              contextScope: frame.target.contextScope.provide(binding.definition, binding.value),
             }
 
             activeValues.add(current)
@@ -964,88 +832,58 @@ export class AmlRuntime {
               // collector follows the root Agent into its prompt, System, and
               // FollowUp targets, so a Loop in any of those channels would
               // otherwise start hidden sessions outside that contract.
-              throw new EvaluationError(
-                "Structured evaluate() must resolve to exactly one <Agent>",
-              )
+              throw new EvaluationError("Structured evaluate() must resolve to exactly one <Agent>")
             }
 
-            const props = current.props as Readonly<
-              LoopProps<
-                StandardSchemaV1<
-                  unknown,
-                  Record<string, unknown>
-                >
-              >
-            >
-            const trace = context.createTrace(
-              frame.target.parentSpanId,
-            )
-            const span = context.startTraceSpan(
-              trace,
-              "loop",
-              "Loop",
-            )
+            const props = current.props as Readonly<LoopProps<StandardSchemaV1<unknown, Record<string, unknown>>>>
+            const trace = context.createTrace(frame.target.parentSpanId)
+            const span = context.startTraceSpan(trace, "loop", "Loop")
 
             activeValues.add(current)
             let result: string
 
             try {
-              result = await this.#loopEvaluator.evaluate(
-                props,
-                context,
-                span.identity,
-                async (value, stateTool) => {
-                  const selection =
-                    await this.#loopAgentSelector.select(
-                      value,
-                      nodeDepth,
-                      new Set(activeValues),
-                      frame.target.contextScope,
-                      context.signal,
-                      async (
-                        nestedValue,
-                        nestedSchema,
-                        nestedDepth,
-                        nestedAncestors,
-                        nestedContextScope,
-                      ) => {
-                        const modelSchema =
-                          nestedSchema === undefined
-                            ? undefined
-                            : new ModelSchema(nestedSchema)
+              result = await this.#loopEvaluator.evaluate(props, context, span.identity, async (value, stateTool) => {
+                const selection = await this.#loopAgentSelector.select(
+                  value,
+                  nodeDepth,
+                  new Set(activeValues),
+                  frame.target.contextScope,
+                  context.signal,
+                  async (nestedValue, nestedSchema, nestedDepth, nestedAncestors, nestedContextScope) => {
+                    const modelSchema = nestedSchema === undefined ? undefined : new ModelSchema(nestedSchema)
 
-                        return await this.#evaluateInDomain(
-                          nestedValue,
-                          domain,
-                          {
-                            contextScope: nestedContextScope,
-                            depth: nestedDepth,
-                            parentSpanId: trace.spanId,
-                            sandbox: frame.target.sandbox,
-                            workspace: frame.target.workspace,
-                          },
-                          modelSchema,
-                          nestedAncestors,
-                        )
+                    return await this.#evaluateInDomain(
+                      nestedValue,
+                      domain,
+                      {
+                        contextScope: nestedContextScope,
+                        depth: nestedDepth,
+                        parentSpanId: trace.spanId,
+                        sandbox: frame.target.sandbox,
+                        workspace: frame.target.workspace,
                       },
+                      modelSchema,
+                      nestedAncestors
                     )
+                  }
+                )
 
-                  return (await this.#evaluateInDomain(
-                    selection.agent,
-                    domain,
-                    {
-                      contextScope: selection.contextScope,
-                      depth: selection.parentDepth,
-                      parentSpanId: trace.spanId,
-                      sandbox: frame.target.sandbox,
-                      workspace: frame.target.workspace,
-                    },
-                    undefined,
-                    selection.activeAncestors,
-                    stateTool,
-                  )) as string
-                },
-              )
+                return (await this.#evaluateInDomain(
+                  selection.agent,
+                  domain,
+                  {
+                    contextScope: selection.contextScope,
+                    depth: selection.parentDepth,
+                    parentSpanId: trace.spanId,
+                    sandbox: frame.target.sandbox,
+                    workspace: frame.target.workspace,
+                  },
+                  undefined,
+                  selection.activeAncestors,
+                  stateTool
+                )) as string
+              })
               context.endTraceSpan(span, "ok")
             } catch (error) {
               context.failTraceSpan(span, error)
@@ -1061,13 +899,9 @@ export class AmlRuntime {
           // <FollowUp> redirects its children into one later user-message
           // channel while the containing Agent still resolves post-order.
           if (primitiveKind === "follow-up") {
-            if (
-              frame.target.kind !== "agent" ||
-              !frame.target.acceptsMessageDescriptors
-            ) {
+            if (frame.target.kind !== "agent" || !frame.target.acceptsMessageDescriptors) {
               const placement =
-                frame.target.kind === "text" &&
-                frame.target.source === "follow-up"
+                frame.target.kind === "text" && frame.target.source === "follow-up"
                   ? "nested <FollowUp> descriptors are invalid"
                   : frame.target.kind === "agent"
                     ? "<FollowUp> must be an immediate message descriptor of <Agent>"
@@ -1108,14 +942,9 @@ export class AmlRuntime {
           if (primitiveKind === "sandbox") {
             const props = current.props as Readonly<SandboxProps>
             const trace = context.createTrace(frame.target.parentSpanId)
-            const span = context.startTraceSpan(
-              trace,
-              "sandbox",
-              "Sandbox",
-              {
-                nested: frame.target.sandbox !== undefined,
-              },
-            )
+            const span = context.startTraceSpan(trace, "sandbox", "Sandbox", {
+              nested: frame.target.sandbox !== undefined,
+            })
             let scope: Readonly<SandboxEvaluationScope>
 
             try {
@@ -1124,7 +953,7 @@ export class AmlRuntime {
                 frame.target.sandbox,
                 frame.target.workspace,
                 trace.runId,
-                context.signal,
+                context.signal
               )
             } catch (error) {
               context.failTraceSpan(span, error)
@@ -1136,9 +965,7 @@ export class AmlRuntime {
               // A lexical resource primitive remains visible after component
               // expansion, so descriptors beneath it are not immediate Agent
               // messages. A nested Agent creates its own direct message scope.
-              ...(frame.target.kind === "agent"
-                ? { acceptsMessageDescriptors: false }
-                : {}),
+              ...(frame.target.kind === "agent" ? { acceptsMessageDescriptors: false } : {}),
               parentSpanId: trace.spanId,
               sandbox: scope.session,
             }
@@ -1167,9 +994,7 @@ export class AmlRuntime {
           // cannot hide inside prompt assembly or another resource scope.
           if (primitiveKind === "workspace") {
             if (domain.workspaceDeclared) {
-              throw new EvaluationError(
-                "An AML evaluation may contain at most one <Workspace>",
-              )
+              throw new EvaluationError("An AML evaluation may contain at most one <Workspace>")
             }
 
             if (
@@ -1178,29 +1003,17 @@ export class AmlRuntime {
               frame.target.sandbox !== undefined ||
               frame.target.workspace !== undefined
             ) {
-              throw new EvaluationError(
-                "<Workspace> must be a top-level resource boundary",
-              )
+              throw new EvaluationError("<Workspace> must be a top-level resource boundary")
             }
 
             domain.workspaceDeclared = true
             const props = current.props as Readonly<WorkspaceProps>
-            const trace = context.createTrace(
-              frame.target.parentSpanId,
-            )
-            const span = context.startTraceSpan(
-              trace,
-              "workspace",
-              "Workspace",
-            )
+            const trace = context.createTrace(frame.target.parentSpanId)
+            const span = context.startTraceSpan(trace, "workspace", "Workspace")
             let scope: Readonly<WorkspaceEvaluationScope>
 
             try {
-              scope = await this.#workspaceEvaluator.enter(
-                props,
-                trace.runId,
-                context.signal,
-              )
+              scope = await this.#workspaceEvaluator.enter(props, trace.runId, context.signal)
             } catch (error) {
               context.failTraceSpan(span, error)
               throw error
@@ -1234,21 +1047,15 @@ export class AmlRuntime {
           if (primitiveKind === "mcp") {
             if (frame.target.kind !== "agent") {
               if (frame.target.source === "follow-up") {
-                throw new EvaluationError(
-                  "<Mcp> is invalid inside <FollowUp>",
-                )
+                throw new EvaluationError("<Mcp> is invalid inside <FollowUp>")
               }
 
-              throw new EvaluationError(
-                "<Mcp> is only valid inside <Agent>",
-              )
+              throw new EvaluationError("<Mcp> is only valid inside <Agent>")
             }
 
             // MCP descriptors mutate only the nearest Agent plan. Providers
             // perform attachment later at the complete-session boundary.
-            frame.target.mcpServers.add(
-              current.props as Readonly<McpProps>,
-            )
+            frame.target.mcpServers.add(current.props as Readonly<McpProps>)
             continue
           }
 
@@ -1256,21 +1063,15 @@ export class AmlRuntime {
           if (primitiveKind === "tool") {
             if (frame.target.kind !== "agent") {
               if (frame.target.source === "follow-up") {
-                throw new EvaluationError(
-                  "<Tool> is invalid inside <FollowUp>",
-                )
+                throw new EvaluationError("<Tool> is invalid inside <FollowUp>")
               }
 
-              throw new EvaluationError(
-                "<Tool> is only valid inside <Agent>",
-              )
+              throw new EvaluationError("<Tool> is only valid inside <Agent>")
             }
 
             // Tool descriptors mutate only the nearest Agent plan and never add
             // text to its initial prompt.
-            frame.target.tools.add(
-              current.props as Readonly<ToolProps>,
-            )
+            frame.target.tools.add(current.props as Readonly<ToolProps>)
             continue
           }
 
@@ -1278,9 +1079,7 @@ export class AmlRuntime {
           // They remain prompt text rather than a provider-specific capability.
           if (primitiveKind === "skill") {
             const plan = this.#skillEvaluator.prepare(current.props)
-            const trace = context.createObservationTrace(
-              frame.target.parentSpanId,
-            )
+            const trace = context.createObservationTrace(frame.target.parentSpanId)
             const span = context.startTraceSpan(
               trace,
               "skill",
@@ -1290,13 +1089,9 @@ export class AmlRuntime {
                 hasSource: plan.source !== undefined,
               },
               {
-                ...(plan.description === undefined
-                  ? {}
-                  : { description: plan.description }),
-                ...(plan.source === undefined
-                  ? {}
-                  : { source: plan.source }),
-              },
+                ...(plan.description === undefined ? {} : { description: plan.description }),
+                ...(plan.source === undefined ? {} : { source: plan.source }),
+              }
             )
 
             const skillTarget: TextTarget = {
@@ -1347,15 +1142,10 @@ export class AmlRuntime {
             }
 
             const props = current.props as Readonly<SystemProps>
-            const trace = context.createObservationTrace(
-              frame.target.parentSpanId,
-            )
-            const span = context.startTraceSpan(
-              trace,
-              "system",
-              "System",
-              { index: frame.target.systemFragments.length + 1 },
-            )
+            const trace = context.createObservationTrace(frame.target.parentSpanId)
+            const span = context.startTraceSpan(trace, "system", "System", {
+              index: frame.target.systemFragments.length + 1,
+            })
             const systemTarget: TextTarget = {
               chunks: [],
               contextScope: frame.target.contextScope,
@@ -1387,14 +1177,8 @@ export class AmlRuntime {
 
           // User components are ordinary async factories. Invocation happens only
           // now so authoring JSX remains inert and evaluation owns all side effects.
-          const trace = context.createObservationTrace(
-            frame.target.parentSpanId,
-          )
-          const span = context.startTraceSpan(
-            trace,
-            "component",
-            traceComponentName(current.type),
-          )
+          const trace = context.createObservationTrace(frame.target.parentSpanId)
+          const span = context.startTraceSpan(trace, "component", traceComponentName(current.type))
           activeValues.add(current)
           frames.push({ kind: "release", value: current })
           let componentOutput: unknown
@@ -1408,10 +1192,7 @@ export class AmlRuntime {
                 // A nested schema is captured before its provider boundary.
                 // Both calls remain in this domain and inherit only lexical
                 // execution resources, never the parent Agent's capabilities.
-                const modelSchema =
-                  nestedSchema === undefined
-                    ? undefined
-                    : new ModelSchema(nestedSchema)
+                const modelSchema = nestedSchema === undefined ? undefined : new ModelSchema(nestedSchema)
 
                 return await this.#evaluateInDomain(
                   nestedValue,
@@ -1424,10 +1205,10 @@ export class AmlRuntime {
                     workspace: frame.target.workspace,
                   },
                   modelSchema,
-                  new Set(activeValues),
+                  new Set(activeValues)
                 )
               },
-              frame.target.contextScope,
+              frame.target.contextScope
             )
           } catch (error) {
             context.failTraceSpan(span, error)
@@ -1477,9 +1258,7 @@ export class AmlRuntime {
 
         // Objects are not stringified implicitly: accepting them would make
         // prompts depend on JavaScript's lossy "[object Object]" coercion.
-        throw new EvaluationError(
-          `AML cannot render a value of type ${typeof current}`,
-        )
+        throw new EvaluationError(`AML cannot render a value of type ${typeof current}`)
       }
     } catch (error) {
       const releaseErrors: unknown[] = []
@@ -1513,10 +1292,7 @@ export class AmlRuntime {
 
       const terminalError =
         releaseErrors.length > 0
-          ? new AggregateError(
-          [error, ...releaseErrors],
-          "AML evaluation and resource cleanup both failed",
-            )
+          ? new AggregateError([error, ...releaseErrors], "AML evaluation and resource cleanup both failed")
           : error
 
       // Spans still on this invocation's stack represent boundaries skipped by
@@ -1537,9 +1313,7 @@ export class AmlRuntime {
 
     if (structured !== undefined) {
       if (structured.agentCount !== 1 || !structured.hasResult) {
-        throw new EvaluationError(
-          "Structured evaluate() must resolve to exactly one <Agent>",
-        )
+        throw new EvaluationError("Structured evaluate() must resolve to exactly one <Agent>")
       }
 
       return structured.result
@@ -1558,9 +1332,7 @@ function appendText(target: ResolutionTarget, value: string): void {
     // descriptors is harmless, but later initial-prompt text is ambiguous.
     if (target.followUps.length > 0) {
       if (value.trim().length > 0) {
-        throw new EvaluationError(
-          "non-whitespace Agent text cannot follow <FollowUp>",
-        )
+        throw new EvaluationError("non-whitespace Agent text cannot follow <FollowUp>")
       }
 
       return
@@ -1572,14 +1344,8 @@ function appendText(target: ResolutionTarget, value: string): void {
 
   // Structured evaluation returns an Agent's typed value, so adjacent rendered
   // text would create a second incompatible result channel.
-  if (
-    target.structured !== undefined &&
-    target.source === "evaluation" &&
-    value.length > 0
-  ) {
-    throw new EvaluationError(
-      "Structured evaluate() cannot include text outside its <Agent>",
-    )
+  if (target.structured !== undefined && target.source === "evaluation" && value.length > 0) {
+    throw new EvaluationError("Structured evaluate() cannot include text outside its <Agent>")
   }
 
   target.chunks.push(value)
@@ -1590,7 +1356,7 @@ function appendText(target: ResolutionTarget, value: string): void {
  */
 function captureAllowedNames(
   values: readonly string[] | undefined,
-  label: "allowedMcpServers" | "allowedTools",
+  label: "allowedMcpServers" | "allowedTools"
 ): ReadonlySet<string> | undefined {
   if (values === undefined) {
     return undefined
@@ -1603,14 +1369,8 @@ function captureAllowedNames(
   const result = new Set<string>()
 
   for (const value of values) {
-    if (
-      typeof value !== "string" ||
-      value.length === 0 ||
-      value !== value.trim()
-    ) {
-      throw new TypeError(
-        `${label} entries must be non-empty normalized strings`,
-      )
+    if (typeof value !== "string" || value.length === 0 || value !== value.trim()) {
+      throw new TypeError(`${label} entries must be non-empty normalized strings`)
     }
 
     result.add(value)
@@ -1624,7 +1384,7 @@ function captureAllowedNames(
  */
 function captureTraceOptions(
   trace: TraceSink | undefined,
-  onError: TraceErrorHandler | undefined,
+  onError: TraceErrorHandler | undefined
 ): Readonly<{
   onError: TraceErrorHandler | undefined
   sink: TraceSink | undefined
@@ -1646,16 +1406,11 @@ function captureTraceOptions(
 /**
  * Removes one post-order span and rejects impossible lifecycle ordering.
  */
-function removeActiveTraceSpan(
-  active: TraceSpan[],
-  expected: TraceSpan,
-): void {
+function removeActiveTraceSpan(active: TraceSpan[], expected: TraceSpan): void {
   const span = active.pop()
 
   if (span !== expected) {
-    throw new EvaluationError(
-      "AML trace spans completed out of lifecycle order",
-    )
+    throw new EvaluationError("AML trace spans completed out of lifecycle order")
   }
 }
 
@@ -1665,13 +1420,9 @@ function removeActiveTraceSpan(
  */
 function traceComponentName(component: Function): string {
   try {
-    const name = ComponentEvaluationContext.withoutAccess(() =>
-      Reflect.get(component, "name"),
-    )
+    const name = ComponentEvaluationContext.withoutAccess(() => Reflect.get(component, "name"))
 
-    return typeof name === "string" && name.length > 0
-      ? name
-      : "AnonymousComponent"
+    return typeof name === "string" && name.length > 0 ? name : "AnonymousComponent"
   } catch {
     return "AnonymousComponent"
   }

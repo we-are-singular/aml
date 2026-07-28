@@ -1,4 +1,4 @@
-import type { SandboxSession } from "@aml/sdk"
+import type { SandboxSession } from "@aml-jsx/sdk"
 
 import type { DockerSandboxHandle } from "./docker-sandbox-handle.js"
 
@@ -8,9 +8,7 @@ import type { DockerSandboxHandle } from "./docker-sandbox-handle.js"
  * One bind mount cannot enforce a nested root or access downgrade, so those
  * restrictive AML views correctly fail this compatibility handshake.
  */
-export function supportsDockerSandbox(
-  session: SandboxSession,
-): session is SandboxSession<DockerSandboxHandle> {
+export function supportsDockerSandbox(session: SandboxSession): session is SandboxSession<DockerSandboxHandle> {
   try {
     const handle = session.lease.handle as Partial<DockerSandboxHandle>
 

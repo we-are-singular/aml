@@ -15,11 +15,9 @@ export class DeterministicAgentProvider implements AgentProvider {
   readonly #respond: (
     request: AgentRequest,
     context: AgentExecutionContext,
-    callIndex: number,
+    callIndex: number
   ) => AgentResponse | PromiseLike<AgentResponse>
-  readonly #supportsSandbox:
-    | ((sandbox: SandboxSession) => boolean)
-    | undefined
+  readonly #supportsSandbox: ((sandbox: SandboxSession) => boolean) | undefined
   readonly name: string
 
   /**
@@ -31,28 +29,23 @@ export class DeterministicAgentProvider implements AgentProvider {
       readonly respond?: (
         request: AgentRequest,
         context: AgentExecutionContext,
-        callIndex: number,
+        callIndex: number
       ) => AgentResponse | PromiseLike<AgentResponse>
       readonly supportsSandbox?: (sandbox: SandboxSession) => boolean
-    } = {},
+    } = {}
   ) {
     const name = options.name ?? "deterministic"
 
     if (name.length === 0) {
-      throw new TypeError(
-        "Deterministic Agent provider name must not be empty",
-      )
+      throw new TypeError("Deterministic Agent provider name must not be empty")
     }
 
     if (name !== name.trim()) {
-      throw new TypeError(
-        "Deterministic Agent provider name must already be normalized",
-      )
+      throw new TypeError("Deterministic Agent provider name must already be normalized")
     }
 
     this.name = name
-    this.#respond =
-      options.respond ?? ((request) => ({ text: request.prompt }))
+    this.#respond = options.respond ?? (request => ({ text: request.prompt }))
     this.#supportsSandbox = options.supportsSandbox
   }
 
@@ -69,10 +62,7 @@ export class DeterministicAgentProvider implements AgentProvider {
   /**
    * Records one immutable call snapshot before invoking the response strategy.
    */
-  async run(
-    request: AgentRequest,
-    context: AgentExecutionContext,
-  ): Promise<AgentResponse> {
+  async run(request: AgentRequest, context: AgentExecutionContext): Promise<AgentResponse> {
     const callIndex = this.#calls.length
     this.#calls.push(Object.freeze({ context, request }))
     return await this.#respond(request, context, callIndex)

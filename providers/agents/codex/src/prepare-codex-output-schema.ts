@@ -1,6 +1,4 @@
-type NormalizedSchema =
-  | boolean
-  | Readonly<Record<string, unknown>>
+type NormalizedSchema = boolean | Readonly<Record<string, unknown>>
 
 const MAX_CODEX_SCHEMA_DEPTH = 128
 
@@ -17,19 +15,9 @@ const OBJECT_APPLICATOR_KEYWORDS = [
   "unevaluatedProperties",
 ] as const
 
-const SCHEMA_ARRAY_KEYWORDS = [
-  "allOf",
-  "anyOf",
-  "oneOf",
-  "prefixItems",
-] as const
+const SCHEMA_ARRAY_KEYWORDS = ["allOf", "anyOf", "oneOf", "prefixItems"] as const
 
-const SCHEMA_MAP_KEYWORDS = [
-  "$defs",
-  "definitions",
-  "dependentSchemas",
-  "patternProperties",
-] as const
+const SCHEMA_MAP_KEYWORDS = ["$defs", "definitions", "dependentSchemas", "patternProperties"] as const
 
 const SCHEMA_VALUE_KEYWORDS = [
   "contains",
@@ -52,17 +40,13 @@ const SCHEMA_VALUE_KEYWORDS = [
  * required without changing application semantics, so the adapter rejects
  * those schemas instead of silently rewriting their output shape.
  */
-export function prepareCodexOutputSchema(
-  schema: Readonly<Record<string, unknown>>,
-): Readonly<Record<string, unknown>> {
+export function prepareCodexOutputSchema(schema: Readonly<Record<string, unknown>>): Readonly<Record<string, unknown>> {
   const normalized = normalizeSchemaNode(schema, "$")
 
   // The public contract requires an object root even though nested JSON Schema
   // branches may use the boolean-schema shorthand.
   if (typeof normalized === "boolean") {
-    throw new TypeError(
-      "Codex output schema $ must be an object",
-    )
+    throw new TypeError("Codex output schema $ must be an object")
   }
 
   return normalized
@@ -71,29 +55,17 @@ export function prepareCodexOutputSchema(
 /**
  * Recursively normalizes every standard schema-bearing branch.
  */
-function normalizeSchemaNode(
-  value: unknown,
-  path: string,
-  depth = 0,
-): NormalizedSchema {
+function normalizeSchemaNode(value: unknown, path: string, depth = 0): NormalizedSchema {
   if (typeof value === "boolean") {
     return value
   }
 
   if (depth > MAX_CODEX_SCHEMA_DEPTH) {
-    throw new TypeError(
-      `Codex output schema exceeds the maximum depth of ${MAX_CODEX_SCHEMA_DEPTH}`,
-    )
+    throw new TypeError(`Codex output schema exceeds the maximum depth of ${MAX_CODEX_SCHEMA_DEPTH}`)
   }
 
-  if (
-    typeof value !== "object" ||
-    value === null ||
-    Array.isArray(value)
-  ) {
-    throw new TypeError(
-      `Codex output schema ${path} must be an object or boolean`,
-    )
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    throw new TypeError(`Codex output schema ${path} must be an object or boolean`)
   }
 
   const schema = value as Readonly<Record<string, unknown>>
@@ -111,19 +83,11 @@ function normalizeSchemaNode(
     }
 
     if (!Array.isArray(branches)) {
-      throw new TypeError(
-        `Codex output schema ${path}.${keyword} must be an array`,
-      )
+      throw new TypeError(`Codex output schema ${path}.${keyword} must be an array`)
     }
 
     output[keyword] = Object.freeze(
-      branches.map((branch, index) =>
-        normalizeSchemaNode(
-          branch,
-          `${path}.${keyword}[${index}]`,
-          depth + 1,
-        ),
-      ),
+      branches.map((branch, index) => normalizeSchemaNode(branch, `${path}.${keyword}[${index}]`, depth + 1))
     )
   }
 
@@ -132,11 +96,7 @@ function normalizeSchemaNode(
     const child = schema[keyword]
 
     if (child !== undefined) {
-      output[keyword] = normalizeSchemaNode(
-        child,
-        `${path}.${keyword}`,
-        depth + 1,
-      )
+      output[keyword] = normalizeSchemaNode(child, `${path}.${keyword}`, depth + 1)
     }
   }
 
@@ -145,19 +105,9 @@ function normalizeSchemaNode(
   if (schema.items !== undefined) {
     output.items = Array.isArray(schema.items)
       ? Object.freeze(
-          schema.items.map((item, index) =>
-            normalizeSchemaNode(
-              item,
-              `${path}.items[${index}]`,
-              depth + 1,
-            ),
-          ),
+          schema.items.map((item, index) => normalizeSchemaNode(item, `${path}.items[${index}]`, depth + 1))
         )
-      : normalizeSchemaNode(
-          schema.items,
-          `${path}.items`,
-          depth + 1,
-        )
+      : normalizeSchemaNode(schema.items, `${path}.items`, depth + 1)
   }
 
   // Definition and pattern keywords contain name-to-schema dictionaries.
@@ -168,43 +118,28 @@ function normalizeSchemaNode(
       continue
     }
 
-    output[keyword] = normalizeSchemaMap(
-      children,
-      `${path}.${keyword}`,
-      depth + 1,
-    )
+    output[keyword] = normalizeSchemaMap(children, `${path}.${keyword}`, depth + 1)
   }
 
   const properties = schema.properties
 
   if (properties !== undefined) {
-    const normalizedProperties = normalizeSchemaMap(
-      properties,
-      `${path}.properties`,
-      depth + 1,
-    )
+    const normalizedProperties = normalizeSchemaMap(properties, `${path}.properties`, depth + 1)
 
     output.properties = normalizedProperties
     const propertyNames = Object.keys(normalizedProperties)
     const required = schema.required ?? []
 
-    if (
-      !Array.isArray(required) ||
-      required.some((name) => typeof name !== "string")
-    ) {
-      throw new TypeError(
-        `Codex output schema ${path}.required must list every object property`,
-      )
+    if (!Array.isArray(required) || required.some(name => typeof name !== "string")) {
+      throw new TypeError(`Codex output schema ${path}.required must list every object property`)
     }
 
     const requiredNames = new Set(required)
-    const optional = propertyNames.filter(
-      (name) => !requiredNames.has(name),
-    )
+    const optional = propertyNames.filter(name => !requiredNames.has(name))
 
     if (optional.length > 0) {
       throw new TypeError(
-        `Codex output schema ${path} has optional properties unsupported by strict output: ${optional.join(", ")}`,
+        `Codex output schema ${path} has optional properties unsupported by strict output: ${optional.join(", ")}`
       )
     }
 
@@ -213,20 +148,11 @@ function normalizeSchemaNode(
 
   const appliesToObjects =
     schema.type === "object" ||
-    (Array.isArray(schema.type) &&
-      schema.type.includes("object")) ||
-    OBJECT_APPLICATOR_KEYWORDS.some(
-      (keyword) => schema[keyword] !== undefined,
-    )
+    (Array.isArray(schema.type) && schema.type.includes("object")) ||
+    OBJECT_APPLICATOR_KEYWORDS.some(keyword => schema[keyword] !== undefined)
 
-  if (
-    appliesToObjects &&
-    schema.additionalProperties !== undefined &&
-    schema.additionalProperties !== false
-  ) {
-    throw new TypeError(
-      `Codex output schema ${path}.additionalProperties must be false`,
-    )
+  if (appliesToObjects && schema.additionalProperties !== undefined && schema.additionalProperties !== false) {
+    throw new TypeError(`Codex output schema ${path}.additionalProperties must be false`)
   }
 
   if (appliesToObjects) {
@@ -242,28 +168,15 @@ function normalizeSchemaNode(
 function normalizeSchemaMap(
   value: unknown,
   path: string,
-  childDepth: number,
+  childDepth: number
 ): Readonly<Record<string, NormalizedSchema>> {
-  if (
-    typeof value !== "object" ||
-    value === null ||
-    Array.isArray(value)
-  ) {
-    throw new TypeError(
-      `Codex output schema ${path} must be an object`,
-    )
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    throw new TypeError(`Codex output schema ${path} must be an object`)
   }
 
   return Object.freeze(
     Object.fromEntries(
-      Object.entries(value).map(([name, child]) => [
-        name,
-        normalizeSchemaNode(
-          child,
-          `${path}.${name}`,
-          childDepth,
-        ),
-      ]),
-    ),
+      Object.entries(value).map(([name, child]) => [name, normalizeSchemaNode(child, `${path}.${name}`, childDepth)])
+    )
   )
 }

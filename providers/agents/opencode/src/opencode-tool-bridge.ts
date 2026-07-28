@@ -1,21 +1,10 @@
 import { randomUUID } from "node:crypto"
-import {
-  createServer,
-  type Server as HttpServer,
-} from "node:http"
+import { createServer, type Server as HttpServer } from "node:http"
 
 import { Server as McpServer } from "@modelcontextprotocol/sdk/server/index.js"
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js"
-import {
-  CallToolRequestSchema,
-  ListToolsRequestSchema,
-} from "@modelcontextprotocol/sdk/types.js"
-import type {
-  AgentExecutionContext,
-  AgentJavaScriptTool,
-  AgentToolExecutionContext,
-  AmlJsonValue,
-} from "@aml/sdk"
+import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js"
+import type { AgentExecutionContext, AgentJavaScriptTool, AgentToolExecutionContext, AmlJsonValue } from "@aml-jsx/sdk"
 
 /**
  * Authenticated localhost endpoint registered with OpenCode for one invocation.
@@ -44,16 +33,10 @@ export class OpenCodeToolBridge {
   /**
    * Creates an unstarted MCP server around one Agent's JavaScript Tools.
    */
-  constructor(
-    tools: readonly AgentJavaScriptTool[],
-    context: AgentExecutionContext,
-  ) {
+  constructor(tools: readonly AgentJavaScriptTool[], context: AgentExecutionContext) {
     this.#context = context
-    this.#tools = new Map(tools.map((tool) => [tool.name, tool]))
-    this.#mcp = new McpServer(
-      { name: this.#name, version: "0.0.0" },
-      { capabilities: { tools: {} } },
-    )
+    this.#tools = new Map(tools.map(tool => [tool.name, tool]))
+    this.#mcp = new McpServer({ name: this.#name, version: "0.0.0" }, { capabilities: { tools: {} } })
     this.#transport = new StreamableHTTPServerTransport({
       sessionIdGenerator: randomUUID,
     })
@@ -64,7 +47,7 @@ export class OpenCodeToolBridge {
     // Only AML-declared Tools are advertised; the bridge has no ambient
     // capability registry or fallback to host functions.
     this.#mcp.setRequestHandler(ListToolsRequestSchema, async () => ({
-      tools: tools.map((tool) => ({
+      tools: tools.map(tool => ({
         description: tool.description,
         inputSchema: tool.inputSchema as {
           type: "object"
@@ -73,67 +56,55 @@ export class OpenCodeToolBridge {
         name: tool.name,
       })),
     }))
-    this.#mcp.setRequestHandler(
-      CallToolRequestSchema,
-      async (request, extra) => {
-        const tool = this.#tools.get(request.params.name)
+    this.#mcp.setRequestHandler(CallToolRequestSchema, async (request, extra) => {
+      const tool = this.#tools.get(request.params.name)
 
-        if (!tool) {
-          return {
-            content: [
-              {
-                text: `Unknown AML Tool "${request.params.name}"`,
-                type: "text" as const,
-              },
-            ],
-            isError: true,
-          }
+      if (!tool) {
+        return {
+          content: [
+            {
+              text: `Unknown AML Tool "${request.params.name}"`,
+              type: "text" as const,
+            },
+          ],
+          isError: true,
         }
+      }
 
-        // The Tool observes an aborted signal when either the complete AML
-        // evaluation or OpenCode's individual MCP request is cancelled.
-        // Application functions remain responsible for cooperative stopping.
-        const signal = AbortSignal.any([
-          this.#context.signal,
-          extra.signal,
-        ])
-        const toolContext: AgentToolExecutionContext = Object.freeze({
-          signal,
-          trace: this.#context.trace,
-        })
+      // The Tool observes an aborted signal when either the complete AML
+      // evaluation or OpenCode's individual MCP request is cancelled.
+      // Application functions remain responsible for cooperative stopping.
+      const signal = AbortSignal.any([this.#context.signal, extra.signal])
+      const toolContext: AgentToolExecutionContext = Object.freeze({
+        signal,
+        trace: this.#context.trace,
+      })
 
-        // ToolDefinition owns input/output validation. The bridge translates
-        // its attributed failure into MCP's explicit isError response.
-        try {
-          const result = await tool.execute(
-            request.params.arguments,
-            toolContext,
-          )
+      // ToolDefinition owns input/output validation. The bridge translates
+      // its attributed failure into MCP's explicit isError response.
+      try {
+        const result = await tool.execute(request.params.arguments, toolContext)
 
-          return {
-            content: [
-              {
-                text: OpenCodeToolBridge.#resultText(result),
-                type: "text" as const,
-              },
-            ],
-          }
-        } catch (error) {
-          return {
-            content: [
-              {
-                text:
-                  error instanceof Error
-                    ? error.message
-                    : "AML Tool execution failed",
-                type: "text" as const,
-              },
-            ],
-            isError: true,
-          }
+        return {
+          content: [
+            {
+              text: OpenCodeToolBridge.#resultText(result),
+              type: "text" as const,
+            },
+          ],
         }
-      },
-    )
+      } catch (error) {
+        return {
+          content: [
+            {
+              text: error instanceof Error ? error.message : "AML Tool execution failed",
+              type: "text" as const,
+            },
+          ],
+          isError: true,
+        }
+      }
+    })
   }
 
   /**
@@ -179,10 +150,7 @@ export class OpenCodeToolBridge {
       try {
         await this.close()
       } catch (cleanupError) {
-        throw new AggregateError(
-          [error, cleanupError],
-          "AML OpenCode Tool bridge startup and cleanup failed",
-        )
+        throw new AggregateError([error, cleanupError], "AML OpenCode Tool bridge startup and cleanup failed")
       }
 
       throw error
@@ -191,17 +159,12 @@ export class OpenCodeToolBridge {
     const address = this.#http.address()
 
     if (!address || typeof address === "string") {
-      const addressError = new Error(
-        "AML OpenCode Tool bridge has no TCP address",
-      )
+      const addressError = new Error("AML OpenCode Tool bridge has no TCP address")
 
       try {
         await this.close()
       } catch (cleanupError) {
-        throw new AggregateError(
-          [addressError, cleanupError],
-          "AML OpenCode Tool bridge startup and cleanup failed",
-        )
+        throw new AggregateError([addressError, cleanupError], "AML OpenCode Tool bridge startup and cleanup failed")
       }
 
       throw addressError
@@ -238,7 +201,7 @@ export class OpenCodeToolBridge {
 
     try {
       await new Promise<void>((resolve, reject) => {
-        this.#http.close((error) => {
+        this.#http.close(error => {
           if (error && (error as NodeJS.ErrnoException).code !== "ERR_SERVER_NOT_RUNNING") {
             reject(error)
             return
@@ -265,14 +228,11 @@ export class OpenCodeToolBridge {
    */
   async #handleRequest(
     request: Parameters<StreamableHTTPServerTransport["handleRequest"]>[0],
-    response: Parameters<StreamableHTTPServerTransport["handleRequest"]>[1],
+    response: Parameters<StreamableHTTPServerTransport["handleRequest"]>[1]
   ): Promise<void> {
     // A 404 for both bad paths and bad credentials avoids exposing which part
     // of the private endpoint an unauthenticated caller guessed correctly.
-    if (
-      request.url !== "/mcp" ||
-      request.headers.authorization !== `Bearer ${this.#authToken}`
-    ) {
+    if (request.url !== "/mcp" || request.headers.authorization !== `Bearer ${this.#authToken}`) {
       response.writeHead(404).end()
       return
     }

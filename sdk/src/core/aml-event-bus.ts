@@ -9,10 +9,7 @@ import type {
   AmlEvaluationStartEvent,
 } from "./aml-event-subscriber.js"
 import type { AmlTraceEvent } from "../observability/trace-event.js"
-import type {
-  TraceErrorHandler,
-  TraceSink,
-} from "../observability/trace-sink.js"
+import type { TraceErrorHandler, TraceSink } from "../observability/trace-sink.js"
 
 interface AmlTraceEnvelope {
   readonly content: AmlTraceEvent
@@ -45,20 +42,14 @@ export class AmlEventBus implements AmlEventSubscriber {
   /**
    * Registers one listener until its returned unsubscribe function is called.
    */
-  on<Name extends AmlEventName>(
-    name: Name,
-    listener: AmlEventListener<Name>,
-  ): () => void {
+  on<Name extends AmlEventName>(name: Name, listener: AmlEventListener<Name>): () => void {
     return this.#register(name, listener, false)
   }
 
   /**
    * Registers one listener that removes itself before its first invocation.
    */
-  once<Name extends AmlEventName>(
-    name: Name,
-    listener: AmlEventListener<Name>,
-  ): () => void {
+  once<Name extends AmlEventName>(name: Name, listener: AmlEventListener<Name>): () => void {
     return this.#register(name, listener, true)
   }
 
@@ -66,26 +57,21 @@ export class AmlEventBus implements AmlEventSubscriber {
    * Runs setup listeners serially and stops at the first failure.
    */
   async start(event: AmlEvaluationStartEvent): Promise<void> {
-    await ComponentEvaluationContext.withoutAccess(
-      async () => await this.#hooks.callHook("start", event),
-    )
+    await ComponentEvaluationContext.withoutAccess(async () => await this.#hooks.callHook("start", event))
   }
 
   /**
    * Runs every cleanup listener and returns each failure in call order.
    */
-  async finish(
-    event: AmlEvaluationFinishEvent,
-  ): Promise<readonly unknown[]> {
+  async finish(event: AmlEvaluationFinishEvent): Promise<readonly unknown[]> {
     return await this.#hooks.callHookWith(
-      async (listeners) => {
+      async listeners => {
         const errors: unknown[] = []
 
         for (const listener of listeners) {
           try {
             await ComponentEvaluationContext.withoutAccess(
-              async () =>
-                await Reflect.apply(listener, undefined, [event]),
+              async () => await Reflect.apply(listener, undefined, [event])
             )
           } catch (error) {
             errors.push(error)
@@ -95,31 +81,25 @@ export class AmlEventBus implements AmlEventSubscriber {
         return errors
       },
       "finish",
-      [event],
+      [event]
     )
   }
 
   /**
    * Starts every trace listener without awaiting or coupling their failures.
    */
-  trace(
-    redacted: AmlTraceEvent,
-    content: AmlTraceEvent,
-    onError: TraceErrorHandler,
-  ): void {
+  trace(redacted: AmlTraceEvent, content: AmlTraceEvent, onError: TraceErrorHandler): void {
     const envelope = Object.freeze({ content, redacted })
 
     this.#hooks.callHookWith(
-      (listeners) => {
+      listeners => {
         for (const listener of listeners) {
           let result: unknown
 
           try {
             // Invoke each observer separately so a synchronous throw cannot
             // abort Hookable's listener traversal.
-            result = ComponentEvaluationContext.withoutAccess(() =>
-              Reflect.apply(listener, undefined, [envelope]),
-            )
+            result = ComponentEvaluationContext.withoutAccess(() => Reflect.apply(listener, undefined, [envelope]))
           } catch (error) {
             onError(error, redacted)
             continue
@@ -133,7 +113,7 @@ export class AmlEventBus implements AmlEventSubscriber {
         }
       },
       "trace",
-      [envelope],
+      [envelope]
     )
   }
 
@@ -148,18 +128,12 @@ export class AmlEventBus implements AmlEventSubscriber {
   /**
    * Routes public listeners into Hookable's internal payload contracts.
    */
-  #register<Name extends AmlEventName>(
-    name: Name,
-    listener: AmlEventListener<Name>,
-    once: boolean,
-  ): () => void {
+  #register<Name extends AmlEventName>(name: Name, listener: AmlEventListener<Name>, once: boolean): () => void {
     if (name === "trace") {
       return this.#registerTrace(listener as TraceSink, once)
     }
 
-    return once
-      ? this.#hooks.hookOnce(name, listener as never)
-      : this.#hooks.hook(name, listener as never)
+    return once ? this.#hooks.hookOnce(name, listener as never) : this.#hooks.hook(name, listener as never)
   }
 
   /**
@@ -167,13 +141,9 @@ export class AmlEventBus implements AmlEventSubscriber {
    */
   #registerTrace(listener: TraceSink, once: boolean): () => void {
     const captureContent = captureTraceContent(listener)
-    const contentRegistration = captureContent
-      ? Symbol("trace-content-listener")
-      : undefined
+    const contentRegistration = captureContent ? Symbol("trace-content-listener") : undefined
     const releaseContent = () =>
-      contentRegistration === undefined
-        ? undefined
-        : this.#contentTraceListeners.delete(contentRegistration)
+      contentRegistration === undefined ? undefined : this.#contentTraceListeners.delete(contentRegistration)
     const invoke = (events: AmlTraceEnvelope) => {
       if (once) {
         releaseContent()
@@ -182,14 +152,10 @@ export class AmlEventBus implements AmlEventSubscriber {
       // Public observers may return any ignored value. Normalize it into one
       // completion Promise so rejected thenables still reach trace reporting.
       return Promise.resolve(
-        Reflect.apply(listener, undefined, [
-          captureContent ? events.content : events.redacted,
-        ]),
+        Reflect.apply(listener, undefined, [captureContent ? events.content : events.redacted])
       ).then(() => undefined)
     }
-    const removeHook = once
-      ? this.#hooks.hookOnce("trace", invoke)
-      : this.#hooks.hook("trace", invoke)
+    const removeHook = once ? this.#hooks.hookOnce("trace", invoke) : this.#hooks.hook("trace", invoke)
 
     if (contentRegistration !== undefined) {
       this.#contentTraceListeners.add(contentRegistration)
@@ -211,16 +177,11 @@ function captureTraceContent(listener: TraceSink): boolean {
   try {
     value = Reflect.get(listener, "captureContent")
   } catch (cause) {
-    throw new TypeError(
-      "trace listener captureContent could not be read",
-      { cause },
-    )
+    throw new TypeError("trace listener captureContent could not be read", { cause })
   }
 
   if (value !== undefined && typeof value !== "boolean") {
-    throw new TypeError(
-      "trace listener captureContent must be a boolean",
-    )
+    throw new TypeError("trace listener captureContent must be a boolean")
   }
 
   return value ?? false

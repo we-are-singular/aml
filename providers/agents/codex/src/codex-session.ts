@@ -1,15 +1,6 @@
-import type {
-  AgentExecutionContext,
-  AgentRequest,
-  AgentResponse,
-} from "@aml/sdk"
+import type { AgentExecutionContext, AgentRequest, AgentResponse } from "@aml-jsx/sdk"
 
-import type {
-  CodexClient,
-  CodexReasoningEffort,
-  CodexThread,
-  CodexThreadOptions,
-} from "./codex-client-factory.js"
+import type { CodexClient, CodexReasoningEffort, CodexThread, CodexThreadOptions } from "./codex-client-factory.js"
 import { prepareCodexOutputSchema } from "./prepare-codex-output-schema.js"
 
 interface CodexSessionOptions {
@@ -24,9 +15,7 @@ interface CodexSessionOptions {
  */
 export class CodexSession {
   readonly #model: string | undefined
-  readonly #outputSchema:
-    | Readonly<Record<string, unknown>>
-    | undefined
+  readonly #outputSchema: Readonly<Record<string, unknown>> | undefined
   readonly #prompts: readonly string[]
   readonly #reasoningEffort: CodexReasoningEffort | undefined
   readonly #skipGitRepoCheck: boolean | undefined
@@ -35,27 +24,14 @@ export class CodexSession {
   /**
    * Validates every turn before capability setup can perform external work.
    */
-  constructor(
-    request: AgentRequest,
-    options: CodexSessionOptions,
-  ) {
-    this.#model = CodexSession.#validateModel(
-      request.model ?? options.model,
-    )
-    this.#outputSchema =
-      request.output === undefined
-        ? undefined
-        : prepareCodexOutputSchema(
-            request.output.jsonSchema,
-          )
+  constructor(request: AgentRequest, options: CodexSessionOptions) {
+    this.#model = CodexSession.#validateModel(request.model ?? options.model)
+    this.#outputSchema = request.output === undefined ? undefined : prepareCodexOutputSchema(request.output.jsonSchema)
     this.#reasoningEffort = options.reasoningEffort
     this.#skipGitRepoCheck = options.skipGitRepoCheck
     this.#workingDirectory = options.workingDirectory
 
-    if (
-      request.followUps !== undefined &&
-      !Array.isArray(request.followUps)
-    ) {
+    if (request.followUps !== undefined && !Array.isArray(request.followUps)) {
       throw new TypeError("Codex followUps must be an array")
     }
 
@@ -63,9 +39,7 @@ export class CodexSession {
 
     for (const followUp of request.followUps ?? []) {
       if (typeof followUp !== "string" || followUp.length === 0) {
-        throw new TypeError(
-          "Codex followUps must contain non-empty strings",
-        )
+        throw new TypeError("Codex followUps must contain non-empty strings")
       }
 
       prompts.push(followUp)
@@ -77,25 +51,18 @@ export class CodexSession {
   /**
    * Executes every authored input through one provider conversation.
    */
-  async run(
-    client: CodexClient,
-    context: AgentExecutionContext,
-  ): Promise<AgentResponse> {
+  async run(client: CodexClient, context: AgentExecutionContext): Promise<AgentResponse> {
     context.signal.throwIfAborted()
 
     const startThread = client.startThread
 
     if (typeof startThread !== "function") {
-      throw new TypeError(
-        "Codex client startThread must be a function",
-      )
+      throw new TypeError("Codex client startThread must be a function")
     }
 
     const threadOptions: CodexThreadOptions = Object.freeze({
       approvalPolicy: "never",
-      ...(this.#model === undefined
-        ? {}
-        : { model: this.#model }),
+      ...(this.#model === undefined ? {} : { model: this.#model }),
       ...(this.#reasoningEffort === undefined
         ? {}
         : {
@@ -103,22 +70,14 @@ export class CodexSession {
           }),
       networkAccessEnabled: false,
       sandboxMode: "read-only",
-      ...(this.#skipGitRepoCheck === undefined
-        ? {}
-        : { skipGitRepoCheck: this.#skipGitRepoCheck }),
+      ...(this.#skipGitRepoCheck === undefined ? {} : { skipGitRepoCheck: this.#skipGitRepoCheck }),
       webSearchMode: "disabled",
-      ...(this.#workingDirectory === undefined
-        ? {}
-        : { workingDirectory: this.#workingDirectory }),
+      ...(this.#workingDirectory === undefined ? {} : { workingDirectory: this.#workingDirectory }),
     })
-    const thread = Reflect.apply(startThread, client, [
-      threadOptions,
-    ]) as CodexThread
+    const thread = Reflect.apply(startThread, client, [threadOptions]) as CodexThread
 
     if (typeof thread !== "object" || thread === null) {
-      throw new TypeError(
-        "Codex client must return a thread object",
-      )
+      throw new TypeError("Codex client must return a thread object")
     }
 
     const run = thread.run
@@ -137,9 +96,7 @@ export class CodexSession {
       const turn = await Reflect.apply(run, thread, [
         prompt,
         Object.freeze({
-          ...(isFinalTurn && this.#outputSchema !== undefined
-            ? { outputSchema: this.#outputSchema }
-            : {}),
+          ...(isFinalTurn && this.#outputSchema !== undefined ? { outputSchema: this.#outputSchema } : {}),
           signal: context.signal,
         }),
       ])
@@ -150,25 +107,13 @@ export class CodexSession {
       // The injected client is an external boundary. Read its result field once
       // so a stateful getter cannot change the turn after validation.
       try {
-        responseValue =
-          typeof turn === "object" && turn !== null
-            ? Reflect.get(turn, "finalResponse")
-            : undefined
+        responseValue = typeof turn === "object" && turn !== null ? Reflect.get(turn, "finalResponse") : undefined
       } catch (cause) {
-        throw new TypeError(
-          "Codex thread returned an invalid turn result",
-          { cause },
-        )
+        throw new TypeError("Codex thread returned an invalid turn result", { cause })
       }
 
-      if (
-        typeof turn !== "object" ||
-        turn === null ||
-        typeof responseValue !== "string"
-      ) {
-        throw new TypeError(
-          "Codex thread returned an invalid turn result",
-        )
+      if (typeof turn !== "object" || turn === null || typeof responseValue !== "string") {
+        throw new TypeError("Codex thread returned an invalid turn result")
       }
 
       // Reading an injected result can execute an accessor. Re-check after the
@@ -186,10 +131,7 @@ export class CodexSession {
     try {
       structured = JSON.parse(finalResponse)
     } catch (cause) {
-      throw new TypeError(
-        "Codex structured response is not valid JSON",
-        { cause },
-      )
+      throw new TypeError("Codex structured response is not valid JSON", { cause })
     }
 
     context.signal.throwIfAborted()
@@ -202,21 +144,13 @@ export class CodexSession {
   /**
    * Accepts an opaque Codex model name without normalizing its identity.
    */
-  static #validateModel(
-    value: string | undefined,
-  ): string | undefined {
+  static #validateModel(value: string | undefined): string | undefined {
     if (value === undefined) {
       return undefined
     }
 
-    if (
-      typeof value !== "string" ||
-      value.length === 0 ||
-      value !== value.trim()
-    ) {
-      throw new TypeError(
-        "Codex model must be a non-empty normalized string",
-      )
+    if (typeof value !== "string" || value.length === 0 || value !== value.trim()) {
+      throw new TypeError("Codex model must be a non-empty normalized string")
     }
 
     return value

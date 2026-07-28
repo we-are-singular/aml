@@ -1,7 +1,4 @@
-import type {
-  SandboxAcquireRequest,
-  SandboxProvider,
-} from "../components/sandbox/sandbox-provider.js"
+import type { SandboxAcquireRequest, SandboxProvider } from "../components/sandbox/sandbox-provider.js"
 import {
   captureSandboxLease,
   validateSandboxLease,
@@ -11,9 +8,7 @@ import {
 /**
  * Exercises one complete provider-neutral Sandbox lease lifecycle.
  */
-export async function sandboxProviderConformance(
-  provider: SandboxProvider,
-): Promise<void> {
+export async function sandboxProviderConformance(provider: SandboxProvider): Promise<void> {
   const validatedProvider = validateSandboxProvider(provider)
   const request: SandboxAcquireRequest = Object.freeze({
     access: "read-only",
@@ -22,11 +17,7 @@ export async function sandboxProviderConformance(
     root: ".",
     signal: new AbortController().signal,
   })
-  const value = await Reflect.apply(
-    validatedProvider.acquire,
-    validatedProvider.provider,
-    [request],
-  )
+  const value = await Reflect.apply(validatedProvider.acquire, validatedProvider.provider, [request])
   const capture = captureSandboxLease(value, validatedProvider.name)
   let releaseAttempted = false
 
@@ -43,7 +34,7 @@ export async function sandboxProviderConformance(
       } catch (releaseError) {
         throw new AggregateError(
           [error, releaseError],
-          `Sandbox provider "${validatedProvider.name}" failed conformance and cleanup`,
+          `Sandbox provider "${validatedProvider.name}" failed conformance and cleanup`
         )
       }
     }

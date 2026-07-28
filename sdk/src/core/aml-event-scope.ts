@@ -25,19 +25,13 @@ export class AmlEventScope implements AmlEventSubscriber {
    * Reports whether any observer of this evaluation accepts trace content.
    */
   get capturesTraceContent(): boolean {
-    return (
-      this.#runtime.capturesTraceContent ||
-      this.#local.capturesTraceContent
-    )
+    return this.#runtime.capturesTraceContent || this.#local.capturesTraceContent
   }
 
   /**
    * Registers one listener visible only to this evaluation.
    */
-  on<Name extends AmlEventName>(
-    name: Name,
-    listener: AmlEventListener<Name>,
-  ): () => void {
+  on<Name extends AmlEventName>(name: Name, listener: AmlEventListener<Name>): () => void {
     this.#assertOpen()
     return this.#local.on(name, listener)
   }
@@ -45,10 +39,7 @@ export class AmlEventScope implements AmlEventSubscriber {
   /**
    * Registers one evaluation-local listener for its next event.
    */
-  once<Name extends AmlEventName>(
-    name: Name,
-    listener: AmlEventListener<Name>,
-  ): () => void {
+  once<Name extends AmlEventName>(name: Name, listener: AmlEventListener<Name>): () => void {
     this.#assertOpen()
     return this.#local.once(name, listener)
   }
@@ -89,11 +80,7 @@ export class AmlEventScope implements AmlEventSubscriber {
   /**
    * Delivers one trace event to runtime and evaluation-local observers.
    */
-  trace(
-    redacted: AmlTraceEvent,
-    content: AmlTraceEvent,
-    onError: TraceErrorHandler,
-  ): void {
+  trace(redacted: AmlTraceEvent, content: AmlTraceEvent, onError: TraceErrorHandler): void {
     this.#runtime.trace(redacted, content, onError)
     this.#local.trace(redacted, content, onError)
   }

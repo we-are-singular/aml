@@ -1,4 +1,4 @@
-import type { AmlRenderable } from "@aml/sdk"
+import type { AmlRenderable } from "@aml-jsx/sdk"
 
 interface SectionProps {
   readonly children?: AmlRenderable

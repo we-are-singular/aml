@@ -9,7 +9,7 @@ import {
   type WorkspaceAcquireRequest,
   type WorkspaceLease,
   type WorkspaceProvider,
-} from "@aml/sdk"
+} from "@aml-jsx/sdk"
 
 import type { LocalWorkspaceHandle } from "./local-workspace-handle.js"
 import {
@@ -24,22 +24,14 @@ export type { LocalWorkspaceOptions } from "./local-workspace-options.js"
 /**
  * Creates a lazy provider for one existing durable local directory.
  */
-export function localWorkspace(
-  options: LocalWorkspaceOptions,
-): Readonly<WorkspaceProvider<LocalWorkspaceHandle>> {
-  return defineWorkspaceProvider(
-    new LocalWorkspaceProvider(
-      parseLocalWorkspaceOptions(options),
-    ),
-  )
+export function localWorkspace(options: LocalWorkspaceOptions): Readonly<WorkspaceProvider<LocalWorkspaceHandle>> {
+  return defineWorkspaceProvider(new LocalWorkspaceProvider(parseLocalWorkspaceOptions(options)))
 }
 
 /**
  * Owns physical directory validation and cross-process writer locking.
  */
-class LocalWorkspaceProvider
-  implements WorkspaceProvider<LocalWorkspaceHandle>
-{
+class LocalWorkspaceProvider implements WorkspaceProvider<LocalWorkspaceHandle> {
   readonly #options: Readonly<ParsedLocalWorkspaceOptions>
   readonly name = "local"
 
@@ -53,9 +45,7 @@ class LocalWorkspaceProvider
   /**
    * Resolves and exclusively locks the configured local materialization.
    */
-  async acquire(
-    request: WorkspaceAcquireRequest,
-  ): Promise<WorkspaceLease<LocalWorkspaceHandle>> {
+  async acquire(request: WorkspaceAcquireRequest): Promise<WorkspaceLease<LocalWorkspaceHandle>> {
     request.signal.throwIfAborted()
     const directory = await this.#resolveDirectory(request.signal)
     const activeLock = new LocalWorkspaceLock(directory)
@@ -80,10 +70,7 @@ class LocalWorkspaceProvider
         throw new WorkspaceConflictError(request.id)
       }
 
-      throw new Error(
-        `Local Workspace "${directory}" lock acquisition failed`,
-        { cause },
-      )
+      throw new Error(`Local Workspace "${directory}" lock acquisition failed`, { cause })
     }
 
     if (request.signal.aborted) {
@@ -94,7 +81,7 @@ class LocalWorkspaceProvider
       } catch (releaseError) {
         throw new AggregateError(
           [request.signal.reason, releaseError],
-          "Local Workspace acquisition was cancelled and lock cleanup failed",
+          "Local Workspace acquisition was cancelled and lock cleanup failed"
         )
       }
 
@@ -117,16 +104,11 @@ class LocalWorkspaceProvider
       signal.throwIfAborted()
 
       if (!metadata.isDirectory()) {
-        throw new TypeError(
-          "Local Workspace materialization must be a directory",
-        )
+        throw new TypeError("Local Workspace materialization must be a directory")
       }
     } catch (cause) {
       signal.throwIfAborted()
-      throw new Error(
-        `Local Workspace "${this.#options.directory}" cannot be materialized`,
-        { cause },
-      )
+      throw new Error(`Local Workspace "${this.#options.directory}" cannot be materialized`, { cause })
     }
 
     return directory
@@ -170,10 +152,7 @@ class LocalWorkspaceLock {
     }
 
     this.#compromiseReported = true
-    throw createCompromiseError(
-      this.#directory,
-      this.#compromise,
-    )
+    throw createCompromiseError(this.#directory, this.#compromise)
   }
 
   /**
@@ -198,9 +177,7 @@ class LocalWorkspaceLock {
     }
 
     if (this.#releaseLock === undefined) {
-      throw new Error(
-        `Local Workspace "${this.#directory}" lock was not acquired`,
-      )
+      throw new Error(`Local Workspace "${this.#directory}" lock was not acquired`)
     }
 
     try {
@@ -213,10 +190,7 @@ class LocalWorkspaceLock {
         return
       }
 
-      throw new Error(
-        `Local Workspace "${this.#directory}" lock release failed`,
-        { cause },
-      )
+      throw new Error(`Local Workspace "${this.#directory}" lock release failed`, { cause })
     }
 
     if (this.#compromise !== undefined) {
@@ -242,7 +216,7 @@ class LocalWorkspaceLock {
  */
 function createLocalWorkspaceLease(
   directory: string,
-  activeLock: LocalWorkspaceLock,
+  activeLock: LocalWorkspaceLock
 ): Readonly<WorkspaceLease<LocalWorkspaceHandle>> {
   const handle: LocalWorkspaceHandle = Object.freeze({
     directory,
@@ -268,14 +242,8 @@ function createLocalWorkspaceLease(
 /**
  * Attributes renewable-lock failure without leaking dependency error wording.
  */
-function createCompromiseError(
-  directory: string,
-  cause: Error,
-): Error {
-  return new Error(
-    `Local Workspace "${directory}" lock was compromised`,
-    { cause },
-  )
+function createCompromiseError(directory: string, cause: Error): Error {
+  return new Error(`Local Workspace "${directory}" lock was compromised`, { cause })
 }
 
 /**
@@ -287,10 +255,7 @@ function hasErrorCode(value: unknown, code: string): boolean {
   }
 
   try {
-    return (
-      "code" in value &&
-      (value as { readonly code?: unknown }).code === code
-    )
+    return "code" in value && (value as { readonly code?: unknown }).code === code
   } catch {
     return false
   }

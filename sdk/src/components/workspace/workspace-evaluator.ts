@@ -1,9 +1,6 @@
 import { EvaluationError } from "../../core/evaluation-error.js"
 import type { WorkspaceProps } from "./workspace.js"
-import type {
-  WorkspaceMaterializationReference,
-  WorkspaceProvider,
-} from "./workspace-provider.js"
+import type { WorkspaceMaterializationReference, WorkspaceProvider } from "./workspace-provider.js"
 import {
   captureWorkspaceLease,
   captureWorkspaceRelease,
@@ -35,10 +32,7 @@ export class WorkspaceEvaluator {
    * Captures an optional runtime-wide provider without acquiring resources.
    */
   constructor(provider?: WorkspaceProvider) {
-    this.#provider =
-      provider === undefined
-        ? undefined
-        : validateWorkspaceProvider(provider)
+    this.#provider = provider === undefined ? undefined : validateWorkspaceProvider(provider)
   }
 
   /**
@@ -47,18 +41,13 @@ export class WorkspaceEvaluator {
   async enter(
     props: Readonly<WorkspaceProps>,
     evaluationId: string,
-    signal: AbortSignal,
+    signal: AbortSignal
   ): Promise<Readonly<WorkspaceEvaluationScope>> {
     const workspaceId = validateWorkspaceId(props.id)
-    const provider =
-      props.provider === undefined
-        ? this.#provider
-        : validateWorkspaceProvider(props.provider)
+    const provider = props.provider === undefined ? this.#provider : validateWorkspaceProvider(props.provider)
 
     if (provider === undefined) {
-      throw new EvaluationError(
-        "<Workspace> requires a provider or AmlRuntime workspaceProvider",
-      )
+      throw new EvaluationError("<Workspace> requires a provider or AmlRuntime workspaceProvider")
     }
 
     const request = Object.freeze({
@@ -69,31 +58,21 @@ export class WorkspaceEvaluator {
     let value: unknown
 
     try {
-      value = await Reflect.apply(
-        provider.acquire,
-        provider.provider,
-        [request],
-      )
+      value = await Reflect.apply(provider.acquire, provider.provider, [request])
     } catch (cause) {
       signal.throwIfAborted()
-      throw new EvaluationError(
-        `Workspace provider "${provider.name}" failed to acquire`,
-        { cause },
-      )
+      throw new EvaluationError(`Workspace provider "${provider.name}" failed to acquire`, { cause })
     }
 
     let releaseCapture: ReturnType<typeof captureWorkspaceRelease>
 
     try {
-      releaseCapture = captureWorkspaceRelease(
-        value,
-        provider.name,
-      )
+      releaseCapture = captureWorkspaceRelease(value, provider.name)
     } catch (leaseError) {
       if (signal.aborted) {
         throw new AggregateError(
           [signal.reason, leaseError],
-          `Workspace provider "${provider.name}" completed cancelled acquisition with an invalid lease`,
+          `Workspace provider "${provider.name}" completed cancelled acquisition with an invalid lease`
         )
       }
 
@@ -106,7 +85,7 @@ export class WorkspaceEvaluator {
       } catch (releaseError) {
         throw new AggregateError(
           [signal.reason, releaseError],
-          "Workspace acquisition was cancelled and cleanup failed",
+          "Workspace acquisition was cancelled and cleanup failed"
         )
       }
 
@@ -116,36 +95,19 @@ export class WorkspaceEvaluator {
     let capture: ReturnType<typeof captureWorkspaceLease>
 
     try {
-      capture = captureWorkspaceLease(
-        releaseCapture,
-        provider.name,
-      )
+      capture = captureWorkspaceLease(releaseCapture, provider.name)
     } catch (leaseError) {
-      return await throwAfterInvalidLease(
-        leaseError,
-        releaseCapture.release,
-        provider.name,
-        signal,
-      )
+      return await throwAfterInvalidLease(leaseError, releaseCapture.release, provider.name, signal)
     }
 
     let lease: Readonly<ValidatedWorkspaceLease>
 
     try {
-      lease = validateWorkspaceLease(
-        capture,
-        provider.name,
-        workspaceId,
-      )
+      lease = validateWorkspaceLease(capture, provider.name, workspaceId)
     } catch (leaseError) {
       // No descendant has run, so an invalid materialization is released
       // without persisting provider data AML could not safely inspect.
-      return await throwAfterInvalidLease(
-        leaseError,
-        capture.release,
-        provider.name,
-        signal,
-      )
+      return await throwAfterInvalidLease(leaseError, capture.release, provider.name, signal)
     }
 
     return createWorkspaceScope(lease)
@@ -159,12 +121,10 @@ async function throwAfterInvalidLease(
   leaseError: unknown,
   release: () => Promise<void>,
   providerName: string,
-  signal: AbortSignal,
+  signal: AbortSignal
 ): Promise<never> {
   const cancellationCaptured = signal.aborted
-  const errors: unknown[] = cancellationCaptured
-    ? [signal.reason, leaseError]
-    : [leaseError]
+  const errors: unknown[] = cancellationCaptured ? [signal.reason, leaseError] : [leaseError]
 
   try {
     await release()
@@ -183,16 +143,14 @@ async function throwAfterInvalidLease(
 
   throw new AggregateError(
     errors,
-    `Workspace provider "${providerName}" returned an invalid lease and cleanup failed or raced cancellation`,
+    `Workspace provider "${providerName}" returned an invalid lease and cleanup failed or raced cancellation`
   )
 }
 
 /**
  * Creates an idempotent completion barrier around save-then-release.
  */
-function createWorkspaceScope(
-  lease: Readonly<ValidatedWorkspaceLease>,
-): Readonly<WorkspaceEvaluationScope> {
+function createWorkspaceScope(lease: Readonly<ValidatedWorkspaceLease>): Readonly<WorkspaceEvaluationScope> {
   let completion: Promise<void> | undefined
 
   return Object.freeze({
@@ -207,9 +165,7 @@ function createWorkspaceScope(
 /**
  * Persists before release and preserves both independent provider failures.
  */
-async function saveAndReleaseWorkspace(
-  lease: Readonly<ValidatedWorkspaceLease>,
-): Promise<void> {
+async function saveAndReleaseWorkspace(lease: Readonly<ValidatedWorkspaceLease>): Promise<void> {
   const errors: unknown[] = []
 
   try {
@@ -229,10 +185,7 @@ async function saveAndReleaseWorkspace(
   }
 
   if (errors.length > 1) {
-    throw new AggregateError(
-      errors,
-      "Workspace save and release both failed",
-    )
+    throw new AggregateError(errors, "Workspace save and release both failed")
   }
 }
 
@@ -240,14 +193,8 @@ async function saveAndReleaseWorkspace(
  * Rejects identities that change through implicit trimming or empty values.
  */
 function validateWorkspaceId(value: unknown): string {
-  if (
-    typeof value !== "string" ||
-    value.length === 0 ||
-    value !== value.trim()
-  ) {
-    throw new EvaluationError(
-      "<Workspace> id must be a non-empty normalized string",
-    )
+  if (typeof value !== "string" || value.length === 0 || value !== value.trim()) {
+    throw new EvaluationError("<Workspace> id must be a non-empty normalized string")
   }
 
   return value

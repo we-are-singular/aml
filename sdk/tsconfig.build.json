@@ -6,16 +6,16 @@
     "emitDeclarationOnly": true,
     "noEmit": false,
     "outDir": "dist",
-    "rootDir": "src",
+    "rootDir": "..",
     "sourceMap": true
   },
   "include": [
     "src/**/*.ts",
-    "src/**/*.tsx"
+    "src/**/*.tsx",
+    "../providers/agents/codex/src/**/*.ts",
+    "../providers/agents/opencode/src/**/*.ts",
+    "../providers/sandboxes/docker/src/**/*.ts",
+    "../providers/workspaces/local/src/**/*.ts"
   ],
-  "exclude": [
-    "scripts",
-    "tests",
-    "vite.config.ts"
-  ]
+  "exclude": ["scripts", "tests", "vite.config.ts"]
 }

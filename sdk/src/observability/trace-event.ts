@@ -6,11 +6,7 @@ import type { AmlTraceIdentity } from "../core/trace-identity.js"
  * Trace attributes intentionally exclude arbitrary objects so observers never
  * receive live workflow, provider, Tool, or resource references.
  */
-export type AmlTraceAttribute =
-  | boolean
-  | number
-  | string
-  | readonly string[]
+export type AmlTraceAttribute = boolean | number | string | readonly string[]
 
 /**
  * Execution boundaries represented by paired start and end events.
@@ -29,19 +25,13 @@ export type AmlTraceSpanKind =
 /**
  * Point-in-time events that belong to an existing execution span.
  */
-export type AmlTraceEventName =
-  | "agent.turn"
-  | "capability.mcp"
-  | "capability.tool"
-  | "loop.transition"
+export type AmlTraceEventName = "agent.turn" | "capability.mcp" | "capability.tool" | "loop.transition"
 
 /**
  * Common immutable correlation and ordering fields on every trace event.
  */
 export interface AmlTraceEventBase extends AmlTraceIdentity {
-  readonly attributes: Readonly<
-    Record<string, AmlTraceAttribute>
-  >
+  readonly attributes: Readonly<Record<string, AmlTraceAttribute>>
   readonly sequence: number
   readonly timestamp: number
 }
@@ -77,7 +67,4 @@ export interface AmlTracePointEvent extends AmlTraceEventBase {
 /**
  * Stable provider-neutral event union emitted by one AML evaluation.
  */
-export type AmlTraceEvent =
-  | AmlTracePointEvent
-  | AmlTraceSpanEndEvent
-  | AmlTraceSpanStartEvent
+export type AmlTraceEvent = AmlTracePointEvent | AmlTraceSpanEndEvent | AmlTraceSpanStartEvent

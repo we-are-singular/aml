@@ -5,7 +5,7 @@
     "exactOptionalPropertyTypes": true,
     "forceConsistentCasingInFileNames": true,
     "jsx": "react-jsx",
-    "jsxImportSource": "@aml/sdk",
+    "jsxImportSource": "@aml-jsx/sdk",
     "lib": ["ES2022"],
     "module": "ESNext",
     "moduleDetection": "force",

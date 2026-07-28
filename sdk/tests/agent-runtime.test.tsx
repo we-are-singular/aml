@@ -18,11 +18,11 @@ describe("Agent", () => {
   it("uses the runtime provider unless an Agent overrides it", async () => {
     const runtimeProvider = new DeterministicAgentProvider({
       name: "runtime",
-      respond: (request) => ({ text: `runtime:${request.prompt}` }),
+      respond: request => ({ text: `runtime:${request.prompt}` }),
     })
     const localProvider = new DeterministicAgentProvider({
       name: "local",
-      respond: (request) => ({ text: `local:${request.prompt}` }),
+      respond: request => ({ text: `local:${request.prompt}` }),
     })
     const runtime = new AmlRuntime({ agentProvider: runtimeProvider })
 
@@ -34,7 +34,7 @@ describe("Agent", () => {
           model: "provider/model",
           provider: localProvider,
         }),
-      ]),
+      ])
     ).resolves.toBe("runtime:firstlocal:second")
 
     expect(runtimeProvider.calls).toHaveLength(1)
@@ -51,10 +51,7 @@ describe("Agent", () => {
       respond(request) {
         events.push(`specialist:${request.prompt}`)
         return {
-          text:
-            request.prompt === "Write rules"
-              ? "generated rules"
-              : "evidence result",
+          text: request.prompt === "Write rules" ? "generated rules" : "evidence result",
         }
       },
     })
@@ -64,9 +61,7 @@ describe("Agent", () => {
         events.push("coordinator")
         expect(request.model).toBe("coordinator/model")
         expect(request.prompt).toBe("before:evidence result:after")
-        expect(request.system).toBe(
-          "runtime system\nfixed system\ngenerated rules\nasync guidance",
-        )
+        expect(request.system).toBe("runtime system\nfixed system\ngenerated rules\nasync guidance")
         return { text: "final answer" }
       },
     })
@@ -101,7 +96,7 @@ describe("Agent", () => {
     })
     const runtime = new AmlRuntime({
       system: " runtime system ",
-      trace: (event) => traceEvents.push(event),
+      trace: event => traceEvents.push(event),
     })
 
     await expect(runtime.evaluate(tree)).resolves.toBe("final answer")
@@ -114,43 +109,27 @@ describe("Agent", () => {
     ])
 
     const parentTrace = coordinator.calls[0]?.context.trace
-    const systemSpan = traceEvents.find(
-      (event) =>
-        event.type === "span.start" &&
-        event.kind === "system",
-    )
+    const systemSpan = traceEvents.find(event => event.type === "span.start" && event.kind === "system")
 
     expect(parentTrace).toBeDefined()
-    expect(specialist.calls[0]?.context.trace.parentSpanId).toBe(
-      systemSpan?.spanId,
-    )
-    expect(specialist.calls[1]?.context.trace.parentSpanId).toBe(
-      parentTrace?.spanId,
-    )
-    expect(specialist.calls[0]?.context.trace.runId).toBe(
-      parentTrace?.runId,
-    )
+    expect(specialist.calls[0]?.context.trace.parentSpanId).toBe(systemSpan?.spanId)
+    expect(specialist.calls[1]?.context.trace.parentSpanId).toBe(parentTrace?.spanId)
+    expect(specialist.calls[0]?.context.trace.runId).toBe(parentTrace?.runId)
 
     // Providers receive the exact identity published for their Agent span;
     // correlation must never assign two parents to one span ID.
-    for (const call of [
-      ...specialist.calls,
-      ...coordinator.calls,
-    ]) {
+    for (const call of [...specialist.calls, ...coordinator.calls]) {
       expect(
         traceEvents.find(
-          (event) =>
-            event.type === "span.start" &&
-            event.kind === "agent" &&
-            event.spanId === call.context.trace.spanId,
-        ),
+          event => event.type === "span.start" && event.kind === "agent" && event.spanId === call.context.trace.spanId
+        )
       ).toMatchObject(call.context.trace)
     }
   })
 
   it("accepts System descriptors returned through components", async () => {
     const provider = new DeterministicAgentProvider({
-      respond: (request) => ({ text: request.system }),
+      respond: request => ({ text: request.system }),
     })
 
     function ReusableSystem() {
@@ -162,8 +141,8 @@ describe("Agent", () => {
         <Agent>
           <ReusableSystem />
           prompt
-        </Agent>,
-      ),
+        </Agent>
+      )
     ).resolves.toBe("component system")
 
     expect(provider.calls[0]?.request.prompt).toBe("prompt")
@@ -173,24 +152,22 @@ describe("Agent", () => {
     const provider = new DeterministicAgentProvider()
     const runtime = new AmlRuntime({ agentProvider: provider })
 
-    await expect(runtime.evaluate(<System>outside</System>)).rejects.toThrow(
-      "<System> is only valid inside <Agent>",
-    )
+    await expect(runtime.evaluate(<System>outside</System>)).rejects.toThrow("<System> is only valid inside <Agent>")
     await expect(
       runtime.evaluate(
         <Agent>
           <System>
             <System>nested</System>
           </System>
-        </Agent>,
-      ),
+        </Agent>
+      )
     ).rejects.toThrow("nested <System> descriptors are invalid")
     await expect(
       runtime.evaluate(
         <Agent>
           <System> </System>
-        </Agent>,
-      ),
+        </Agent>
+      )
     ).rejects.toThrow("<System> must resolve to non-empty text")
     expect(provider.calls).toHaveLength(0)
   })
@@ -207,8 +184,8 @@ describe("Agent", () => {
       new AmlRuntime().evaluate(
         <Agent>
           <Child />
-        </Agent>,
-      ),
+        </Agent>
+      )
     ).rejects.toThrow("Agent span-1 has no provider")
     expect(events).toEqual(["child"])
   })
@@ -229,10 +206,7 @@ describe("Agent", () => {
       .catch((cause: unknown) => cause)
 
     expect(error).toBeInstanceOf(EvaluationError)
-    expect(error).toHaveProperty(
-      "message",
-      'Agent "broken" (span-1) failed',
-    )
+    expect(error).toHaveProperty("message", 'Agent "broken" (span-1) failed')
     expect(error).toHaveProperty("cause", failure)
   })
 
@@ -244,12 +218,8 @@ describe("Agent", () => {
       },
     }
 
-    await expect(
-      new AmlRuntime({ agentProvider: provider }).evaluate(
-        <Agent>prompt</Agent>,
-      ),
-    ).rejects.toThrow(
-      'Agent "invalid-response" (span-1) returned an invalid response',
+    await expect(new AmlRuntime({ agentProvider: provider }).evaluate(<Agent>prompt</Agent>)).rejects.toThrow(
+      'Agent "invalid-response" (span-1) returned an invalid response'
     )
   })
 
@@ -272,11 +242,9 @@ describe("Agent", () => {
       },
     }
 
-    await expect(
-      new AmlRuntime({ agentProvider: provider }).evaluate(
-        <Agent>prompt</Agent>,
-      ),
-    ).resolves.toBe("captured once")
+    await expect(new AmlRuntime({ agentProvider: provider }).evaluate(<Agent>prompt</Agent>)).resolves.toBe(
+      "captured once"
+    )
     expect(reads).toBe(1)
   })
 
@@ -298,10 +266,7 @@ describe("Agent", () => {
       .catch((cause: unknown) => cause)
 
     expect(error).toBeInstanceOf(EvaluationError)
-    expect(error).toHaveProperty(
-      "message",
-      'Agent "getter-failure" (span-1) returned an invalid response',
-    )
+    expect(error).toHaveProperty("message", 'Agent "getter-failure" (span-1) returned an invalid response')
     expect(error).toHaveProperty("cause", failure)
   })
 
@@ -320,50 +285,43 @@ describe("Agent", () => {
         <Agent>
           <Agent provider={child}>child prompt</Agent>
           parent prompt
-        </Agent>,
+        </Agent>
       )
       .catch((cause: unknown) => cause)
 
-    expect(error).toHaveProperty(
-      "message",
-      'Agent "child" (span-2) failed',
-    )
+    expect(error).toHaveProperty("message", 'Agent "child" (span-2) failed')
     expect(error).toHaveProperty("cause", failure)
     expect(parent.calls).toHaveLength(0)
   })
 
   it("enforces the default Agent-call budget", async () => {
     const provider = new DeterministicAgentProvider()
-    const agents = Array.from({ length: 33 }, (_, index) => (
-      <Agent provider={provider}>{index}</Agent>
-    ))
+    const agents = Array.from({ length: 33 }, (_, index) => <Agent provider={provider}>{index}</Agent>)
 
     await expect(new AmlRuntime().evaluate(agents)).rejects.toThrow(
-      "AML evaluation exceeded maxAgentCalls 32 at Agent span-33",
+      "AML evaluation exceeded maxAgentCalls 32 at Agent span-33"
     )
     expect(provider.calls).toHaveLength(32)
   })
 
   it("accepts zero as an unlimited Agent-call budget", async () => {
     const provider = new DeterministicAgentProvider()
-    const agents = Array.from({ length: 33 }, (_, index) => (
-      <Agent provider={provider}>{index}</Agent>
-    ))
+    const agents = Array.from({ length: 33 }, (_, index) => <Agent provider={provider}>{index}</Agent>)
 
-    await expect(
-      new AmlRuntime({ maxAgentCalls: 0 }).evaluate(agents),
-    ).resolves.toBe(Array.from({ length: 33 }, (_, index) => index).join(""))
+    await expect(new AmlRuntime({ maxAgentCalls: 0 }).evaluate(agents)).resolves.toBe(
+      Array.from({ length: 33 }, (_, index) => index).join("")
+    )
     expect(provider.calls).toHaveLength(33)
   })
 
   it("recognizes Agent and System markers from another SDK copy", async () => {
     const provider = new DeterministicAgentProvider({
-      respond: (request) => ({
+      respond: request => ({
         text: `${request.system}|${request.prompt}`,
       }),
     })
-    const nodeBrand = Symbol.for("@aml/sdk/node")
-    const primitiveKind = Symbol.for("@aml/sdk/primitive-kind")
+    const nodeBrand = Symbol.for("@aml-jsx/sdk/node")
+    const primitiveKind = Symbol.for("@aml-jsx/sdk/primitive-kind")
 
     function ForeignAgent(): never {
       throw new Error("Foreign Agent was invoked as a component")
@@ -392,9 +350,7 @@ describe("Agent", () => {
       type: ForeignAgent,
     }
 
-    await expect(
-      new AmlRuntime().evaluate(agentNode),
-    ).resolves.toBe("foreign system|foreign prompt")
+    await expect(new AmlRuntime().evaluate(agentNode)).resolves.toBe("foreign system|foreign prompt")
   })
 
   it("does not type an unbranded descriptor as AML", () => {
@@ -418,11 +374,9 @@ describe("Agent", () => {
       },
     }
 
-    await expect(
-      new AmlRuntime().evaluate(
-        <Agent provider={provider}>captured once</Agent>,
-      ),
-    ).resolves.toBe("captured once")
+    await expect(new AmlRuntime().evaluate(<Agent provider={provider}>captured once</Agent>)).resolves.toBe(
+      "captured once"
+    )
 
     expect(nameReads).toBe(1)
     expect(runReads).toBe(1)
@@ -452,7 +406,7 @@ describe("defineAgentProvider", () => {
         prompt: "prompt",
         system: "",
         tools: [],
-      }),
+      })
     ).resolves.toEqual({ text: "state:prompt" })
   })
 
@@ -468,21 +422,17 @@ describe("defineAgentProvider", () => {
   })
 
   it("rejects incomplete provider definitions", () => {
-    expect(() =>
-      defineAgentProvider({ name: " ", run: async () => ({ text: "" }) }),
-    ).toThrow("Agent provider name must already be normalized")
-    expect(() =>
-      defineAgentProvider({ name: "missing-run" } as never),
-    ).toThrow("Agent provider run must be a function")
+    expect(() => defineAgentProvider({ name: " ", run: async () => ({ text: "" }) })).toThrow(
+      "Agent provider name must already be normalized"
+    )
+    expect(() => defineAgentProvider({ name: "missing-run" } as never)).toThrow("Agent provider run must be a function")
     const callable = Object.assign(function callableProvider() {}, {
       async run() {
         return { text: "" }
       },
     })
 
-    expect(() => defineAgentProvider(callable)).toThrow(
-      "Agent provider must be an object",
-    )
+    expect(() => defineAgentProvider(callable)).toThrow("Agent provider must be an object")
   })
 })
 
@@ -509,23 +459,15 @@ describe("agentProviderConformance", () => {
 
     await expect(agentProviderConformance(provider)).resolves.toBeUndefined()
     expect(provider.calls).toHaveLength(1)
-    expect(provider.calls[0]?.request.prompt).toBe(
-      "agent-provider-conformance",
-    )
-    expect(provider.calls[0]?.request.followUps).toEqual([
-      "agent-provider-conformance-final",
-    ])
-    expect(Object.isFrozen(provider.calls[0]?.request.followUps)).toBe(
-      true,
-    )
+    expect(provider.calls[0]?.request.prompt).toBe("agent-provider-conformance")
+    expect(provider.calls[0]?.request.followUps).toEqual(["agent-provider-conformance-final"])
+    expect(Object.isFrozen(provider.calls[0]?.request.followUps)).toBe(true)
     expect(Object.isFrozen(provider.calls[0]?.request)).toBe(true)
     expect(Object.isFrozen(provider.calls[0]?.context)).toBe(true)
 
-    await expect(
-      new AmlRuntime({ agentProvider: provider }).evaluate(
-        <Agent>runtime-compatible</Agent>,
-      ),
-    ).resolves.toBe("runtime-compatible")
+    await expect(new AmlRuntime({ agentProvider: provider }).evaluate(<Agent>runtime-compatible</Agent>)).resolves.toBe(
+      "runtime-compatible"
+    )
   })
 
   it("rejects providers that violate the response contract", async () => {
@@ -536,19 +478,13 @@ describe("agentProviderConformance", () => {
       },
     }
 
-    await expect(agentProviderConformance(provider)).rejects.toThrow(
-      "Agent provider must return a text response",
-    )
+    await expect(agentProviderConformance(provider)).rejects.toThrow("Agent provider must return a text response")
   })
 })
 
 describe("Agent runtime options", () => {
   it("rejects invalid Agent-call budgets", () => {
-    expect(() => new AmlRuntime({ maxAgentCalls: -1 })).toThrow(
-      "maxAgentCalls must be a non-negative safe integer",
-    )
-    expect(() => new AmlRuntime({ maxAgentCalls: 1.5 })).toThrow(
-      "maxAgentCalls must be a non-negative safe integer",
-    )
+    expect(() => new AmlRuntime({ maxAgentCalls: -1 })).toThrow("maxAgentCalls must be a non-negative safe integer")
+    expect(() => new AmlRuntime({ maxAgentCalls: 1.5 })).toThrow("maxAgentCalls must be a non-negative safe integer")
   })
 })

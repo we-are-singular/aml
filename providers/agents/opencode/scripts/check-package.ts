@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs"
 import { fileURLToPath, pathToFileURL } from "node:url"
 import { resolve } from "node:path"
 
-import { agentProviderConformance } from "@aml/sdk/testing"
+import { agentProviderConformance } from "@aml-jsx/sdk/testing"
 
 interface PackResult {
   files: { path: string }[]
@@ -15,17 +15,14 @@ interface BuiltProviderPackage {
       abort(input: unknown): Promise<void>
       attachCapabilities(
         input: unknown,
-        signal: AbortSignal,
+        signal: AbortSignal
       ): Promise<{
         close(): Promise<void>
         tools: Readonly<Record<string, boolean>>
       }>
       create(input: unknown, signal: AbortSignal): Promise<string>
       delete(input: unknown): Promise<void>
-      prompt(
-        input: unknown,
-        signal: AbortSignal,
-      ): Promise<{ parts: { text: string; type: string }[] }>
+      prompt(input: unknown, signal: AbortSignal): Promise<{ parts: { text: string; type: string }[] }>
     }
   }): {
     close(): Promise<void>
@@ -35,9 +32,7 @@ interface BuiltProviderPackage {
 }
 
 const packageDirectory = resolve(import.meta.dirname, "..")
-const packageJson = JSON.parse(
-  readFileSync(resolve(packageDirectory, "package.json"), "utf8"),
-) as {
+const packageJson = JSON.parse(readFileSync(resolve(packageDirectory, "package.json"), "utf8")) as {
   exports: Record<string, { import: string; types: string }>
   files: string[]
 }
@@ -51,24 +46,20 @@ if (
     },
   })
 ) {
-  throw new Error(
-    "OpenCode provider exports do not match the reviewed dist-only contract",
-  )
+  throw new Error("OpenCode provider exports do not match the reviewed dist-only contract")
 }
 
 if (JSON.stringify(packageJson.files) !== JSON.stringify(["dist"])) {
   throw new Error('OpenCode provider files must be exactly ["dist"]')
 }
 
-const entry = fileURLToPath(import.meta.resolve("@aml/agent-opencode"))
+const entry = fileURLToPath(import.meta.resolve("@aml-jsx/agent-opencode"))
 
 if (!entry.startsWith(resolve(packageDirectory, "dist"))) {
   throw new Error(`OpenCode provider resolved outside dist: ${entry}`)
 }
 
-const built = (await import(
-  pathToFileURL(entry).href
-)) as BuiltProviderPackage
+const built = (await import(pathToFileURL(entry).href)) as BuiltProviderPackage
 const calls = {
   abort: 0,
   attachCapabilities: 0,
@@ -118,16 +109,12 @@ if (
   throw new Error("Built OpenCode provider failed its package contract")
 }
 
-const packOutput = execFileSync(
-  "npm",
-  ["pack", "--dry-run", "--ignore-scripts", "--json"],
-  {
-    cwd: packageDirectory,
-    encoding: "utf8",
-  },
-)
+const packOutput = execFileSync("npm", ["pack", "--dry-run", "--ignore-scripts", "--json"], {
+  cwd: packageDirectory,
+  encoding: "utf8",
+})
 const [packResult] = JSON.parse(packOutput) as PackResult[]
-const packedFiles = new Set(packResult?.files.map((file) => file.path))
+const packedFiles = new Set(packResult?.files.map(file => file.path))
 
 for (const expectedFile of ["dist/index.d.ts", "dist/index.js"]) {
   if (!packedFiles.has(expectedFile)) {
@@ -135,7 +122,7 @@ for (const expectedFile of ["dist/index.d.ts", "dist/index.js"]) {
   }
 }
 
-if ([...packedFiles].some((file) => file.startsWith("src/"))) {
+if ([...packedFiles].some(file => file.startsWith("src/"))) {
   throw new Error("OpenCode provider package contains source files")
 }
 

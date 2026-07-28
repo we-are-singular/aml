@@ -7,11 +7,7 @@ import type { AgentExecutionContext } from "../src/components/agent/agent-execut
 import type { AgentProvider } from "../src/components/agent/agent-provider.js"
 import type { AgentRequest } from "../src/components/agent/agent-request.js"
 import { FollowUp } from "../src/components/follow-up/follow-up.js"
-import {
-  type DeepReadonly,
-  Loop,
-  type LoopProps,
-} from "../src/components/loop/loop.js"
+import { type DeepReadonly, Loop, type LoopProps } from "../src/components/loop/loop.js"
 import { Sandbox } from "../src/components/sandbox/sandbox.js"
 import type { AgentJavaScriptTool } from "../src/components/tool/agent-tool.js"
 import { Tool } from "../src/components/tool/tool.js"
@@ -60,16 +56,10 @@ describe("Loop", () => {
           snapshots.push(state)
           expect(iteration).toBe(snapshots.length)
 
-          return (
-            <Agent>
-              {state.status === "pending"
-                ? "investigate"
-                : state.findings.join(",")}
-            </Agent>
-          )
+          return <Agent>{state.status === "pending" ? "investigate" : state.findings.join(",")}</Agent>
         }}
         schema={State}
-      />,
+      />
     )
 
     expect(output).toBe("final:verified")
@@ -77,11 +67,7 @@ describe("Loop", () => {
     expect(snapshots).toHaveLength(2)
     expect(snapshots[0]).not.toBe(initial)
     expect(Object.isFrozen(snapshots[0])).toBe(true)
-    expect(
-      Object.isFrozen(
-        (snapshots[0] as { findings: string[] }).findings,
-      ),
-    ).toBe(true)
+    expect(Object.isFrozen((snapshots[0] as { findings: string[] }).findings)).toBe(true)
     expect(Object.isFrozen(initial)).toBe(false)
     expect(Object.isFrozen(initial.findings)).toBe(false)
   })
@@ -112,20 +98,18 @@ describe("Loop", () => {
           render={({ state }) => (
             <Agent>
               {state.done ? "committed" : "pending"}
-              <FollowUp>
-                Confirm using this session's history.
-              </FollowUp>
+              <FollowUp>Confirm using this session's history.</FollowUp>
             </Agent>
           )}
           schema={State}
-        />,
-      ),
+        />
+      )
     ).resolves.toBe("current final turn")
     expect(
-      requests.map((request) => ({
+      requests.map(request => ({
         followUps: request.followUps,
         prompt: request.prompt,
-      })),
+      }))
     ).toEqual([
       {
         followUps: ["Confirm using this session's history."],
@@ -144,7 +128,7 @@ describe("Loop", () => {
     const provider: AgentProvider = {
       name: "scoped",
       async run(request) {
-        grants.push(request.tools.map((tool) => tool.name))
+        grants.push(request.tools.map(tool => tool.name))
         return {
           text: request.prompt === "child" ? "evidence" : "finished",
         }
@@ -162,8 +146,8 @@ describe("Loop", () => {
             </Agent>
           )}
           schema={State}
-        />,
-      ),
+        />
+      )
     ).resolves.toBe("finished")
     expect(grants).toEqual([[], ["aml_set_state"]])
   })
@@ -182,23 +166,14 @@ describe("Loop", () => {
         calls += 1
         const tool = requireStateTool(request)
 
+        await expect(tool.execute({ updates: { left: 1 } }, toolContext(context))).rejects.toThrow(
+          "failed schema validation"
+        )
+        await expect(tool.execute({ updates: { missing: true } }, toolContext(context))).rejects.toThrow(
+          "cannot update unknown keys: missing"
+        )
         await expect(
-          tool.execute(
-            { updates: { left: 1 } },
-            toolContext(context),
-          ),
-        ).rejects.toThrow("failed schema validation")
-        await expect(
-          tool.execute(
-            { updates: { missing: true } },
-            toolContext(context),
-          ),
-        ).rejects.toThrow("cannot update unknown keys: missing")
-        await expect(
-          tool.execute(
-            { extra: true, updates: { left: 1, right: 1 } },
-            toolContext(context),
-          ),
+          tool.execute({ extra: true, updates: { left: 1, right: 1 } }, toolContext(context))
         ).rejects.toThrow("must contain only updates")
 
         return { text: "unchanged" }
@@ -210,11 +185,13 @@ describe("Loop", () => {
         <Loop
           initial={{ left: 0, right: 0 }}
           render={({ state }) => (
-            <Agent>{state.left}:{state.right}</Agent>
+            <Agent>
+              {state.left}:{state.right}
+            </Agent>
           )}
           schema={State}
-        />,
-      ),
+        />
+      )
     ).resolves.toBe("unchanged")
     expect(calls).toBe(1)
   })
@@ -230,14 +207,8 @@ describe("Loop", () => {
         if (request.prompt === "0") {
           const tool = requireStateTool(request)
           await Promise.all([
-            tool.execute(
-              { updates: { count: 1 } },
-              toolContext(context),
-            ),
-            tool.execute(
-              { updates: { count: 2 } },
-              toolContext(context),
-            ),
+            tool.execute({ updates: { count: 1 } }, toolContext(context)),
+            tool.execute({ updates: { count: 2 } }, toolContext(context)),
           ])
           return { text: "stale" }
         }
@@ -248,12 +219,8 @@ describe("Loop", () => {
 
     await expect(
       new AmlRuntime({ agentProvider: provider }).evaluate(
-        <Loop
-          initial={{ count: 0 }}
-          render={({ state }) => <Agent>{state.count}</Agent>}
-          schema={State}
-        />,
-      ),
+        <Loop initial={{ count: 0 }} render={({ state }) => <Agent>{state.count}</Agent>} schema={State} />
+      )
     ).resolves.toBe("finished")
     expect(prompts).toEqual(["0", "2"])
   })
@@ -267,22 +234,12 @@ describe("Loop", () => {
         calls += 1
         const tool = requireStateTool(request)
         expect(Object.isFrozen(tool)).toBe(true)
-        await expect(
-          tool.execute(
-            { updates: { done: true } },
-            toolContext(context),
-          ),
-        ).resolves.toEqual({
+        await expect(tool.execute({ updates: { done: true } }, toolContext(context))).resolves.toEqual({
           changed: true,
           updated: ["done"],
           willRepeat: true,
         })
-        await expect(
-          tool.execute(
-            { updates: { done: false } },
-            toolContext(context),
-          ),
-        ).resolves.toEqual({
+        await expect(tool.execute({ updates: { done: false } }, toolContext(context))).resolves.toEqual({
           changed: true,
           updated: ["done"],
           willRepeat: false,
@@ -293,12 +250,8 @@ describe("Loop", () => {
 
     await expect(
       new AmlRuntime({ agentProvider: provider }).evaluate(
-        <Loop
-          initial={{ done: false }}
-          render={({ state }) => <Agent>{String(state.done)}</Agent>}
-          schema={State}
-        />,
-      ),
+        <Loop initial={{ done: false }} render={({ state }) => <Agent>{String(state.done)}</Agent>} schema={State} />
+      )
     ).resolves.toBe("settled output")
     expect(calls).toBe(1)
   })
@@ -323,38 +276,22 @@ describe("Loop", () => {
     }
 
     await new AmlRuntime({ agentProvider: provider }).evaluate(
-      <Loop
-        initial={{ done: false }}
-        render={({ state }) => <Agent>{String(state.done)}</Agent>}
-        schema={State}
-      />,
+      <Loop initial={{ done: false }} render={({ state }) => <Agent>{String(state.done)}</Agent>} schema={State} />
     )
 
     expect(retained).toBeDefined()
-    await expect(
-      retained!.tool.execute(
-        { updates: { done: true } },
-        toolContext(retained!.context),
-      ),
-    ).rejects.toThrow(
-      '"Loop" state capability expired when its Agent finished',
+    await expect(retained!.tool.execute({ updates: { done: true } }, toolContext(retained!.context))).rejects.toThrow(
+      '"Loop" state capability expired when its Agent finished'
     )
   })
 
   it("prevents a detached Tool call from committing after its Agent returns", async () => {
     let validationCall = 0
     let releasePatch: (() => void) | undefined
-    const State: StandardSchemaV1<
-      { done: boolean },
-      { done: boolean }
-    > = {
+    const State: StandardSchemaV1<{ done: boolean }, { done: boolean }> = {
       "~standard": {
         validate(value: unknown) {
-          if (
-            typeof value !== "object" ||
-            value === null ||
-            typeof Reflect.get(value, "done") !== "boolean"
-          ) {
+          if (typeof value !== "object" || value === null || typeof Reflect.get(value, "done") !== "boolean") {
             return { issues: [{ message: "done must be boolean" }] }
           }
 
@@ -366,7 +303,7 @@ describe("Loop", () => {
           // Initial state consumes calls one and two. Hold the patch's first
           // validation until after the provider session has returned.
           if (validationCall === 3) {
-            return new Promise<{ value: { done: boolean } }>((resolve) => {
+            return new Promise<{ value: { done: boolean } }>(resolve => {
               releasePatch = () => resolve({ value: state })
             })
           }
@@ -381,10 +318,7 @@ describe("Loop", () => {
     const provider: AgentProvider = {
       name: "detached",
       async run(request, context) {
-        detached = requireStateTool(request).execute(
-          { updates: { done: true } },
-          toolContext(context),
-        )
+        detached = requireStateTool(request).execute({ updates: { done: true } }, toolContext(context))
 
         // Observe the rejection without joining it; this deliberately models a
         // provider that violates the Tool cleanup barrier.
@@ -395,18 +329,12 @@ describe("Loop", () => {
 
     await expect(
       new AmlRuntime({ agentProvider: provider }).evaluate(
-        <Loop
-          initial={{ done: false }}
-          render={({ state }) => <Agent>{String(state.done)}</Agent>}
-          schema={State}
-        />,
-      ),
+        <Loop initial={{ done: false }} render={({ state }) => <Agent>{String(state.done)}</Agent>} schema={State} />
+      )
     ).resolves.toBe("current output")
     expect(detached).toBeDefined()
     releasePatch?.()
-    await expect(detached).rejects.toThrow(
-      '"Loop" state capability expired when its Agent finished',
-    )
+    await expect(detached).rejects.toThrow('"Loop" state capability expired when its Agent finished')
   })
 
   it("enforces one evaluation-wide state-transition budget", async () => {
@@ -431,15 +359,11 @@ describe("Loop", () => {
         <Loop
           initial={{ toggle: false }}
           name="toggle"
-          render={({ state }) => (
-            <Agent>{String(state.toggle)}</Agent>
-          )}
+          render={({ state }) => <Agent>{String(state.toggle)}</Agent>}
           schema={State}
-        />,
-      ),
-    ).rejects.toThrow(
-      'maxStateTransitions 2 at Loop "toggle" iteration 3',
-    )
+        />
+      )
+    ).rejects.toThrow('maxStateTransitions 2 at Loop "toggle" iteration 3')
   })
 
   it("shares the transition budget across sibling Loops", async () => {
@@ -470,23 +394,17 @@ describe("Loop", () => {
         <Loop
           initial={{ count: 0 }}
           name="first"
-          render={({ state }) => (
-            <Agent>first:{state.count}</Agent>
-          )}
+          render={({ state }) => <Agent>first:{state.count}</Agent>}
           schema={State}
         />,
         <Loop
           initial={{ count: 0 }}
           name="second"
-          render={({ state }) => (
-            <Agent>second:{state.count}</Agent>
-          )}
+          render={({ state }) => <Agent>second:{state.count}</Agent>}
           schema={State}
         />,
-      ]),
-    ).rejects.toThrow(
-      'maxStateTransitions 1 at Loop "second" iteration 1',
-    )
+      ])
+    ).rejects.toThrow('maxStateTransitions 1 at Loop "second" iteration 1')
     expect(prompts).toEqual(["first:0", "first:1", "second:0"])
   })
 
@@ -512,13 +430,7 @@ describe("Loop", () => {
       new AmlRuntime({
         agentProvider: provider,
         maxStateTransitions: 0,
-      }).evaluate(
-        <Loop
-          initial={{ count: 0 }}
-          render={({ state }) => <Agent>{state.count}</Agent>}
-          schema={State}
-        />,
-      ),
+      }).evaluate(<Loop initial={{ count: 0 }} render={({ state }) => <Agent>{state.count}</Agent>} schema={State} />)
     ).resolves.toBe("finished")
   })
 
@@ -542,12 +454,8 @@ describe("Loop", () => {
 
     await expect(
       new AmlRuntime({ agentProvider: provider }).evaluate(
-        <Loop
-          initial={{ done: false }}
-          render={() => <Wrapper />}
-          schema={State}
-        />,
-      ),
+        <Loop initial={{ done: false }} render={() => <Wrapper />} schema={State} />
+      )
     ).resolves.toBe("selected")
     expect(provider.calls).toHaveLength(1)
     expect(provider.calls[0]?.request.prompt).toBe("resolved")
@@ -572,16 +480,9 @@ describe("Loop", () => {
 
     await expect(
       new AmlRuntime({ agentProvider: provider }).evaluate(
-        <Loop
-          initial={{ done: false }}
-          render={() => [
-            <CancellingWrapper />,
-            <LaterWrapper />,
-          ]}
-          schema={State}
-        />,
-        { signal: controller.signal },
-      ),
+        <Loop initial={{ done: false }} render={() => [<CancellingWrapper />, <LaterWrapper />]} schema={State} />,
+        { signal: controller.signal }
+      )
     ).rejects.toThrow("stop wrapper selection")
     expect(laterWrapperRan).toBe(false)
     expect(provider.calls).toHaveLength(0)
@@ -593,27 +494,13 @@ describe("Loop", () => {
     const runtime = new AmlRuntime({ agentProvider: provider })
 
     await expect(
-      runtime.evaluate(
-        <Loop
-          initial={{ done: false }}
-          render={() => "not an Agent"}
-          schema={State}
-        />,
-      ),
-    ).rejects.toThrow(
-      "<Loop> render must resolve to exactly one <Agent>",
-    )
+      runtime.evaluate(<Loop initial={{ done: false }} render={() => "not an Agent"} schema={State} />)
+    ).rejects.toThrow("<Loop> render must resolve to exactly one <Agent>")
     await expect(
       runtime.evaluate(
-        <Loop
-          initial={{ done: false }}
-          render={() => [<Agent>one</Agent>, <Agent>two</Agent>]}
-          schema={State}
-        />,
-      ),
-    ).rejects.toThrow(
-      "<Loop> render must resolve to exactly one <Agent>",
-    )
+        <Loop initial={{ done: false }} render={() => [<Agent>one</Agent>, <Agent>two</Agent>]} schema={State} />
+      )
+    ).rejects.toThrow("<Loop> render must resolve to exactly one <Agent>")
     await expect(
       runtime.evaluate(
         <Loop
@@ -624,11 +511,9 @@ describe("Loop", () => {
             </Sandbox>
           )}
           schema={State}
-        />,
-      ),
-    ).rejects.toThrow(
-      "<Loop> render must resolve to exactly one <Agent>",
-    )
+        />
+      )
+    ).rejects.toThrow("<Loop> render must resolve to exactly one <Agent>")
     expect(provider.calls).toHaveLength(0)
   })
 
@@ -636,9 +521,7 @@ describe("Loop", () => {
     const State = z.object({ done: z.boolean() })
     const provider = new DeterministicAgentProvider({
       respond(request) {
-        expect(request.tools.map((tool) => tool.name)).toEqual([
-          "aml_set_state",
-        ])
+        expect(request.tools.map(tool => tool.name)).toEqual(["aml_set_state"])
         return { text: "available" }
       },
     })
@@ -647,13 +530,7 @@ describe("Loop", () => {
       new AmlRuntime({
         agentProvider: provider,
         allowedTools: [],
-      }).evaluate(
-        <Loop
-          initial={{ done: false }}
-          render={() => <Agent>run</Agent>}
-          schema={State}
-        />,
-      ),
+      }).evaluate(<Loop initial={{ done: false }} render={() => <Agent>run</Agent>} schema={State} />)
     ).resolves.toBe("available")
 
     await expect(
@@ -667,11 +544,9 @@ describe("Loop", () => {
             </Agent>
           )}
           schema={State}
-        />,
-      ),
-    ).rejects.toThrow(
-      'Agent declares duplicate Tool "aml_set_state"',
-    )
+        />
+      )
+    ).rejects.toThrow('Agent declares duplicate Tool "aml_set_state"')
   })
 
   it("rejects non-JSON and unstable schema state before an Agent runs", async () => {
@@ -681,9 +556,7 @@ describe("Loop", () => {
     const unstableSchema = {
       "~standard": {
         validate(value: unknown) {
-          const count = Number(
-            Reflect.get(value as object, "count"),
-          )
+          const count = Number(Reflect.get(value as object, "count"))
           return { value: { count: count + 1 } }
         },
         vendor: "unstable-test",
@@ -693,24 +566,12 @@ describe("Loop", () => {
 
     await expect(
       runtime.evaluate(
-        <Loop
-          initial={{ createdAt: new Date("2026-01-01") }}
-          render={() => <Agent>never</Agent>}
-          schema={DateState}
-        />,
-      ),
+        <Loop initial={{ createdAt: new Date("2026-01-01") }} render={() => <Agent>never</Agent>} schema={DateState} />
+      )
     ).rejects.toThrow("must contain only stable JSON")
     await expect(
-      runtime.evaluate(
-        <Loop
-          initial={{ count: 0 }}
-          render={() => <Agent>never</Agent>}
-          schema={unstableSchema}
-        />,
-      ),
-    ).rejects.toThrow(
-      "schema must produce stable JSON state",
-    )
+      runtime.evaluate(<Loop initial={{ count: 0 }} render={() => <Agent>never</Agent>} schema={unstableSchema} />)
+    ).rejects.toThrow("schema must produce stable JSON state")
     expect(provider.calls).toHaveLength(0)
   })
 
@@ -723,17 +584,13 @@ describe("Loop", () => {
       label: " ready ",
     }
     const provider = new DeterministicAgentProvider({
-      respond: (request) => ({ text: request.prompt }),
+      respond: request => ({ text: request.prompt }),
     })
 
     await expect(
       new AmlRuntime({ agentProvider: provider }).evaluate(
-        <Loop
-          initial={initial}
-          render={({ state }) => <Agent>{state.label}</Agent>}
-          schema={State}
-        />,
-      ),
+        <Loop initial={initial} render={({ state }) => <Agent>{state.label}</Agent>} schema={State} />
+      )
     ).resolves.toBe("ready")
     expect(provider.calls[0]?.request.prompt).toBe("ready")
   })
@@ -762,11 +619,7 @@ describe("Loop", () => {
       return (
         <Loop
           initial={{ done: false, user: "" }}
-          render={({ state }) => (
-            <Agent>
-              {state.done ? state.user : `${user}:pending`}
-            </Agent>
-          )}
+          render={({ state }) => <Agent>{state.done ? state.user : `${user}:pending`}</Agent>}
           schema={State}
         />
       )
@@ -774,13 +627,9 @@ describe("Loop", () => {
 
     await expect(
       Promise.all([
-        new AmlRuntime({ agentProvider: provider }).evaluate(
-          <Workflow user="alpha" />,
-        ),
-        new AmlRuntime({ agentProvider: provider }).evaluate(
-          <Workflow user="beta" />,
-        ),
-      ]),
+        new AmlRuntime({ agentProvider: provider }).evaluate(<Workflow user="alpha" />),
+        new AmlRuntime({ agentProvider: provider }).evaluate(<Workflow user="beta" />),
+      ])
     ).resolves.toEqual(["alpha", "beta"])
   })
 
@@ -794,12 +643,8 @@ describe("Loop", () => {
     type Props = LoopProps<typeof State>
     type RenderState = Parameters<Props["render"]>[0]["state"]
 
-    expectTypeOf<RenderState>().toEqualTypeOf<
-      DeepReadonly<z.output<typeof State>>
-    >()
-    expectTypeOf<RenderState["tuple"]>().toEqualTypeOf<
-      readonly [string, number]
-    >()
+    expectTypeOf<RenderState>().toEqualTypeOf<DeepReadonly<z.output<typeof State>>>()
+    expectTypeOf<RenderState["tuple"]>().toEqualTypeOf<readonly [string, number]>()
   })
 
   it("normalizes a wider schema input into rendered canonical state", async () => {
@@ -814,27 +659,19 @@ describe("Loop", () => {
     expectTypeOf<Props["initial"]>().toEqualTypeOf<{
       count: string | number
     }>()
-    expectTypeOf<RenderState>().toEqualTypeOf<
-      Readonly<{ count: number }>
-    >()
+    expectTypeOf<RenderState>().toEqualTypeOf<Readonly<{ count: number }>>()
 
     await expect(
       new AmlRuntime({
         agentProvider: new DeterministicAgentProvider({
-          respond: (request) => ({ text: request.prompt }),
+          respond: request => ({ text: request.prompt }),
         }),
       }).evaluate(
-        <Loop
-          initial={{ count: "7" }}
-          render={({ state }) => <Agent>{state.count}</Agent>}
-          schema={NormalizedState}
-        />,
-      ),
+        <Loop initial={{ count: "7" }} render={({ state }) => <Agent>{state.count}</Agent>} schema={NormalizedState} />
+      )
     ).resolves.toBe("7")
 
-    const DisjointState = z
-      .object({ count: z.string() })
-      .transform(({ count }) => ({ count: Number(count) }))
+    const DisjointState = z.object({ count: z.string() }).transform(({ count }) => ({ count: Number(count) }))
     type DisjointProps = LoopProps<typeof DisjointState>
 
     expectTypeOf<DisjointProps["schema"]>().toEqualTypeOf<never>()
@@ -859,22 +696,13 @@ describe("Loop", () => {
       () =>
         new AmlRuntime({
           maxStateTransitions: -1,
-        }),
-    ).toThrow(
-      "maxStateTransitions must be a non-negative safe integer",
-    )
+        })
+    ).toThrow("maxStateTransitions must be a non-negative safe integer")
     await expect(
       new AmlRuntime({ agentProvider: provider }).evaluate(
-        <Loop
-          initial={{ done: false }}
-          name=" invalid "
-          render={() => <Agent>never</Agent>}
-          schema={State}
-        />,
-      ),
-    ).rejects.toThrow(
-      "<Loop> name must be a non-empty normalized string",
-    )
+        <Loop initial={{ done: false }} name=" invalid " render={() => <Agent>never</Agent>} schema={State} />
+      )
+    ).rejects.toThrow("<Loop> name must be a non-empty normalized string")
     expect(provider.calls).toHaveLength(0)
   })
 })
@@ -882,13 +710,10 @@ describe("Loop", () => {
 /**
  * Returns the one runtime-owned state capability from an Agent request.
  */
-function requireStateTool(
-  request: AgentRequest,
-): AgentJavaScriptTool {
+function requireStateTool(request: AgentRequest): AgentJavaScriptTool {
   const tool = request.tools.find(
     (candidate): candidate is AgentJavaScriptTool =>
-      candidate.kind === "javascript" &&
-      candidate.name === "aml_set_state",
+      candidate.kind === "javascript" && candidate.name === "aml_set_state"
   )
 
   if (!tool) {
@@ -901,9 +726,7 @@ function requireStateTool(
 /**
  * Narrows an Agent context to the provider-neutral Tool execution contract.
  */
-function toolContext(
-  context: AgentExecutionContext,
-): {
+function toolContext(context: AgentExecutionContext): {
   readonly signal: AbortSignal
   readonly trace: AgentExecutionContext["trace"]
 } {
@@ -916,13 +739,6 @@ function toolContext(
 /**
  * Executes the runtime state Tool as a deterministic provider would.
  */
-async function executeStateTool(
-  request: AgentRequest,
-  context: AgentExecutionContext,
-  input: unknown,
-): Promise<void> {
-  await requireStateTool(request).execute(
-    input,
-    toolContext(context),
-  )
+async function executeStateTool(request: AgentRequest, context: AgentExecutionContext, input: unknown): Promise<void> {
+  await requireStateTool(request).execute(input, toolContext(context))
 }

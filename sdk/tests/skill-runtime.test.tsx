@@ -1,16 +1,8 @@
-import {
-  mkdtemp,
-  rm,
-  writeFile,
-} from "node:fs/promises"
+import { mkdtemp, rm, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 
-import {
-  describe,
-  expect,
-  it,
-} from "vitest"
+import { describe, expect, it } from "vitest"
 
 import { Agent } from "../src/components/agent/agent.js"
 import { Skill } from "../src/components/skill/skill.js"
@@ -39,7 +31,7 @@ describe("Skill", () => {
               "Skill: evidence\nDescription: Prefer concrete evidence.\n\ninline",
               "Skill: generated-review\n\nbase\ngenerated",
               "Finish.",
-            ].join(""),
+            ].join("")
           )
           return { text: "done" }
         },
@@ -55,10 +47,7 @@ describe("Skill", () => {
             {[
               "Start.",
               <Skill src="./local.md" />,
-              <Skill
-                name="evidence"
-                description="Prefer concrete evidence."
-              >
+              <Skill name="evidence" description="Prefer concrete evidence.">
                 inline
               </Skill>,
               <Skill src="./base.md" name="generated-review">
@@ -66,8 +55,8 @@ describe("Skill", () => {
               </Skill>,
               "Finish.",
             ]}
-          </Agent>,
-        ),
+          </Agent>
+        )
       ).resolves.toBe("done")
       expect(provider.calls).toHaveLength(2)
     } finally {
@@ -81,11 +70,9 @@ describe("Skill", () => {
     try {
       await writeFile(join(directory, "base.md"), "base\n")
 
-      await expect(
-        new AmlRuntime({ cwd: directory }).evaluate(
-          <Skill src="./base.md">extra</Skill>,
-        ),
-      ).resolves.toBe("base\n\nextra")
+      await expect(new AmlRuntime({ cwd: directory }).evaluate(<Skill src="./base.md">extra</Skill>)).resolves.toBe(
+        "base\n\nextra"
+      )
     } finally {
       await rm(directory, { force: true, recursive: true })
     }
@@ -109,8 +96,8 @@ describe("Skill", () => {
         new AmlRuntime({ cwd: directory }).evaluate(
           <Skill src="./mutable.md">
             <UpdateSkill />
-          </Skill>,
-        ),
+          </Skill>
+        )
       ).resolves.toBe("after\nchild")
     } finally {
       await rm(directory, { force: true, recursive: true })
@@ -121,9 +108,7 @@ describe("Skill", () => {
     const provider = new DeterministicAgentProvider({
       respond(request) {
         expect(request.prompt).toBe("prompt")
-        expect(request.system).toBe(
-          "Skill: policy\n\nUse the repository policy.",
-        )
+        expect(request.system).toBe("Skill: policy\n\nUse the repository policy.")
         return { text: "done" }
       },
     })
@@ -132,13 +117,11 @@ describe("Skill", () => {
       new AmlRuntime({ agentProvider: provider }).evaluate(
         <Agent>
           <System>
-            <Skill name="policy">
-              Use the repository policy.
-            </Skill>
+            <Skill name="policy">Use the repository policy.</Skill>
           </System>
           prompt
-        </Agent>,
-      ),
+        </Agent>
+      )
     ).resolves.toBe("done")
   })
 
@@ -149,14 +132,10 @@ describe("Skill", () => {
     try {
       const runtime = new AmlRuntime({ cwd: directory })
       await writeFile(path, "first")
-      await expect(
-        runtime.evaluate(<Skill src="./skill.md" />),
-      ).resolves.toBe("first")
+      await expect(runtime.evaluate(<Skill src="./skill.md" />)).resolves.toBe("first")
 
       await writeFile(path, "second")
-      await expect(
-        runtime.evaluate(<Skill src="./skill.md" />),
-      ).resolves.toBe("second")
+      await expect(runtime.evaluate(<Skill src="./skill.md" />)).resolves.toBe("second")
     } finally {
       await rm(directory, { force: true, recursive: true })
     }
@@ -175,13 +154,11 @@ describe("Skill", () => {
           <Agent>
             <Skill src="./missing.md" />
             prompt
-          </Agent>,
-        ),
+          </Agent>
+        )
       ).rejects.toMatchObject({
         cause: expect.objectContaining({ code: "ENOENT" }),
-        message: expect.stringContaining(
-          "<Skill> could not read local file",
-        ),
+        message: expect.stringContaining("<Skill> could not read local file"),
       })
       expect(provider.calls).toHaveLength(0)
     } finally {
@@ -191,30 +168,18 @@ describe("Skill", () => {
 
   it("rejects missing, invalid, and empty Skill content", async () => {
     const runtime = new AmlRuntime()
-    const UnsafeSkill = Skill as (
-      props: Record<string, unknown>,
-    ) => never
+    const UnsafeSkill = Skill as (props: Record<string, unknown>) => never
 
-    await expect(runtime.evaluate(<Skill />)).rejects.toThrow(
-      "<Skill> requires src, children, or both",
+    await expect(runtime.evaluate(<Skill />)).rejects.toThrow("<Skill> requires src, children, or both")
+    await expect(runtime.evaluate(<UnsafeSkill src="" />)).rejects.toThrow("src must be a non-empty local path")
+    await expect(runtime.evaluate(<UnsafeSkill src={42} />)).rejects.toThrow("src must be a non-empty local path")
+    await expect(runtime.evaluate(<Skill name=" trimmed ">content</Skill>)).rejects.toThrow(
+      "name must be a non-empty normalized string"
     )
-    await expect(
-      runtime.evaluate(<UnsafeSkill src="" />),
-    ).rejects.toThrow("src must be a non-empty local path")
-    await expect(
-      runtime.evaluate(<UnsafeSkill src={42} />),
-    ).rejects.toThrow("src must be a non-empty local path")
-    await expect(
-      runtime.evaluate(<Skill name=" trimmed ">content</Skill>),
-    ).rejects.toThrow("name must be a non-empty normalized string")
-    await expect(
-      runtime.evaluate(<Skill description="">content</Skill>),
-    ).rejects.toThrow(
-      "description must be a non-empty normalized string",
+    await expect(runtime.evaluate(<Skill description="">content</Skill>)).rejects.toThrow(
+      "description must be a non-empty normalized string"
     )
-    await expect(runtime.evaluate(<Skill> </Skill>)).rejects.toThrow(
-      "<Skill> must resolve to non-empty text",
-    )
+    await expect(runtime.evaluate(<Skill> </Skill>)).rejects.toThrow("<Skill> must resolve to non-empty text")
   })
 
   it("preserves caller cancellation identity during file access", async () => {
@@ -224,10 +189,9 @@ describe("Skill", () => {
 
     try {
       await writeFile(join(directory, "skill.md"), "content")
-      const pending = new AmlRuntime({ cwd: directory }).evaluate(
-        <Skill src="./skill.md" />,
-        { signal: controller.signal },
-      )
+      const pending = new AmlRuntime({ cwd: directory }).evaluate(<Skill src="./skill.md" />, {
+        signal: controller.signal,
+      })
 
       // evaluate() has entered the asynchronous read before returning its
       // promise, so this probes the Skill I/O boundary rather than preflight.
@@ -240,12 +204,8 @@ describe("Skill", () => {
   })
 
   it("validates the runtime working directory", () => {
-    expect(() => new AmlRuntime({ cwd: "" })).toThrow(
-      "cwd must be a non-empty string",
-    )
-    expect(() => new AmlRuntime({ cwd: 42 as never })).toThrow(
-      "cwd must be a non-empty string",
-    )
+    expect(() => new AmlRuntime({ cwd: "" })).toThrow("cwd must be a non-empty string")
+    expect(() => new AmlRuntime({ cwd: 42 as never })).toThrow("cwd must be a non-empty string")
   })
 
   it("attributes Skill file failures with EvaluationError", async () => {

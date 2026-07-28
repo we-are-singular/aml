@@ -1,9 +1,4 @@
-import type {
-  AgentExecutionContext,
-  AgentMcpServer,
-  AgentOutputRequest,
-  AgentTool,
-} from "@aml/sdk"
+import type { AgentExecutionContext, AgentMcpServer, AgentOutputRequest, AgentTool } from "@aml-jsx/sdk"
 
 /**
  * OpenCode's provider/model identity split.
@@ -104,16 +99,13 @@ export interface OpenCodeSessionClient {
    */
   attachCapabilities(
     input: OpenCodeCapabilityAttachmentInput,
-    signal: AbortSignal,
+    signal: AbortSignal
   ): Promise<OpenCodeCapabilityAttachment>
 
   /**
    * Opens one fresh provider session and returns its acknowledged identity.
    */
-  create(
-    input: OpenCodeSessionCreateInput,
-    signal: AbortSignal,
-  ): Promise<string>
+  create(input: OpenCodeSessionCreateInput, signal: AbortSignal): Promise<string>
 
   /**
    * Deletes provider state after execution and capability cleanup.
@@ -123,8 +115,5 @@ export interface OpenCodeSessionClient {
   /**
    * Sends one turn into the created session and waits for its response.
    */
-  prompt(
-    input: OpenCodeSessionPromptInput,
-    signal: AbortSignal,
-  ): Promise<OpenCodeSessionPromptResult>
+  prompt(input: OpenCodeSessionPromptInput, signal: AbortSignal): Promise<OpenCodeSessionPromptResult>
 }

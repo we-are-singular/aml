@@ -13,9 +13,7 @@ export interface ValidatedAgentProvider {
 /**
  * Validates a provider once and captures the exact members an invocation uses.
  */
-export function validateAgentProvider(
-  value: unknown,
-): Readonly<ValidatedAgentProvider> {
+export function validateAgentProvider(value: unknown): Readonly<ValidatedAgentProvider> {
   if (typeof value !== "object" || value === null) {
     throw new TypeError("Agent provider must be an object")
   }
@@ -41,20 +39,14 @@ export function validateAgentProvider(
     throw new TypeError("Agent provider run must be a function")
   }
 
-  if (
-    supportsSandbox !== undefined &&
-    typeof supportsSandbox !== "function"
-  ) {
-    throw new TypeError(
-      "Agent provider supportsSandbox must be a function when provided",
-    )
+  if (supportsSandbox !== undefined && typeof supportsSandbox !== "function") {
+    throw new TypeError("Agent provider supportsSandbox must be a function when provided")
   }
 
   return Object.freeze({
     name,
     provider: value as AgentProvider,
     run: run as AgentProvider["run"],
-    supportsSandbox:
-      supportsSandbox as AgentProvider["supportsSandbox"],
+    supportsSandbox: supportsSandbox as AgentProvider["supportsSandbox"],
   })
 }

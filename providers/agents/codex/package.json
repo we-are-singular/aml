@@ -1,25 +1,17 @@
 {
-  "name": "@aml/agent-codex",
+  "name": "@aml-jsx/agent-codex",
   "version": "0.0.0",
   "private": true,
-  "type": "module",
-  "sideEffects": false,
   "files": [
     "dist"
   ],
+  "type": "module",
+  "sideEffects": false,
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
     }
-  },
-  "dependencies": {
-    "@aml/sdk": "*",
-    "@modelcontextprotocol/sdk": "^1.29.0",
-    "@openai/codex-sdk": "0.145.0"
-  },
-  "devDependencies": {
-    "zod": "^4.4.3"
   },
   "scripts": {
     "build": "vite build && tsc --project tsconfig.build.json",
@@ -27,5 +19,13 @@
     "test": "vitest run",
     "test:integration": "vitest run tests/codex-agent.integration.test.tsx",
     "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@aml-jsx/sdk": "*",
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "@openai/codex-sdk": "0.145.0"
+  },
+  "devDependencies": {
+    "zod": "^4.4.3"
   }
 }

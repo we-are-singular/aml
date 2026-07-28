@@ -1,7 +1,4 @@
-import type {
-  SandboxLeaseReference,
-  SandboxProvider,
-} from "./sandbox-provider.js"
+import type { SandboxLeaseReference, SandboxProvider } from "./sandbox-provider.js"
 
 /**
  * Captured provider members used without rereading mutable public properties.
@@ -31,9 +28,7 @@ export interface SandboxLeaseCapture {
 /**
  * Validates a Sandbox provider and captures the members one acquisition uses.
  */
-export function validateSandboxProvider(
-  value: unknown,
-): Readonly<ValidatedSandboxProvider> {
+export function validateSandboxProvider(value: unknown): Readonly<ValidatedSandboxProvider> {
   if (typeof value !== "object" || value === null) {
     throw new TypeError("Sandbox provider must be an object")
   }
@@ -46,15 +41,11 @@ export function validateSandboxProvider(
   const acquire = candidate.acquire
 
   if (typeof name !== "string" || name.length === 0) {
-    throw new TypeError(
-      "Sandbox provider name must be a non-empty string",
-    )
+    throw new TypeError("Sandbox provider name must be a non-empty string")
   }
 
   if (name !== name.trim()) {
-    throw new TypeError(
-      "Sandbox provider name must already be normalized",
-    )
+    throw new TypeError("Sandbox provider name must already be normalized")
   }
 
   if (typeof acquire !== "function") {
@@ -74,14 +65,9 @@ export function validateSandboxProvider(
  * `release` is read first so callers can still clean up when a later lease
  * field is malformed or exposed through a throwing accessor.
  */
-export function captureSandboxLease(
-  value: unknown,
-  providerName: string,
-): Readonly<SandboxLeaseCapture> {
+export function captureSandboxLease(value: unknown, providerName: string): Readonly<SandboxLeaseCapture> {
   if (typeof value !== "object" || value === null) {
-    throw new TypeError(
-      `Sandbox provider "${providerName}" returned an invalid lease`,
-    )
+    throw new TypeError(`Sandbox provider "${providerName}" returned an invalid lease`)
   }
 
   const candidate = value as {
@@ -92,16 +78,13 @@ export function captureSandboxLease(
   try {
     release = candidate.release
   } catch (cause) {
-    throw new TypeError(
-      `Sandbox provider "${providerName}" returned a lease with an unreadable release method`,
-      { cause },
-    )
+    throw new TypeError(`Sandbox provider "${providerName}" returned a lease with an unreadable release method`, {
+      cause,
+    })
   }
 
   if (typeof release !== "function") {
-    throw new TypeError(
-      `Sandbox provider "${providerName}" returned a lease without release()`,
-    )
+    throw new TypeError(`Sandbox provider "${providerName}" returned a lease without release()`)
   }
 
   return Object.freeze({
@@ -117,7 +100,7 @@ export function captureSandboxLease(
  */
 export function validateSandboxLease(
   capture: SandboxLeaseCapture,
-  providerName: string,
+  providerName: string
 ): Readonly<ValidatedSandboxLease> {
   const candidate = capture.value as {
     readonly handle?: unknown
@@ -130,20 +113,11 @@ export function validateSandboxLease(
     id = candidate.id
     handle = candidate.handle
   } catch (cause) {
-    throw new TypeError(
-      `Sandbox provider "${providerName}" returned a lease with unreadable identity data`,
-      { cause },
-    )
+    throw new TypeError(`Sandbox provider "${providerName}" returned a lease with unreadable identity data`, { cause })
   }
 
-  if (
-    typeof id !== "string" ||
-    id.length === 0 ||
-    id !== id.trim()
-  ) {
-    throw new TypeError(
-      `Sandbox provider "${providerName}" returned a lease with an invalid id`,
-    )
+  if (typeof id !== "string" || id.length === 0 || id !== id.trim()) {
+    throw new TypeError(`Sandbox provider "${providerName}" returned a lease with an invalid id`)
   }
 
   // Descendants receive stable identity data without the lifecycle method that

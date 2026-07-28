@@ -1,8 +1,4 @@
-import type {
-  AgentExecutionContext,
-  AgentRequest,
-  AgentResponse,
-} from "@aml/sdk"
+import type { AgentExecutionContext, AgentRequest, AgentResponse } from "@aml-jsx/sdk"
 
 import type {
   OpenCodeModel,
@@ -27,10 +23,7 @@ export class OpenCodeSession {
   /**
    * Captures the provider port and configured per-provider defaults.
    */
-  constructor(
-    client: OpenCodeSessionClient,
-    options: OpenCodeSessionOptions,
-  ) {
+  constructor(client: OpenCodeSessionClient, options: OpenCodeSessionOptions) {
     this.#client = client
     this.#directory = options.directory
     this.#model = options.model
@@ -49,9 +42,7 @@ export class OpenCodeSession {
     }
 
     if (value !== value.trim()) {
-      throw new TypeError(
-        "OpenCode model must already be normalized as provider/model",
-      )
+      throw new TypeError("OpenCode model must already be normalized as provider/model")
     }
 
     const separator = value.indexOf("/")
@@ -69,10 +60,7 @@ export class OpenCodeSession {
   /**
    * Executes one fresh OpenCode session with failure-safe capability cleanup.
    */
-  async run(
-    request: AgentRequest,
-    context: AgentExecutionContext,
-  ): Promise<AgentResponse> {
+  async run(request: AgentRequest, context: AgentExecutionContext): Promise<AgentResponse> {
     context.signal.throwIfAborted()
 
     const model = OpenCodeSession.parseModel(request.model ?? this.#model)
@@ -86,9 +74,7 @@ export class OpenCodeSession {
 
     for (const followUp of followUps ?? []) {
       if (typeof followUp !== "string" || followUp.length === 0) {
-        throw new TypeError(
-          "OpenCode followUps must contain non-empty strings",
-        )
+        throw new TypeError("OpenCode followUps must contain non-empty strings")
       }
 
       prompts.push(followUp)
@@ -98,40 +84,29 @@ export class OpenCodeSession {
     // remote session exists. This is both a side-effect and security boundary.
     const capabilityAttachment = await this.#client.attachCapabilities(
       {
-        ...(this.#directory === undefined
-          ? {}
-          : { directory: this.#directory }),
+        ...(this.#directory === undefined ? {} : { directory: this.#directory }),
         context,
         mcpServers: request.mcpServers,
         structuredOutput: request.output !== undefined,
         tools: request.tools,
       },
-      context.signal,
+      context.signal
     )
-    let closeCapabilityAttachment:
-      | (() => Promise<void>)
-      | undefined
+    let closeCapabilityAttachment: (() => Promise<void>) | undefined
     let capabilityTools: Readonly<Record<string, boolean>>
 
     // Attachment can already own live MCP and Tool resources. Capture its
     // cleanup capability before reading any other provider-owned accessor so a
     // malformed Tool map can still be compensated without leaking resources.
     try {
-      if (
-        typeof capabilityAttachment !== "object" ||
-        capabilityAttachment === null
-      ) {
-        throw new TypeError(
-          "OpenCode session client returned an invalid capability attachment",
-        )
+      if (typeof capabilityAttachment !== "object" || capabilityAttachment === null) {
+        throw new TypeError("OpenCode session client returned an invalid capability attachment")
       }
 
       const close = capabilityAttachment.close
 
       if (typeof close !== "function") {
-        throw new TypeError(
-          "OpenCode capability attachment close must be a function",
-        )
+        throw new TypeError("OpenCode capability attachment close must be a function")
       }
 
       closeCapabilityAttachment = async () => {
@@ -140,22 +115,14 @@ export class OpenCodeSession {
 
       const tools = capabilityAttachment.tools
 
-      if (
-        typeof tools !== "object" ||
-        tools === null ||
-        Array.isArray(tools)
-      ) {
-        throw new TypeError(
-          "OpenCode capability attachment tools must be an object",
-        )
+      if (typeof tools !== "object" || tools === null || Array.isArray(tools)) {
+        throw new TypeError("OpenCode capability attachment tools must be an object")
       }
 
       const entries = Object.entries(tools)
 
       if (entries.some(([, enabled]) => typeof enabled !== "boolean")) {
-        throw new TypeError(
-          "OpenCode capability attachment tools must contain booleans",
-        )
+        throw new TypeError("OpenCode capability attachment tools must contain booleans")
       }
 
       capabilityTools = Object.freeze(Object.fromEntries(entries))
@@ -163,27 +130,15 @@ export class OpenCodeSession {
       // Every prompt must fail closed against OpenCode's ambient capability
       // registry before exact authored grants are added.
       if (capabilityTools["*"] !== false) {
-        throw new TypeError(
-          'OpenCode capability attachment must disable the "*" Tool wildcard',
-        )
+        throw new TypeError('OpenCode capability attachment must disable the "*" Tool wildcard')
       }
 
-      if (
-        request.output !== undefined &&
-        capabilityTools.StructuredOutput !== true
-      ) {
-        throw new TypeError(
-          "OpenCode structured requests require the StructuredOutput Tool grant",
-        )
+      if (request.output !== undefined && capabilityTools.StructuredOutput !== true) {
+        throw new TypeError("OpenCode structured requests require the StructuredOutput Tool grant")
       }
 
-      if (
-        request.output === undefined &&
-        capabilityTools.StructuredOutput === true
-      ) {
-        throw new TypeError(
-          "OpenCode text requests cannot grant the StructuredOutput Tool",
-        )
+      if (request.output === undefined && capabilityTools.StructuredOutput === true) {
+        throw new TypeError("OpenCode text requests cannot grant the StructuredOutput Tool")
       }
     } catch (attachmentError) {
       if (closeCapabilityAttachment === undefined) {
@@ -193,10 +148,7 @@ export class OpenCodeSession {
       try {
         await closeCapabilityAttachment()
       } catch (cleanupError) {
-        throw new AggregateError(
-          [attachmentError, cleanupError],
-          "OpenCode capability validation and cleanup failed",
-        )
+        throw new AggregateError([attachmentError, cleanupError], "OpenCode capability validation and cleanup failed")
       }
 
       throw attachmentError
@@ -206,11 +158,7 @@ export class OpenCodeSession {
       request.output === undefined
         ? capabilityTools
         : Object.freeze(
-            Object.fromEntries(
-              Object.entries(capabilityTools).filter(
-                ([name]) => name !== "StructuredOutput",
-              ),
-            ),
+            Object.fromEntries(Object.entries(capabilityTools).filter(([name]) => name !== "StructuredOutput"))
           )
     let sessionId: string
 
@@ -220,19 +168,15 @@ export class OpenCodeSession {
       context.signal.throwIfAborted()
       sessionId = await this.#client.create(
         {
-          ...(this.#directory === undefined
-            ? {}
-            : { directory: this.#directory }),
+          ...(this.#directory === undefined ? {} : { directory: this.#directory }),
           ...(model === undefined ? {} : { model }),
           title: `AML ${context.trace.spanId}`,
         },
-        context.signal,
+        context.signal
       )
 
       if (typeof sessionId !== "string" || sessionId.length === 0) {
-        throw new TypeError(
-          "OpenCode session client must return a non-empty session ID",
-        )
+        throw new TypeError("OpenCode session client must return a non-empty session ID")
       }
     } catch (creationError) {
       const errors: unknown[] = [creationError]
@@ -244,19 +188,14 @@ export class OpenCodeSession {
       }
 
       if (errors.length > 1) {
-        throw new AggregateError(
-          errors,
-          "OpenCode session creation and capability cleanup failed",
-        )
+        throw new AggregateError(errors, "OpenCode session creation and capability cleanup failed")
       }
 
       throw creationError
     }
 
     const location: OpenCodeSessionLocation = Object.freeze({
-      ...(this.#directory === undefined
-        ? {}
-        : { directory: this.#directory }),
+      ...(this.#directory === undefined ? {} : { directory: this.#directory }),
       sessionId,
     })
     let hasAbortError = false
@@ -271,7 +210,7 @@ export class OpenCodeSession {
         (error: unknown) => {
           hasAbortError = true
           abortError = error
-        },
+        }
       )
     }
 
@@ -299,19 +238,14 @@ export class OpenCodeSession {
             ...(model === undefined ? {} : { model }),
             // Intermediate turns remain ordinary text. The schema constrains
             // only the final response that escapes the Agent boundary.
-            ...(isFinalTurn && request.output !== undefined
-              ? { output: request.output }
-              : {}),
+            ...(isFinalTurn && request.output !== undefined ? { output: request.output } : {}),
             prompt,
             system: request.system,
             // Capability attachment is session-wide, but OpenCode's internal
             // StructuredOutput Tool is granted only with the final schema turn.
-            tools:
-              isFinalTurn && request.output !== undefined
-                ? capabilityTools
-                : textTurnTools,
+            tools: isFinalTurn && request.output !== undefined ? capabilityTools : textTurnTools,
           },
-          context.signal,
+          context.signal
         )
 
         context.signal.throwIfAborted()
@@ -319,9 +253,7 @@ export class OpenCodeSession {
 
         if (isFinalTurn) {
           response = Object.freeze({
-            ...(Reflect.has(result, "structured")
-              ? { structured: result.structured }
-              : {}),
+            ...(Reflect.has(result, "structured") ? { structured: result.structured } : {}),
             text,
           })
         }
@@ -380,10 +312,7 @@ export class OpenCodeSession {
     }
 
     if (errors.length > 1) {
-      throw new AggregateError(
-        errors,
-        `OpenCode session ${sessionId} failed during execution and cleanup`,
-      )
+      throw new AggregateError(errors, `OpenCode session ${sessionId} failed during execution and cleanup`)
     }
 
     if (!response) {
@@ -432,11 +361,7 @@ export class OpenCodeSession {
         throw new TypeError("OpenCode returned invalid response metadata")
       }
 
-      if (
-        type !== "text" ||
-        synthetic === true ||
-        ignored === true
-      ) {
+      if (type !== "text" || synthetic === true || ignored === true) {
         continue
       }
 

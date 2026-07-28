@@ -30,17 +30,13 @@ export interface DefineMcpStreamableHttpTransport {
  */
 export interface DefineMcpServerOptions {
   readonly name: string
-  readonly transport:
-    | DefineMcpStdioTransport
-    | DefineMcpStreamableHttpTransport
+  readonly transport: DefineMcpStdioTransport | DefineMcpStreamableHttpTransport
 }
 
 /**
  * Defines one immutable portable MCP server without connecting to it.
  */
-export function defineMcpServer(
-  options: DefineMcpServerOptions,
-): Readonly<AmlMcpServer> {
+export function defineMcpServer(options: DefineMcpServerOptions): Readonly<AmlMcpServer> {
   if (typeof options !== "object" || options === null) {
     throw new TypeError("MCP server definition must be an object")
   }
@@ -80,9 +76,7 @@ export function defineMcpServer(
 /**
  * Selects and snapshots one supported standard transport.
  */
-function normalizeTransport(
-  value: unknown,
-): AmlMcpStdioTransport | AmlMcpStreamableHttpTransport {
+function normalizeTransport(value: unknown): AmlMcpStdioTransport | AmlMcpStreamableHttpTransport {
   if (typeof value !== "object" || value === null) {
     throw new TypeError("MCP server transport must be an object")
   }
@@ -105,17 +99,13 @@ function normalizeTransport(
     return normalizeHttpTransport(value)
   }
 
-  throw new TypeError(
-    'MCP server transport type must be "stdio" or "streamable-http"',
-  )
+  throw new TypeError('MCP server transport type must be "stdio" or "streamable-http"')
 }
 
 /**
  * Validates process settings while retaining arguments exactly as authored.
  */
-function normalizeStdioTransport(
-  value: object,
-): AmlMcpStdioTransport {
+function normalizeStdioTransport(value: object): AmlMcpStdioTransport {
   let args: unknown
   let command: unknown
   let cwd: unknown
@@ -138,14 +128,8 @@ function normalizeStdioTransport(
     validateNormalizedText(cwd, "MCP stdio cwd")
   }
 
-  const normalizedArgs =
-    args === undefined
-      ? undefined
-      : captureStringArray(args, "MCP stdio args")
-  const normalizedEnv =
-    env === undefined
-      ? undefined
-      : captureStringRecord(env, "MCP stdio env")
+  const normalizedArgs = args === undefined ? undefined : captureStringArray(args, "MCP stdio args")
+  const normalizedEnv = env === undefined ? undefined : captureStringRecord(env, "MCP stdio env")
 
   return Object.freeze({
     ...(normalizedArgs === undefined ? {} : { args: normalizedArgs }),
@@ -159,9 +143,7 @@ function normalizeStdioTransport(
 /**
  * Normalizes a remote endpoint and snapshots credential-bearing headers.
  */
-function normalizeHttpTransport(
-  value: object,
-): AmlMcpStreamableHttpTransport {
+function normalizeHttpTransport(value: object): AmlMcpStreamableHttpTransport {
   let headers: unknown
   let rawUrl: unknown
 
@@ -169,16 +151,11 @@ function normalizeHttpTransport(
     headers = Reflect.get(value, "headers")
     rawUrl = Reflect.get(value, "url")
   } catch (cause) {
-    throw new TypeError(
-      "MCP Streamable HTTP transport must be readable",
-      { cause },
-    )
+    throw new TypeError("MCP Streamable HTTP transport must be readable", { cause })
   }
 
   if (!(typeof rawUrl === "string" || rawUrl instanceof URL)) {
-    throw new TypeError(
-      "MCP Streamable HTTP url must be a string or URL",
-    )
+    throw new TypeError("MCP Streamable HTTP url must be a string or URL")
   }
 
   let url: URL
@@ -186,30 +163,18 @@ function normalizeHttpTransport(
   try {
     url = new URL(rawUrl)
   } catch (cause) {
-    throw new TypeError(
-      "MCP Streamable HTTP url must be an absolute URL",
-      { cause },
-    )
+    throw new TypeError("MCP Streamable HTTP url must be an absolute URL", { cause })
   }
 
   if (url.protocol !== "http:" && url.protocol !== "https:") {
-    throw new TypeError(
-      "MCP Streamable HTTP url must use http or https",
-    )
+    throw new TypeError("MCP Streamable HTTP url must use http or https")
   }
 
   const normalizedHeaders =
-    headers === undefined
-      ? undefined
-      : captureStringRecord(
-          headers,
-          "MCP Streamable HTTP headers",
-        )
+    headers === undefined ? undefined : captureStringRecord(headers, "MCP Streamable HTTP headers")
 
   return Object.freeze({
-    ...(normalizedHeaders === undefined
-      ? {}
-      : { headers: normalizedHeaders }),
+    ...(normalizedHeaders === undefined ? {} : { headers: normalizedHeaders }),
     type: "streamable-http" as const,
     url: url.href,
   })
@@ -218,10 +183,7 @@ function normalizeHttpTransport(
 /**
  * Copies one readonly argument array and rejects non-string entries.
  */
-function captureStringArray(
-  value: unknown,
-  label: string,
-): readonly string[] {
+function captureStringArray(value: unknown, label: string): readonly string[] {
   if (!Array.isArray(value)) {
     throw new TypeError(`${label} must be an array of strings`)
   }
@@ -230,7 +192,7 @@ function captureStringArray(
   // string for a different process argument during a second traversal.
   const snapshot = [...value] as unknown[]
 
-  if (snapshot.some((entry) => typeof entry !== "string")) {
+  if (snapshot.some(entry => typeof entry !== "string")) {
     throw new TypeError(`${label} must be an array of strings`)
   }
 
@@ -240,15 +202,8 @@ function captureStringArray(
 /**
  * Copies one plain enumerable string record without retaining accessors.
  */
-function captureStringRecord(
-  value: unknown,
-  label: string,
-): Readonly<Record<string, string>> {
-  if (
-    typeof value !== "object" ||
-    value === null ||
-    Array.isArray(value)
-  ) {
+function captureStringRecord(value: unknown, label: string): Readonly<Record<string, string>> {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
     throw new TypeError(`${label} must be an object of strings`)
   }
 
@@ -264,25 +219,14 @@ function captureStringRecord(
     throw new TypeError(`${label} must be an object of strings`)
   }
 
-  return Object.freeze(Object.fromEntries(entries)) as Readonly<
-    Record<string, string>
-  >
+  return Object.freeze(Object.fromEntries(entries)) as Readonly<Record<string, string>>
 }
 
 /**
  * Enforces stable identity text without silently rewriting it.
  */
-function validateNormalizedText(
-  value: unknown,
-  label: string,
-): asserts value is string {
-  if (
-    typeof value !== "string" ||
-    value.length === 0 ||
-    value !== value.trim()
-  ) {
-    throw new TypeError(
-      `${label} must be a non-empty normalized string`,
-    )
+function validateNormalizedText(value: unknown, label: string): asserts value is string {
+  if (typeof value !== "string" || value.length === 0 || value !== value.trim()) {
+    throw new TypeError(`${label} must be a non-empty normalized string`)
   }
 }

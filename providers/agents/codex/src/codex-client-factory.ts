@@ -1,12 +1,7 @@
 /**
  * Recursive configuration accepted by the Codex SDK's `--config` bridge.
  */
-export type CodexConfigValue =
-  | boolean
-  | number
-  | string
-  | readonly CodexConfigValue[]
-  | CodexConfig
+export type CodexConfigValue = boolean | number | string | readonly CodexConfigValue[] | CodexConfig
 
 /**
  * Provider-specific Codex configuration captured without importing SDK types.
@@ -18,12 +13,7 @@ export interface CodexConfig {
 /**
  * Codex reasoning levels exposed through the configured provider factory.
  */
-export type CodexReasoningEffort =
-  | "minimal"
-  | "low"
-  | "medium"
-  | "high"
-  | "xhigh"
+export type CodexReasoningEffort = "minimal" | "low" | "medium" | "high" | "xhigh"
 
 /**
  * SDK-construction values that vary for each AML Agent invocation.
@@ -75,10 +65,7 @@ export interface CodexThread {
   /**
    * Executes one turn and resolves only after the Codex CLI process settles.
    */
-  run(
-    prompt: string,
-    options: CodexTurnOptions,
-  ): Promise<CodexTurnResult>
+  run(prompt: string, options: CodexTurnOptions): Promise<CodexTurnResult>
 }
 
 /**

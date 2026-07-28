@@ -15,10 +15,7 @@ export interface AgentProvider {
    * The initial prompt and every request FollowUp share provider history and
    * session-wide capabilities; only the final response is returned to AML.
    */
-  run(
-    request: AgentRequest,
-    context: AgentExecutionContext,
-  ): Promise<AgentResponse>
+  run(request: AgentRequest, context: AgentExecutionContext): Promise<AgentResponse>
 
   /**
    * Confirms that model-controlled actions honor one effective Sandbox.

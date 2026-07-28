@@ -6,7 +6,6 @@ import type { AgentProvider } from "../src/components/agent/agent-provider.js"
 import type { AgentResponse } from "../src/components/agent/agent-response.js"
 import { AmlRuntime } from "../src/core/aml-runtime.js"
 import { evaluate } from "../src/core/evaluate.js"
-import { jsx } from "../src/jsx-runtime.js"
 
 describe("Agent concurrency", () => {
   it("runs explicit branches concurrently and preserves synthesis order", async () => {
@@ -15,10 +14,10 @@ describe("Agent concurrency", () => {
     let maxActive = 0
     let releaseFast: (() => void) | undefined
     let releaseSlow: (() => void) | undefined
-    const fastGate = new Promise<void>((resolve) => {
+    const fastGate = new Promise<void>(resolve => {
       releaseFast = resolve
     })
-    const slowGate = new Promise<void>((resolve) => {
+    const slowGate = new Promise<void>(resolve => {
       releaseSlow = resolve
     })
     const provider: AgentProvider = {
@@ -42,9 +41,7 @@ describe("Agent concurrency", () => {
           return { text: "fast-result" }
         }
 
-        expect(request.prompt).toBe(
-          "synthesize:slow-result|fast-result",
-        )
+        expect(request.prompt).toBe("synthesize:slow-result|fast-result")
         active -= 1
         events.push("synthesize:end")
         return { text: "final" }
@@ -52,12 +49,13 @@ describe("Agent concurrency", () => {
     }
 
     async function Workflow() {
-      const [slow, fast] = await Promise.all([
-        evaluate(<Agent>slow</Agent>),
-        evaluate(<Agent>fast</Agent>),
-      ])
+      const [slow, fast] = await Promise.all([evaluate(<Agent>slow</Agent>), evaluate(<Agent>fast</Agent>)])
 
-      return <Agent>synthesize:{slow}|{fast}</Agent>
+      return (
+        <Agent>
+          synthesize:{slow}|{fast}
+        </Agent>
+      )
     }
 
     const result = new AmlRuntime({
@@ -100,10 +98,7 @@ describe("Agent concurrency", () => {
         await Promise.resolve()
         active -= 1
         return {
-          text:
-            request.prompt === "child"
-              ? "child-result"
-              : "parent-result",
+          text: request.prompt === "child" ? "child-result" : "parent-result",
         }
       },
     }
@@ -116,8 +111,8 @@ describe("Agent concurrency", () => {
         <Agent>
           <Agent>child</Agent>
           parent
-        </Agent>,
-      ),
+        </Agent>
+      )
     ).resolves.toBe("parent-result")
     expect(calls).toEqual(["child", "child-resultparent"])
     expect(maxActive).toBe(1)
@@ -128,7 +123,7 @@ describe("Agent concurrency", () => {
     let calls = 0
     let maxActive = 0
     let release: (() => void) | undefined
-    const gate = new Promise<void>((resolve) => {
+    const gate = new Promise<void>(resolve => {
       release = resolve
     })
     const provider: AgentProvider = {
@@ -144,13 +139,7 @@ describe("Agent concurrency", () => {
     }
 
     async function Workflow() {
-      return (
-        await Promise.all(
-          Array.from({ length: 5 }, (_, index) =>
-            evaluate(<Agent>{index}</Agent>),
-          ),
-        )
-      ).join("")
+      return (await Promise.all(Array.from({ length: 5 }, (_, index) => evaluate(<Agent>{index}</Agent>)))).join("")
     }
 
     const result = new AmlRuntime({
@@ -175,7 +164,7 @@ describe("Agent concurrency", () => {
       name: "fifo-concurrency",
       async run(request) {
         calls.push(request.prompt)
-        await new Promise<void>((resolve) => {
+        await new Promise<void>(resolve => {
           releases.set(request.prompt, resolve)
         })
         return { text: request.prompt }
@@ -246,7 +235,7 @@ describe("Agent concurrency", () => {
       new AmlRuntime({
         agentProvider: provider,
         maxConcurrentAgents: 1,
-      }).evaluate(<Workflow />),
+      }).evaluate(<Workflow />)
     ).resolves.toBe("done")
     expect(calls).toEqual(["fails", "continues"])
   })
@@ -256,7 +245,7 @@ describe("Agent concurrency", () => {
     let calls = 0
     let maxActive = 0
     let release: (() => void) | undefined
-    const gate = new Promise<void>((resolve) => {
+    const gate = new Promise<void>(resolve => {
       release = resolve
     })
     const provider: AgentProvider = {
@@ -283,10 +272,7 @@ describe("Agent concurrency", () => {
     expect(maxActive).toBe(2)
     release?.()
 
-    await expect(Promise.all([first, second])).resolves.toEqual([
-      "first",
-      "second",
-    ])
+    await expect(Promise.all([first, second])).resolves.toEqual(["first", "second"])
   })
 
   it("treats zero as unlimited Agent concurrency", async () => {
@@ -294,7 +280,7 @@ describe("Agent concurrency", () => {
     let calls = 0
     let maxActive = 0
     let release: (() => void) | undefined
-    const gate = new Promise<void>((resolve) => {
+    const gate = new Promise<void>(resolve => {
       release = resolve
     })
     const provider: AgentProvider = {
@@ -310,13 +296,7 @@ describe("Agent concurrency", () => {
     }
 
     async function Workflow() {
-      return (
-        await Promise.all(
-          Array.from({ length: 6 }, (_, index) =>
-            evaluate(<Agent>{index}</Agent>),
-          ),
-        )
-      ).join("")
+      return (await Promise.all(Array.from({ length: 6 }, (_, index) => evaluate(<Agent>{index}</Agent>)))).join("")
     }
 
     const result = new AmlRuntime({
@@ -343,20 +323,13 @@ describe("Agent concurrency", () => {
         calls.push(request.prompt)
 
         return new Promise((_resolve, reject) => {
-          context.signal.addEventListener(
-            "abort",
-            () => reject(context.signal.reason),
-            { once: true },
-          )
+          context.signal.addEventListener("abort", () => reject(context.signal.reason), { once: true })
         })
       },
     }
 
     async function Workflow() {
-      await Promise.all([
-        evaluate(<Agent>active</Agent>),
-        evaluate(<Agent>queued</Agent>),
-      ])
+      await Promise.all([evaluate(<Agent>active</Agent>), evaluate(<Agent>queued</Agent>)])
       return "unreachable"
     }
 
@@ -379,12 +352,8 @@ describe("Agent concurrency", () => {
     ])
     expect(
       (error as AggregateError).errors.some(
-        (nested) =>
-          nested instanceof Error &&
-          nested.message.includes(
-            "was cancelled before provider execution",
-          ),
-      ),
+        nested => nested instanceof Error && nested.message.includes("was cancelled before provider execution")
+      )
     ).toBe(true)
     expect(calls).toEqual(["active"])
   })
@@ -415,11 +384,10 @@ describe("Agent concurrency", () => {
       new AmlRuntime({
         agentProvider: provider,
         maxConcurrentAgents: 1,
-      }).evaluate(<Workflow />),
+      }).evaluate(<Workflow />)
     ).resolves.toBe("outer-result")
     expect(nestedError).toMatchObject({
-      message:
-        "evaluate() is only available while an AML component is active",
+      message: "evaluate() is only available while an AML component is active",
     })
     expect(calls).toEqual(["outer"])
   })
@@ -439,12 +407,8 @@ describe("Agent concurrency", () => {
         return {
           then(resolve: (value: AgentResponse) => void) {
             try {
-              void evaluate(
-                <Agent provider={provider}>nested</Agent>,
-              )
-              nestedError = new Error(
-                "provider thenable retained evaluate() access",
-              )
+              void evaluate(<Agent provider={provider}>nested</Agent>)
+              nestedError = new Error("provider thenable retained evaluate() access")
             } catch (error) {
               nestedError = error
             }
@@ -456,19 +420,12 @@ describe("Agent concurrency", () => {
     }
 
     async function Workflow() {
-      return await evaluate(
-        <Agent provider={provider}>outer</Agent>,
-      )
+      return await evaluate(<Agent provider={provider}>outer</Agent>)
     }
 
-    await expect(
-      new AmlRuntime({ maxConcurrentAgents: 1 }).evaluate(
-        <Workflow />,
-      ),
-    ).resolves.toBe("outer-result")
+    await expect(new AmlRuntime({ maxConcurrentAgents: 1 }).evaluate(<Workflow />)).resolves.toBe("outer-result")
     expect(nestedError).toMatchObject({
-      message:
-        "evaluate() is only available while an AML component is active",
+      message: "evaluate() is only available while an AML component is active",
     })
     expect(calls).toEqual(["outer"])
   })
@@ -488,12 +445,8 @@ describe("Agent concurrency", () => {
         return {
           get text() {
             try {
-              void evaluate(
-                <Agent provider={provider}>injected</Agent>,
-              )
-              getterError = new Error(
-                "provider response retained evaluate() access",
-              )
+              void evaluate(<Agent provider={provider}>injected</Agent>)
+              getterError = new Error("provider response retained evaluate() access")
             } catch (error) {
               getterError = error
             }
@@ -505,19 +458,12 @@ describe("Agent concurrency", () => {
     }
 
     async function Workflow() {
-      return await evaluate(
-        <Agent provider={provider}>outer</Agent>,
-      )
+      return await evaluate(<Agent provider={provider}>outer</Agent>)
     }
 
-    await expect(
-      new AmlRuntime({ maxConcurrentAgents: 1 }).evaluate(
-        <Workflow />,
-      ),
-    ).resolves.toBe("outer-result")
+    await expect(new AmlRuntime({ maxConcurrentAgents: 1 }).evaluate(<Workflow />)).resolves.toBe("outer-result")
     expect(getterError).toMatchObject({
-      message:
-        "evaluate() is only available while an AML component is active",
+      message: "evaluate() is only available while an AML component is active",
     })
     expect(calls).toEqual(["outer"])
   })
@@ -538,12 +484,8 @@ describe("Agent concurrency", () => {
           structured: {
             get value() {
               try {
-                void evaluate(
-                  <Agent provider={provider}>injected</Agent>,
-                )
-                getterError = new Error(
-                  "structured value retained evaluate() access",
-                )
+                void evaluate(<Agent provider={provider}>injected</Agent>)
+                getterError = new Error("structured value retained evaluate() access")
               } catch (error) {
                 getterError = error
               }
@@ -558,19 +500,13 @@ describe("Agent concurrency", () => {
     const Result = z.object({ value: z.string() })
 
     async function Workflow() {
-      const result = await evaluate(
-        <Agent provider={provider}>outer</Agent>,
-        Result,
-      )
+      const result = await evaluate(<Agent provider={provider}>outer</Agent>, Result)
       return result.value
     }
 
-    await expect(new AmlRuntime().evaluate(<Workflow />)).resolves.toBe(
-      "safe",
-    )
+    await expect(new AmlRuntime().evaluate(<Workflow />)).resolves.toBe("safe")
     expect(getterError).toMatchObject({
-      message:
-        "evaluate() is only available while an AML component is active",
+      message: "evaluate() is only available while an AML component is active",
     })
     expect(calls).toEqual(["outer"])
   })
@@ -588,12 +524,8 @@ describe("Agent concurrency", () => {
     const provider: AgentProvider = {
       get name() {
         try {
-          void evaluate(
-            <Agent provider={injectedProvider}>injected</Agent>,
-          )
-          accessorError = new Error(
-            "provider accessor retained evaluate() access",
-          )
+          void evaluate(<Agent provider={injectedProvider}>injected</Agent>)
+          accessorError = new Error("provider accessor retained evaluate() access")
         } catch (error) {
           accessorError = error
         }
@@ -606,27 +538,20 @@ describe("Agent concurrency", () => {
     }
 
     async function Workflow() {
-      return await evaluate(
-        <Agent provider={provider}>outer</Agent>,
-      )
+      return await evaluate(<Agent provider={provider}>outer</Agent>)
     }
 
-    await expect(new AmlRuntime().evaluate(<Workflow />)).resolves.toBe(
-      "outer-result",
-    )
+    await expect(new AmlRuntime().evaluate(<Workflow />)).resolves.toBe("outer-result")
     expect(accessorError).toMatchObject({
-      message:
-        "evaluate() is only available while an AML component is active",
+      message: "evaluate() is only available while an AML component is active",
     })
     expect(injectedCalls).toEqual([])
   })
 
   it("rejects invalid concurrency limits before evaluation", () => {
     for (const value of [-1, 1.5, Number.NaN]) {
-      expect(
-        () => new AmlRuntime({ maxConcurrentAgents: value }),
-      ).toThrow(
-        "maxConcurrentAgents must be a non-negative safe integer",
+      expect(() => new AmlRuntime({ maxConcurrentAgents: value })).toThrow(
+        "maxConcurrentAgents must be a non-negative safe integer"
       )
     }
   })

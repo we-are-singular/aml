@@ -1,4 +1,4 @@
-import type { SandboxAccess } from "@aml/sdk"
+import type { SandboxAccess } from "@aml-jsx/sdk"
 
 /**
  * Captured stdout, stderr, and process status from one container command.
@@ -30,10 +30,7 @@ export interface DockerSandboxHandle {
   /**
    * Executes an argument array directly inside the leased container.
    */
-  exec(
-    command: readonly string[],
-    options: DockerExecOptions,
-  ): Promise<DockerCommandResult>
+  exec(command: readonly string[], options: DockerExecOptions): Promise<DockerCommandResult>
 
   readonly kind: "docker"
   readonly root: string

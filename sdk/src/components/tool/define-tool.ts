@@ -1,13 +1,7 @@
-import type {
-  StandardSchemaV1,
-} from "@standard-schema/spec"
+import type { StandardSchemaV1 } from "@standard-schema/spec"
 
 import type { AmlJsonValue } from "../../core/aml-json-value.js"
-import type {
-  AgentToolExecutionContext,
-  AmlTool,
-  AmlToolSchema,
-} from "./agent-tool.js"
+import type { AgentToolExecutionContext, AmlTool, AmlToolSchema } from "./agent-tool.js"
 import { ToolDefinition } from "./tool-definition.js"
 
 type MaybePromise<Value> = PromiseLike<Value> | Value
@@ -29,14 +23,14 @@ export type DefineToolOptions<
     ? {
         readonly execute: (
           input: StandardSchemaV1.InferOutput<InputSchema>,
-          context: AgentToolExecutionContext,
+          context: AgentToolExecutionContext
         ) => MaybePromise<StandardSchemaV1.InferInput<OutputSchema>>
         readonly output: OutputSchema
       }
     : {
         readonly execute: (
           input: StandardSchemaV1.InferOutput<InputSchema>,
-          context: AgentToolExecutionContext,
+          context: AgentToolExecutionContext
         ) => MaybePromise<AmlJsonValue>
         readonly output?: undefined
       })
@@ -50,9 +44,7 @@ export type DefineToolOptions<
 export function defineTool<
   InputSchema extends AmlToolSchema,
   OutputSchema extends StandardSchemaV1 | undefined = undefined,
->(
-  options: DefineToolOptions<InputSchema, OutputSchema>,
-): AmlTool {
+>(options: DefineToolOptions<InputSchema, OutputSchema>): AmlTool {
   if (typeof options !== "object" || options === null) {
     throw new TypeError("defineTool options must be an object")
   }

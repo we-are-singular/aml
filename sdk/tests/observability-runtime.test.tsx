@@ -32,9 +32,7 @@ describe("observability", () => {
     })
     const provider = new DeterministicAgentProvider({
       async respond(request, context) {
-        const tool = request.tools.find(
-          (candidate) => candidate.name === "lookup",
-        )
+        const tool = request.tools.find(candidate => candidate.name === "lookup")
 
         if (tool?.kind !== "javascript") {
           throw new Error("Expected lookup Tool")
@@ -46,8 +44,8 @@ describe("observability", () => {
             {
               signal: context.signal,
               trace: context.trace,
-            },
-          ),
+            }
+          )
         ).resolves.toEqual({ id: 42, status: "active" })
 
         return { text: "PRIVATE_OUTPUT" }
@@ -58,10 +56,7 @@ describe("observability", () => {
       return (
         <Agent provider={provider}>
           <System>PRIVATE_SYSTEM</System>
-          <Skill
-            description="PRIVATE_DESCRIPTION"
-            name="evidence"
-          >
+          <Skill description="PRIVATE_DESCRIPTION" name="evidence">
             PRIVATE_SKILL
           </Skill>
           <Tool use={lookup} />
@@ -78,13 +73,11 @@ describe("observability", () => {
         trace(event) {
           events.push(event)
         },
-      }).evaluate(<Review />),
+      }).evaluate(<Review />)
     ).resolves.toBe("PRIVATE_OUTPUT")
 
     expect(events.length).toBeGreaterThan(10)
-    expect(events.map(({ sequence }) => sequence)).toEqual(
-      events.map((_event, index) => index + 1),
-    )
+    expect(events.map(({ sequence }) => sequence)).toEqual(events.map((_event, index) => index + 1))
 
     for (const event of events) {
       expect(Object.isFrozen(event)).toBe(true)
@@ -99,47 +92,16 @@ describe("observability", () => {
     expect(serialized).not.toContain("PRIVATE_FOLLOW_UP")
     expect(serialized).not.toContain("PRIVATE_OUTPUT")
 
-    const rootStart = events.find(
-      (event) =>
-        event.type === "span.start" &&
-        event.kind === "evaluation",
-    )
-    const rootEnd = events.find(
-      (event) =>
-        event.type === "span.end" &&
-        event.kind === "evaluation",
-    )
-    const agentStart = events.find(
-      (event) =>
-        event.type === "span.start" &&
-        event.kind === "agent",
-    )
-    const agentEnd = events.find(
-      (event) =>
-        event.type === "span.end" &&
-        event.kind === "agent",
-    )
-    const toolStart = events.find(
-      (event) =>
-        event.type === "span.start" &&
-        event.kind === "tool",
-    )
+    const rootStart = events.find(event => event.type === "span.start" && event.kind === "evaluation")
+    const rootEnd = events.find(event => event.type === "span.end" && event.kind === "evaluation")
+    const agentStart = events.find(event => event.type === "span.start" && event.kind === "agent")
+    const agentEnd = events.find(event => event.type === "span.end" && event.kind === "agent")
+    const toolStart = events.find(event => event.type === "span.start" && event.kind === "tool")
     const componentStart = events.find(
-      (event) =>
-        event.type === "span.start" &&
-        event.kind === "component" &&
-        event.name === "Review",
+      event => event.type === "span.start" && event.kind === "component" && event.name === "Review"
     )
-    const skillStart = events.find(
-      (event) =>
-        event.type === "span.start" &&
-        event.kind === "skill",
-    )
-    const systemStart = events.find(
-      (event) =>
-        event.type === "span.start" &&
-        event.kind === "system",
-    )
+    const skillStart = events.find(event => event.type === "span.start" && event.kind === "skill")
+    const systemStart = events.find(event => event.type === "span.start" && event.kind === "system")
 
     expect(rootStart).toMatchObject({
       name: "evaluate",
@@ -178,49 +140,24 @@ describe("observability", () => {
     expect(systemStart).toMatchObject({
       parentSpanId: agentStart?.spanId,
     })
-    expect(
-      events.filter(
-        (event) =>
-          event.type === "event" &&
-          event.name === "agent.turn",
-      ),
-    ).toMatchObject([
+    expect(events.filter(event => event.type === "event" && event.name === "agent.turn")).toMatchObject([
       { attributes: { index: 1, kind: "initial" } },
       { attributes: { index: 2, kind: "follow-up" } },
     ])
-    expect(
-      events.find(
-        (event) =>
-          event.type === "event" &&
-          event.name === "capability.tool",
-      ),
-    ).toMatchObject({
+    expect(events.find(event => event.type === "event" && event.name === "capability.tool")).toMatchObject({
       attributes: { kind: "javascript", name: "lookup" },
       spanId: agentStart?.spanId,
     })
-    expect(
-      events.find(
-        (event) =>
-          event.type === "event" &&
-          event.name === "capability.mcp",
-      ),
-    ).toMatchObject({
+    expect(events.find(event => event.type === "event" && event.name === "capability.mcp")).toMatchObject({
       attributes: { kind: "named", name: "project" },
       spanId: agentStart?.spanId,
     })
 
-    const starts = events.filter(
-      (event) => event.type === "span.start",
-    )
+    const starts = events.filter(event => event.type === "span.start")
 
     for (const start of starts) {
       expect(
-        events.some(
-          (event) =>
-            event.type === "span.end" &&
-            event.spanId === start.spanId &&
-            event.kind === start.kind,
-        ),
+        events.some(event => event.type === "span.end" && event.spanId === start.spanId && event.kind === start.kind)
       ).toBe(true)
     }
   })
@@ -246,16 +183,10 @@ describe("observability", () => {
       trace: sink,
     })
 
-    await runtime.evaluate(
-      <Agent system="VISIBLE_SYSTEM">VISIBLE_PROMPT</Agent>,
-    )
+    await runtime.evaluate(<Agent system="VISIBLE_SYSTEM">VISIBLE_PROMPT</Agent>)
     await runtime.evaluate("plain")
 
-    const agentEnd = events.find(
-      (event) =>
-        event.type === "span.end" &&
-        event.kind === "agent",
-    )
+    const agentEnd = events.find(event => event.type === "span.end" && event.kind === "agent")
 
     expect(agentEnd?.attributes).toMatchObject({
       output: "VISIBLE_OUTPUT",
@@ -274,18 +205,16 @@ describe("observability", () => {
       }),
     })
 
-    runtime.on("trace", (event) => redactedEvents.push(event))
+    runtime.on("trace", event => redactedEvents.push(event))
     runtime.on(
       "trace",
       createConsoleTracer({
         captureContent: true,
-        write: (line) => visibleLines.push(line),
-      }),
+        write: line => visibleLines.push(line),
+      })
     )
 
-    await runtime.evaluate(
-      <Agent system="PRIVATE_SYSTEM">PRIVATE_PROMPT</Agent>,
-    )
+    await runtime.evaluate(<Agent system="PRIVATE_SYSTEM">PRIVATE_PROMPT</Agent>)
 
     const visible = visibleLines.join("\n")
     const redacted = JSON.stringify(redactedEvents)
@@ -308,9 +237,7 @@ describe("observability", () => {
     })
     const provider = new DeterministicAgentProvider({
       async respond(request, context) {
-        const callable = request.tools.find(
-          (candidate) => candidate.name === "trace_echo",
-        )
+        const callable = request.tools.find(candidate => candidate.name === "trace_echo")
 
         if (callable?.kind !== "javascript") {
           throw new Error("Expected trace_echo Tool")
@@ -321,7 +248,7 @@ describe("observability", () => {
           {
             signal: context.signal,
             trace: context.trace,
-          },
+          }
         )
         return { text: "done" }
       },
@@ -335,34 +262,24 @@ describe("observability", () => {
     })
 
     await new AmlRuntime({
-      trace: (event) => hiddenEvents.push(event),
+      trace: event => hiddenEvents.push(event),
     }).evaluate(
       <Agent provider={provider}>
         <Tool use={tool} />
         inspect
-      </Agent>,
+      </Agent>
     )
     await new AmlRuntime({ trace: visibleSink }).evaluate(
       <Agent provider={provider}>
         <Tool use={tool} />
         inspect
-      </Agent>,
+      </Agent>
     )
 
-    expect(JSON.stringify(hiddenEvents)).not.toContain(
-      "TOOL_SECRET",
-    )
+    expect(JSON.stringify(hiddenEvents)).not.toContain("TOOL_SECRET")
 
-    const toolEnd = visibleEvents.find(
-      (event) =>
-        event.type === "span.end" &&
-        event.kind === "tool",
-    )
-    const toolStart = visibleEvents.find(
-      (event) =>
-        event.type === "span.start" &&
-        event.kind === "tool",
-    )
+    const toolEnd = visibleEvents.find(event => event.type === "span.end" && event.kind === "tool")
+    const toolStart = visibleEvents.find(event => event.type === "span.start" && event.kind === "tool")
 
     expect(toolStart?.attributes).toEqual({
       input: '{"secret":"TOOL_SECRET"}',
@@ -393,21 +310,16 @@ describe("observability", () => {
       })
       const provider = new DeterministicAgentProvider({
         async respond(request, context) {
-          const callable = request.tools.find(
-            (candidate) => candidate.name === "read_once",
-          )
+          const callable = request.tools.find(candidate => candidate.name === "read_once")
 
           if (callable?.kind !== "javascript") {
             throw new Error("Expected read_once Tool")
           }
 
-          toolOutput = await callable.execute(
-            providerInput,
-            {
-              signal: context.signal,
-              trace: context.trace,
-            },
-          )
+          toolOutput = await callable.execute(providerInput, {
+            signal: context.signal,
+            trace: context.trace,
+          })
           return { text: "done" }
         },
       })
@@ -425,7 +337,7 @@ describe("observability", () => {
         <Agent provider={provider}>
           <Tool use={tool} />
           inspect
-        </Agent>,
+        </Agent>
       )
 
       return { events, getterReads, toolOutput }
@@ -439,9 +351,7 @@ describe("observability", () => {
     expect(hidden.toolOutput).toEqual({ value: "stable" })
     expect(visible.toolOutput).toEqual({ value: "stable" })
     expect(JSON.stringify(hidden.events)).not.toContain("stable")
-    expect(JSON.stringify(visible.events)).toContain(
-      '"input":"{\\"value\\":\\"stable\\"}"',
-    )
+    expect(JSON.stringify(visible.events)).toContain('"input":"{\\"value\\":\\"stable\\"}"')
   })
 
   it("traces Tool transport rejection even when the provider recovers", async () => {
@@ -455,9 +365,7 @@ describe("observability", () => {
     })
     const provider = new DeterministicAgentProvider({
       async respond(request, context) {
-        const callable = request.tools.find(
-          (candidate) => candidate.name === "transport_guard",
-        )
+        const callable = request.tools.find(candidate => candidate.name === "transport_guard")
 
         if (callable?.kind !== "javascript") {
           throw new Error("Expected transport_guard Tool")
@@ -469,7 +377,7 @@ describe("observability", () => {
             {
               signal: context.signal,
               trace: context.trace,
-            },
+            }
           )
         } catch (error) {
           toolError = error
@@ -481,29 +389,21 @@ describe("observability", () => {
 
     await expect(
       new AmlRuntime({
-        trace: (event) => events.push(event),
+        trace: event => events.push(event),
       }).evaluate(
         <Agent provider={provider}>
           <Tool use={tool} />
           inspect
-        </Agent>,
-      ),
+        </Agent>
+      )
     ).resolves.toBe("recovered")
 
     expect(toolError).toMatchObject({
       message: 'Tool "transport_guard" input is not valid JSON',
     })
 
-    const start = events.find(
-      (event) =>
-        event.type === "span.start" &&
-        event.kind === "tool",
-    )
-    const end = events.find(
-      (event) =>
-        event.type === "span.end" &&
-        event.kind === "tool",
-    )
+    const start = events.find(event => event.type === "span.start" && event.kind === "tool")
+    const end = events.find(event => event.type === "span.end" && event.kind === "tool")
 
     expect(start).toMatchObject({ name: "transport_guard" })
     expect(start?.attributes).toEqual({})
@@ -517,7 +417,7 @@ describe("observability", () => {
   it("isolates asynchronous observer failures from evaluation", async () => {
     const errors: unknown[] = []
     const sink = vi.fn((_event: AmlTraceEvent) =>
-      Promise.reject(new Error("async trace failure")),
+      Promise.reject(new Error("async trace failure"))
     ) as unknown as TraceSink
 
     await expect(
@@ -526,18 +426,12 @@ describe("observability", () => {
           errors.push(error)
         },
         trace: sink,
-      }).evaluate("stable"),
+      }).evaluate("stable")
     ).resolves.toBe("stable")
 
-    await new Promise((resolve) => setImmediate(resolve))
+    await new Promise(resolve => setImmediate(resolve))
     expect(sink).toHaveBeenCalled()
-    expect(
-      errors.some(
-        (error) =>
-          error instanceof Error &&
-          error.message === "async trace failure",
-      ),
-    ).toBe(true)
+    expect(errors.some(error => error instanceof Error && error.message === "async trace failure")).toBe(true)
   })
 
   it("masks component evaluate authority from asynchronous observers", async () => {
@@ -576,9 +470,7 @@ describe("observability", () => {
     }
 
     const trace = ((event: AmlTraceEvent) =>
-      event.type === "span.start" &&
-      event.kind === "component" &&
-      event.name === "Nested"
+      event.type === "span.start" && event.kind === "component" && event.name === "Nested"
         ? observerThenable("sink")
         : undefined) as unknown as TraceSink
 
@@ -593,36 +485,28 @@ describe("observability", () => {
     await expect(
       new AmlRuntime({
         trace,
-      }).evaluate(<Workflow />),
+      }).evaluate(<Workflow />)
     ).resolves.toBe("nested")
 
-    await new Promise((resolve) => setImmediate(resolve))
+    await new Promise(resolve => setImmediate(resolve))
 
-    expect(attempts.map(({ phase }) => phase)).toEqual([
-      "sink:getter",
-      "sink:then",
-    ])
+    expect(attempts.map(({ phase }) => phase)).toEqual(["sink:getter", "sink:then"])
     expect(attempts).toSatisfy(
       (
         values: Array<{
           readonly error: unknown
           readonly phase: string
-        }>,
+        }>
       ) =>
         values.every(
           ({ error }) =>
-            error instanceof Error &&
-            error.message.includes(
-              "only available while an AML component is active",
-            ),
-        ),
+            error instanceof Error && error.message.includes("only available while an AML component is active")
+        )
     )
   })
 
   it("warns once when a failing sink has no secondary handler", async () => {
-    const stderr = vi
-      .spyOn(console, "error")
-      .mockImplementation(() => undefined)
+    const stderr = vi.spyOn(console, "error").mockImplementation(() => undefined)
 
     try {
       await expect(
@@ -630,13 +514,11 @@ describe("observability", () => {
           trace() {
             throw new Error("broken observer")
           },
-        }).evaluate("stable"),
+        }).evaluate("stable")
       ).resolves.toBe("stable")
 
       expect(stderr).toHaveBeenCalledTimes(1)
-      expect(stderr).toHaveBeenCalledWith(
-        expect.stringContaining("[aml] trace listener failed"),
-      )
+      expect(stderr).toHaveBeenCalledWith(expect.stringContaining("[aml] trace listener failed"))
     } finally {
       stderr.mockRestore()
     }
@@ -649,7 +531,7 @@ describe("observability", () => {
         getPrototypeOf() {
           throw new Error("trace inspected thrown proxy")
         },
-      },
+      }
     )
     const sink = (() => undefined) as TraceSink
 
@@ -661,9 +543,7 @@ describe("observability", () => {
       throw thrown
     }
 
-    const error = await new AmlRuntime({ trace: sink })
-      .evaluate(<BrokenComponent />)
-      .catch((cause: unknown) => cause)
+    const error = await new AmlRuntime({ trace: sink }).evaluate(<BrokenComponent />).catch((cause: unknown) => cause)
 
     expect(error).toBe(thrown)
   })
@@ -685,18 +565,14 @@ describe("observability", () => {
             observerErrors.push(error)
           }
         },
-      }).evaluate(<Workflow />),
+      }).evaluate(<Workflow />)
     ).resolves.toBe("result:nested")
 
     expect(observerErrors.length).toBeGreaterThan(0)
     expect(observerErrors).toSatisfy((errors: unknown[]) =>
       errors.every(
-        (error) =>
-          error instanceof Error &&
-          error.message.includes(
-            "only available while an AML component is active",
-          ),
-      ),
+        error => error instanceof Error && error.message.includes("only available while an AML component is active")
+      )
     )
   })
 
@@ -711,9 +587,7 @@ describe("observability", () => {
           throw new Error("writer threw")
         }
 
-        return Promise.reject(
-          new Error("writer rejected"),
-        ) as never
+        return Promise.reject(new Error("writer rejected")) as never
       },
     })
 
@@ -723,15 +597,15 @@ describe("observability", () => {
           errors.push(error)
         },
         trace,
-      }).evaluate("stable"),
+      }).evaluate("stable")
     ).resolves.toBe("stable")
 
-    await new Promise((resolve) => setImmediate(resolve))
+    await new Promise(resolve => setImmediate(resolve))
     expect(errors).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ message: "writer threw" }),
         expect.objectContaining({ message: "writer rejected" }),
-      ]),
+      ])
     )
   })
 
@@ -749,9 +623,7 @@ describe("observability", () => {
     })
     const provider = new DeterministicAgentProvider({
       async respond(request, context) {
-        const callable = request.tools.find(
-          (candidate) => candidate.name === "observe_signal",
-        )
+        const callable = request.tools.find(candidate => candidate.name === "observe_signal")
 
         if (callable?.kind !== "javascript") {
           throw new Error("Expected observe_signal Tool")
@@ -762,7 +634,7 @@ describe("observability", () => {
           {
             signal: providerController.signal,
             trace: context.trace,
-          },
+          }
         )
         return { text: "done" }
       },
@@ -772,7 +644,7 @@ describe("observability", () => {
       <Agent provider={provider}>
         <Tool use={tool} />
         inspect
-      </Agent>,
+      </Agent>
     )
 
     expect(receivedSignal).toBe(providerController.signal)
@@ -801,21 +673,17 @@ describe("observability", () => {
 
     await new AmlRuntime({
       agentProvider: new DeterministicAgentProvider(),
-      trace: (event) => events.push(event),
+      trace: event => events.push(event),
     }).evaluate(
       <Agent>
         <Mcp name="provider-owned" />
         <Mcp use={stdio} />
         <Mcp use={remote} />
         inspect
-      </Agent>,
+      </Agent>
     )
 
-    const capabilities = events.filter(
-      (event) =>
-        event.type === "event" &&
-        event.name === "capability.mcp",
-    )
+    const capabilities = events.filter(event => event.type === "event" && event.name === "capability.mcp")
 
     expect(capabilities.map(({ attributes }) => attributes)).toEqual([
       { kind: "named", name: "provider-owned" },
@@ -836,15 +704,13 @@ describe("observability", () => {
   it("isolates correlation and sequence counters across concurrent evaluations", async () => {
     const events: AmlTraceEvent[] = []
     const runtime = new AmlRuntime({
-      trace: (event) => events.push(event),
+      trace: event => events.push(event),
     })
 
-    await expect(
-      Promise.all([
-        runtime.evaluate("first"),
-        runtime.evaluate("second"),
-      ]),
-    ).resolves.toEqual(["first", "second"])
+    await expect(Promise.all([runtime.evaluate("first"), runtime.evaluate("second")])).resolves.toEqual([
+      "first",
+      "second",
+    ])
 
     const byRun = new Map<string, AmlTraceEvent[]>()
 
@@ -858,10 +724,7 @@ describe("observability", () => {
     expect(byRun.size).toBe(2)
 
     for (const runEvents of byRun.values()) {
-      expect(runEvents.map(({ sequence }) => sequence)).toEqual([
-        1,
-        2,
-      ])
+      expect(runEvents.map(({ sequence }) => sequence)).toEqual([1, 2])
       expect(runEvents).toMatchObject([
         {
           kind: "evaluation",
@@ -883,22 +746,12 @@ describe("observability", () => {
 
     await expect(
       new AmlRuntime({
-        trace: (event) => events.push(event),
-      }).evaluate(
-        <Agent model={42 as never}>invalid</Agent>,
-      ),
+        trace: event => events.push(event),
+      }).evaluate(<Agent model={42 as never}>invalid</Agent>)
     ).rejects.toThrow("<Agent> model must be a string")
 
-    const starts = events.filter(
-      (event) =>
-        event.type === "span.start" &&
-        event.kind === "agent",
-    )
-    const ends = events.filter(
-      (event) =>
-        event.type === "span.end" &&
-        event.kind === "agent",
-    )
+    const starts = events.filter(event => event.type === "span.start" && event.kind === "agent")
+    const ends = events.filter(event => event.type === "span.end" && event.kind === "agent")
 
     expect(starts).toHaveLength(1)
     expect(ends).toMatchObject([
@@ -912,7 +765,7 @@ describe("observability", () => {
   it("renders a readable console tree without content by default", async () => {
     const lines: string[] = []
     const trace = createConsoleTracer({
-      write: (line) => lines.push(line),
+      write: line => lines.push(line),
     })
 
     await new AmlRuntime({
@@ -928,7 +781,7 @@ describe("observability", () => {
         expect.stringContaining("▶ agent Agent"),
         expect.stringContaining("✓ agent Agent"),
         expect.stringContaining("✓ evaluation evaluate"),
-      ]),
+      ])
     )
     expect(lines.join("\n")).not.toContain("CONSOLE_PROMPT")
     expect(lines.join("\n")).not.toContain("CONSOLE_OUTPUT")
@@ -942,9 +795,7 @@ describe("observability", () => {
       supportsSandbox: () => true,
       async respond(request, context, callIndex) {
         if (callIndex === 0) {
-          const stateTool = request.tools.find(
-            (tool) => tool.name === "aml_set_state",
-          )
+          const stateTool = request.tools.find(tool => tool.name === "aml_set_state")
 
           if (stateTool?.kind !== "javascript") {
             throw new Error("Expected Loop state Tool")
@@ -955,7 +806,7 @@ describe("observability", () => {
             {
               signal: context.signal,
               trace: context.trace,
-            },
+            }
           )
           return { text: "discarded" }
         }
@@ -975,30 +826,16 @@ describe("observability", () => {
             <Loop
               initial={{ done: false }}
               schema={z.object({ done: z.boolean() })}
-              render={({ state }) => (
-                <Agent provider={provider}>
-                  done={String(state.done)}
-                </Agent>
-              )}
+              render={({ state }) => <Agent provider={provider}>done={String(state.done)}</Agent>}
             />
           </Sandbox>
-        </Workspace>,
-      ),
+        </Workspace>
+      )
     ).resolves.toBe("complete")
 
-    for (const kind of [
-      "workspace",
-      "sandbox",
-      "loop",
-    ] as const) {
-      const start = events.find(
-        (event) =>
-          event.type === "span.start" && event.kind === kind,
-      )
-      const end = events.find(
-        (event) =>
-          event.type === "span.end" && event.kind === kind,
-      )
+    for (const kind of ["workspace", "sandbox", "loop"] as const) {
+      const start = events.find(event => event.type === "span.start" && event.kind === kind)
+      const end = events.find(event => event.type === "span.end" && event.kind === kind)
 
       expect(start).toBeDefined()
       expect(end).toMatchObject({
@@ -1007,51 +844,21 @@ describe("observability", () => {
       })
     }
 
-    const root = events.find(
-      (event) =>
-        event.type === "span.start" &&
-        event.kind === "evaluation",
-    )
-    const workspaceStart = events.find(
-      (event) =>
-        event.type === "span.start" &&
-        event.kind === "workspace",
-    )
-    const sandboxStart = events.find(
-      (event) =>
-        event.type === "span.start" &&
-        event.kind === "sandbox",
-    )
-    const loopStart = events.find(
-      (event) =>
-        event.type === "span.start" &&
-        event.kind === "loop",
-    )
-    const agentStarts = events.filter(
-      (event) =>
-        event.type === "span.start" &&
-        event.kind === "agent",
-    )
+    const root = events.find(event => event.type === "span.start" && event.kind === "evaluation")
+    const workspaceStart = events.find(event => event.type === "span.start" && event.kind === "workspace")
+    const sandboxStart = events.find(event => event.type === "span.start" && event.kind === "sandbox")
+    const loopStart = events.find(event => event.type === "span.start" && event.kind === "loop")
+    const agentStarts = events.filter(event => event.type === "span.start" && event.kind === "agent")
 
     expect(workspaceStart?.parentSpanId).toBe(root?.spanId)
-    expect(sandboxStart?.parentSpanId).toBe(
-      workspaceStart?.spanId,
-    )
+    expect(sandboxStart?.parentSpanId).toBe(workspaceStart?.spanId)
     expect(loopStart?.parentSpanId).toBe(sandboxStart?.spanId)
     expect(agentStarts).toHaveLength(2)
     expect(agentStarts).toSatisfy((starts: AmlTraceEvent[]) =>
-      starts.every(
-        (event) => event.parentSpanId === loopStart?.spanId,
-      ),
+      starts.every(event => event.parentSpanId === loopStart?.spanId)
     )
 
-    expect(
-      events.find(
-        (event) =>
-          event.type === "event" &&
-          event.name === "loop.transition",
-      ),
-    ).toMatchObject({
+    expect(events.find(event => event.type === "event" && event.name === "loop.transition")).toMatchObject({
       attributes: {
         iteration: 1,
         name: "Loop",
@@ -1076,29 +883,18 @@ describe("observability", () => {
 
     await expect(
       new AmlRuntime({
-        trace: (event) => events.push(event),
+        trace: event => events.push(event),
       }).evaluate(
         <Workspace id="failure" provider={workspace}>
           <Sandbox provider={sandbox}>
             <Agent provider={provider}>fail</Agent>
           </Sandbox>
-        </Workspace>,
-      ),
+        </Workspace>
+      )
     ).rejects.toThrow('Agent "deterministic"')
 
-    for (const kind of [
-      "agent",
-      "sandbox",
-      "workspace",
-      "evaluation",
-    ] as const) {
-      expect(
-        events.find(
-          (event) =>
-            event.type === "span.end" &&
-            event.kind === kind,
-        ),
-      ).toMatchObject({ status: "error" })
+    for (const kind of ["agent", "sandbox", "workspace", "evaluation"] as const) {
+      expect(events.find(event => event.type === "span.end" && event.kind === kind)).toMatchObject({ status: "error" })
     }
 
     expect(workspace.saves).toHaveLength(1)

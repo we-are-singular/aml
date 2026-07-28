@@ -1,11 +1,5 @@
 import { z } from "zod"
-import {
-  describe,
-  expect,
-  expectTypeOf,
-  it,
-  vi,
-} from "vitest"
+import { describe, expect, expectTypeOf, it, vi } from "vitest"
 
 import { Agent } from "../src/components/agent/agent.js"
 import type { AgentProvider } from "../src/components/agent/agent-provider.js"
@@ -18,7 +12,6 @@ import { Workspace } from "../src/components/workspace/workspace.js"
 import type { AmlRenderable } from "../src/core/aml-node.js"
 import { AmlRuntime } from "../src/core/aml-runtime.js"
 import { evaluate } from "../src/core/evaluate.js"
-import { jsx } from "../src/jsx-runtime.js"
 import { DeterministicAgentProvider } from "../src/testing/deterministic-agent-provider.js"
 import { DeterministicSandboxProvider } from "../src/testing/deterministic-sandbox-provider.js"
 import { DeterministicWorkspaceProvider } from "../src/testing/deterministic-workspace-provider.js"
@@ -65,10 +58,7 @@ describe("component-local evaluate()", () => {
     async function Workflow() {
       renders += 1
       events.push("component:start")
-      const research = await evaluate(
-        <Agent>Research.</Agent>,
-        ResearchResult,
-      )
+      const research = await evaluate(<Agent>Research.</Agent>, ResearchResult)
       expectTypeOf(research).toEqualTypeOf<{
         risks: string[]
         summary: string
@@ -78,26 +68,15 @@ describe("component-local evaluate()", () => {
       return <Agent>Synthesize: {research.summary}</Agent>
     }
 
-    await expect(
-      new AmlRuntime({ agentProvider: provider }).evaluate(
-        <Workflow />,
-      ),
-    ).resolves.toBe("final")
+    await expect(new AmlRuntime({ agentProvider: provider }).evaluate(<Workflow />)).resolves.toBe("final")
     expect(renders).toBe(1)
-    expect(events).toEqual([
-      "component:start",
-      "agent:0",
-      "component:data:stale dependency",
-      "agent:1",
-    ])
-    expect(provider.calls[0]?.context.trace.runId).toBe(
-      provider.calls[1]?.context.trace.runId,
-    )
+    expect(events).toEqual(["component:start", "agent:0", "component:data:stale dependency", "agent:1"])
+    expect(provider.calls[0]?.context.trace.runId).toBe(provider.calls[1]?.context.trace.runId)
   })
 
   it("returns text through the same evaluation domain", async () => {
     const provider = new DeterministicAgentProvider({
-      respond: (request) => ({ text: `answer:${request.prompt}` }),
+      respond: request => ({ text: `answer:${request.prompt}` }),
     })
 
     async function Workflow() {
@@ -106,11 +85,9 @@ describe("component-local evaluate()", () => {
       return `received:${result}`
     }
 
-    await expect(
-      new AmlRuntime({ agentProvider: provider }).evaluate(
-        <Workflow />,
-      ),
-    ).resolves.toBe("received:answer:inspect")
+    await expect(new AmlRuntime({ agentProvider: provider }).evaluate(<Workflow />)).resolves.toBe(
+      "received:answer:inspect"
+    )
   })
 
   it("shares Agent-call limits with the root evaluation", async () => {
@@ -125,7 +102,7 @@ describe("component-local evaluate()", () => {
       new AmlRuntime({
         agentProvider: provider,
         maxAgentCalls: 1,
-      }).evaluate(<Workflow />),
+      }).evaluate(<Workflow />)
     ).rejects.toThrow("exceeded maxAgentCalls 1")
     expect(provider.calls).toHaveLength(1)
   })
@@ -135,9 +112,9 @@ describe("component-local evaluate()", () => {
       return evaluate(<Agent>too deep</Agent>)
     }
 
-    await expect(
-      new AmlRuntime({ maxDepth: 1 }).evaluate(<Workflow />),
-    ).rejects.toThrow("AML evaluation exceeded maxDepth 1")
+    await expect(new AmlRuntime({ maxDepth: 1 }).evaluate(<Workflow />)).rejects.toThrow(
+      "AML evaluation exceeded maxDepth 1"
+    )
   })
 
   it("inherits the active Sandbox into a nested Agent call", async () => {
@@ -145,9 +122,7 @@ describe("component-local evaluate()", () => {
     const agentProvider: AgentProvider = {
       name: "sandbox-aware",
       run(request, context) {
-        expect(context.sandbox?.provider.name).toBe(
-          "deterministic-sandbox",
-        )
+        expect(context.sandbox?.provider.name).toBe("deterministic-sandbox")
         expect(context.sandbox?.root).toBe("repository")
         return Promise.resolve({ text: request.prompt })
       },
@@ -163,8 +138,8 @@ describe("component-local evaluate()", () => {
       new AmlRuntime({ agentProvider }).evaluate(
         <Sandbox provider={sandboxProvider} root="repository">
           <Workflow />
-        </Sandbox>,
-      ),
+        </Sandbox>
+      )
     ).resolves.toBe("observed:inside")
     expect(sandboxProvider.releases).toHaveLength(1)
   })
@@ -182,17 +157,15 @@ describe("component-local evaluate()", () => {
     })
 
     async function Workflow() {
-      return await evaluate(
-        <Sandbox provider={sandboxProvider}>nested</Sandbox>,
-      )
+      return await evaluate(<Sandbox provider={sandboxProvider}>nested</Sandbox>)
     }
 
     await expect(
       new AmlRuntime().evaluate(
         <Workspace id="review-42" provider={workspaceProvider}>
           <Workflow />
-        </Workspace>,
-      ),
+        </Workspace>
+      )
     ).resolves.toBe("nested")
     expect(workspaceProvider.acquisitions).toHaveLength(1)
     expect(workspaceProvider.saves).toHaveLength(1)
@@ -202,7 +175,7 @@ describe("component-local evaluate()", () => {
 
   it("joins concurrent nested work before releasing an inherited Sandbox", async () => {
     let finishSecond: (() => void) | undefined
-    const secondGate = new Promise<void>((resolve) => {
+    const secondGate = new Promise<void>(resolve => {
       finishSecond = resolve
     })
     const events: string[] = []
@@ -223,17 +196,14 @@ describe("component-local evaluate()", () => {
     const sandboxProvider = new DeterministicSandboxProvider()
 
     async function Workflow() {
-      await Promise.all([
-        evaluate(<Agent>first</Agent>),
-        evaluate(<Agent>second</Agent>),
-      ])
+      await Promise.all([evaluate(<Agent>first</Agent>), evaluate(<Agent>second</Agent>)])
       return "unreachable"
     }
 
     const evaluation = new AmlRuntime({ agentProvider }).evaluate(
       <Sandbox provider={sandboxProvider}>
         <Workflow />
-      </Sandbox>,
+      </Sandbox>
     )
 
     await vi.waitFor(() => {
@@ -242,21 +212,13 @@ describe("component-local evaluate()", () => {
     expect(sandboxProvider.releases).toHaveLength(0)
 
     finishSecond?.()
-    await expect(evaluation).rejects.toThrow(
-      'Agent "deterministic" (span-2) failed',
-    )
-    expect(events).toEqual([
-      "first:start",
-      "second:start",
-      "second:end",
-    ])
+    await expect(evaluation).rejects.toThrow('Agent "deterministic" (span-2) failed')
+    expect(events).toEqual(["first:start", "second:start", "second:end"])
     expect(sandboxProvider.releases).toHaveLength(1)
   })
 
   it("rejects calls outside a component and after its invocation settles", async () => {
-    expect(() => evaluate("outside")).toThrow(
-      "evaluate() is only available while an AML component is active",
-    )
+    expect(() => evaluate("outside")).toThrow("evaluate() is only available while an AML component is active")
 
     let callAfterReturn: (() => Promise<string>) | undefined
 
@@ -265,12 +227,8 @@ describe("component-local evaluate()", () => {
       return "done"
     }
 
-    await expect(new AmlRuntime().evaluate(<Workflow />)).resolves.toBe(
-      "done",
-    )
-    expect(() => callAfterReturn?.()).toThrow(
-      "evaluate() is only available while an AML component is active",
-    )
+    await expect(new AmlRuntime().evaluate(<Workflow />)).resolves.toBe("done")
+    expect(() => callAfterReturn?.()).toThrow("evaluate() is only available while an AML component is active")
   })
 
   it("revokes async-local access inherited by detached work", async () => {
@@ -278,7 +236,7 @@ describe("component-local evaluate()", () => {
     let detached: Promise<unknown> | undefined
 
     function Workflow() {
-      const gate = new Promise<void>((resolve) => {
+      const gate = new Promise<void>(resolve => {
         releaseDetached = resolve
       })
 
@@ -288,13 +246,9 @@ describe("component-local evaluate()", () => {
       return "done"
     }
 
-    await expect(new AmlRuntime().evaluate(<Workflow />)).resolves.toBe(
-      "done",
-    )
+    await expect(new AmlRuntime().evaluate(<Workflow />)).resolves.toBe("done")
     releaseDetached?.()
-    await expect(detached).rejects.toThrow(
-      "evaluate() is only available while an AML component is active",
-    )
+    await expect(detached).rejects.toThrow("evaluate() is only available while an AML component is active")
   })
 
   it("revokes synchronous components before detached microtasks run", async () => {
@@ -305,12 +259,8 @@ describe("component-local evaluate()", () => {
       return "done"
     }
 
-    await expect(new AmlRuntime().evaluate(<Workflow />)).resolves.toBe(
-      "done",
-    )
-    await expect(detached).rejects.toThrow(
-      "evaluate() is only available while an AML component is active",
-    )
+    await expect(new AmlRuntime().evaluate(<Workflow />)).resolves.toBe("done")
+    await expect(detached).rejects.toThrow("evaluate() is only available while an AML component is active")
   })
 
   it("keeps component-local evaluation active for returned thenables", async () => {
@@ -324,9 +274,7 @@ describe("component-local evaluate()", () => {
       return lazy
     }
 
-    await expect(new AmlRuntime().evaluate(<Workflow />)).resolves.toBe(
-      "lazy",
-    )
+    await expect(new AmlRuntime().evaluate(<Workflow />)).resolves.toBe("lazy")
   })
 
   it("reads a returned thenable getter once inside the component boundary", async () => {
@@ -344,24 +292,20 @@ describe("component-local evaluate()", () => {
       return lazy
     }
 
-    await expect(new AmlRuntime().evaluate(<Workflow />)).resolves.toBe(
-      "getter",
-    )
+    await expect(new AmlRuntime().evaluate(<Workflow />)).resolves.toBe("getter")
     expect(reads).toBe(1)
   })
 
   it("preserves cycle detection across component-local evaluation", async () => {
-    let recursiveNode: AmlRenderable
-
     async function Recursive() {
       return await evaluate(recursiveNode)
     }
 
-    recursiveNode = <Recursive />
+    const recursiveNode: AmlRenderable = <Recursive />
 
-    await expect(
-      new AmlRuntime({ maxDepth: 0 }).evaluate(recursiveNode),
-    ).rejects.toThrow("AML nodes cannot contain cycles")
+    await expect(new AmlRuntime({ maxDepth: 0 }).evaluate(recursiveNode)).rejects.toThrow(
+      "AML nodes cannot contain cycles"
+    )
   })
 
   it("rejects missing and invalid provider structured output", async () => {
@@ -375,24 +319,17 @@ describe("component-local evaluate()", () => {
       }),
     })
 
-    async function Structured({
-      provider,
-    }: {
-      provider: AgentProvider
-    }) {
-      await evaluate(
-        <Agent provider={provider}>extract</Agent>,
-        ResearchResult,
-      )
+    async function Structured({ provider }: { provider: AgentProvider }) {
+      await evaluate(<Agent provider={provider}>extract</Agent>, ResearchResult)
       return "unreachable"
     }
 
-    await expect(
-      new AmlRuntime().evaluate(<Structured provider={missing} />),
-    ).rejects.toThrow("omitted structured output")
-    await expect(
-      new AmlRuntime().evaluate(<Structured provider={invalid} />),
-    ).rejects.toThrow("returned invalid structured output")
+    await expect(new AmlRuntime().evaluate(<Structured provider={missing} />)).rejects.toThrow(
+      "omitted structured output"
+    )
+    await expect(new AmlRuntime().evaluate(<Structured provider={invalid} />)).rejects.toThrow(
+      "returned invalid structured output"
+    )
   })
 
   it("rejects non-JSON provider data before permissive schema validation", async () => {
@@ -406,27 +343,20 @@ describe("component-local evaluate()", () => {
     })
 
     async function Workflow() {
-      await evaluate(
-        <Agent provider={provider}>extract</Agent>,
-        z.any(),
-      )
+      await evaluate(<Agent provider={provider}>extract</Agent>, z.any())
       return "unreachable"
     }
 
-    const error = await new AmlRuntime()
-      .evaluate(<Workflow />)
-      .catch((cause: unknown) => cause)
+    const error = await new AmlRuntime().evaluate(<Workflow />).catch((cause: unknown) => cause)
 
     expect(error).toMatchObject({
       cause: {
         cause: {
-          message:
-            "Agent structured output contains unsupported function data",
+          message: "Agent structured output contains unsupported function data",
         },
         message: "Agent structured output is not valid JSON",
       },
-      message:
-        'Agent "deterministic" (span-1) returned invalid structured output',
+      message: 'Agent "deterministic" (span-1) returned invalid structured output',
     })
   })
 
@@ -444,33 +374,18 @@ describe("component-local evaluate()", () => {
     }
 
     async function TwoAgents() {
-      await evaluate(
-        [
-          <Agent provider={provider}>one</Agent>,
-          <Agent provider={provider}>two</Agent>,
-        ],
-        ResearchResult,
-      )
+      await evaluate([<Agent provider={provider}>one</Agent>, <Agent provider={provider}>two</Agent>], ResearchResult)
       return "unreachable"
     }
 
     async function AdjacentText() {
-      await evaluate(
-        [<Agent provider={provider}>one</Agent>, "extra"],
-        ResearchResult,
-      )
+      await evaluate([<Agent provider={provider}>one</Agent>, "extra"], ResearchResult)
       return "unreachable"
     }
 
-    await expect(new AmlRuntime().evaluate(<NoAgent />)).rejects.toThrow(
-      "cannot include text outside its <Agent>",
-    )
-    await expect(
-      new AmlRuntime().evaluate(<TwoAgents />),
-    ).rejects.toThrow("must resolve to exactly one <Agent>")
-    await expect(
-      new AmlRuntime().evaluate(<AdjacentText />),
-    ).rejects.toThrow("cannot include text outside its <Agent>")
+    await expect(new AmlRuntime().evaluate(<NoAgent />)).rejects.toThrow("cannot include text outside its <Agent>")
+    await expect(new AmlRuntime().evaluate(<TwoAgents />)).rejects.toThrow("must resolve to exactly one <Agent>")
+    await expect(new AmlRuntime().evaluate(<AdjacentText />)).rejects.toThrow("cannot include text outside its <Agent>")
   })
 
   it("rejects nested Loops in every structured Agent message channel", async () => {
@@ -483,40 +398,24 @@ describe("component-local evaluate()", () => {
     })
     const nestedLoops: AmlRenderable[] = [
       <Agent provider={provider}>
-        <Loop
-          initial={{ done: false }}
-          render={() => <Agent provider={provider}>prompt</Agent>}
-          schema={State}
-        />
+        <Loop initial={{ done: false }} render={() => <Agent provider={provider}>prompt</Agent>} schema={State} />
       </Agent>,
       <Agent provider={provider}>
         <System>
-          <Loop
-            initial={{ done: false }}
-            render={() => <Agent provider={provider}>system</Agent>}
-            schema={State}
-          />
+          <Loop initial={{ done: false }} render={() => <Agent provider={provider}>system</Agent>} schema={State} />
         </System>
         prompt
       </Agent>,
       <Agent provider={provider}>
         <Skill>
-          <Loop
-            initial={{ done: false }}
-            render={() => <Agent provider={provider}>skill</Agent>}
-            schema={State}
-          />
+          <Loop initial={{ done: false }} render={() => <Agent provider={provider}>skill</Agent>} schema={State} />
         </Skill>
         prompt
       </Agent>,
       <Agent provider={provider}>
         prompt
         <FollowUp>
-          <Loop
-            initial={{ done: false }}
-            render={() => <Agent provider={provider}>follow-up</Agent>}
-            schema={State}
-          />
+          <Loop initial={{ done: false }} render={() => <Agent provider={provider}>follow-up</Agent>} schema={State} />
         </FollowUp>
       </Agent>,
     ]
@@ -527,10 +426,8 @@ describe("component-local evaluate()", () => {
         return "unreachable"
       }
 
-      await expect(
-        new AmlRuntime().evaluate(<Workflow />),
-      ).rejects.toThrow(
-        "Structured evaluate() must resolve to exactly one <Agent>",
+      await expect(new AmlRuntime().evaluate(<Workflow />)).rejects.toThrow(
+        "Structured evaluate() must resolve to exactly one <Agent>"
       )
     }
 
@@ -539,9 +436,7 @@ describe("component-local evaluate()", () => {
   })
 
   it("returns Standard Schema transformations rather than raw provider data", async () => {
-    const LengthResult = z
-      .object({ summary: z.string() })
-      .transform((value) => value.summary.length)
+    const LengthResult = z.object({ summary: z.string() }).transform(value => value.summary.length)
     const provider = new DeterministicAgentProvider({
       respond: () => ({
         structured: { summary: "four" },
@@ -550,16 +445,11 @@ describe("component-local evaluate()", () => {
     })
 
     async function Workflow() {
-      const length = await evaluate(
-        <Agent provider={provider}>measure</Agent>,
-        LengthResult,
-      )
+      const length = await evaluate(<Agent provider={provider}>measure</Agent>, LengthResult)
       expectTypeOf(length).toEqualTypeOf<number>()
       return `length:${length}`
     }
 
-    await expect(new AmlRuntime().evaluate(<Workflow />)).resolves.toBe(
-      "length:4",
-    )
+    await expect(new AmlRuntime().evaluate(<Workflow />)).resolves.toBe("length:4")
   })
 })

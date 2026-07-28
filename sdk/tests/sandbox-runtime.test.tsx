@@ -9,11 +9,7 @@ import {
   type SandboxLease,
   type SandboxProvider,
 } from "../src/index.js"
-import {
-  DeterministicAgentProvider,
-  DeterministicSandboxProvider,
-  sandboxProviderConformance,
-} from "../src/testing.js"
+import { DeterministicAgentProvider, DeterministicSandboxProvider, sandboxProviderConformance } from "../src/testing.js"
 
 describe("<Sandbox>", () => {
   it("acquires before descendants and releases after the complete subtree", async () => {
@@ -37,15 +33,10 @@ describe("<Sandbox>", () => {
 
     await expect(
       new AmlRuntime({ agentProvider }).evaluate(
-        <Sandbox
-          access="read-write"
-          cwd="src"
-          provider={sandboxProvider}
-          root="repository"
-        >
+        <Sandbox access="read-write" cwd="src" provider={sandboxProvider} root="repository">
           <Agent>Inspect.</Agent>
-        </Sandbox>,
-      ),
+        </Sandbox>
+      )
     ).resolves.toBe("done")
 
     expect(events).toEqual([
@@ -60,15 +51,9 @@ describe("<Sandbox>", () => {
         root: "repository",
       }),
     ])
-    expect(sandboxProvider.releases).toEqual([
-      "deterministic-sandbox-1",
-    ])
-    expect(
-      "release" in (agentProvider.calls[0]?.context.sandbox?.lease ?? {}),
-    ).toBe(false)
-    expect(
-      "acquire" in (agentProvider.calls[0]?.context.sandbox?.provider ?? {}),
-    ).toBe(false)
+    expect(sandboxProvider.releases).toEqual(["deterministic-sandbox-1"])
+    expect("release" in (agentProvider.calls[0]?.context.sandbox?.lease ?? {})).toBe(false)
+    expect("acquire" in (agentProvider.calls[0]?.context.sandbox?.provider ?? {})).toBe(false)
   })
 
   it("uses the runtime default and applies root defaults", async () => {
@@ -83,7 +68,7 @@ describe("<Sandbox>", () => {
     }).evaluate(
       <Sandbox>
         <Agent>Inspect.</Agent>
-      </Sandbox>,
+      </Sandbox>
     )
 
     expect(sandboxProvider.acquisitions).toEqual([
@@ -102,19 +87,11 @@ describe("<Sandbox>", () => {
     })
 
     await new AmlRuntime({ agentProvider }).evaluate(
-      <Sandbox
-        access="read-write"
-        provider={sandboxProvider}
-        root="repository"
-      >
-        <Sandbox
-          access="read-only"
-          cwd="src"
-          root="packages/api"
-        >
+      <Sandbox access="read-write" provider={sandboxProvider} root="repository">
+        <Sandbox access="read-only" cwd="src" root="packages/api">
           <Agent cwd="routes">Inspect routes.</Agent>
         </Sandbox>
-      </Sandbox>,
+      </Sandbox>
     )
 
     expect(sandboxProvider.acquisitions).toHaveLength(1)
@@ -125,12 +102,8 @@ describe("<Sandbox>", () => {
       nested: true,
       root: "repository/packages/api",
     })
-    expect(
-      agentProvider.calls[0]?.context.sandbox?.lease,
-    ).toBeDefined()
-    expect(
-      agentProvider.calls[0]?.context.trace.parentSpanId,
-    ).toBe("span-2")
+    expect(agentProvider.calls[0]?.context.sandbox?.lease).toBeDefined()
+    expect(agentProvider.calls[0]?.context.trace.parentSpanId).toBe("span-2")
   })
 
   it("rejects nested permission widening and provider replacement", async () => {
@@ -144,20 +117,16 @@ describe("<Sandbox>", () => {
       runtime.evaluate(
         <Sandbox provider={sandboxProvider}>
           <Sandbox access="read-write">invalid</Sandbox>
-        </Sandbox>,
-      ),
-    ).rejects.toThrow(
-      "A nested <Sandbox> cannot widen read-only access to read-write",
-    )
+        </Sandbox>
+      )
+    ).rejects.toThrow("A nested <Sandbox> cannot widen read-only access to read-write")
     await expect(
       runtime.evaluate(
         <Sandbox provider={sandboxProvider}>
           <Sandbox provider={replacement}>invalid</Sandbox>
-        </Sandbox>,
-      ),
-    ).rejects.toThrow(
-      "A nested <Sandbox> cannot select a provider",
-    )
+        </Sandbox>
+      )
+    ).rejects.toThrow("A nested <Sandbox> cannot select a provider")
 
     // Each invalid nested scope is discovered after its outer lease exists.
     expect(sandboxProvider.acquisitions).toHaveLength(2)
@@ -169,19 +138,13 @@ describe("<Sandbox>", () => {
     const sandboxProvider = new DeterministicSandboxProvider()
     const runtime = new AmlRuntime()
 
-    for (const root of [
-      "",
-      "/absolute",
-      "C:/absolute",
-      "../escape",
-      "packages/../secrets",
-    ]) {
+    for (const root of ["", "/absolute", "C:/absolute", "../escape", "packages/../secrets"]) {
       await expect(
         runtime.evaluate(
           <Sandbox provider={sandboxProvider} root={root}>
             invalid
-          </Sandbox>,
-        ),
+          </Sandbox>
+        )
       ).rejects.toBeInstanceOf(EvaluationError)
     }
 
@@ -189,14 +152,10 @@ describe("<Sandbox>", () => {
 
     await expect(
       runtime.evaluate(
-        <Sandbox
-          cwd="src/../secrets"
-          provider={sandboxProvider}
-          root="repository"
-        >
+        <Sandbox cwd="src/../secrets" provider={sandboxProvider} root="repository">
           invalid
-        </Sandbox>,
-      ),
+        </Sandbox>
+      )
     ).rejects.toThrow("cannot contain parent traversal")
     expect(sandboxProvider.acquisitions).toHaveLength(0)
 
@@ -204,8 +163,8 @@ describe("<Sandbox>", () => {
       runtime.evaluate(
         <Sandbox provider={sandboxProvider} root="repository">
           <Sandbox root="../../escape">invalid</Sandbox>
-        </Sandbox>,
-      ),
+        </Sandbox>
+      )
     ).rejects.toThrow("cannot contain parent traversal")
     expect(sandboxProvider.releases).toHaveLength(1)
 
@@ -213,8 +172,8 @@ describe("<Sandbox>", () => {
       runtime.evaluate(
         <Sandbox provider={sandboxProvider} root="repository">
           <Sandbox cwd="src/../secrets">invalid</Sandbox>
-        </Sandbox>,
-      ),
+        </Sandbox>
+      )
     ).rejects.toThrow("cannot contain parent traversal")
     expect(sandboxProvider.releases).toHaveLength(2)
   })
@@ -225,10 +184,8 @@ describe("<Sandbox>", () => {
     })
     const runtime = new AmlRuntime({ agentProvider })
 
-    await expect(
-      runtime.evaluate(<Agent cwd="src">Inspect.</Agent>),
-    ).rejects.toThrow(
-      "<Agent> cwd requires an enclosing <Sandbox>",
+    await expect(runtime.evaluate(<Agent cwd="src">Inspect.</Agent>)).rejects.toThrow(
+      "<Agent> cwd requires an enclosing <Sandbox>"
     )
 
     const sandboxProvider = new DeterministicSandboxProvider()
@@ -236,8 +193,8 @@ describe("<Sandbox>", () => {
       runtime.evaluate(
         <Sandbox provider={sandboxProvider}>
           <Agent cwd="src/../escape">Inspect.</Agent>
-        </Sandbox>,
-      ),
+        </Sandbox>
+      )
     ).rejects.toThrow("cannot contain parent traversal")
     expect(agentProvider.calls).toHaveLength(0)
     expect(sandboxProvider.releases).toHaveLength(1)
@@ -254,25 +211,18 @@ describe("<Sandbox>", () => {
       new AmlRuntime().evaluate(
         <Sandbox>
           <Child />
-        </Sandbox>,
-      ),
-    ).rejects.toThrow(
-      "<Sandbox> requires a provider or AmlRuntime sandboxProvider",
-    )
+        </Sandbox>
+      )
+    ).rejects.toThrow("<Sandbox> requires a provider or AmlRuntime sandboxProvider")
 
     const sandboxProvider = new DeterministicSandboxProvider()
     await expect(
       new AmlRuntime().evaluate(
-        <Sandbox
-          access={"execute" as "read-only"}
-          provider={sandboxProvider}
-        >
+        <Sandbox access={"execute" as "read-only"} provider={sandboxProvider}>
           <Child />
-        </Sandbox>,
-      ),
-    ).rejects.toThrow(
-      '<Sandbox> access must be "read-only" or "read-write"',
-    )
+        </Sandbox>
+      )
+    ).rejects.toThrow('<Sandbox> access must be "read-only" or "read-write"')
 
     expect(child).not.toHaveBeenCalled()
     expect(sandboxProvider.acquisitions).toHaveLength(0)
@@ -287,11 +237,9 @@ describe("<Sandbox>", () => {
       runtime.evaluate(
         <Sandbox provider={sandboxProvider}>
           <Agent>Inspect.</Agent>
-        </Sandbox>,
-      ),
-    ).rejects.toThrow(
-      'Agent provider "deterministic" cannot run inside Sandbox provider "deterministic-sandbox"',
-    )
+        </Sandbox>
+      )
+    ).rejects.toThrow('Agent provider "deterministic" cannot run inside Sandbox provider "deterministic-sandbox"')
 
     expect(unsupported.calls).toHaveLength(0)
     expect(sandboxProvider.releases).toHaveLength(1)
@@ -310,7 +258,7 @@ describe("<Sandbox>", () => {
       .evaluate(
         <Sandbox provider={sandboxProvider}>
           <Agent>Inspect.</Agent>
-        </Sandbox>,
+        </Sandbox>
       )
       .catch((cause: unknown) => cause)
 
@@ -338,18 +286,14 @@ describe("<Sandbox>", () => {
       .evaluate(
         <Sandbox provider={sandboxProvider}>
           <Agent>Inspect.</Agent>
-        </Sandbox>,
+        </Sandbox>
       )
       .catch((cause: unknown) => cause)
 
     expect(error).toBeInstanceOf(AggregateError)
     expect((error as AggregateError).errors).toHaveLength(2)
-    expect(
-      (error as AggregateError).errors[0],
-    ).toHaveProperty("cause", agentFailure)
-    expect(
-      (error as AggregateError).errors[1],
-    ).toHaveProperty("cause", releaseFailure)
+    expect((error as AggregateError).errors[0]).toHaveProperty("cause", agentFailure)
+    expect((error as AggregateError).errors[1]).toHaveProperty("cause", releaseFailure)
     expect(sandboxProvider.releases).toHaveLength(1)
   })
 
@@ -368,12 +312,10 @@ describe("<Sandbox>", () => {
         <Sandbox provider={sandboxProvider}>
           <CancelEvaluation />
         </Sandbox>,
-        { signal: controller.signal },
-      ),
+        { signal: controller.signal }
+      )
     ).rejects.toBe(reason)
-    expect(sandboxProvider.releases).toEqual([
-      "deterministic-sandbox-1",
-    ])
+    expect(sandboxProvider.releases).toEqual(["deterministic-sandbox-1"])
   })
 
   it("propagates cancellation to a pending cooperative acquisition", async () => {
@@ -381,7 +323,7 @@ describe("<Sandbox>", () => {
     const reason = new Error("cancel pending acquisition")
     let cleanedPartialSetup = false
     let started: (() => void) | undefined
-    const acquisitionStarted = new Promise<void>((resolve) => {
+    const acquisitionStarted = new Promise<void>(resolve => {
       started = resolve
     })
     const provider: SandboxProvider = {
@@ -396,15 +338,14 @@ describe("<Sandbox>", () => {
               cleanedPartialSetup = true
               reject(request.signal.reason)
             },
-            { once: true },
+            { once: true }
           )
         })
       },
     }
-    const pending = new AmlRuntime().evaluate(
-      <Sandbox provider={provider}>never</Sandbox>,
-      { signal: controller.signal },
-    )
+    const pending = new AmlRuntime().evaluate(<Sandbox provider={provider}>never</Sandbox>, {
+      signal: controller.signal,
+    })
 
     await acquisitionStarted
     controller.abort(reason)
@@ -417,22 +358,19 @@ describe("<Sandbox>", () => {
     const controller = new AbortController()
     const reason = new Error("cancel ignored acquisition")
     const release = vi.fn(async () => {})
-    let finishAcquisition:
-      | ((lease: SandboxLease) => void)
-      | undefined
+    let finishAcquisition: ((lease: SandboxLease) => void) | undefined
     const provider: SandboxProvider = {
       name: "ignores-cancellation",
       async acquire(request) {
-        return await new Promise<SandboxLease>((resolve) => {
+        return await new Promise<SandboxLease>(resolve => {
           finishAcquisition = resolve
           expect(request.signal).toBe(controller.signal)
         })
       },
     }
-    const pending = new AmlRuntime().evaluate(
-      <Sandbox provider={provider}>never</Sandbox>,
-      { signal: controller.signal },
-    )
+    const pending = new AmlRuntime().evaluate(<Sandbox provider={provider}>never</Sandbox>, {
+      signal: controller.signal,
+    })
 
     await vi.waitFor(() => expect(finishAcquisition).toBeTypeOf("function"))
     controller.abort(reason)
@@ -452,7 +390,7 @@ describe("<Sandbox>", () => {
     const releaseFailure = new Error("release after cancellation failed")
     let failRelease: ((error: Error) => void) | undefined
     let releaseStarted: (() => void) | undefined
-    const started = new Promise<void>((resolve) => {
+    const started = new Promise<void>(resolve => {
       releaseStarted = resolve
     })
     const sandboxProvider = new DeterministicSandboxProvider({
@@ -463,10 +401,9 @@ describe("<Sandbox>", () => {
         })
       },
     })
-    const pending = new AmlRuntime().evaluate(
-      <Sandbox provider={sandboxProvider}>resolved</Sandbox>,
-      { signal: controller.signal },
-    )
+    const pending = new AmlRuntime().evaluate(<Sandbox provider={sandboxProvider}>resolved</Sandbox>, {
+      signal: controller.signal,
+    })
 
     await started
     controller.abort(cancellation)
@@ -474,10 +411,7 @@ describe("<Sandbox>", () => {
 
     const error = await pending.catch((cause: unknown) => cause)
     expect(error).toBeInstanceOf(AggregateError)
-    expect((error as AggregateError).errors).toEqual([
-      cancellation,
-      expect.objectContaining({ cause: releaseFailure }),
-    ])
+    expect((error as AggregateError).errors).toEqual([cancellation, expect.objectContaining({ cause: releaseFailure })])
     expect(sandboxProvider.releases).toHaveLength(1)
   })
 
@@ -499,7 +433,7 @@ describe("<Sandbox>", () => {
       .evaluate(
         <Sandbox provider={provider}>
           <Child />
-        </Sandbox>,
+        </Sandbox>
       )
       .catch((cause: unknown) => cause)
 
@@ -521,11 +455,9 @@ describe("<Sandbox>", () => {
       },
     }
 
-    await expect(
-      new AmlRuntime().evaluate(
-        <Sandbox provider={provider}>never</Sandbox>,
-      ),
-    ).rejects.toThrow("lease with an invalid id")
+    await expect(new AmlRuntime().evaluate(<Sandbox provider={provider}>never</Sandbox>)).rejects.toThrow(
+      "lease with an invalid id"
+    )
     expect(release).toHaveBeenCalledOnce()
   })
 
@@ -559,7 +491,7 @@ describe("<Sandbox>", () => {
       expect(error).toHaveProperty("cause", failure)
       expect(error).toHaveProperty(
         "message",
-        `Sandbox provider "throwing-${field}" returned a lease with unreadable identity data`,
+        `Sandbox provider "throwing-${field}" returned a lease with unreadable identity data`
       )
       expect(release).toHaveBeenCalledOnce()
     }
@@ -592,7 +524,7 @@ describe("<Sandbox>", () => {
     expect(error).toHaveProperty("cause", failure)
     expect(error).toHaveProperty(
       "message",
-      'Sandbox provider "throwing-release" returned a lease with an unreadable release method',
+      'Sandbox provider "throwing-release" returned a lease with an unreadable release method'
     )
   })
 
@@ -617,11 +549,9 @@ describe("<Sandbox>", () => {
       new AmlRuntime({ agentProvider: unsupported }).evaluate(
         <Sandbox provider={provider}>
           <Agent>Inspect.</Agent>
-        </Sandbox>,
-      ),
-    ).rejects.toThrow(
-      'cannot run inside Sandbox provider "captured-name"',
-    )
+        </Sandbox>
+      )
+    ).rejects.toThrow('cannot run inside Sandbox provider "captured-name"')
     expect(nameReads).toBe(1)
   })
 })
@@ -647,19 +577,15 @@ describe("Sandbox provider authorship", () => {
         async acquire() {
           throw new Error("not called")
         },
-      }),
+      })
     ).toThrow("must already be normalized")
   })
 
   it("passes the reusable conformance lifecycle", async () => {
     const provider = new DeterministicSandboxProvider()
 
-    await expect(
-      sandboxProviderConformance(provider),
-    ).resolves.toBeUndefined()
+    await expect(sandboxProviderConformance(provider)).resolves.toBeUndefined()
     expect(provider.acquisitions).toHaveLength(1)
-    expect(provider.releases).toEqual([
-      "deterministic-sandbox-1",
-    ])
+    expect(provider.releases).toEqual(["deterministic-sandbox-1"])
   })
 })

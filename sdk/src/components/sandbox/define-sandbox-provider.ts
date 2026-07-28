@@ -6,9 +6,9 @@ import { validateSandboxProvider } from "./validate-sandbox-provider.js"
  *
  * This definition step performs no acquisition or provider-specific setup.
  */
-export function defineSandboxProvider<
-  const Provider extends SandboxProvider,
->(implementation: Provider): Readonly<Provider> {
+export function defineSandboxProvider<const Provider extends SandboxProvider>(
+  implementation: Provider
+): Readonly<Provider> {
   validateSandboxProvider(implementation)
   return Object.freeze(implementation)
 }

@@ -3,9 +3,7 @@ import type { OpenCodeCapabilityAttachment as OpenCodeCapabilityAttachmentContra
 /**
  * Owns one invocation's OpenCode capability map and cleanup barrier.
  */
-export class OpenCodeCapabilityAttachment
-  implements OpenCodeCapabilityAttachmentContract
-{
+export class OpenCodeCapabilityAttachment implements OpenCodeCapabilityAttachmentContract {
   readonly #cleanup: () => Promise<void>
   #closePromise: Promise<void> | undefined
   readonly tools: Readonly<Record<string, boolean>>
@@ -13,10 +11,7 @@ export class OpenCodeCapabilityAttachment
   /**
    * Captures the exact OpenCode capability map and its cleanup operation.
    */
-  constructor(
-    tools: Readonly<Record<string, boolean>>,
-    cleanup: () => Promise<void>,
-  ) {
+  constructor(tools: Readonly<Record<string, boolean>>, cleanup: () => Promise<void>) {
     this.tools = Object.freeze({ ...tools })
     this.#cleanup = cleanup
   }

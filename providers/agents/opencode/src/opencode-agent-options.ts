@@ -45,9 +45,7 @@ export interface CapturedOpenCodeAgentOptions {
 /**
  * Validates and snapshots provider configuration at the factory boundary.
  */
-export function captureOpenCodeAgentOptions(
-  options: OpenCodeAgentOptions,
-): Readonly<CapturedOpenCodeAgentOptions> {
+export function captureOpenCodeAgentOptions(options: OpenCodeAgentOptions): Readonly<CapturedOpenCodeAgentOptions> {
   if (typeof options !== "object" || options === null) {
     throw new TypeError("OpenCode Agent options must be an object")
   }
@@ -61,30 +59,18 @@ export function captureOpenCodeAgentOptions(
 
   // Portable model parsing happens synchronously so invalid configured
   // identities never reach server or session creation.
-  if (
-    directory !== undefined &&
-    (typeof directory !== "string" ||
-      directory.length === 0)
-  ) {
+  if (directory !== undefined && (typeof directory !== "string" || directory.length === 0)) {
     throw new TypeError("OpenCode directory must be a non-empty string")
   }
 
   OpenCodeSession.parseModel(model)
 
   if (serverValue !== undefined && sessionClientValue !== undefined) {
-    throw new TypeError(
-      "OpenCode server and sessionClient options are mutually exclusive",
-    )
+    throw new TypeError("OpenCode server and sessionClient options are mutually exclusive")
   }
 
-  const server =
-    serverValue === undefined
-      ? undefined
-      : captureServerOptions(serverValue)
-  const sessionClient =
-    sessionClientValue === undefined
-      ? undefined
-      : captureSessionClient(sessionClientValue)
+  const server = serverValue === undefined ? undefined : captureServerOptions(serverValue)
+  const sessionClient = sessionClientValue === undefined ? undefined : captureSessionClient(sessionClientValue)
 
   return Object.freeze({
     ...(directory === undefined ? {} : { directory }),
@@ -97,9 +83,7 @@ export function captureOpenCodeAgentOptions(
 /**
  * Snapshots child-host configuration without retaining external accessors.
  */
-function captureServerOptions(
-  value: OpenCodeServerOptions,
-): Readonly<OpenCodeServerOptions> {
+function captureServerOptions(value: OpenCodeServerOptions): Readonly<OpenCodeServerOptions> {
   if (typeof value !== "object" || value === null) {
     throw new TypeError("OpenCode server options must be an object")
   }
@@ -108,31 +92,16 @@ function captureServerOptions(
   const port = value.port
   const timeout = value.timeout
 
-  if (
-    hostname !== undefined &&
-    (typeof hostname !== "string" || hostname.length === 0)
-  ) {
-    throw new TypeError(
-      "OpenCode server hostname must be a non-empty string",
-    )
+  if (hostname !== undefined && (typeof hostname !== "string" || hostname.length === 0)) {
+    throw new TypeError("OpenCode server hostname must be a non-empty string")
   }
 
-  if (
-    port !== undefined &&
-    (!Number.isSafeInteger(port) || port < 0 || port > 65_535)
-  ) {
-    throw new TypeError(
-      "OpenCode server port must be an integer between 0 and 65535",
-    )
+  if (port !== undefined && (!Number.isSafeInteger(port) || port < 0 || port > 65_535)) {
+    throw new TypeError("OpenCode server port must be an integer between 0 and 65535")
   }
 
-  if (
-    timeout !== undefined &&
-    (!Number.isSafeInteger(timeout) || timeout < 0)
-  ) {
-    throw new TypeError(
-      "OpenCode server timeout must be a non-negative safe integer",
-    )
+  if (timeout !== undefined && (!Number.isSafeInteger(timeout) || timeout < 0)) {
+    throw new TypeError("OpenCode server timeout must be a non-negative safe integer")
   }
 
   return Object.freeze({
@@ -145,9 +114,7 @@ function captureServerOptions(
 /**
  * Captures an injected session port and binds each method to its original owner.
  */
-function captureSessionClient(
-  value: OpenCodeSessionClient,
-): OpenCodeSessionClient {
+function captureSessionClient(value: OpenCodeSessionClient): OpenCodeSessionClient {
   if (typeof value !== "object" || value === null) {
     throw new TypeError("OpenCode sessionClient must be an object")
   }
@@ -155,10 +122,7 @@ function captureSessionClient(
   // Method getters are another authority boundary. Resolve each exactly once
   // before any remote session exists, then expose a stable AML-owned facade.
   const abort = captureSessionClientMethod(value, "abort")
-  const attachCapabilities = captureSessionClientMethod(
-    value,
-    "attachCapabilities",
-  )
+  const attachCapabilities = captureSessionClientMethod(value, "attachCapabilities")
   const create = captureSessionClientMethod(value, "create")
   const deleteSession = captureSessionClientMethod(value, "delete")
   const prompt = captureSessionClientMethod(value, "prompt")
@@ -169,23 +133,17 @@ function captureSessionClient(
     },
     attachCapabilities(
       input: OpenCodeCapabilityAttachmentInput,
-      signal: AbortSignal,
+      signal: AbortSignal
     ): Promise<OpenCodeCapabilityAttachment> {
       return Reflect.apply(attachCapabilities, value, [input, signal])
     },
-    create(
-      input: OpenCodeSessionCreateInput,
-      signal: AbortSignal,
-    ): Promise<string> {
+    create(input: OpenCodeSessionCreateInput, signal: AbortSignal): Promise<string> {
       return Reflect.apply(create, value, [input, signal])
     },
     delete(input: OpenCodeSessionLocation): Promise<void> {
       return Reflect.apply(deleteSession, value, [input])
     },
-    prompt(
-      input: OpenCodeSessionPromptInput,
-      signal: AbortSignal,
-    ): Promise<OpenCodeSessionPromptResult> {
+    prompt(input: OpenCodeSessionPromptInput, signal: AbortSignal): Promise<OpenCodeSessionPromptResult> {
       return Reflect.apply(prompt, value, [input, signal])
     },
   })
@@ -194,27 +152,20 @@ function captureSessionClient(
 /**
  * Reads one injected port method without allowing validation/use substitution.
  */
-function captureSessionClientMethod<
-  Name extends keyof OpenCodeSessionClient,
->(
+function captureSessionClientMethod<Name extends keyof OpenCodeSessionClient>(
   client: OpenCodeSessionClient,
-  name: Name,
+  name: Name
 ): OpenCodeSessionClient[Name] {
   let method: unknown
 
   try {
     method = Reflect.get(client, name)
   } catch (cause) {
-    throw new TypeError(
-      `OpenCode sessionClient ${name} must be readable`,
-      { cause },
-    )
+    throw new TypeError(`OpenCode sessionClient ${name} must be readable`, { cause })
   }
 
   if (typeof method !== "function") {
-    throw new TypeError(
-      `OpenCode sessionClient ${name} must be a function`,
-    )
+    throw new TypeError(`OpenCode sessionClient ${name} must be a function`)
   }
 
   return method as OpenCodeSessionClient[Name]

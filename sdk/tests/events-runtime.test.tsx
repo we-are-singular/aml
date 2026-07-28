@@ -10,16 +10,16 @@ describe("runtime events", () => {
     let runId: string | undefined
     const runtime = new AmlRuntime()
 
-    runtime.on("start", (event) => {
+    runtime.on("start", event => {
       runId = event.runId
       calls.push("start")
       expect(Object.isFrozen(event)).toBe(true)
     })
-    runtime.on("trace", (event) => {
+    runtime.on("trace", event => {
       expect(event.runId).toBe(runId)
       calls.push(`trace:${event.type}`)
     })
-    runtime.on("finish", (event) => {
+    runtime.on("finish", event => {
       expect(event.runId).toBe(runId)
       expect(event.status).toBe("ok")
       calls.push("finish")
@@ -55,7 +55,7 @@ describe("runtime events", () => {
 
         if (!registeredRuns.has(runId)) {
           registeredRuns.add(runId)
-          context.events.once("finish", (event) => {
+          context.events.once("finish", event => {
             calls.push(`finish:${event.runId}`)
           })
         }
@@ -66,22 +66,13 @@ describe("runtime events", () => {
     }
 
     await expect(
-      new AmlRuntime().evaluate([
-        <Agent provider={provider}>first</Agent>,
-        <Agent provider={provider}>second</Agent>,
-      ]),
+      new AmlRuntime().evaluate([<Agent provider={provider}>first</Agent>, <Agent provider={provider}>second</Agent>])
     ).resolves.toBe("donedone")
 
-    const runIds = calls
-      .filter((call) => call.startsWith("run:"))
-      .map((call) => call.slice("run:".length))
+    const runIds = calls.filter(call => call.startsWith("run:")).map(call => call.slice("run:".length))
 
     expect(new Set(runIds).size).toBe(1)
-    expect(calls).toEqual([
-      `run:${runIds[0]}`,
-      `run:${runIds[0]}`,
-      `finish:${runIds[0]}`,
-    ])
+    expect(calls).toEqual([`run:${runIds[0]}`, `run:${runIds[0]}`, `finish:${runIds[0]}`])
   })
 
   it("isolates provider subscriptions across concurrent evaluations", async () => {
@@ -89,10 +80,10 @@ describe("runtime events", () => {
     let active = 0
     let releaseRuns: (() => void) | undefined
     let reportReady: (() => void) | undefined
-    const runsReady = new Promise<void>((resolve) => {
+    const runsReady = new Promise<void>(resolve => {
       reportReady = resolve
     })
-    const runGate = new Promise<void>((resolve) => {
+    const runGate = new Promise<void>(resolve => {
       releaseRuns = resolve
     })
     const provider: AgentProvider = {
@@ -102,10 +93,10 @@ describe("runtime events", () => {
         const events: string[] = []
         scopedEvents.set(runId, events)
 
-        context.events.on("trace", (event) => {
+        context.events.on("trace", event => {
           events.push(`trace:${event.runId}`)
         })
-        context.events.once("finish", (event) => {
+        context.events.once("finish", event => {
           events.push(`finish:${event.runId}`)
         })
 
@@ -120,41 +111,26 @@ describe("runtime events", () => {
       },
     }
     const runtime = new AmlRuntime()
-    const first = runtime.evaluate(
-      <Agent provider={provider}>first</Agent>,
-    )
-    const second = runtime.evaluate(
-      <Agent provider={provider}>second</Agent>,
-    )
+    const first = runtime.evaluate(<Agent provider={provider}>first</Agent>)
+    const second = runtime.evaluate(<Agent provider={provider}>second</Agent>)
 
     await runsReady
     releaseRuns?.()
 
-    await expect(Promise.all([first, second])).resolves.toEqual([
-      "first",
-      "second",
-    ])
+    await expect(Promise.all([first, second])).resolves.toEqual(["first", "second"])
     expect(scopedEvents.size).toBe(2)
 
     for (const [runId, events] of scopedEvents) {
       expect(events.length).toBeGreaterThan(1)
-      expect(
-        events.every((event) => event.endsWith(runId)),
-      ).toBe(true)
-      expect(
-        events.filter((event) => event.startsWith("finish:")),
-      ).toEqual([`finish:${runId}`])
+      expect(events.every(event => event.endsWith(runId))).toBe(true)
+      expect(events.filter(event => event.startsWith("finish:"))).toEqual([`finish:${runId}`])
     }
 
-    const settledCounts = [...scopedEvents.values()].map(
-      (events) => events.length,
-    )
+    const settledCounts = [...scopedEvents.values()].map(events => events.length)
 
     // A later evaluation must not retain either provider-local registry.
     await runtime.evaluate("plain")
-    expect(
-      [...scopedEvents.values()].map((events) => events.length),
-    ).toEqual(settledCounts)
+    expect([...scopedEvents.values()].map(events => events.length)).toEqual(settledCounts)
   })
 
   it("stops setup at the first start failure and still runs finish", async () => {
@@ -175,7 +151,7 @@ describe("runtime events", () => {
       expect.objectContaining({
         error: failure,
         status: "error",
-      }),
+      })
     )
   })
 
@@ -202,9 +178,7 @@ describe("runtime events", () => {
       throw second
     })
 
-    const error = await runtime
-      .evaluate("done")
-      .catch((cause: unknown) => cause)
+    const error = await runtime.evaluate("done").catch((cause: unknown) => cause)
 
     expect(error).toBeInstanceOf(AggregateError)
     expect(error).toHaveProperty("errors", [first, second])
@@ -225,12 +199,12 @@ describe("runtime events", () => {
     runtime.on("trace", async () => {
       throw new Error("async observer failed")
     })
-    runtime.on("trace", (event) => {
+    runtime.on("trace", event => {
       received.push(event.type)
     })
 
     await expect(runtime.evaluate("done")).resolves.toBe("done")
-    await new Promise((resolve) => setImmediate(resolve))
+    await new Promise(resolve => setImmediate(resolve))
 
     expect(received).toEqual(["span.start", "span.end"])
     expect(errors).toEqual([
@@ -256,19 +230,11 @@ describe("runtime events", () => {
       throw finishFailure
     })
 
-    const error = await runtime
-      .evaluate(<Agent provider={provider}>prompt</Agent>)
-      .catch((cause: unknown) => cause)
+    const error = await runtime.evaluate(<Agent provider={provider}>prompt</Agent>).catch((cause: unknown) => cause)
 
     expect(error).toBeInstanceOf(AggregateError)
-    expect(error).toHaveProperty(
-      "message",
-      "AML evaluation and finish listeners both failed",
-    )
-    expect((error as AggregateError).errors[0]).toHaveProperty(
-      "cause",
-      executionFailure,
-    )
+    expect(error).toHaveProperty("message", "AML evaluation and finish listeners both failed")
+    expect((error as AggregateError).errors[0]).toHaveProperty("cause", executionFailure)
     expect((error as AggregateError).errors[1]).toBe(finishFailure)
   })
 })

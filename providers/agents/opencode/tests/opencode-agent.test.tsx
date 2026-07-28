@@ -1,21 +1,6 @@
-import type {
-  AgentRequest,
-  AgentResponse,
-} from "@aml/sdk"
-import {
-  Agent,
-  AmlRuntime,
-  defineMcpServer,
-  defineTool,
-  evaluate,
-  FollowUp,
-  Mcp,
-  Tool,
-} from "@aml/sdk"
-import {
-  agentProviderConformance,
-  createAgentExecutionContext,
-} from "@aml/sdk/testing"
+import type { AgentRequest } from "@aml-jsx/sdk"
+import { Agent, AmlRuntime, defineMcpServer, defineTool, evaluate, FollowUp, Mcp, Tool } from "@aml-jsx/sdk"
+import { agentProviderConformance, createAgentExecutionContext } from "@aml-jsx/sdk/testing"
 import { Client as McpClient } from "@modelcontextprotocol/sdk/client/index.js"
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js"
 import { z } from "zod"
@@ -25,10 +10,7 @@ const openCodeHost = vi.hoisted(() => ({
   createIsolatedOpencode: vi.fn(),
 }))
 
-vi.mock(
-  "../src/create-isolated-opencode.js",
-  () => openCodeHost,
-)
+vi.mock("../src/create-isolated-opencode.js", () => openCodeHost)
 
 import {
   opencodeAgent,
@@ -64,26 +46,20 @@ class RecordingSessionClient implements OpenCodeSessionClient {
     parts: [{ text: "response", type: "text" }],
   }
 
-  async create(
-    input: OpenCodeSessionCreateInput,
-    signal: AbortSignal,
-  ): Promise<string> {
+  async create(input: OpenCodeSessionCreateInput, signal: AbortSignal): Promise<string> {
     this.events.push("create")
     this.createCalls.push({ input, signal })
     return `session-${this.createCalls.length}`
   }
 
-  async prompt(
-    input: OpenCodeSessionPromptInput,
-    signal: AbortSignal,
-  ): Promise<OpenCodeSessionPromptResult> {
+  async prompt(input: OpenCodeSessionPromptInput, signal: AbortSignal): Promise<OpenCodeSessionPromptResult> {
     this.promptCalls.push({ input, signal })
     return this.promptResult
   }
 
   async attachCapabilities(
     input: OpenCodeCapabilityAttachmentInput,
-    signal: AbortSignal,
+    signal: AbortSignal
   ): Promise<OpenCodeCapabilityAttachment> {
     this.events.push("attach")
     this.capabilityAttachmentCalls.push({ input, signal })
@@ -91,23 +67,19 @@ class RecordingSessionClient implements OpenCodeSessionClient {
     if (
       input.structuredOutput &&
       input.tools.some(
-        (tool) =>
+        tool =>
           tool.kind === "host" &&
           (process.platform === "win32"
             ? tool.name.toLowerCase() === "structuredoutput"
-            : tool.name === "StructuredOutput"),
+            : tool.name === "StructuredOutput")
       )
     ) {
-      throw new TypeError(
-        'OpenCode host Tool "StructuredOutput" is reserved by structured requests',
-      )
+      throw new TypeError('OpenCode host Tool "StructuredOutput" is reserved by structured requests')
     }
 
     return new OpenCodeCapabilityAttachment(
-      input.structuredOutput
-        ? { "*": false, StructuredOutput: true }
-        : { "*": false },
-      this.capabilityAttachmentClose,
+      input.structuredOutput ? { "*": false, StructuredOutput: true } : { "*": false },
+      this.capabilityAttachmentClose
     )
   }
 
@@ -140,10 +112,7 @@ function createContext(signal = new AbortController().signal) {
 /**
  * Supplies the reviewed OpenCode server contract to narrow SDK-client fakes.
  */
-function createSdkClient(
-  client: Record<string, unknown>,
-  version = "1.18.5",
-): OpenCodeSdkClient {
+function createSdkClient(client: Record<string, unknown>, version = "1.18.5"): OpenCodeSdkClient {
   return new OpenCodeSdkClient({
     global: {
       health: vi.fn(async () => ({
@@ -163,9 +132,7 @@ describe("opencodeAgent", () => {
     const client = new RecordingSessionClient()
     const provider = opencodeAgent({ sessionClient: client })
 
-    expect(
-      openCodeHost.createIsolatedOpencode,
-    ).not.toHaveBeenCalled()
+    expect(openCodeHost.createIsolatedOpencode).not.toHaveBeenCalled()
     expect(Object.isFrozen(provider)).toBe(true)
     expect(provider.name).toBe("opencode")
 
@@ -199,10 +166,7 @@ describe("opencodeAgent", () => {
     })
 
     await expect(
-      runtime.evaluate([
-        <Agent>first</Agent>,
-        <Agent model="anthropic/claude-sonnet-4-6">second</Agent>,
-      ]),
+      runtime.evaluate([<Agent>first</Agent>, <Agent model="anthropic/claude-sonnet-4-6">second</Agent>])
     ).resolves.toBe("visible answervisible answer")
 
     expect(client.createCalls).toHaveLength(2)
@@ -265,14 +229,12 @@ describe("opencodeAgent", () => {
           Count findings.
           <FollowUp>Return the final structured count.</FollowUp>
         </Agent>,
-        Result,
+        Result
       )
       return `count:${result.count}`
     }
 
-    await expect(new AmlRuntime().evaluate(<Workflow />)).resolves.toBe(
-      "count:3",
-    )
+    await expect(new AmlRuntime().evaluate(<Workflow />)).resolves.toBe("count:3")
     expect(client.promptCalls).toHaveLength(2)
     expect(client.promptCalls[0]?.input.output).toBeUndefined()
     expect(client.promptCalls[1]?.input.output).toMatchObject({
@@ -303,26 +265,21 @@ describe("opencodeAgent", () => {
           <Tool name="StructuredOutput" />
           Count findings.
         </Agent>,
-        Result,
+        Result
       )
       return "unreachable"
     }
 
-    const error = await new AmlRuntime()
-      .evaluate(<Workflow />)
-      .catch((cause: unknown) => cause)
+    const error = await new AmlRuntime().evaluate(<Workflow />).catch((cause: unknown) => cause)
 
     expect(error).toMatchObject({
       cause: {
-        message:
-          'OpenCode host Tool "StructuredOutput" is reserved by structured requests',
+        message: 'OpenCode host Tool "StructuredOutput" is reserved by structured requests',
       },
       message: 'Agent "opencode" (span-1) failed',
     })
     expect(client.capabilityAttachmentCalls).toHaveLength(1)
-    expect(
-      client.capabilityAttachmentCalls[0]?.input.structuredOutput,
-    ).toBe(true)
+    expect(client.capabilityAttachmentCalls[0]?.input.structuredOutput).toBe(true)
     expect(client.createCalls).toHaveLength(0)
     await provider.close()
   })
@@ -346,14 +303,10 @@ describe("opencodeAgent", () => {
           first
         </Agent>,
         <Agent>second</Agent>,
-      ]),
+      ])
     ).resolves.toBe("responseresponse")
 
-    expect(
-      client.capabilityAttachmentCalls.map(({ input }) =>
-        input.mcpServers,
-      ),
-    ).toEqual([
+    expect(client.capabilityAttachmentCalls.map(({ input }) => input.mcpServers)).toEqual([
       [
         { kind: "named", name: "github" },
         { definition: configured, kind: "configured" },
@@ -394,8 +347,8 @@ describe("opencodeAgent", () => {
           investigate
           <FollowUp>challenge</FollowUp>
           <FollowUp>finalize</FollowUp>
-        </Agent>,
-      ),
+        </Agent>
+      )
     ).resolves.toBe("response-3")
 
     expect(client.capabilityAttachmentCalls).toHaveLength(1)
@@ -406,7 +359,7 @@ describe("opencodeAgent", () => {
         prompt: input.prompt,
         sessionId: input.sessionId,
         tools: input.tools,
-      })),
+      }))
     ).toEqual([
       {
         output: undefined,
@@ -427,45 +380,33 @@ describe("opencodeAgent", () => {
         tools: { "*": false },
       },
     ])
-    expect(
-      client.capabilityAttachmentCalls[0]?.input.mcpServers,
-    ).toEqual([
+    expect(client.capabilityAttachmentCalls[0]?.input.mcpServers).toEqual([
       { definition: configured, kind: "configured" },
     ])
-    expect(
-      client.capabilityAttachmentCalls[0]?.input.tools,
-    ).toEqual([{ kind: "host", name: "read" }])
+    expect(client.capabilityAttachmentCalls[0]?.input.tools).toEqual([{ kind: "host", name: "read" }])
     expect(client.capabilityAttachmentClose).toHaveBeenCalledOnce()
     expect(client.deleteCalls).toEqual([{ sessionId: "session-1" }])
     await provider.close()
   })
 
   it("rejects invalid configuration synchronously", () => {
-    expect(() => opencodeAgent(null as never)).toThrow(
-      "OpenCode Agent options must be an object",
-    )
-    expect(() => opencodeAgent({ directory: "" })).toThrow(
-      "OpenCode directory must be a non-empty string",
-    )
-    expect(() => opencodeAgent({ model: "missing-provider" })).toThrow(
-      "OpenCode model must use provider/model",
-    )
-    expect(() => opencodeAgent({ model: " provider/model" })).toThrow(
-      "OpenCode model must already be normalized",
-    )
+    expect(() => opencodeAgent(null as never)).toThrow("OpenCode Agent options must be an object")
+    expect(() => opencodeAgent({ directory: "" })).toThrow("OpenCode directory must be a non-empty string")
+    expect(() => opencodeAgent({ model: "missing-provider" })).toThrow("OpenCode model must use provider/model")
+    expect(() => opencodeAgent({ model: " provider/model" })).toThrow("OpenCode model must already be normalized")
     expect(() =>
       opencodeAgent({
         server: {},
         sessionClient: new RecordingSessionClient(),
-      }),
+      })
     ).toThrow("server and sessionClient options are mutually exclusive")
     expect(() => opencodeAgent({ server: { port: 65_536 } })).toThrow(
-      "OpenCode server port must be an integer between 0 and 65535",
+      "OpenCode server port must be an integer between 0 and 65535"
     )
     expect(() =>
       opencodeAgent({
         sessionClient: { create() {} } as never,
-      }),
+      })
     ).toThrow("OpenCode sessionClient abort must be a function")
     expect(() =>
       opencodeAgent({
@@ -475,7 +416,7 @@ describe("opencodeAgent", () => {
           delete() {},
           prompt() {},
         } as never,
-      }),
+      })
     ).toThrow("OpenCode sessionClient attachCapabilities must be a function")
   })
 
@@ -511,22 +452,16 @@ describe("opencodeAgent", () => {
       },
     }
     let clientReads = 0
-    const options = Object.defineProperty(
-      {},
-      "sessionClient",
-      {
-        enumerable: true,
-        get() {
-          clientReads += 1
-          return clientReads === 1 ? accessorClient : undefined
-        },
+    const options = Object.defineProperty({}, "sessionClient", {
+      enumerable: true,
+      get() {
+        clientReads += 1
+        return clientReads === 1 ? accessorClient : undefined
       },
-    )
+    })
     const provider = opencodeAgent(options)
 
-    await expect(
-      provider.run(createRequest(), createContext()),
-    ).resolves.toEqual({ text: "response" })
+    await expect(provider.run(createRequest(), createContext())).resolves.toEqual({ text: "response" })
 
     expect(clientReads).toBe(1)
     expect(methodReads).toEqual({
@@ -536,9 +471,7 @@ describe("opencodeAgent", () => {
       delete: 1,
       prompt: 1,
     })
-    expect(
-      openCodeHost.createIsolatedOpencode,
-    ).not.toHaveBeenCalled()
+    expect(openCodeHost.createIsolatedOpencode).not.toHaveBeenCalled()
 
     await provider.close()
   })
@@ -584,17 +517,13 @@ describe("opencodeAgent", () => {
       },
     }
     let serverOptionReads = 0
-    const options = Object.defineProperty(
-      { model: "opencode-go/minimax-m3" },
-      "server",
-      {
-        enumerable: true,
-        get() {
-          serverOptionReads += 1
-          return serverOptionReads === 1 ? server : undefined
-        },
+    const options = Object.defineProperty({ model: "opencode-go/minimax-m3" }, "server", {
+      enumerable: true,
+      get() {
+        serverOptionReads += 1
+        return serverOptionReads === 1 ? server : undefined
       },
-    )
+    })
     const provider = opencodeAgent(options)
 
     expect(openCodeHost.createIsolatedOpencode).not.toHaveBeenCalled()
@@ -605,9 +534,7 @@ describe("opencodeAgent", () => {
       timeout: 1,
     })
 
-    await expect(
-      provider.run(createRequest(), createContext()),
-    ).resolves.toEqual({ text: "owned response" })
+    await expect(provider.run(createRequest(), createContext())).resolves.toEqual({ text: "owned response" })
     expect(openCodeHost.createIsolatedOpencode).toHaveBeenCalledWith({
       hostname: "127.0.0.1",
       port: 0,
@@ -616,9 +543,7 @@ describe("opencodeAgent", () => {
     await provider.close()
     await provider.close()
     expect(close).toHaveBeenCalledTimes(1)
-    await expect(
-      provider.run(createRequest(), createContext()),
-    ).rejects.toThrow("OpenCode Agent provider is closed")
+    await expect(provider.run(createRequest(), createContext())).rejects.toThrow("OpenCode Agent provider is closed")
   })
 
   it("uses disposable owned servers for dynamic capability sessions", async () => {
@@ -685,63 +610,35 @@ describe("opencodeAgent", () => {
     })
     const provider = opencodeAgent()
 
-    await expect(
-      provider.run(createRequest(), createContext()),
-    ).resolves.toEqual({ text: "tool response" })
+    await expect(provider.run(createRequest(), createContext())).resolves.toEqual({ text: "tool response" })
     await expect(
       Promise.all([
-        provider.run(
-          createRequest({ tools: [lookup] }),
-          createContext(),
-        ),
-        provider.run(
-          createRequest({ tools: [lookup] }),
-          createContext(),
-        ),
-      ]),
-    ).resolves.toEqual([
-      { text: "tool response" },
-      { text: "tool response" },
-    ])
+        provider.run(createRequest({ tools: [lookup] }), createContext()),
+        provider.run(createRequest({ tools: [lookup] }), createContext()),
+      ])
+    ).resolves.toEqual([{ text: "tool response" }, { text: "tool response" }])
     await expect(
       provider.run(
         createRequest({
-          mcpServers: [
-            { definition: projectMcp, kind: "configured" },
-          ],
+          mcpServers: [{ definition: projectMcp, kind: "configured" }],
         }),
-        createContext(),
-      ),
+        createContext()
+      )
     ).resolves.toEqual({ text: "tool response" })
 
-    expect(openCodeHost.createIsolatedOpencode.mock.calls).toEqual([
-      [{}],
-      [{ port: 0 }],
-      [{ port: 0 }],
-      [{ port: 0 }],
-    ])
+    expect(openCodeHost.createIsolatedOpencode.mock.calls).toEqual([[{}], [{ port: 0 }], [{ port: 0 }], [{ port: 0 }]])
     expect(serverCloses).toHaveLength(4)
-    expect(serverCloses.map((close) => close.mock.calls.length)).toEqual([
-      0,
-      1,
-      1,
-      1,
-    ])
+    expect(serverCloses.map(close => close.mock.calls.length)).toEqual([0, 1, 1, 1])
 
     await provider.close()
-    expect(serverCloses.map((close) => close.mock.calls.length)).toEqual([
-      1,
-      1,
-      1,
-      1,
-    ])
+    expect(serverCloses.map(close => close.mock.calls.length)).toEqual([1, 1, 1, 1])
   })
 
   it("shares one close barrier across concurrent callers", async () => {
     let finishPrompt: (() => void) | undefined
     let notifyPromptStarted: (() => void) | undefined
     const close = vi.fn()
-    const promptStarted = new Promise<void>((resolve) => {
+    const promptStarted = new Promise<void>(resolve => {
       notifyPromptStarted = resolve
     })
     const rawClient = {
@@ -756,7 +653,7 @@ describe("opencodeAgent", () => {
                 info: object
                 parts: { text: string; type: string }[]
               }
-            }>((resolve) => {
+            }>(resolve => {
               finishPrompt = () =>
                 resolve({
                   data: {
@@ -765,7 +662,7 @@ describe("opencodeAgent", () => {
                   },
                 })
               notifyPromptStarted?.()
-            }),
+            })
         ),
       },
     }
@@ -827,12 +724,8 @@ describe("opencodeAgent", () => {
     const provider = opencodeAgent()
     const runtime = new AmlRuntime()
 
-    await expect(
-      runtime.evaluate(<Agent provider={provider}>first</Agent>),
-    ).resolves.toBe("done")
-    await expect(
-      runtime.evaluate(<Agent provider={provider}>second</Agent>),
-    ).resolves.toBe("done")
+    await expect(runtime.evaluate(<Agent provider={provider}>first</Agent>)).resolves.toBe("done")
+    await expect(runtime.evaluate(<Agent provider={provider}>second</Agent>)).resolves.toBe("done")
 
     expect(closes).toHaveLength(2)
     expect(closes[0]).toHaveBeenCalledTimes(1)
@@ -881,30 +774,24 @@ describe("opencodeAgent", () => {
     const controller = new AbortController()
     const cancelled = new Error("cancelled")
     let notifyPromptStarted: (() => void) | undefined
-    const promptStarted = new Promise<void>((resolve) => {
+    const promptStarted = new Promise<void>(resolve => {
       notifyPromptStarted = resolve
     })
     const client = new RecordingSessionClient()
-    client.prompt = async (
-      input: OpenCodeSessionPromptInput,
-      signal: AbortSignal,
-    ) => {
+    client.prompt = async (input: OpenCodeSessionPromptInput, signal: AbortSignal) => {
       client.promptCalls.push({ input, signal })
       notifyPromptStarted?.()
 
-      return await new Promise<OpenCodeSessionPromptResult>(
-        (_resolve, reject) => {
-          signal.addEventListener("abort", () => reject(signal.reason), {
-            once: true,
-          })
-        },
-      )
+      return await new Promise<OpenCodeSessionPromptResult>((_resolve, reject) => {
+        signal.addEventListener("abort", () => reject(signal.reason), {
+          once: true,
+        })
+      })
     }
     const provider = opencodeAgent({ sessionClient: client })
-    const evaluation = new AmlRuntime({ agentProvider: provider }).evaluate(
-      <Agent>cancel me</Agent>,
-      { signal: controller.signal },
-    )
+    const evaluation = new AmlRuntime({ agentProvider: provider }).evaluate(<Agent>cancel me</Agent>, {
+      signal: controller.signal,
+    })
 
     await promptStarted
     controller.abort(cancelled)
@@ -924,19 +811,11 @@ describe("OpenCodeSession", () => {
     const client = new RecordingSessionClient()
 
     await expect(
-      new OpenCodeSession(client, {}).run(
-        createRequest({ followUps: "invalid" as never }),
-        createContext(),
-      ),
+      new OpenCodeSession(client, {}).run(createRequest({ followUps: "invalid" as never }), createContext())
     ).rejects.toThrow("OpenCode followUps must be an array")
     await expect(
-      new OpenCodeSession(client, {}).run(
-        createRequest({ followUps: [""] }),
-        createContext(),
-      ),
-    ).rejects.toThrow(
-      "OpenCode followUps must contain non-empty strings",
-    )
+      new OpenCodeSession(client, {}).run(createRequest({ followUps: [""] }), createContext())
+    ).rejects.toThrow("OpenCode followUps must contain non-empty strings")
     expect(client.capabilityAttachmentCalls).toHaveLength(0)
     expect(client.createCalls).toHaveLength(0)
   })
@@ -953,12 +832,7 @@ describe("OpenCodeSession", () => {
         },
       }) as never
 
-    await expect(
-      new OpenCodeSession(client, {}).run(
-        createRequest(),
-        createContext(),
-      ),
-    ).rejects.toBe(toolsError)
+    await expect(new OpenCodeSession(client, {}).run(createRequest(), createContext())).rejects.toBe(toolsError)
     expect(close).toHaveBeenCalledOnce()
     expect(client.createCalls).toHaveLength(0)
   })
@@ -966,26 +840,18 @@ describe("OpenCodeSession", () => {
   it("snapshots a fail-closed capability map once for every turn", async () => {
     let toolReads = 0
     const close = vi.fn(async () => undefined)
-    const tools = Object.defineProperty(
-      { "*": false },
-      "read",
-      {
-        enumerable: true,
-        get() {
-          toolReads += 1
-          return toolReads === 1
-        },
+    const tools = Object.defineProperty({ "*": false }, "read", {
+      enumerable: true,
+      get() {
+        toolReads += 1
+        return toolReads === 1
       },
-    )
+    })
     const client = new RecordingSessionClient()
-    client.attachCapabilities = async () =>
-      ({ close, tools }) as never
+    client.attachCapabilities = async () => ({ close, tools }) as never
 
     await expect(
-      new OpenCodeSession(client, {}).run(
-        createRequest({ followUps: ["second"] }),
-        createContext(),
-      ),
+      new OpenCodeSession(client, {}).run(createRequest({ followUps: ["second"] }), createContext())
     ).resolves.toEqual({ text: "response" })
     expect(toolReads).toBe(1)
     expect(client.promptCalls).toHaveLength(2)
@@ -997,25 +863,17 @@ describe("OpenCodeSession", () => {
       "*": false,
       read: true,
     })
-    expect(client.promptCalls[0]?.input.tools).toBe(
-      client.promptCalls[1]?.input.tools,
-    )
+    expect(client.promptCalls[0]?.input.tools).toBe(client.promptCalls[1]?.input.tools)
     expect(close).toHaveBeenCalledOnce()
   })
 
   it("closes capability attachments that do not deny ambient Tools", async () => {
     const close = vi.fn(async () => undefined)
     const client = new RecordingSessionClient()
-    client.attachCapabilities = async () =>
-      ({ close, tools: {} }) as never
+    client.attachCapabilities = async () => ({ close, tools: {} }) as never
 
-    await expect(
-      new OpenCodeSession(client, {}).run(
-        createRequest(),
-        createContext(),
-      ),
-    ).rejects.toThrow(
-      'OpenCode capability attachment must disable the "*" Tool wildcard',
+    await expect(new OpenCodeSession(client, {}).run(createRequest(), createContext())).rejects.toThrow(
+      'OpenCode capability attachment must disable the "*" Tool wildcard'
     )
     expect(close).toHaveBeenCalledOnce()
     expect(client.createCalls).toHaveLength(0)
@@ -1034,8 +892,8 @@ describe("OpenCodeSession", () => {
         createRequest({
           tools: [{ kind: "host", name: "read" }],
         }),
-        createContext(),
-      ),
+        createContext()
+      )
     ).rejects.toBe(attachError)
     expect(client.events).toEqual(["attach"])
     expect(client.createCalls).toHaveLength(0)
@@ -1057,8 +915,8 @@ describe("OpenCodeSession", () => {
         createRequest({
           tools: [{ kind: "host", name: "read" }],
         }),
-        createContext(),
-      ),
+        createContext()
+      )
     ).rejects.toBe(createError)
     expect(client.events).toEqual(["attach", "create"])
     expect(client.capabilityAttachmentClose).toHaveBeenCalledTimes(1)
@@ -1072,7 +930,7 @@ describe("OpenCodeSession", () => {
     client.prompt = async () => {
       throw promptError
     }
-    client.delete = async (input) => {
+    client.delete = async input => {
       client.deleteCalls.push(input)
       throw cleanupError
     }
@@ -1106,12 +964,10 @@ describe("OpenCodeSession", () => {
         createRequest({
           followUps: ["second", "must not run"],
         }),
-        createContext(),
-      ),
+        createContext()
+      )
     ).rejects.toBe(promptError)
-    expect(
-      client.promptCalls.map(({ input }) => input.prompt),
-    ).toEqual(["prompt", "second"])
+    expect(client.promptCalls.map(({ input }) => input.prompt)).toEqual(["prompt", "second"])
     expect(client.capabilityAttachmentClose).toHaveBeenCalledOnce()
     expect(client.deleteCalls).toEqual([{ sessionId: "session-1" }])
   })
@@ -1131,12 +987,10 @@ describe("OpenCodeSession", () => {
     await expect(
       new OpenCodeSession(client, {}).run(
         createRequest({ followUps: ["must not run"] }),
-        createContext(controller.signal),
-      ),
+        createContext(controller.signal)
+      )
     ).rejects.toBe(cancellation)
-    expect(
-      client.promptCalls.map(({ input }) => input.prompt),
-    ).toEqual(["prompt"])
+    expect(client.promptCalls.map(({ input }) => input.prompt)).toEqual(["prompt"])
     expect(client.abortCalls).toEqual([{ sessionId: "session-1" }])
     expect(client.capabilityAttachmentClose).toHaveBeenCalledOnce()
     expect(client.deleteCalls).toEqual([{ sessionId: "session-1" }])
@@ -1148,12 +1002,7 @@ describe("OpenCodeSession", () => {
       throw undefined
     }
 
-    await expect(
-      new OpenCodeSession(client, {}).run(
-        createRequest(),
-        createContext(),
-      ),
-    ).rejects.toBeUndefined()
+    await expect(new OpenCodeSession(client, {}).run(createRequest(), createContext())).rejects.toBeUndefined()
     expect(client.deleteCalls).toEqual([{ sessionId: "session-1" }])
   })
 
@@ -1166,21 +1015,15 @@ describe("OpenCodeSession", () => {
       .run(createRequest(), createContext())
       .catch((cause: unknown) => cause)
 
-    expect(assistantError).toHaveProperty(
-      "message",
-      "OpenCode returned an assistant error",
-    )
+    expect(assistantError).toHaveProperty("message", "OpenCode returned an assistant error")
     expect(assistantError).toHaveProperty("cause", providerError)
     expect(client.deleteCalls).toHaveLength(1)
 
     client.promptResult = { parts: [{ type: "text" }] }
 
-    await expect(
-      new OpenCodeSession(client, {}).run(
-        createRequest(),
-        createContext(),
-      ),
-    ).rejects.toThrow("OpenCode returned an invalid visible text part")
+    await expect(new OpenCodeSession(client, {}).run(createRequest(), createContext())).rejects.toThrow(
+      "OpenCode returned an invalid visible text part"
+    )
     expect(client.deleteCalls).toHaveLength(2)
 
     client.promptResult = {
@@ -1193,36 +1036,26 @@ describe("OpenCodeSession", () => {
       ],
     }
 
-    await expect(
-      new OpenCodeSession(client, {}).run(
-        createRequest(),
-        createContext(),
-      ),
-    ).rejects.toThrow("OpenCode returned invalid response metadata")
+    await expect(new OpenCodeSession(client, {}).run(createRequest(), createContext())).rejects.toThrow(
+      "OpenCode returned invalid response metadata"
+    )
     expect(client.deleteCalls).toHaveLength(3)
   })
 
   it("reads each provider text value once at the validation boundary", async () => {
     const client = new RecordingSessionClient()
     let reads = 0
-    const part = Object.defineProperty(
-      { type: "text" },
-      "text",
-      {
-        get() {
-          reads += 1
-          return reads === 1 ? "stable" : { unvalidated: true }
-        },
+    const part = Object.defineProperty({ type: "text" }, "text", {
+      get() {
+        reads += 1
+        return reads === 1 ? "stable" : { unvalidated: true }
       },
-    )
+    })
     client.promptResult = { parts: [part] }
 
-    await expect(
-      new OpenCodeSession(client, {}).run(
-        createRequest(),
-        createContext(),
-      ),
-    ).resolves.toEqual({ text: "stable" })
+    await expect(new OpenCodeSession(client, {}).run(createRequest(), createContext())).resolves.toEqual({
+      text: "stable",
+    })
     expect(reads).toBe(1)
     expect(client.deleteCalls).toEqual([{ sessionId: "session-1" }])
   })
@@ -1254,8 +1087,8 @@ describe("OpenCodeSession", () => {
             type: "json",
           },
         }),
-        createContext(),
-      ),
+        createContext()
+      )
     ).resolves.toEqual({
       structured: { count: 2 },
       text: "",
@@ -1283,7 +1116,7 @@ describe("OpenCodeSdkClient", () => {
         structuredOutput: true,
         tools: [],
       },
-      signal,
+      signal
     )
 
     expect(health).toHaveBeenCalledOnce()
@@ -1297,10 +1130,7 @@ describe("OpenCodeSdkClient", () => {
 
   it("rejects unreviewed servers for structured-only requests", async () => {
     const ids = vi.fn()
-    const client = createSdkClient(
-      { tool: { ids } },
-      "1.19.0",
-    )
+    const client = createSdkClient({ tool: { ids } }, "1.19.0")
 
     await expect(
       client.attachCapabilities(
@@ -1310,11 +1140,9 @@ describe("OpenCodeSdkClient", () => {
           structuredOutput: true,
           tools: [],
         },
-        new AbortController().signal,
-      ),
-    ).rejects.toThrow(
-      "OpenCode server 1.19.0 is unsupported for capability isolation",
-    )
+        new AbortController().signal
+      )
+    ).rejects.toThrow("OpenCode server 1.19.0 is unsupported for capability isolation")
     expect(ids).not.toHaveBeenCalled()
   })
 
@@ -1335,11 +1163,9 @@ describe("OpenCodeSdkClient", () => {
           structuredOutput: true,
           tools: [],
         },
-        new AbortController().signal,
-      ),
-    ).rejects.toThrow(
-      'OpenCode host Tool "StructuredOutput" is reserved by structured requests',
-    )
+        new AbortController().signal
+      )
+    ).rejects.toThrow('OpenCode host Tool "StructuredOutput" is reserved by structured requests')
   })
 
   it("rejects unreviewed OpenCode server versions before capability setup", async () => {
@@ -1349,7 +1175,7 @@ describe("OpenCodeSdkClient", () => {
         mcp: { status: vi.fn() },
         tool: { ids },
       },
-      "1.19.0",
+      "1.19.0"
     )
 
     await expect(
@@ -1360,11 +1186,9 @@ describe("OpenCodeSdkClient", () => {
           structuredOutput: false,
           tools: [{ kind: "host", name: "read" }],
         },
-        new AbortController().signal,
-      ),
-    ).rejects.toThrow(
-      "OpenCode server 1.19.0 is unsupported for capability isolation",
-    )
+        new AbortController().signal
+      )
+    ).rejects.toThrow("OpenCode server 1.19.0 is unsupported for capability isolation")
     expect(ids).not.toHaveBeenCalled()
   })
 
@@ -1374,20 +1198,15 @@ describe("OpenCodeSdkClient", () => {
       description: "Accept a scalar",
       input: z.string(),
       name: "scalar",
-      execute: async (value) => value,
+      execute: async value => value,
     })
     const client = createSdkClient({
       session: { create },
     } as never)
 
     await expect(
-      new OpenCodeSession(client, {}).run(
-        createRequest({ tools: [scalar] }),
-        createContext(),
-      ),
-    ).rejects.toThrow(
-      'OpenCode Tool "scalar" requires an object input schema',
-    )
+      new OpenCodeSession(client, {}).run(createRequest({ tools: [scalar] }), createContext())
+    ).rejects.toThrow('OpenCode Tool "scalar" requires an object input schema')
     expect(create).not.toHaveBeenCalled()
   })
 
@@ -1412,7 +1231,7 @@ describe("OpenCodeSdkClient", () => {
         structuredOutput: false,
         tools: [{ kind: "host", name: "read" }],
       },
-      signal,
+      signal
     )
 
     expect(attachment.tools).toEqual({ "*": false, read: true })
@@ -1425,8 +1244,8 @@ describe("OpenCodeSdkClient", () => {
           structuredOutput: false,
           tools: [{ kind: "host", name: "write" }],
         },
-        signal,
-      ),
+        signal
+      )
     ).rejects.toThrow('OpenCode host Tool "write" is unavailable')
 
     await expect(
@@ -1437,11 +1256,9 @@ describe("OpenCodeSdkClient", () => {
           structuredOutput: false,
           tools: [{ kind: "host", name: "read*" }],
         },
-        signal,
-      ),
-    ).rejects.toThrow(
-      'OpenCode host Tool "read*" contains wildcard syntax',
-    )
+        signal
+      )
+    ).rejects.toThrow('OpenCode host Tool "read*" contains wildcard syntax')
     await expect(
       client.attachCapabilities(
         {
@@ -1450,11 +1267,9 @@ describe("OpenCodeSdkClient", () => {
           structuredOutput: false,
           tools: [{ kind: "host", name: "read?" }],
         },
-        signal,
-      ),
-    ).rejects.toThrow(
-      'OpenCode host Tool "read?" contains wildcard syntax',
-    )
+        signal
+      )
+    ).rejects.toThrow('OpenCode host Tool "read?" contains wildcard syntax')
   })
 
   it("captures provider Tool IDs once before authorizing a host Tool", async () => {
@@ -1486,8 +1301,8 @@ describe("OpenCodeSdkClient", () => {
           structuredOutput: false,
           tools: [{ kind: "host", name: "write" }],
         },
-        signal,
-      ),
+        signal
+      )
     ).rejects.toThrow('OpenCode host Tool "write" is unavailable')
     expect(reads).toBe(1)
   })
@@ -1513,11 +1328,9 @@ describe("OpenCodeSdkClient", () => {
           structuredOutput: false,
           tools: [{ kind: "host", name: "github_admin" }],
         },
-        signal,
-      ),
-    ).rejects.toThrow(
-      'OpenCode host Tool "github_admin" overlaps MCP server "github"',
-    )
+        signal
+      )
+    ).rejects.toThrow('OpenCode host Tool "github_admin" overlaps MCP server "github"')
   })
 
   it("rejects provider Tool IDs that OpenCode treats as equivalent patterns", async () => {
@@ -1541,11 +1354,9 @@ describe("OpenCodeSdkClient", () => {
           structuredOutput: false,
           tools: [{ kind: "host", name: "path\\read" }],
         },
-        signal,
-      ),
-    ).rejects.toThrow(
-      'OpenCode host Tool "path\\read" has permission-equivalent provider Tool IDs',
-    )
+        signal
+      )
+    ).rejects.toThrow('OpenCode host Tool "path\\read" has permission-equivalent provider Tool IDs')
   })
 
   it("mirrors OpenCode case-insensitive permission matching on Windows", async () => {
@@ -1588,11 +1399,9 @@ describe("OpenCodeSdkClient", () => {
             structuredOutput: false,
             tools: [],
           },
-          signal,
-        ),
-      ).rejects.toThrow(
-        'OpenCode MCP server "github" overlaps undeclared server "GitHub_admin"',
-      )
+          signal
+        )
+      ).rejects.toThrow('OpenCode MCP server "github" overlaps undeclared server "GitHub_admin"')
     } finally {
       Object.defineProperty(process, "platform", platform)
     }
@@ -1603,10 +1412,7 @@ describe("OpenCodeSdkClient", () => {
       native: { status: "disabled" },
     }
     const mcp = {
-      add: vi.fn(async (input: {
-        config: unknown
-        name: string
-      }) => {
+      add: vi.fn(async (input: { config: unknown; name: string }) => {
         statuses[input.name] = { status: "connected" }
         return { data: { ...statuses } }
       }),
@@ -1655,13 +1461,10 @@ describe("OpenCodeSdkClient", () => {
         structuredOutput: false,
         tools: [],
       },
-      signal,
+      signal
     )
 
-    expect(mcp.connect).toHaveBeenCalledWith(
-      { name: "native" },
-      { signal, throwOnError: true },
-    )
+    expect(mcp.connect).toHaveBeenCalledWith({ name: "native" }, { signal, throwOnError: true })
     expect(mcp.add.mock.calls.map(([input]) => input)).toEqual([
       {
         config: {
@@ -1691,9 +1494,7 @@ describe("OpenCodeSdkClient", () => {
 
     await attachment.close()
     await attachment.close()
-    expect(
-      mcp.disconnect.mock.calls.map(([input]) => input.name),
-    ).toEqual(["remote.api", "project-db", "native"])
+    expect(mcp.disconnect.mock.calls.map(([input]) => input.name)).toEqual(["remote.api", "project-db", "native"])
   })
 
   it("fails closed for unavailable, colliding, or unsupported MCP grants", async () => {
@@ -1714,11 +1515,9 @@ describe("OpenCodeSdkClient", () => {
           structuredOutput: false,
           tools: [],
         },
-        signal,
-      ),
-    ).rejects.toThrow(
-      'OpenCode named MCP server "missing" is unavailable',
-    )
+        signal
+      )
+    ).rejects.toThrow('OpenCode named MCP server "missing" is unavailable')
 
     const withCwd = defineMcpServer({
       name: "local",
@@ -1733,17 +1532,13 @@ describe("OpenCodeSdkClient", () => {
       client.attachCapabilities(
         {
           context: createContext(signal),
-          mcpServers: [
-            { definition: withCwd, kind: "configured" },
-          ],
+          mcpServers: [{ definition: withCwd, kind: "configured" }],
           structuredOutput: false,
           tools: [],
         },
-        signal,
-      ),
-    ).rejects.toThrow(
-      'OpenCode does not support cwd for MCP server "local"',
-    )
+        signal
+      )
+    ).rejects.toThrow('OpenCode does not support cwd for MCP server "local"')
 
     await expect(
       client.attachCapabilities(
@@ -1756,11 +1551,9 @@ describe("OpenCodeSdkClient", () => {
           structuredOutput: false,
           tools: [],
         },
-        signal,
-      ),
-    ).rejects.toThrow(
-      "OpenCode MCP server names collide after provider normalization",
-    )
+        signal
+      )
+    ).rejects.toThrow("OpenCode MCP server names collide after provider normalization")
     await expect(
       client.attachCapabilities(
         {
@@ -1772,11 +1565,9 @@ describe("OpenCodeSdkClient", () => {
           structuredOutput: false,
           tools: [],
         },
-        signal,
-      ),
-    ).rejects.toThrow(
-      "OpenCode MCP server names overlap after provider normalization",
-    )
+        signal
+      )
+    ).rejects.toThrow("OpenCode MCP server names overlap after provider normalization")
     expect(mcp.add).not.toHaveBeenCalled()
     expect(mcp.connect).not.toHaveBeenCalled()
   })
@@ -1812,15 +1603,10 @@ describe("OpenCodeSdkClient", () => {
           structuredOutput: false,
           tools: [],
         },
-        signal,
-      ),
-    ).rejects.toThrow(
-      'OpenCode MCP server "github" overlaps undeclared server "github_admin"',
-    )
-    expect(disconnect).toHaveBeenCalledWith(
-      { name: "github" },
-      { throwOnError: true },
-    )
+        signal
+      )
+    ).rejects.toThrow('OpenCode MCP server "github" overlaps undeclared server "github_admin"')
+    expect(disconnect).toHaveBeenCalledWith({ name: "github" }, { throwOnError: true })
 
     delete statuses.github_admin
     tool.ids.mockResolvedValueOnce({
@@ -1834,11 +1620,9 @@ describe("OpenCodeSdkClient", () => {
           structuredOutput: false,
           tools: [],
         },
-        signal,
-      ),
-    ).rejects.toThrow(
-      'OpenCode MCP server "github" overlaps undeclared host Tool "github_admin"',
-    )
+        signal
+      )
+    ).rejects.toThrow('OpenCode MCP server "github" overlaps undeclared host Tool "github_admin"')
     expect(disconnect).toHaveBeenCalledTimes(2)
 
     statuses.github = { status: "connected" }
@@ -1852,11 +1636,9 @@ describe("OpenCodeSdkClient", () => {
           structuredOutput: false,
           tools: [],
         },
-        signal,
-      ),
-    ).rejects.toThrow(
-      'OpenCode MCP server "github_admin" overlaps undeclared server "github"',
-    )
+        signal
+      )
+    ).rejects.toThrow('OpenCode MCP server "github_admin" overlaps undeclared server "github"')
     expect(disconnect).toHaveBeenCalledTimes(3)
   })
 
@@ -1896,15 +1678,10 @@ describe("OpenCodeSdkClient", () => {
           structuredOutput: false,
           tools: [],
         },
-        signal,
-      ),
-    ).rejects.toThrow(
-      'OpenCode named MCP server "missing" is unavailable',
-    )
-    expect(disconnect).toHaveBeenCalledWith(
-      { name: "first" },
-      { throwOnError: true },
-    )
+        signal
+      )
+    ).rejects.toThrow('OpenCode named MCP server "missing" is unavailable')
+    expect(disconnect).toHaveBeenCalledWith({ name: "first" }, { throwOnError: true })
 
     const setupFailure = new Error("MCP add response failed")
     const cleanupFailure = new Error("MCP disconnect failed")
@@ -1915,56 +1692,50 @@ describe("OpenCodeSdkClient", () => {
       .attachCapabilities(
         {
           context: createContext(signal),
-          mcpServers: [
-            { definition: first, kind: "configured" },
-          ],
+          mcpServers: [{ definition: first, kind: "configured" }],
           structuredOutput: false,
           tools: [],
         },
-        signal,
+        signal
       )
       .catch((cause: unknown) => cause)
 
     expect(error).toBeInstanceOf(AggregateError)
-    expect(error).toHaveProperty("errors", [
-      setupFailure,
-      cleanupFailure,
-    ])
+    expect(error).toHaveProperty("errors", [setupFailure, cleanupFailure])
   })
 
   it("serves JavaScript Tools through an invocation-scoped MCP bridge", async () => {
     let bridgeClient: McpClient | undefined
     let bridgeName: string | undefined
     const mcp = {
-      add: vi.fn(async (input: {
-        config: {
-          headers: Record<string, string>
-          url: string
-        }
-        name: string
-      }) => {
-        bridgeName = input.name
-        bridgeClient = new McpClient({
-          name: "opencode-test",
-          version: "0.0.0",
-        })
-        await bridgeClient.connect(
-          new StreamableHTTPClientTransport(
-            new URL(input.config.url),
-            {
+      add: vi.fn(
+        async (input: {
+          config: {
+            headers: Record<string, string>
+            url: string
+          }
+          name: string
+        }) => {
+          bridgeName = input.name
+          bridgeClient = new McpClient({
+            name: "opencode-test",
+            version: "0.0.0",
+          })
+          await bridgeClient.connect(
+            new StreamableHTTPClientTransport(new URL(input.config.url), {
               requestInit: {
                 headers: { ...input.config.headers },
               },
-            },
-          ) as never,
-        )
+            }) as never
+          )
 
-        return {
-          data: {
-            [input.name]: { status: "connected" },
-          },
+          return {
+            data: {
+              [input.name]: { status: "connected" },
+            },
+          }
         }
-      }),
+      ),
       disconnect: vi.fn(async () => {
         await bridgeClient?.close()
         return { data: true }
@@ -1995,7 +1766,7 @@ describe("OpenCodeSdkClient", () => {
         structuredOutput: false,
         tools: [lookup],
       },
-      signal,
+      signal
     )
 
     expect(attachment.tools).toEqual({
@@ -2014,7 +1785,7 @@ describe("OpenCodeSdkClient", () => {
       bridgeClient!.callTool({
         arguments: { id: 42 },
         name: "lookup_customer",
-      }),
+      })
     ).resolves.toMatchObject({
       content: [
         {
@@ -2028,7 +1799,7 @@ describe("OpenCodeSdkClient", () => {
       expect.objectContaining({
         signal: expect.any(AbortSignal),
         trace: createContext().trace,
-      }),
+      })
     )
 
     await attachment.close()
@@ -2065,12 +1836,9 @@ describe("OpenCodeSdkClient", () => {
           context: createContext(),
           mcpServers: [],
           structuredOutput: false,
-          tools: [
-            lookup,
-            { kind: "host", name: "missing" },
-          ],
+          tools: [lookup, { kind: "host", name: "missing" }],
         },
-        new AbortController().signal,
+        new AbortController().signal
       )
       .catch((cause: unknown) => cause)
 
@@ -2105,12 +1873,9 @@ describe("OpenCodeSdkClient", () => {
     const client = createSdkClient(rawClient as never)
     const model = { modelId: "model", providerId: "provider" }
 
-    await expect(
-      client.create(
-        { directory: "/workspace", model, title: "AML span-1" },
-        signal,
-      ),
-    ).resolves.toBe("session-id")
+    await expect(client.create({ directory: "/workspace", model, title: "AML span-1" }, signal)).resolves.toBe(
+      "session-id"
+    )
     await expect(
       client.prompt(
         {
@@ -2128,8 +1893,8 @@ describe("OpenCodeSdkClient", () => {
           system: "system",
           tools: { "*": false },
         },
-        signal,
-      ),
+        signal
+      )
     ).resolves.toEqual({
       parts: [textPart],
       structured: { answer: 42 },
@@ -2149,7 +1914,7 @@ describe("OpenCodeSdkClient", () => {
         model: { id: "model", providerID: "provider" },
         title: "AML span-1",
       },
-      { signal, throwOnError: true },
+      { signal, throwOnError: true }
     )
     expect(rawClient.session.prompt).toHaveBeenCalledWith(
       {
@@ -2167,7 +1932,7 @@ describe("OpenCodeSdkClient", () => {
         system: "system",
         tools: { "*": false },
       },
-      { signal, throwOnError: true },
+      { signal, throwOnError: true }
     )
   })
 
@@ -2212,9 +1977,7 @@ describe("OpenCodeSdkClient", () => {
       },
     } as never)
 
-    await expect(client.prompt(input, signal)).rejects.toThrow(
-      "OpenCode returned invalid assistant metadata",
-    )
+    await expect(client.prompt(input, signal)).rejects.toThrow("OpenCode returned invalid assistant metadata")
   })
 
   it("rejects every non-true abort and delete acknowledgement", async () => {
@@ -2226,11 +1989,9 @@ describe("OpenCodeSdkClient", () => {
     }
     const client = createSdkClient(rawClient as never)
 
-    await expect(client.abort({ sessionId: "session-id" })).rejects.toThrow(
-      "OpenCode did not abort session session-id",
-    )
+    await expect(client.abort({ sessionId: "session-id" })).rejects.toThrow("OpenCode did not abort session session-id")
     await expect(client.delete({ sessionId: "session-id" })).rejects.toThrow(
-      "OpenCode did not delete session session-id",
+      "OpenCode did not delete session session-id"
     )
   })
 })

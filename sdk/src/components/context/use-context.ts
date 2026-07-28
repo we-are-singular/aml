@@ -8,10 +8,6 @@ import { ContextRegistry } from "./context-registry.js"
  * This is an ambient dependency lookup, not a reactive hook: it has no setter,
  * subscription, invalidation, or rerender behavior.
  */
-export function useContext<Value>(
-  context: AmlContext<Value>,
-): Value {
-  return ComponentEvaluationContext.readContext<Value>(
-    ContextRegistry.fromContext(context),
-  )
+export function useContext<Value>(context: AmlContext<Value>): Value {
+  return ComponentEvaluationContext.readContext<Value>(ContextRegistry.fromContext(context))
 }

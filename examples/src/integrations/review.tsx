@@ -1,9 +1,4 @@
-import {
-  Agent,
-  defineTool,
-  evaluate,
-  Tool,
-} from "@aml/sdk"
+import { Agent, defineTool, evaluate, Tool } from "@aml-jsx/sdk"
 import { z } from "zod"
 
 import { createReviewProvider } from "../shared/create-review-provider.js"
@@ -21,9 +16,7 @@ export function calculateInvoiceTotal(lines: InvoiceLine[]): number {
 /**
  * Selects the Agent harness once so the AML workflow remains provider-agnostic.
  */
-const ExampleProvider = createReviewProvider(
-  process.env.AML_REVIEW_PROVIDER ?? "deterministic",
-)
+const ExampleProvider = createReviewProvider(process.env.AML_REVIEW_PROVIDER ?? "deterministic")
 
 /**
  * Gives each specialist the same complete source fixture through a typed Tool.
@@ -48,9 +41,8 @@ async function ReviewWorkflow() {
         system="You are a correctness reviewer. Report only concrete defects supported by the supplied code."
       >
         <Tool use={ExampleTool} />
-        Call read_review_fixture, inspect its complete result, and report the
-        highest-confidence correctness problem.
-      </Agent>,
+        Call read_review_fixture, inspect its complete result, and report the highest-confidence correctness problem.
+      </Agent>
     ),
     evaluate(
       <Agent
@@ -58,25 +50,18 @@ async function ReviewWorkflow() {
         system="You are a maintainability reviewer. Prefer direct, proportionate improvements over speculative abstraction."
       >
         <Tool use={ExampleTool} />
-        Call read_review_fixture, inspect its complete result, and report the
-        most useful maintainability observation.
-      </Agent>,
+        Call read_review_fixture, inspect its complete result, and report the most useful maintainability observation.
+      </Agent>
     ),
   ])
 
   return (
-    <Agent
-      provider={ExampleProvider}
-      system="You synthesize code-review evidence without inventing findings."
-    >
+    <Agent provider={ExampleProvider} system="You synthesize code-review evidence without inventing findings.">
       Correctness reviewer:
       {correctness}
-
       Maintainability reviewer:
       {maintainability}
-
-      Return one concise final review. End with the exact marker
-      AML_REVIEW_COMPLETE.
+      Return one concise final review. End with the exact marker AML_REVIEW_COMPLETE.
     </Agent>
   )
 }

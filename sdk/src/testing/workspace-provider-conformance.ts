@@ -1,7 +1,4 @@
-import type {
-  WorkspaceAcquireRequest,
-  WorkspaceProvider,
-} from "../components/workspace/workspace-provider.js"
+import type { WorkspaceAcquireRequest, WorkspaceProvider } from "../components/workspace/workspace-provider.js"
 import {
   captureWorkspaceLease,
   captureWorkspaceRelease,
@@ -18,9 +15,7 @@ type ProviderAcquisitionOutcome =
   | Readonly<{ kind: "fulfilled"; value: unknown }>
   | Readonly<{ error: unknown; kind: "rejected" }>
 
-type TimedAcquisitionOutcome =
-  | ProviderAcquisitionOutcome
-  | Readonly<{ kind: "timeout" }>
+type TimedAcquisitionOutcome = ProviderAcquisitionOutcome | Readonly<{ kind: "timeout" }>
 
 /**
  * Timing used only to report a provider that waits instead of rejecting.
@@ -38,28 +33,15 @@ export interface WorkspaceProviderConformanceOptions {
  */
 export async function workspaceProviderConformance(
   provider: WorkspaceProvider,
-  options: WorkspaceProviderConformanceOptions = {},
+  options: WorkspaceProviderConformanceOptions = {}
 ): Promise<void> {
   const validatedProvider = validateWorkspaceProvider(provider)
-  const conflictTimeoutMs = validateConflictTimeout(
-    options.conflictTimeoutMs ?? DEFAULT_CONFLICT_TIMEOUT_MS,
-  )
-  const first = await acquireConformanceLease(
-    validatedProvider,
-    createConformanceRequest("first"),
-  )
+  const conflictTimeoutMs = validateConflictTimeout(options.conflictTimeoutMs ?? DEFAULT_CONFLICT_TIMEOUT_MS)
+  const first = await acquireConformanceLease(validatedProvider, createConformanceRequest("first"))
   const conflictController = new AbortController()
-  const conflictRequest = createConformanceRequest(
-    "competing",
-    conflictController.signal,
-  )
-  const competing = observeProviderAcquisition(
-    acquireProviderValue(validatedProvider, conflictRequest),
-  )
-  const outcome = await waitForAcquisition(
-    competing,
-    conflictTimeoutMs,
-  )
+  const conflictRequest = createConformanceRequest("competing", conflictController.signal)
+  const competing = observeProviderAcquisition(acquireProviderValue(validatedProvider, conflictRequest))
+  const outcome = await waitForAcquisition(competing, conflictTimeoutMs)
 
   if (outcome.kind === "timeout") {
     return await failTimedOutConflictProbe(
@@ -67,46 +49,34 @@ export async function workspaceProviderConformance(
       first,
       competing,
       conflictController,
-      conflictTimeoutMs,
+      conflictTimeoutMs
     )
   }
 
   if (outcome.kind === "fulfilled") {
     const contractError = new Error(
-      `Workspace provider "${validatedProvider.name}" allowed concurrent writers for "conformance-workspace"`,
+      `Workspace provider "${validatedProvider.name}" allowed concurrent writers for "conformance-workspace"`
     )
-    const cleanupErrors = await releaseConformanceResources(
-      first,
-      outcome.value,
-      validatedProvider.name,
-    )
+    const cleanupErrors = await releaseConformanceResources(first, outcome.value, validatedProvider.name)
     throwWithCleanup(
       contractError,
       cleanupErrors,
-      `Workspace provider "${validatedProvider.name}" violated exclusive-writer conformance and cleanup failed`,
+      `Workspace provider "${validatedProvider.name}" violated exclusive-writer conformance and cleanup failed`
     )
   }
 
-  if (
-    !WorkspaceConflictError.is(
-      outcome.error,
-      conflictRequest.id,
-    )
-  ) {
+  if (!WorkspaceConflictError.is(outcome.error, conflictRequest.id)) {
     const cleanupErrors = await releaseValidatedLeases([first])
     throwWithCleanup(
       outcome.error,
       cleanupErrors,
-      `Workspace provider "${validatedProvider.name}" failed conflict probing and cleanup`,
+      `Workspace provider "${validatedProvider.name}" failed conflict probing and cleanup`
     )
   }
 
   await saveAndRelease(first, validatedProvider.name)
   // Conflict rejection is conformant only if release restores availability.
-  const reacquired = await acquireConformanceLease(
-    validatedProvider,
-    createConformanceRequest("reacquired"),
-  )
+  const reacquired = await acquireConformanceLease(validatedProvider, createConformanceRequest("reacquired"))
   await saveAndRelease(reacquired, validatedProvider.name)
 }
 
@@ -115,7 +85,7 @@ export async function workspaceProviderConformance(
  */
 function createConformanceRequest(
   phase: string,
-  signal = new AbortController().signal,
+  signal = new AbortController().signal
 ): Readonly<WorkspaceAcquireRequest> {
   return Object.freeze({
     evaluationId: `workspace-provider-conformance-${phase}`,
@@ -129,24 +99,18 @@ function createConformanceRequest(
  */
 async function acquireProviderValue(
   validatedProvider: Readonly<ValidatedWorkspaceProvider>,
-  request: Readonly<WorkspaceAcquireRequest>,
+  request: Readonly<WorkspaceAcquireRequest>
 ): Promise<unknown> {
-  return await Reflect.apply(
-    validatedProvider.acquire,
-    validatedProvider.provider,
-    [request],
-  )
+  return await Reflect.apply(validatedProvider.acquire, validatedProvider.provider, [request])
 }
 
 /**
  * Converts raw provider settlement into a Promise that never rejects.
  */
-function observeProviderAcquisition(
-  acquisition: Promise<unknown>,
-): Promise<ProviderAcquisitionOutcome> {
+function observeProviderAcquisition(acquisition: Promise<unknown>): Promise<ProviderAcquisitionOutcome> {
   return acquisition.then(
-    (value) => Object.freeze({ kind: "fulfilled", value }),
-    (error: unknown) => Object.freeze({ error, kind: "rejected" }),
+    value => Object.freeze({ kind: "fulfilled", value }),
+    (error: unknown) => Object.freeze({ error, kind: "rejected" })
   )
 }
 
@@ -155,17 +119,10 @@ function observeProviderAcquisition(
  */
 async function acquireConformanceLease(
   validatedProvider: Readonly<ValidatedWorkspaceProvider>,
-  request: Readonly<WorkspaceAcquireRequest>,
+  request: Readonly<WorkspaceAcquireRequest>
 ): Promise<Readonly<ValidatedWorkspaceLease>> {
-  const value = await acquireProviderValue(
-    validatedProvider,
-    request,
-  )
-  return await captureConformanceLease(
-    value,
-    validatedProvider,
-    request,
-  )
+  const value = await acquireProviderValue(validatedProvider, request)
+  return await captureConformanceLease(value, validatedProvider, request)
 }
 
 /**
@@ -174,26 +131,20 @@ async function acquireConformanceLease(
 async function captureConformanceLease(
   value: unknown,
   validatedProvider: Readonly<ValidatedWorkspaceProvider>,
-  request: Readonly<WorkspaceAcquireRequest>,
+  request: Readonly<WorkspaceAcquireRequest>
 ): Promise<Readonly<ValidatedWorkspaceLease>> {
-  const releaseCapture = captureWorkspaceRelease(
-    value,
-    validatedProvider.name,
-  )
+  const releaseCapture = captureWorkspaceRelease(value, validatedProvider.name)
   let capture: ReturnType<typeof captureWorkspaceLease>
 
   try {
-    capture = captureWorkspaceLease(
-      releaseCapture,
-      validatedProvider.name,
-    )
+    capture = captureWorkspaceLease(releaseCapture, validatedProvider.name)
   } catch (error) {
     try {
       await releaseCapture.release()
     } catch (releaseError) {
       throw new AggregateError(
         [error, releaseError],
-        `Workspace provider "${validatedProvider.name}" failed conformance and cleanup`,
+        `Workspace provider "${validatedProvider.name}" failed conformance and cleanup`
       )
     }
 
@@ -201,18 +152,14 @@ async function captureConformanceLease(
   }
 
   try {
-    return validateWorkspaceLease(
-      capture,
-      validatedProvider.name,
-      request.id,
-    )
+    return validateWorkspaceLease(capture, validatedProvider.name, request.id)
   } catch (error) {
     try {
       await capture.release()
     } catch (releaseError) {
       throw new AggregateError(
         [error, releaseError],
-        `Workspace provider "${validatedProvider.name}" failed conformance and cleanup`,
+        `Workspace provider "${validatedProvider.name}" failed conformance and cleanup`
       )
     }
 
@@ -223,10 +170,7 @@ async function captureConformanceLease(
 /**
  * Persists a conformant lease and always relinquishes its writer authority.
  */
-async function saveAndRelease(
-  lease: Readonly<ValidatedWorkspaceLease>,
-  providerName: string,
-): Promise<void> {
+async function saveAndRelease(lease: Readonly<ValidatedWorkspaceLease>, providerName: string): Promise<void> {
   const errors: unknown[] = []
 
   try {
@@ -246,10 +190,7 @@ async function saveAndRelease(
   }
 
   if (errors.length > 1) {
-    throw new AggregateError(
-      errors,
-      `Workspace provider "${providerName}" failed conformance persistence and cleanup`,
-    )
+    throw new AggregateError(errors, `Workspace provider "${providerName}" failed conformance persistence and cleanup`)
   }
 }
 
@@ -261,31 +202,25 @@ async function failTimedOutConflictProbe(
   first: Readonly<ValidatedWorkspaceLease>,
   competing: Promise<ProviderAcquisitionOutcome>,
   controller: AbortController,
-  timeoutMs: number,
+  timeoutMs: number
 ): Promise<never> {
   const timeoutError = new Error(
-    `Workspace provider "${providerName}" did not reject a competing writer within ${timeoutMs}ms`,
+    `Workspace provider "${providerName}" did not reject a competing writer within ${timeoutMs}ms`
   )
   controller.abort(timeoutError)
   const cleanupErrors = await releaseValidatedLeases([first])
 
   // Releasing the first lease can wake an invalid serializing provider. Give
   // that late result one bounded cancellation window, then release it too.
-  const lateOutcome = await waitForAcquisition(
-    competing,
-    timeoutMs,
-  )
+  const lateOutcome = await waitForAcquisition(competing, timeoutMs)
 
   if (lateOutcome.kind === "fulfilled") {
-    const releaseErrors = await releaseProviderValue(
-      lateOutcome.value,
-      providerName,
-    )
+    const releaseErrors = await releaseProviderValue(lateOutcome.value, providerName)
     cleanupErrors.push(...releaseErrors)
   } else if (lateOutcome.kind === "timeout") {
     // A provider that ignores both cancellation and release is already
     // non-conformant. Retain a best-effort cleanup owner for any later value.
-    void competing.then(async (event) => {
+    void competing.then(async event => {
       if (event.kind === "fulfilled") {
         await releaseProviderValue(event.value, providerName)
       }
@@ -295,7 +230,7 @@ async function failTimedOutConflictProbe(
   throwWithCleanup(
     timeoutError,
     cleanupErrors,
-    `Workspace provider "${providerName}" timed out during conflict probing and cleanup failed`,
+    `Workspace provider "${providerName}" timed out during conflict probing and cleanup failed`
   )
 }
 
@@ -305,12 +240,9 @@ async function failTimedOutConflictProbe(
 async function releaseConformanceResources(
   first: Readonly<ValidatedWorkspaceLease>,
   competingValue: unknown,
-  providerName: string,
+  providerName: string
 ): Promise<unknown[]> {
-  const errors = await releaseProviderValue(
-    competingValue,
-    providerName,
-  )
+  const errors = await releaseProviderValue(competingValue, providerName)
   errors.push(...(await releaseValidatedLeases([first])))
   return errors
 }
@@ -318,10 +250,7 @@ async function releaseConformanceResources(
 /**
  * Captures and invokes release from an otherwise invalid provider value.
  */
-async function releaseProviderValue(
-  value: unknown,
-  providerName: string,
-): Promise<unknown[]> {
+async function releaseProviderValue(value: unknown, providerName: string): Promise<unknown[]> {
   try {
     const capture = captureWorkspaceRelease(value, providerName)
     await capture.release()
@@ -334,9 +263,7 @@ async function releaseProviderValue(
 /**
  * Releases each validated lease once and reports every cleanup failure.
  */
-async function releaseValidatedLeases(
-  leases: readonly Readonly<ValidatedWorkspaceLease>[],
-): Promise<unknown[]> {
+async function releaseValidatedLeases(leases: readonly Readonly<ValidatedWorkspaceLease>[]): Promise<unknown[]> {
   const errors: unknown[] = []
 
   for (const lease of leases) {
@@ -353,16 +280,9 @@ async function releaseValidatedLeases(
 /**
  * Preserves the primary failure alongside any independent cleanup failures.
  */
-function throwWithCleanup(
-  primaryError: unknown,
-  cleanupErrors: readonly unknown[],
-  message: string,
-): never {
+function throwWithCleanup(primaryError: unknown, cleanupErrors: readonly unknown[], message: string): never {
   if (cleanupErrors.length > 0) {
-    throw new AggregateError(
-      [primaryError, ...cleanupErrors],
-      message,
-    )
+    throw new AggregateError([primaryError, ...cleanupErrors], message)
   }
 
   throw primaryError
@@ -373,14 +293,14 @@ function throwWithCleanup(
  */
 function waitForAcquisition(
   acquisition: Promise<ProviderAcquisitionOutcome>,
-  timeoutMs: number,
+  timeoutMs: number
 ): Promise<TimedAcquisitionOutcome> {
-  return new Promise((resolve) => {
+  return new Promise(resolve => {
     const timer = setTimeout(() => {
       resolve(Object.freeze({ kind: "timeout" }))
     }, timeoutMs)
 
-    void acquisition.then((outcome) => {
+    void acquisition.then(outcome => {
       clearTimeout(timer)
       resolve(outcome)
     })
@@ -392,9 +312,7 @@ function waitForAcquisition(
  */
 function validateConflictTimeout(value: unknown): number {
   if (!Number.isSafeInteger(value) || (value as number) <= 0) {
-    throw new RangeError(
-      "Workspace provider conformance conflictTimeoutMs must be a positive safe integer",
-    )
+    throw new RangeError("Workspace provider conformance conflictTimeoutMs must be a positive safe integer")
   }
 
   return value as number

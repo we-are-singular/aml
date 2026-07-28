@@ -1,5 +1,5 @@
-import { Agent, evaluate } from "@aml/sdk"
-import { DeterministicAgentProvider } from "@aml/sdk/testing"
+import { Agent, evaluate } from "@aml-jsx/sdk"
+import { DeterministicAgentProvider } from "@aml-jsx/sdk/testing"
 import { z } from "zod"
 
 const Finding = z.object({
@@ -33,7 +33,7 @@ async function Review() {
   const finding = await evaluate(
     //
     <Agent provider={ExampleProvider}>Inspect the change.</Agent>,
-    Finding,
+    Finding
   )
 
   return (

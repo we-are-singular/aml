@@ -14,7 +14,4 @@ export interface TraceSink {
 /**
  * Receives a trace-consumer failure through an isolated secondary channel.
  */
-export type TraceErrorHandler = (
-  error: unknown,
-  event: AmlTraceEvent,
-) => void
+export type TraceErrorHandler = (error: unknown, event: AmlTraceEvent) => void

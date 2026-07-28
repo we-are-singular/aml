@@ -1,10 +1,4 @@
-import {
-  mkdtemp,
-  mkdir,
-  readFile,
-  rm,
-  writeFile,
-} from "node:fs/promises"
+import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
 
@@ -20,8 +14,8 @@ import {
   type AgentProvider,
   type AgentRequest,
   type SandboxSession,
-} from "@aml/sdk"
-import { DeterministicWorkspaceProvider } from "@aml/sdk/testing"
+} from "@aml-jsx/sdk"
+import { DeterministicWorkspaceProvider } from "@aml-jsx/sdk/testing"
 
 import {
   dockerSandbox,
@@ -56,16 +50,8 @@ describe.skipIf(!dockerEnabled)("Docker Sandbox integration", () => {
     const containerIds: string[] = []
 
     try {
-      const readOnly = await runProbe(
-        "read-only",
-        provider,
-        containerIds,
-      )
-      const readWrite = await runProbe(
-        "read-write",
-        provider,
-        containerIds,
-      )
+      const readOnly = await runProbe("read-only", provider, containerIds)
+      const readWrite = await runProbe("read-write", provider, containerIds)
 
       expect(readOnly).toMatchObject({
         access: "read-only",
@@ -87,14 +73,10 @@ describe.skipIf(!dockerEnabled)("Docker Sandbox integration", () => {
         rootMountReadOnly: true,
         workspaceWriteSucceeded: true,
       })
-      await expect(
-        readFile(path.join(repository, "write-proof.txt"), "utf8"),
-      ).resolves.toBe("sandbox-write")
+      await expect(readFile(path.join(repository, "write-proof.txt"), "utf8")).resolves.toBe("sandbox-write")
 
       for (const containerId of containerIds) {
-        await expect(
-          client.getContainer(containerId).inspect(),
-        ).rejects.toMatchObject({ statusCode: 404 })
+        await expect(client.getContainer(containerId).inspect()).rejects.toMatchObject({ statusCode: 404 })
       }
     } finally {
       await cleanupContainers(client, containerIds)
@@ -114,25 +96,19 @@ describe.skipIf(!dockerEnabled)("Docker Sandbox integration", () => {
     const cancellation = new Error("cancel Docker Agent")
     const containerIds: string[] = []
     let commandStarted: (() => void) | undefined
-    const started = new Promise<void>((resolve) => {
+    const started = new Promise<void>(resolve => {
       commandStarted = resolve
     })
     const agentProvider: AgentProvider = {
       name: "docker-cancellation-probe",
-      async run(
-        _request: AgentRequest,
-        context: AgentExecutionContext,
-      ) {
+      async run(_request: AgentRequest, context: AgentExecutionContext) {
         const sandbox = requireDockerSandbox(context.sandbox)
         containerIds.push(sandbox.lease.handle.containerId)
         commandStarted?.()
-        await sandbox.lease.handle.exec(
-          ["sh", "-c", "sleep 60"],
-          {
-            cwd: sandbox.cwd,
-            signal: context.signal,
-          },
-        )
+        await sandbox.lease.handle.exec(["sh", "-c", "sleep 60"], {
+          cwd: sandbox.cwd,
+          signal: context.signal,
+        })
         return { text: "unexpected completion" }
       },
       supportsSandbox: supportsDockerSandbox,
@@ -143,7 +119,7 @@ describe.skipIf(!dockerEnabled)("Docker Sandbox integration", () => {
         <Sandbox provider={provider} root="repository">
           <Agent>Wait until cancelled.</Agent>
         </Sandbox>,
-        { signal: controller.signal },
+        { signal: controller.signal }
       )
 
       await started
@@ -155,9 +131,7 @@ describe.skipIf(!dockerEnabled)("Docker Sandbox integration", () => {
       expect(error).toMatchObject({ cause: cancellation })
 
       expect(containerIds).toHaveLength(1)
-      await expect(
-        client.getContainer(containerIds[0]!).inspect(),
-      ).rejects.toMatchObject({ statusCode: 404 })
+      await expect(client.getContainer(containerIds[0]!).inspect()).rejects.toMatchObject({ statusCode: 404 })
     } finally {
       await cleanupContainers(client, containerIds)
       await rm(temporary, { force: true, recursive: true })
@@ -175,10 +149,7 @@ describe.skipIf(!dockerEnabled)("Docker Sandbox integration", () => {
     const containerIds: string[] = []
     const agentProvider: AgentProvider = {
       name: "docker-cwd-probe",
-      async run(
-        _request: AgentRequest,
-        context: AgentExecutionContext,
-      ) {
+      async run(_request: AgentRequest, context: AgentExecutionContext) {
         const sandbox = requireDockerSandbox(context.sandbox)
         containerIds.push(sandbox.lease.handle.containerId)
         const result = await sandbox.lease.handle.exec(["pwd"], {
@@ -196,7 +167,7 @@ describe.skipIf(!dockerEnabled)("Docker Sandbox integration", () => {
       }).evaluate(
         <Sandbox provider={provider} root="repository">
           <Agent cwd="nested">Report the working directory.</Agent>
-        </Sandbox>,
+        </Sandbox>
       )
 
       expect(output).toBe("/workspace/nested")
@@ -219,19 +190,13 @@ describe.skipIf(!dockerEnabled)("Docker Sandbox integration", () => {
     const containerIds: string[] = []
     const agentProvider: AgentProvider = {
       name: "docker-workspace-probe",
-      async run(
-        _request: AgentRequest,
-        context: AgentExecutionContext,
-      ) {
+      async run(_request: AgentRequest, context: AgentExecutionContext) {
         const sandbox = requireDockerSandbox(context.sandbox)
         containerIds.push(sandbox.lease.handle.containerId)
-        const result = await sandbox.lease.handle.exec(
-          ["cat", "fixture.txt"],
-          {
-            cwd: sandbox.cwd,
-            signal: context.signal,
-          },
-        )
+        const result = await sandbox.lease.handle.exec(["cat", "fixture.txt"], {
+          cwd: sandbox.cwd,
+          signal: context.signal,
+        })
         return { text: result.stdout.trim() }
       },
       supportsSandbox: supportsDockerSandbox,
@@ -241,14 +206,11 @@ describe.skipIf(!dockerEnabled)("Docker Sandbox integration", () => {
       const output = await new AmlRuntime({
         agentProvider,
       }).evaluate(
-        <Workspace
-          id="docker-workspace"
-          provider={workspaceProvider}
-        >
+        <Workspace id="docker-workspace" provider={workspaceProvider}>
           <Sandbox provider={provider} root="repository">
             <Agent>Read the attached Workspace.</Agent>
           </Sandbox>
-        </Workspace>,
+        </Workspace>
       )
 
       expect(output).toBe("sandbox fixture")
@@ -284,19 +246,14 @@ describe.skipIf(!dockerEnabled)("Docker Sandbox integration", () => {
         lease.handle.exec(["cat", "fixture.txt"], {
           cwd: "repository",
         }),
-        "read fixture from built image",
+        "read fixture from built image"
       )
 
       expect(fixture.stdout.trim()).toBe("sandbox fixture")
       await lease.release()
-      await expect(
-        client.getContainer(containerId).inspect(),
-      ).rejects.toMatchObject({ statusCode: 404 })
+      await expect(client.getContainer(containerId).inspect()).rejects.toMatchObject({ statusCode: 404 })
     } finally {
-      await cleanupContainers(
-        client,
-        containerId === undefined ? [] : [containerId],
-      )
+      await cleanupContainers(client, containerId === undefined ? [] : [containerId])
       await rm(temporary, { force: true, recursive: true })
     }
   }, 180_000)
@@ -314,10 +271,7 @@ describe.skipIf(!dockerEnabled)("Docker Sandbox integration", () => {
     let containerId: string | undefined
 
     try {
-      await writeFile(
-        dockerfile,
-        `FROM ${process.env.AML_DOCKER_IMAGE ?? "alpine:3.22"}\nRUN exit 19\n`,
-      )
+      await writeFile(dockerfile, `FROM ${process.env.AML_DOCKER_IMAGE ?? "alpine:3.22"}\nRUN exit 19\n`)
       await expect(
         provider.acquire({
           access: "read-only",
@@ -325,13 +279,10 @@ describe.skipIf(!dockerEnabled)("Docker Sandbox integration", () => {
           evaluationId: "docker-failed-build-integration",
           root: "repository",
           signal: new AbortController().signal,
-        }),
+        })
       ).rejects.toThrow("Docker Sandbox image build failed")
 
-      await writeFile(
-        dockerfile,
-        `FROM ${process.env.AML_DOCKER_IMAGE ?? "alpine:3.22"}\n`,
-      )
+      await writeFile(dockerfile, `FROM ${process.env.AML_DOCKER_IMAGE ?? "alpine:3.22"}\n`)
       const lease = await provider.acquire({
         access: "read-only",
         cwd: "repository",
@@ -342,10 +293,7 @@ describe.skipIf(!dockerEnabled)("Docker Sandbox integration", () => {
       containerId = lease.id
       await lease.release()
     } finally {
-      await cleanupContainers(
-        client,
-        containerId === undefined ? [] : [containerId],
-      )
+      await cleanupContainers(client, containerId === undefined ? [] : [containerId])
       await rm(temporary, { force: true, recursive: true })
     }
   }, 180_000)
@@ -362,25 +310,20 @@ class DockerProbeAgent implements AgentProvider {
    */
   constructor(
     private readonly access: "read-only" | "read-write",
-    private readonly containerIds: string[],
+    private readonly containerIds: string[]
   ) {}
 
   /**
    * Confirms that this provider knows how to use the Docker handle.
    */
-  supportsSandbox(
-    sandbox: SandboxSession,
-  ): sandbox is SandboxSession<DockerSandboxHandle> {
+  supportsSandbox(sandbox: SandboxSession): sandbox is SandboxSession<DockerSandboxHandle> {
     return supportsDockerSandbox(sandbox)
   }
 
   /**
    * Executes deterministic confinement probes inside the active container.
    */
-  async run(
-    _request: AgentRequest,
-    context: AgentExecutionContext,
-  ) {
+  async run(_request: AgentRequest, context: AgentExecutionContext) {
     const sandbox = requireDockerSandbox(context.sandbox)
     const handle = sandbox.lease.handle
     this.containerIds.push(handle.containerId)
@@ -389,72 +332,44 @@ class DockerProbeAgent implements AgentProvider {
         cwd: sandbox.cwd,
         signal: context.signal,
       }),
-      "read fixture",
+      "read fixture"
     )
     const uid = await expectSuccess(
       handle.exec(["id", "-u"], {
         cwd: sandbox.cwd,
         signal: context.signal,
       }),
-      "read uid",
+      "read uid"
     )
     const capabilities = await expectSuccess(
-      handle.exec(
-        [
-          "sh",
-          "-c",
-          "awk '/CapEff/ {print $2}' /proc/self/status",
-        ],
-        {
-          cwd: sandbox.cwd,
-          signal: context.signal,
-        },
-      ),
-      "read capabilities",
-    )
-    const network = await handle.exec(
-      ["sh", "-c", "test ! -e /sys/class/net/eth0"],
-      {
+      handle.exec(["sh", "-c", "awk '/CapEff/ {print $2}' /proc/self/status"], {
         cwd: sandbox.cwd,
         signal: context.signal,
-      },
+      }),
+      "read capabilities"
     )
+    const network = await handle.exec(["sh", "-c", "test ! -e /sys/class/net/eth0"], {
+      cwd: sandbox.cwd,
+      signal: context.signal,
+    })
     const hostSibling = await handle.exec(
-      [
-        "sh",
-        "-c",
-        "test ! -e /host-secret.txt && test ! -e /var/run/docker.sock",
-      ],
+      ["sh", "-c", "test ! -e /host-secret.txt && test ! -e /var/run/docker.sock"],
       {
         cwd: sandbox.cwd,
         signal: context.signal,
-      },
+      }
     )
     const rootMount = await expectSuccess(
-      handle.exec(
-        [
-          "sh",
-          "-c",
-          "awk '$2 == \"/\" { print $4 }' /proc/mounts",
-        ],
-        {
-          cwd: sandbox.cwd,
-          signal: context.signal,
-        },
-      ),
-      "read root mount",
-    )
-    const workspaceWrite = await handle.exec(
-      [
-        "sh",
-        "-c",
-        "printf sandbox-write > write-proof.txt",
-      ],
-      {
+      handle.exec(["sh", "-c", "awk '$2 == \"/\" { print $4 }' /proc/mounts"], {
         cwd: sandbox.cwd,
         signal: context.signal,
-      },
+      }),
+      "read root mount"
     )
+    const workspaceWrite = await handle.exec(["sh", "-c", "printf sandbox-write > write-proof.txt"], {
+      cwd: sandbox.cwd,
+      signal: context.signal,
+    })
     const probe: IsolationProbe = {
       access: this.access,
       capabilities: capabilities.stdout.trim(),
@@ -462,10 +377,7 @@ class DockerProbeAgent implements AgentProvider {
       hostSiblingHidden: hostSibling.exitCode === 0,
       networkDisabled: network.exitCode === 0,
       nonRoot: uid.stdout.trim() !== "0",
-      rootMountReadOnly: rootMount.stdout
-        .trim()
-        .split(",")
-        .includes("ro"),
+      rootMountReadOnly: rootMount.stdout.trim().split(",").includes("ro"),
       workspaceWriteSucceeded: workspaceWrite.exitCode === 0,
     }
 
@@ -479,17 +391,13 @@ class DockerProbeAgent implements AgentProvider {
 async function runProbe(
   access: "read-only" | "read-write",
   provider: ReturnType<typeof dockerSandbox>,
-  containerIds: string[],
+  containerIds: string[]
 ): Promise<IsolationProbe> {
   const agentProvider = new DockerProbeAgent(access, containerIds)
   const output = await new AmlRuntime({ agentProvider }).evaluate(
-    <Sandbox
-      access={access}
-      provider={provider}
-      root="repository"
-    >
+    <Sandbox access={access} provider={provider} root="repository">
       <Agent>Run the Docker isolation probe.</Agent>
-    </Sandbox>,
+    </Sandbox>
   )
 
   return JSON.parse(output) as IsolationProbe
@@ -498,9 +406,7 @@ async function runProbe(
 /**
  * Narrows an Agent execution context to the Docker-specific opaque handle.
  */
-function requireDockerSandbox(
-  sandbox: SandboxSession | undefined,
-): SandboxSession<DockerSandboxHandle> {
+function requireDockerSandbox(sandbox: SandboxSession | undefined): SandboxSession<DockerSandboxHandle> {
   if (sandbox === undefined || !supportsDockerSandbox(sandbox)) {
     throw new Error("Docker probe requires a compatible Sandbox")
   }
@@ -511,16 +417,11 @@ function requireDockerSandbox(
 /**
  * Requires a successful container command while preserving its output.
  */
-async function expectSuccess(
-  pending: Promise<DockerCommandResult>,
-  operation: string,
-): Promise<DockerCommandResult> {
+async function expectSuccess(pending: Promise<DockerCommandResult>, operation: string): Promise<DockerCommandResult> {
   const result = await pending
 
   if (result.exitCode !== 0) {
-    throw new Error(
-      `${operation} failed: ${result.stderr || result.stdout}`,
-    )
+    throw new Error(`${operation} failed: ${result.stderr || result.stdout}`)
   }
 
   return result
@@ -530,53 +431,32 @@ async function expectSuccess(
  * Creates one host tree whose sibling must never enter the container.
  */
 async function createIntegrationWorkspace(): Promise<string> {
-  const temporary = await mkdtemp(
-    path.join(os.tmpdir(), "aml-docker-integration-"),
-  )
+  const temporary = await mkdtemp(path.join(os.tmpdir(), "aml-docker-integration-"))
   const repository = path.join(temporary, "repository")
   await mkdir(path.join(repository, "nested"), {
     recursive: true,
   })
-  await writeFile(
-    path.join(repository, "fixture.txt"),
-    "sandbox fixture",
-  )
-  await writeFile(
-    path.join(temporary, "host-secret.txt"),
-    "must stay outside the mount",
-  )
-  await writeFile(
-    path.join(temporary, "Dockerfile"),
-    `FROM ${process.env.AML_DOCKER_IMAGE ?? "alpine:3.22"}\n`,
-  )
+  await writeFile(path.join(repository, "fixture.txt"), "sandbox fixture")
+  await writeFile(path.join(temporary, "host-secret.txt"), "must stay outside the mount")
+  await writeFile(path.join(temporary, "Dockerfile"), `FROM ${process.env.AML_DOCKER_IMAGE ?? "alpine:3.22"}\n`)
   return temporary
 }
 
 /**
  * Best-effort test cleanup for containers left by an assertion failure.
  */
-async function cleanupContainers(
-  client: Dockerode,
-  containerIds: readonly string[],
-): Promise<void> {
+async function cleanupContainers(client: Dockerode, containerIds: readonly string[]): Promise<void> {
   await Promise.all(
-    containerIds.map(
-      async (containerId) => {
-        try {
-          await client.getContainer(containerId).remove({ force: true })
-        } catch (error) {
-          // Integration cleanup is idempotent because the runtime should have
-          // already removed every container under test.
-          if (
-            typeof error !== "object" ||
-            error === null ||
-            !("statusCode" in error) ||
-            error.statusCode !== 404
-          ) {
-            throw error
-          }
+    containerIds.map(async containerId => {
+      try {
+        await client.getContainer(containerId).remove({ force: true })
+      } catch (error) {
+        // Integration cleanup is idempotent because the runtime should have
+        // already removed every container under test.
+        if (typeof error !== "object" || error === null || !("statusCode" in error) || error.statusCode !== 404) {
+          throw error
         }
-      },
-    ),
+      }
+    })
   )
 }

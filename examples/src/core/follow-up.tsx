@@ -1,11 +1,5 @@
-import {
-  Agent,
-  defineMcpServer,
-  FollowUp,
-  Mcp,
-  Tool,
-} from "@aml/sdk"
-import { DeterministicAgentProvider } from "@aml/sdk/testing"
+import { Agent, defineMcpServer, FollowUp, Mcp, Tool } from "@aml-jsx/sdk"
+import { DeterministicAgentProvider } from "@aml-jsx/sdk/testing"
 
 /**
  * Gives the example Agent one MCP capability alongside its authored Tool.

@@ -1,19 +1,10 @@
 import type { AmlEventScope } from "../core/aml-event-scope.js"
 import { ComponentEvaluationContext } from "../core/component-evaluation-context.js"
 import type { AmlTraceIdentity } from "../core/trace-identity.js"
-import type {
-  AmlTraceAttribute,
-  AmlTraceEvent,
-  AmlTraceEventName,
-  AmlTraceSpanKind,
-} from "./trace-event.js"
-import type {
-  TraceErrorHandler,
-} from "./trace-sink.js"
+import type { AmlTraceAttribute, AmlTraceEvent, AmlTraceEventName, AmlTraceSpanKind } from "./trace-event.js"
+import type { TraceErrorHandler } from "./trace-sink.js"
 
-type TraceAttributes = Readonly<
-  Record<string, AmlTraceAttribute>
->
+type TraceAttributes = Readonly<Record<string, AmlTraceAttribute>>
 
 /**
  * Runtime-owned token that closes exactly one emitted span.
@@ -39,10 +30,7 @@ export class TraceDispatcher {
   /**
    * Captures the consumer boundary once for one isolated evaluation.
    */
-  constructor(
-    events: AmlEventScope,
-    onError: TraceErrorHandler | undefined,
-  ) {
+  constructor(events: AmlEventScope, onError: TraceErrorHandler | undefined) {
     this.#events = events
     this.#onError = onError
   }
@@ -55,20 +43,23 @@ export class TraceDispatcher {
     kind: AmlTraceSpanKind,
     name: string,
     attributes: TraceAttributes = {},
-    sensitiveAttributes: TraceAttributes = {},
+    sensitiveAttributes: TraceAttributes = {}
   ): TraceSpan {
     const startedAt = performance.now()
     this.#activeSpans.add(identity.spanId)
 
-    this.#emit({
-      ...identity,
-      attributes: snapshotAttributes(attributes),
-      kind,
-      name,
-      sequence: this.#nextSequence(),
-      timestamp: Date.now(),
-      type: "span.start",
-    }, sensitiveAttributes)
+    this.#emit(
+      {
+        ...identity,
+        attributes: snapshotAttributes(attributes),
+        kind,
+        name,
+        sequence: this.#nextSequence(),
+        timestamp: Date.now(),
+        type: "span.start",
+      },
+      sensitiveAttributes
+    )
 
     return Object.freeze({
       identity,
@@ -85,23 +76,26 @@ export class TraceDispatcher {
     span: TraceSpan,
     status: "error" | "ok",
     attributes: TraceAttributes = {},
-    sensitiveAttributes: TraceAttributes = {},
+    sensitiveAttributes: TraceAttributes = {}
   ): void {
     if (!this.#activeSpans.delete(span.identity.spanId)) {
       return
     }
 
-    this.#emit({
-      ...span.identity,
-      attributes: snapshotAttributes(attributes),
-      durationMs: Math.max(0, performance.now() - span.startedAt),
-      kind: span.kind,
-      name: span.name,
-      sequence: this.#nextSequence(),
-      status,
-      timestamp: Date.now(),
-      type: "span.end",
-    }, sensitiveAttributes)
+    this.#emit(
+      {
+        ...span.identity,
+        attributes: snapshotAttributes(attributes),
+        durationMs: Math.max(0, performance.now() - span.startedAt),
+        kind: span.kind,
+        name: span.name,
+        sequence: this.#nextSequence(),
+        status,
+        timestamp: Date.now(),
+        type: "span.end",
+      },
+      sensitiveAttributes
+    )
   }
 
   /**
@@ -110,12 +104,7 @@ export class TraceDispatcher {
   failSpan(span: TraceSpan, error: unknown): void {
     const snapshot = captureError(error)
 
-    this.endSpan(
-      span,
-      "error",
-      { "error.type": snapshot.type },
-      { "error.message": snapshot.message },
-    )
+    this.endSpan(span, "error", { "error.type": snapshot.type }, { "error.message": snapshot.message })
   }
 
   /**
@@ -125,20 +114,23 @@ export class TraceDispatcher {
     identity: AmlTraceIdentity,
     name: AmlTraceEventName,
     attributes: TraceAttributes = {},
-    sensitiveAttributes: TraceAttributes = {},
+    sensitiveAttributes: TraceAttributes = {}
   ): void {
     if (this.#closed) {
       return
     }
 
-    this.#emit({
-      ...identity,
-      attributes: snapshotAttributes(attributes),
-      name,
-      sequence: this.#nextSequence(),
-      timestamp: Date.now(),
-      type: "event",
-    }, sensitiveAttributes)
+    this.#emit(
+      {
+        ...identity,
+        attributes: snapshotAttributes(attributes),
+        name,
+        sequence: this.#nextSequence(),
+        timestamp: Date.now(),
+        type: "event",
+      },
+      sensitiveAttributes
+    )
   }
 
   /**
@@ -152,32 +144,21 @@ export class TraceDispatcher {
   /**
    * Publishes redacted and content-bearing snapshots for per-listener consent.
    */
-  #emit(
-    event: AmlTraceEvent,
-    sensitiveAttributes: TraceAttributes = {},
-  ): void {
+  #emit(event: AmlTraceEvent, sensitiveAttributes: TraceAttributes = {}): void {
     if (this.#closed) {
       return
     }
 
     const redacted = Object.freeze(event)
     const content =
-      this.#events.capturesTraceContent &&
-      Object.keys(sensitiveAttributes).length > 0
-        ? Object.freeze({
+      this.#events.capturesTraceContent && Object.keys(sensitiveAttributes).length > 0
+        ? (Object.freeze({
             ...event,
-            attributes: snapshotAttributes(
-              event.attributes,
-              sensitiveAttributes,
-            ),
-          }) as AmlTraceEvent
+            attributes: snapshotAttributes(event.attributes, sensitiveAttributes),
+          }) as AmlTraceEvent)
         : redacted
 
-    this.#events.trace(
-      redacted,
-      content,
-      (error, traceEvent) => this.#report(error, traceEvent),
-    )
+    this.#events.trace(redacted, content, (error, traceEvent) => this.#report(error, traceEvent))
   }
 
   /**
@@ -187,13 +168,7 @@ export class TraceDispatcher {
     if (this.#onError !== undefined) {
       try {
         const pending = ComponentEvaluationContext.withoutAccess(() =>
-          Promise.resolve(
-            Reflect.apply(
-              this.#onError as TraceErrorHandler,
-              undefined,
-              [error, event],
-            ),
-          ),
+          Promise.resolve(Reflect.apply(this.#onError as TraceErrorHandler, undefined, [error, event]))
         )
 
         // The secondary channel is out-of-band and cannot recursively report.
@@ -212,9 +187,7 @@ export class TraceDispatcher {
     this.#warned = true
 
     try {
-      console.error(
-        `[aml] trace listener failed at ${event.type} ${event.spanId}`,
-      )
+      console.error(`[aml] trace listener failed at ${event.type} ${event.spanId}`)
     } catch {
       // Even a replaced console cannot make tracing part of workflow behavior.
     }
@@ -232,17 +205,12 @@ export class TraceDispatcher {
 /**
  * Copies trace attributes so observers cannot mutate runtime-owned arrays.
  */
-function snapshotAttributes(
-  ...sources: readonly TraceAttributes[]
-): TraceAttributes {
-  const result: Record<string, AmlTraceAttribute> =
-    Object.create(null) as Record<string, AmlTraceAttribute>
+function snapshotAttributes(...sources: readonly TraceAttributes[]): TraceAttributes {
+  const result: Record<string, AmlTraceAttribute> = Object.create(null) as Record<string, AmlTraceAttribute>
 
   for (const source of sources) {
     for (const [key, value] of Object.entries(source)) {
-      result[key] = Array.isArray(value)
-        ? Object.freeze([...value])
-        : value
+      result[key] = Array.isArray(value) ? Object.freeze([...value]) : value
     }
   }
 
@@ -252,24 +220,16 @@ function snapshotAttributes(
 /**
  * Reads only primitive or genuine Error fields and survives hostile proxies.
  */
-function captureError(
-  error: unknown,
-): Readonly<{ message: string; type: string }> {
+function captureError(error: unknown): Readonly<{ message: string; type: string }> {
   if (error === null) {
     return { message: "null", type: "null" }
   }
 
   const primitiveType = typeof error
 
-  if (
-    primitiveType !== "object" &&
-    primitiveType !== "function"
-  ) {
+  if (primitiveType !== "object" && primitiveType !== "function") {
     return {
-      message:
-        primitiveType === "string"
-          ? (error as string)
-          : primitiveType,
+      message: primitiveType === "string" ? (error as string) : primitiveType,
       type: primitiveType,
     }
   }

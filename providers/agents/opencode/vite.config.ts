@@ -2,9 +2,5 @@ import { createViteLibraryConfig } from "../../../config/create-vite-library-con
 
 export default createViteLibraryConfig({
   directory: import.meta.dirname,
-  external: [
-    /^@modelcontextprotocol\/sdk(?:\/.*)?$/,
-    /^@opencode-ai\/sdk(?:\/.*)?$/,
-    /^execa$/,
-  ],
+  external: [/^@modelcontextprotocol\/sdk(?:\/.*)?$/, /^@opencode-ai\/sdk(?:\/.*)?$/, /^execa$/],
 })

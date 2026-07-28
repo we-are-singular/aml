@@ -43,35 +43,27 @@ function installFakeProcess(): {
   readonly resolve: (result: FakeProcessResult) => void
 } {
   let captured: CapturedSpawnOptions | undefined
-  let resolveProcess:
-    | ((result: FakeProcessResult) => void)
-    | undefined
-  const process = new Promise<FakeProcessResult>((resolve) => {
+  let resolveProcess: ((result: FakeProcessResult) => void) | undefined
+  const process = new Promise<FakeProcessResult>(resolve => {
     resolveProcess = resolve
   })
 
-  dependencies.execa.mockImplementation(
-    (
-      _command: string,
-      _args: readonly string[],
-      options: CapturedSpawnOptions,
-    ) => {
-      captured = options
-      options.cancelSignal.addEventListener(
-        "abort",
-        () => {
-          resolveProcess?.({
-            failed: true,
-            isCanceled: true,
-            isTerminated: true,
-            signal: "SIGTERM",
-          })
-        },
-        { once: true },
-      )
-      return process
-    },
-  )
+  dependencies.execa.mockImplementation((_command: string, _args: readonly string[], options: CapturedSpawnOptions) => {
+    captured = options
+    options.cancelSignal.addEventListener(
+      "abort",
+      () => {
+        resolveProcess?.({
+          failed: true,
+          isCanceled: true,
+          isTerminated: true,
+          signal: "SIGTERM",
+        })
+      },
+      { once: true }
+    )
+    return process
+  })
 
   return {
     captured() {
@@ -109,19 +101,12 @@ describe("createIsolatedOpencode", () => {
         timeout: 10_000,
       })
       const spawn = fake.captured()
-      spawn.stdout.write(
-        "booting\nopencode server listening on http://127.0.0.2:43210\n",
-      )
+      spawn.stdout.write("booting\nopencode server listening on http://127.0.0.2:43210\n")
       const owned = await starting
 
       expect(dependencies.execa).toHaveBeenCalledWith(
         "opencode",
-        [
-          "serve",
-          "--hostname=127.0.0.2",
-          "--port=0",
-          "--log-level=DEBUG",
-        ],
+        ["serve", "--hostname=127.0.0.2", "--port=0", "--log-level=DEBUG"],
         expect.objectContaining({
           env: {
             OPENCODE_CONFIG_CONTENT: JSON.stringify({
@@ -134,14 +119,10 @@ describe("createIsolatedOpencode", () => {
           killDescendants: true,
           reject: false,
           stdin: "ignore",
-        }),
+        })
       )
-      expect(process.env.OPENCODE_DB).toBe(
-        "/caller/opencode.db",
-      )
-      expect(
-        dependencies.createOpencodeClient,
-      ).toHaveBeenCalledWith({
+      expect(process.env.OPENCODE_DB).toBe("/caller/opencode.db")
+      expect(dependencies.createOpencodeClient).toHaveBeenCalledWith({
         baseUrl: "http://127.0.0.2:43210",
       })
       expect(owned.client).toEqual({ kind: "generated-client" })
@@ -175,9 +156,7 @@ describe("createIsolatedOpencode", () => {
       isTerminated: false,
     })
 
-    await expect(starting).rejects.toThrow(
-      "OpenCode server exited with code 1\nServer output: configuration failed",
-    )
+    await expect(starting).rejects.toThrow("OpenCode server exited with code 1\nServer output: configuration failed")
   })
 
   it("waits for a complete readiness line before publishing its URL", async () => {
@@ -189,9 +168,7 @@ describe("createIsolatedOpencode", () => {
     void starting.then(() => {
       settled = true
     })
-    spawn.stdout.write(
-      "opencode server listening on http://127.0.0.1:43",
-    )
+    spawn.stdout.write("opencode server listening on http://127.0.0.1:43")
     await Promise.resolve()
 
     expect(settled).toBe(false)
@@ -208,9 +185,7 @@ describe("createIsolatedOpencode", () => {
     const starting = createIsolatedOpencode({ timeout: 10_000 })
     const spawn = fake.captured()
 
-    spawn.stdout.write(
-      "opencode server listening on http://127.0.0.1:43210\n",
-    )
+    spawn.stdout.write("opencode server listening on http://127.0.0.1:43210\n")
     const owned = await starting
     spawn.stderr.write("database became unavailable")
     fake.resolve({
@@ -221,7 +196,7 @@ describe("createIsolatedOpencode", () => {
     })
 
     await expect(owned.server.close()).rejects.toThrow(
-      "OpenCode server exited with code 2\nServer output: opencode server listening on http://127.0.0.1:43210\ndatabase became unavailable",
+      "OpenCode server exited with code 2\nServer output: opencode server listening on http://127.0.0.1:43210\ndatabase became unavailable"
     )
   })
 
@@ -238,9 +213,8 @@ describe("createIsolatedOpencode", () => {
 
       await expect(failure).resolves.toEqual(
         expect.objectContaining({
-          message:
-            "Timeout waiting for OpenCode server to start after 25ms",
-        }),
+          message: "Timeout waiting for OpenCode server to start after 25ms",
+        })
       )
       expect(spawn.cancelSignal.aborted).toBe(true)
     } finally {

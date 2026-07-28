@@ -1,8 +1,5 @@
 import { describe, expect, it } from "vitest"
-import type {
-  AmlNode,
-  AmlRenderable,
-} from "../src/core/aml-node.js"
+import type { AmlNode, AmlRenderable } from "../src/core/aml-node.js"
 import { AmlRuntime } from "../src/core/aml-runtime.js"
 import { EvaluationError } from "../src/core/evaluation-error.js"
 import { Fragment, jsx, jsxs } from "../src/jsx-runtime.js"
@@ -11,13 +8,7 @@ describe("AmlRuntime", () => {
   it("concatenates supported values without implicit separators", async () => {
     const runtime = new AmlRuntime()
     const tree = jsxs(Fragment, {
-      children: [
-        "alpha",
-        42,
-        false,
-        null,
-        ["beta", jsxs(Fragment, { children: ["gamma", undefined] })],
-      ],
+      children: ["alpha", 42, false, null, ["beta", jsxs(Fragment, { children: ["gamma", undefined] })]],
     })
 
     await expect(runtime.evaluate(tree)).resolves.toBe("alpha42betagamma")
@@ -38,7 +29,7 @@ describe("AmlRuntime", () => {
     await expect(
       new AmlRuntime().evaluate(jsx(Component, {}), {
         signal: controller.signal,
-      }),
+      })
     ).rejects.toBe(reason)
     expect(rendered).toBe(false)
   })
@@ -60,10 +51,7 @@ describe("AmlRuntime", () => {
     }
 
     await expect(
-      new AmlRuntime().evaluate(
-        [jsx(First, {}), jsx(Second, {})],
-        { signal: controller.signal },
-      ),
+      new AmlRuntime().evaluate([jsx(First, {}), jsx(Second, {})], { signal: controller.signal })
     ).rejects.toBe(reason)
     expect(secondRendered).toBe(false)
   })
@@ -98,18 +86,10 @@ describe("AmlRuntime", () => {
     }
 
     const runtime = new AmlRuntime()
-    const output = await runtime.evaluate([
-      jsx(First, {}),
-      jsx(Second, {}),
-    ])
+    const output = await runtime.evaluate([jsx(First, {}), jsx(Second, {})])
 
     expect(output).toBe("AB")
-    expect(events).toEqual([
-      "first:start",
-      "first:end",
-      "second:start",
-      "second:end",
-    ])
+    expect(events).toEqual(["first:start", "first:end", "second:start", "second:end"])
   })
 
   it("reads array siblings only when they reach authored order", async () => {
@@ -145,18 +125,16 @@ describe("AmlRuntime", () => {
 
     siblings.push(jsx(First, {}), "stale")
 
-    await expect(new AmlRuntime().evaluate(siblings)).resolves.toBe(
-      "first:updated",
-    )
+    await expect(new AmlRuntime().evaluate(siblings)).resolves.toBe("first:updated")
   })
 
   it("preserves output order for Promises the application already started", async () => {
     const events: string[] = []
-    const first = new Promise<string>((resolve) => {
+    const first = new Promise<string>(resolve => {
       events.push("first:started")
       setTimeout(() => resolve("A"), 5)
     })
-    const second = new Promise<string>((resolve) => {
+    const second = new Promise<string>(resolve => {
       events.push("second:started")
       resolve("B")
     })
@@ -185,20 +163,16 @@ describe("AmlRuntime", () => {
   it("rejects unsupported objects", async () => {
     const runtime = new AmlRuntime()
 
-    await expect(
-      runtime.evaluate({ value: "not renderable" } as never),
-    ).rejects.toThrow(
-      new EvaluationError("AML cannot render a value of type object"),
+    await expect(runtime.evaluate({ value: "not renderable" } as never)).rejects.toThrow(
+      new EvaluationError("AML cannot render a value of type object")
     )
   })
 
   it("rejects intrinsic JSX element types", async () => {
     const runtime = new AmlRuntime()
 
-    await expect(
-      runtime.evaluate(jsx("div" as never, { children: "no HTML" })),
-    ).rejects.toThrow(
-      "AML does not support intrinsic or unknown JSX element types",
+    await expect(runtime.evaluate(jsx("div" as never, { children: "no HTML" }))).rejects.toThrow(
+      "AML does not support intrinsic or unknown JSX element types"
     )
   })
 
@@ -208,40 +182,32 @@ describe("AmlRuntime", () => {
 
     const runtime = new AmlRuntime()
 
-    await expect(runtime.evaluate(cyclic as never)).rejects.toThrow(
-      "AML arrays cannot contain cycles",
-    )
+    await expect(runtime.evaluate(cyclic as never)).rejects.toThrow("AML arrays cannot contain cycles")
   })
 
   it("rejects array cycles that cross a Promise boundary", async () => {
     let resolveChild: ((value: AmlRenderable) => void) | undefined
-    const child = new Promise<AmlRenderable>((resolve) => {
+    const child = new Promise<AmlRenderable>(resolve => {
       resolveChild = resolve
     })
     const cyclic: AmlRenderable[] = [child]
 
     resolveChild?.(cyclic)
 
-    await expect(new AmlRuntime().evaluate(cyclic)).rejects.toThrow(
-      "AML arrays cannot contain cycles",
-    )
+    await expect(new AmlRuntime().evaluate(cyclic)).rejects.toThrow("AML arrays cannot contain cycles")
   })
 
   it("rejects cycles that cross an async component boundary", async () => {
     let calls = 0
-    let node: AmlNode<{}>
-
     async function Recursive() {
       calls += 1
       await Promise.resolve()
       return node
     }
 
-    node = jsx(Recursive, {})
+    const node: AmlNode<{}> = jsx(Recursive, {})
 
-    await expect(
-      new AmlRuntime({ maxDepth: 0 }).evaluate(node),
-    ).rejects.toThrow("AML nodes cannot contain cycles")
+    await expect(new AmlRuntime({ maxDepth: 0 }).evaluate(node)).rejects.toThrow("AML nodes cannot contain cycles")
     expect(calls).toBe(1)
   })
 
@@ -252,51 +218,39 @@ describe("AmlRuntime", () => {
       tree = [tree]
     }
 
-    await expect(
-      new AmlRuntime().evaluate(tree as never),
-    ).resolves.toBe("done")
+    await expect(new AmlRuntime().evaluate(tree as never)).resolves.toBe("done")
   })
 
   it("bounds recursively returned component nodes", async () => {
     function Recursive({ remaining }: { remaining: number }) {
-      return remaining === 0
-        ? "done"
-        : jsx(Recursive, { remaining: remaining - 1 })
+      return remaining === 0 ? "done" : jsx(Recursive, { remaining: remaining - 1 })
     }
 
     const runtime = new AmlRuntime({ maxDepth: 2 })
 
-    await expect(
-      runtime.evaluate(jsx(Recursive, { remaining: 2 })),
-    ).rejects.toThrow("AML evaluation exceeded maxDepth 2")
+    await expect(runtime.evaluate(jsx(Recursive, { remaining: 2 }))).rejects.toThrow(
+      "AML evaluation exceeded maxDepth 2"
+    )
   })
 
   it("accepts zero as an unlimited depth setting", async () => {
     function Recursive({ remaining }: { remaining: number }) {
-      return remaining === 0
-        ? "done"
-        : jsx(Recursive, { remaining: remaining - 1 })
+      return remaining === 0 ? "done" : jsx(Recursive, { remaining: remaining - 1 })
     }
 
     const runtime = new AmlRuntime({ maxDepth: 0 })
 
-    await expect(
-      runtime.evaluate(jsx(Recursive, { remaining: 20 })),
-    ).resolves.toBe("done")
+    await expect(runtime.evaluate(jsx(Recursive, { remaining: 20 }))).resolves.toBe("done")
   })
 
   it("evaluates deep component chains when depth is unlimited", async () => {
     function Recursive({ remaining }: { remaining: number }) {
-      return remaining === 0
-        ? "done"
-        : jsx(Recursive, { remaining: remaining - 1 })
+      return remaining === 0 ? "done" : jsx(Recursive, { remaining: remaining - 1 })
     }
 
     const runtime = new AmlRuntime({ maxDepth: 0 })
 
-    await expect(
-      runtime.evaluate(jsx(Recursive, { remaining: 20_000 })),
-    ).resolves.toBe("done")
+    await expect(runtime.evaluate(jsx(Recursive, { remaining: 20_000 }))).resolves.toBe("done")
   })
 
   it("reads a PromiseLike then accessor exactly once", async () => {
@@ -344,22 +298,16 @@ describe("AmlRuntime", () => {
           events.push(`has:${String(property)}`)
           return Reflect.has(target, property)
         },
-      },
+      }
     )
 
     await expect(new AmlRuntime().evaluate(value)).resolves.toBe("done")
     expect(events).not.toContain("has:then")
-    expect(events.filter((event) => event.endsWith(":then"))).toEqual([
-      "get:then",
-    ])
+    expect(events.filter(event => event.endsWith(":then"))).toEqual(["get:then"])
   })
 
   it("rejects invalid depth settings at construction", () => {
-    expect(() => new AmlRuntime({ maxDepth: -1 })).toThrow(
-      "maxDepth must be a non-negative safe integer",
-    )
-    expect(() => new AmlRuntime({ maxDepth: 1.5 })).toThrow(
-      "maxDepth must be a non-negative safe integer",
-    )
+    expect(() => new AmlRuntime({ maxDepth: -1 })).toThrow("maxDepth must be a non-negative safe integer")
+    expect(() => new AmlRuntime({ maxDepth: 1.5 })).toThrow("maxDepth must be a non-negative safe integer")
   })
 })

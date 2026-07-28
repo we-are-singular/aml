@@ -9,12 +9,6 @@
     "rootDir": "src",
     "sourceMap": true
   },
-  "include": [
-    "src/**/*.ts"
-  ],
-  "exclude": [
-    "scripts",
-    "tests",
-    "vite.config.ts"
-  ]
+  "include": ["src/**/*.ts"],
+  "exclude": ["scripts", "tests", "vite.config.ts"]
 }

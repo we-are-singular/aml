@@ -1,8 +1,4 @@
-import {
-  AmlNode,
-  type AmlComponent,
-  type AmlRenderable,
-} from "./core/aml-node.js"
+import { AmlNode, type AmlComponent, type AmlRenderable } from "./core/aml-node.js"
 
 interface FragmentProps {
   children?: AmlRenderable
@@ -21,12 +17,9 @@ export function Fragment({ children }: FragmentProps): AmlRenderable {
 export function jsx<Props>(
   type: AmlComponent<Props>,
   props: (Props & { children?: AmlRenderable }) | null,
-  _key?: string,
+  _key?: string
 ): AmlNode<Props> {
-  return new AmlNode(
-    type,
-    (props ?? {}) as Props & { children?: AmlRenderable },
-  )
+  return new AmlNode(type, (props ?? {}) as Props & { children?: AmlRenderable })
 }
 
 /**

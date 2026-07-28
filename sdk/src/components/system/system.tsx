@@ -1,7 +1,4 @@
-import {
-  AmlNode,
-  type AmlRenderable,
-} from "../../core/aml-node.js"
+import { AmlNode, type AmlRenderable } from "../../core/aml-node.js"
 
 /**
  * Children whose resolved text becomes part of the nearest Agent system prompt.

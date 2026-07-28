@@ -1,4 +1,5 @@
-import { Readable, Writable } from "node:stream"
+import type { Readable } from "node:stream"
+import { Writable } from "node:stream"
 import { finished } from "node:stream/promises"
 
 import type Dockerode from "dockerode"
@@ -12,7 +13,7 @@ import type Dockerode from "dockerode"
 export async function captureDockerCommandOutput(
   client: Dockerode,
   value: NodeJS.ReadableStream,
-  maxOutputBytes: number,
+  maxOutputBytes: number
 ): Promise<Readonly<{ stderr: string; stdout: string }>> {
   const stream = value as Readable
   let capturedBytes = 0
@@ -24,11 +25,7 @@ export async function captureDockerCommandOutput(
         capturedBytes += chunk.byteLength
 
         if (capturedBytes > maxOutputBytes) {
-          callback(
-            new RangeError(
-              `Docker Sandbox command output exceeded ${maxOutputBytes} bytes`,
-            ),
-          )
+          callback(new RangeError(`Docker Sandbox command output exceeded ${maxOutputBytes} bytes`))
           return
         }
 
@@ -41,23 +38,19 @@ export async function captureDockerCommandOutput(
 
   // Sink failures must stop the source stream; otherwise demultiplexing can
   // continue after the caller has already rejected the bounded operation.
-  stdout.once("error", (error) => stream.destroy(error))
-  stderr.once("error", (error) => stream.destroy(error))
+  stdout.once("error", error => stream.destroy(error))
+  stderr.once("error", error => stream.destroy(error))
   stream.once("end", () => {
     stdout.end()
     stderr.end()
   })
-  stream.once("error", (error) => {
+  stream.once("error", error => {
     stdout.destroy(error)
     stderr.destroy(error)
   })
   client.modem.demuxStream(stream, stdout, stderr)
 
-  await Promise.all([
-    finished(stream),
-    finished(stdout),
-    finished(stderr),
-  ])
+  await Promise.all([finished(stream), finished(stdout), finished(stderr)])
 
   return Object.freeze({
     stderr: Buffer.concat(stderrChunks).toString("utf8"),

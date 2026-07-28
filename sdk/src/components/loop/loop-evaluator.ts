@@ -7,20 +7,10 @@ import type { AmlRenderable } from "../../core/aml-node.js"
 import type { EvaluationContext } from "../../core/evaluation-context.js"
 import { EvaluationError } from "../../core/evaluation-error.js"
 import type { AmlTraceIdentity } from "../../core/trace-identity.js"
-import type {
-  AgentJavaScriptTool,
-  AgentToolExecutionContext,
-} from "../tool/agent-tool.js"
+import type { AgentJavaScriptTool, AgentToolExecutionContext } from "../tool/agent-tool.js"
 import { JsonSnapshot } from "../tool/json-snapshot.js"
-import {
-  type SchemaValidation,
-  StandardSchemaAdapter,
-} from "../tool/standard-schema-adapter.js"
-import type {
-  DeepReadonly,
-  LoopProps,
-  LoopRenderContext,
-} from "./loop.js"
+import { type SchemaValidation, StandardSchemaAdapter } from "../tool/standard-schema-adapter.js"
+import type { DeepReadonly, LoopProps, LoopRenderContext } from "./loop.js"
 
 type LoopState = Readonly<Record<string, AmlJsonValue>>
 
@@ -43,19 +33,11 @@ export class LoopEvaluator {
   /**
    * Runs fresh Agent sessions until an iteration leaves staged state unchanged.
    */
-  async evaluate<
-    Schema extends StandardSchemaV1<
-      unknown,
-      Record<string, unknown>
-    >,
-  >(
+  async evaluate<Schema extends StandardSchemaV1<unknown, Record<string, unknown>>>(
     props: Readonly<LoopProps<Schema>>,
     context: EvaluationContext,
     trace: AmlTraceIdentity,
-    executeAgent: (
-      value: AmlRenderable,
-      stateTool: AgentJavaScriptTool,
-    ) => Promise<string>,
+    executeAgent: (value: AmlRenderable, stateTool: AgentJavaScriptTool) => Promise<string>
   ): Promise<string> {
     const children = Reflect.get(props, "children")
     const initial = Reflect.get(props, "initial")
@@ -64,21 +46,13 @@ export class LoopEvaluator {
     const schema = Reflect.get(props, "schema")
 
     if (children !== undefined) {
-      throw new EvaluationError(
-        "<Loop> accepts render() instead of children",
-      )
+      throw new EvaluationError("<Loop> accepts render() instead of children")
     }
 
     const name = configuredName ?? "Loop"
 
-    if (
-      typeof name !== "string" ||
-      name.length === 0 ||
-      name !== name.trim()
-    ) {
-      throw new EvaluationError(
-        "<Loop> name must be a non-empty normalized string",
-      )
+    if (typeof name !== "string" || name.length === 0 || name !== name.trim()) {
+      throw new EvaluationError("<Loop> name must be a non-empty normalized string")
     }
 
     if (typeof render !== "function") {
@@ -96,19 +70,10 @@ export class LoopEvaluator {
 
       // Each iteration receives a new capability. Expiration prevents a
       // provider from retaining authority after its Agent session settles.
-      const stateTool = new LoopStateTool(
-        name,
-        snapshot,
-        allowedKeys,
-        stateSchema,
-      )
-      const renderContext: LoopRenderContext<
-        StandardSchemaV1.InferOutput<Schema>
-      > = Object.freeze({
+      const stateTool = new LoopStateTool(name, snapshot, allowedKeys, stateSchema)
+      const renderContext: LoopRenderContext<StandardSchemaV1.InferOutput<Schema>> = Object.freeze({
         iteration,
-        state: snapshot as DeepReadonly<
-          StandardSchemaV1.InferOutput<Schema>
-        >,
+        state: snapshot as DeepReadonly<StandardSchemaV1.InferOutput<Schema>>,
       })
       let output: string
 
@@ -144,11 +109,7 @@ class LoopStateSchema {
 
   constructor(schema: unknown, name: string) {
     this.#label = `<Loop name="${name}"> state`
-    this.#adapter = new StandardSchemaAdapter(
-      schema as StandardSchemaV1,
-      false,
-      `<Loop name="${name}"> schema`,
-    )
+    this.#adapter = new StandardSchemaAdapter(schema as StandardSchemaV1, false, `<Loop name="${name}"> schema`)
   }
 
   /**
@@ -162,9 +123,7 @@ class LoopStateSchema {
     const repeated = this.#captureObject(second)
 
     if (!isDeepStrictEqual(normalized, repeated)) {
-      throw new EvaluationError(
-        `${this.#label} schema must produce stable JSON state`,
-      )
+      throw new EvaluationError(`${this.#label} schema must produce stable JSON state`)
     }
 
     return normalized
@@ -179,21 +138,13 @@ class LoopStateSchema {
     try {
       result = await this.#adapter.validate(value)
     } catch (cause) {
-      throw new EvaluationError(
-        `${this.#label} schema validation failed`,
-        { cause },
-      )
+      throw new EvaluationError(`${this.#label} schema validation failed`, { cause })
     }
 
     if (!result.success) {
-      const messages = result.issues
-        .map((issue) => issue.message)
-        .join("; ")
+      const messages = result.issues.map(issue => issue.message).join("; ")
 
-      throw new EvaluationError(
-        `${this.#label} failed schema validation: ${messages}`,
-        { cause: result.issues },
-      )
+      throw new EvaluationError(`${this.#label} failed schema validation: ${messages}`, { cause: result.issues })
     }
 
     return result.value
@@ -208,20 +159,11 @@ class LoopStateSchema {
     try {
       captured = JsonSnapshot.capture(value, this.#label)
     } catch (cause) {
-      throw new EvaluationError(
-        `${this.#label} must contain only stable JSON`,
-        { cause },
-      )
+      throw new EvaluationError(`${this.#label} must contain only stable JSON`, { cause })
     }
 
-    if (
-      typeof captured !== "object" ||
-      captured === null ||
-      Array.isArray(captured)
-    ) {
-      throw new EvaluationError(
-        `${this.#label} must be a JSON object`,
-      )
+    if (typeof captured !== "object" || captured === null || Array.isArray(captured)) {
+      throw new EvaluationError(`${this.#label} must be a JSON object`)
     }
 
     return captured as LoopState
@@ -245,12 +187,7 @@ class LoopStateTool implements AgentJavaScriptTool {
   readonly kind = "javascript" as const
   readonly name = "aml_set_state"
 
-  constructor(
-    name: string,
-    state: LoopState,
-    allowedKeys: readonly string[],
-    schema: LoopStateSchema,
-  ) {
+  constructor(name: string, state: LoopState, allowedKeys: readonly string[], schema: LoopStateSchema) {
     this.#allowedKeys = new Set(allowedKeys)
     this.#initialState = state
     this.#label = `"${name}" Loop state`
@@ -287,19 +224,14 @@ class LoopStateTool implements AgentJavaScriptTool {
   /**
    * Queues one atomic patch so concurrent Tool calls preserve invocation order.
    */
-  execute(
-    input: unknown,
-    context: AgentToolExecutionContext,
-  ): Promise<AmlJsonValue> {
-    const operation = this.#tail.then(
-      async () => await this.#stage(input, context),
-    )
+  execute(input: unknown, context: AgentToolExecutionContext): Promise<AmlJsonValue> {
+    const operation = this.#tail.then(async () => await this.#stage(input, context))
 
     // A rejected call leaves the queue usable while its own returned Promise
     // still reports the validation or expiration failure to the provider.
     this.#tail = operation.then(
       () => undefined,
-      () => undefined,
+      () => undefined
     )
 
     return operation
@@ -308,25 +240,16 @@ class LoopStateTool implements AgentJavaScriptTool {
   /**
    * Validates a complete proposal before replacing the staged snapshot.
    */
-  async #stage(
-    input: unknown,
-    context: AgentToolExecutionContext,
-  ): Promise<AmlJsonValue> {
+  async #stage(input: unknown, context: AgentToolExecutionContext): Promise<AmlJsonValue> {
     context.signal.throwIfAborted()
     this.#assertActive()
 
     let captured: AmlJsonValue
 
     try {
-      captured = JsonSnapshot.capture(
-        input,
-        `${this.#label} Tool input`,
-      )
+      captured = JsonSnapshot.capture(input, `${this.#label} Tool input`)
     } catch (cause) {
-      throw new EvaluationError(
-        `${this.#label} Tool input must be stable JSON`,
-        { cause },
-      )
+      throw new EvaluationError(`${this.#label} Tool input must be stable JSON`, { cause })
     }
 
     if (
@@ -336,14 +259,10 @@ class LoopStateTool implements AgentJavaScriptTool {
       Object.keys(captured).length !== 1 ||
       !Object.hasOwn(captured, "updates")
     ) {
-      throw new EvaluationError(
-        `${this.#label} Tool input must contain only updates`,
-      )
+      throw new EvaluationError(`${this.#label} Tool input must contain only updates`)
     }
 
-    const updates = (
-      captured as Readonly<Record<string, AmlJsonValue>>
-    ).updates
+    const updates = (captured as Readonly<Record<string, AmlJsonValue>>).updates
 
     if (
       typeof updates !== "object" ||
@@ -351,28 +270,19 @@ class LoopStateTool implements AgentJavaScriptTool {
       Array.isArray(updates) ||
       Object.keys(updates).length === 0
     ) {
-      throw new EvaluationError(
-        `${this.#label} updates must be a non-empty JSON object`,
-      )
+      throw new EvaluationError(`${this.#label} updates must be a non-empty JSON object`)
     }
 
     const updatedKeys = Object.keys(updates)
-    const unknownKeys = updatedKeys.filter(
-      (key) => !this.#allowedKeys.has(key),
-    )
+    const unknownKeys = updatedKeys.filter(key => !this.#allowedKeys.has(key))
 
     if (unknownKeys.length > 0) {
-      throw new EvaluationError(
-        `${this.#label} cannot update unknown keys: ${unknownKeys.join(", ")}`,
-      )
+      throw new EvaluationError(`${this.#label} cannot update unknown keys: ${unknownKeys.join(", ")}`)
     }
 
     // Object.fromEntries uses data-property creation, so even an explicitly
     // authored "__proto__" key cannot mutate the proposal's prototype.
-    const proposal = Object.fromEntries([
-      ...Object.entries(this.#state),
-      ...Object.entries(updates),
-    ])
+    const proposal = Object.fromEntries([...Object.entries(this.#state), ...Object.entries(updates)])
     const next = await this.#schema.validate(proposal)
 
     // Validation may be asynchronous. Recheck both caller control and lease
@@ -395,9 +305,7 @@ class LoopStateTool implements AgentJavaScriptTool {
    */
   #assertActive(): void {
     if (!this.#active) {
-      throw new EvaluationError(
-        `"${this.#name}" state capability expired when its Agent finished`,
-      )
+      throw new EvaluationError(`"${this.#name}" state capability expired when its Agent finished`)
     }
   }
 }

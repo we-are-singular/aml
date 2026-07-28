@@ -1,5 +1,5 @@
-import { Agent, Skill } from "@aml/sdk"
-import { DeterministicAgentProvider } from "@aml/sdk/testing"
+import { Agent, Skill } from "@aml-jsx/sdk"
+import { DeterministicAgentProvider } from "@aml-jsx/sdk/testing"
 
 /**
  * Stands in for any Agent harness so the example can focus on Skill authorship.

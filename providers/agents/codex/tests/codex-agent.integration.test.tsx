@@ -1,22 +1,13 @@
 import { randomUUID } from "node:crypto"
 
-import {
-  Agent,
-  AmlRuntime,
-  defineTool,
-  evaluate,
-  FollowUp,
-  Tool,
-} from "@aml/sdk"
+import { Agent, AmlRuntime, defineTool, evaluate, FollowUp, Tool } from "@aml-jsx/sdk"
 import { expect, it } from "vitest"
 import { z } from "zod"
 
 import { codexAgent } from "../src/index.js"
 
-const liveTest =
-  process.env.AML_CODEX_LIVE === "1" ? it : it.skip
-const model =
-  process.env.AML_CODEX_MODEL ?? "gpt-5.3-codex-spark"
+const liveTest = process.env.AML_CODEX_LIVE === "1" ? it : it.skip
+const model = process.env.AML_CODEX_MODEL ?? "gpt-5.3-codex-spark"
 
 liveTest(
   "retains conversation history across real Codex FollowUps",
@@ -28,15 +19,13 @@ liveTest(
     }).evaluate(
       <Agent>
         Remember the exact token "{secret}". Reply only with acknowledged.
-        <FollowUp>
-          Return only the exact token from the preceding message.
-        </FollowUp>
-      </Agent>,
+        <FollowUp>Return only the exact token from the preceding message.</FollowUp>
+      </Agent>
     )
 
     expect(output.trim()).toBe(secret)
   },
-  180_000,
+  180_000
 )
 
 liveTest(
@@ -60,13 +49,13 @@ liveTest(
       <Agent>
         <Tool use={lookupLabel} />
         Use lookup_aml_fixture_label and return only its exact result.
-      </Agent>,
+      </Agent>
     )
 
     expect(output.trim()).toBe(expectedLabel)
     expect(calls).toBe(1)
   },
-  180_000,
+  180_000
 )
 
 liveTest(
@@ -81,21 +70,14 @@ liveTest(
 
     async function StructuredProof() {
       const result = await evaluate(
-        <Agent>
-          Return proof "{secret}" and count 7 as the requested structured
-          result.
-        </Agent>,
-        Result,
+        <Agent>Return proof "{secret}" and count 7 as the requested structured result.</Agent>,
+        Result
       )
 
       return `${result.proof}:${result.count}`
     }
 
-    await expect(
-      new AmlRuntime({ agentProvider: provider }).evaluate(
-        <StructuredProof />,
-      ),
-    ).resolves.toBe(`${secret}:7`)
+    await expect(new AmlRuntime({ agentProvider: provider }).evaluate(<StructuredProof />)).resolves.toBe(`${secret}:7`)
   },
-  180_000,
+  180_000
 )

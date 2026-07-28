@@ -1,11 +1,5 @@
-import {
-  AmlNode,
-  type AmlRenderable,
-} from "../../core/aml-node.js"
-import type {
-  SandboxAccess,
-  SandboxProvider,
-} from "./sandbox-provider.js"
+import { AmlNode, type AmlRenderable } from "../../core/aml-node.js"
+import type { SandboxAccess, SandboxProvider } from "./sandbox-provider.js"
 
 /**
  * Portable policy and provider selection for one ephemeral execution scope.

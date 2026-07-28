@@ -1,15 +1,6 @@
-import type {
-  AgentExecutionContext,
-  AgentMcpServer,
-  AgentRequest,
-  AgentTool,
-  AgentJavaScriptTool,
-} from "@aml/sdk"
+import type { AgentExecutionContext, AgentMcpServer, AgentRequest, AgentTool, AgentJavaScriptTool } from "@aml-jsx/sdk"
 
-import type {
-  CodexConfig,
-  CodexConfigValue,
-} from "./codex-client-factory.js"
+import type { CodexConfig, CodexConfigValue } from "./codex-client-factory.js"
 import { CodexToolBridge } from "./codex-tool-bridge.js"
 
 const CODEX_MCP_NAME = /^[A-Za-z0-9_-]+$/
@@ -57,9 +48,7 @@ export class CodexCapabilityAttachment {
   static async create(
     request: AgentRequest,
     context: AgentExecutionContext,
-    suppliedMcpOverrides: Readonly<
-      Record<string, CodexConfigValue>
-    >,
+    suppliedMcpOverrides: Readonly<Record<string, CodexConfigValue>>
   ): Promise<CodexCapabilityAttachment> {
     const hostTools: AgentTool[] = []
     const javaScriptTools: AgentJavaScriptTool[] = []
@@ -70,18 +59,14 @@ export class CodexCapabilityAttachment {
     // ambiguous even if the provider happened to accept them.
     for (const tool of request.tools) {
       if (toolNames.has(tool.name)) {
-        throw new TypeError(
-          `Codex Tool name "${tool.name}" is declared more than once`,
-        )
+        throw new TypeError(`Codex Tool name "${tool.name}" is declared more than once`)
       }
 
       toolNames.add(tool.name)
 
       if (tool.kind === "host") {
         if (!READ_ONLY_SHELL_TOOLS.has(tool.name)) {
-          throw new TypeError(
-            `Codex host Tool "${tool.name}" is unsupported`,
-          )
+          throw new TypeError(`Codex host Tool "${tool.name}" is unsupported`)
         }
 
         hostTools.push(tool)
@@ -91,88 +76,54 @@ export class CodexCapabilityAttachment {
       // MCP Tool declarations require an object-root input schema. Reject the
       // mismatch before binding a server or starting a Codex thread.
       if (tool.inputSchema.type !== "object") {
-        throw new TypeError(
-          `Codex Tool "${tool.name}" requires an object input schema`,
-        )
+        throw new TypeError(`Codex Tool "${tool.name}" requires an object input schema`)
       }
 
       javaScriptTools.push(tool)
     }
 
-    const mcpServerEntries: Array<
-      readonly [string, CodexConfig]
-    > = []
+    const mcpServerEntries: Array<readonly [string, CodexConfig]> = []
     const declaredNames = new Set<string>()
 
     for (const server of request.mcpServers) {
-      const name =
-        server.kind === "named"
-          ? server.name
-          : server.definition.name
+      const name = server.kind === "named" ? server.name : server.definition.name
 
       CodexCapabilityAttachment.#validateMcpName(name)
 
       if (declaredNames.has(name)) {
-        throw new TypeError(
-          `Codex MCP server "${name}" is declared more than once`,
-        )
+        throw new TypeError(`Codex MCP server "${name}" is declared more than once`)
       }
 
       declaredNames.add(name)
-      mcpServerEntries.push([
-        name,
-        CodexCapabilityAttachment.#serverConfig(
-          server,
-          suppliedMcpOverrides,
-        ),
-      ])
+      mcpServerEntries.push([name, CodexCapabilityAttachment.#serverConfig(server, suppliedMcpOverrides)])
     }
 
-    const developerInstructions =
-      CodexCapabilityAttachment.#developerInstructions(
-        javaScriptTools,
-        request.mcpServers,
-      )
+    const developerInstructions = CodexCapabilityAttachment.#developerInstructions(javaScriptTools, request.mcpServers)
 
     if (javaScriptTools.length === 0) {
       return new CodexCapabilityAttachment({
         developerInstructions,
         // Object.fromEntries preserves names such as "__proto__" as ordinary
         // data properties instead of invoking Object.prototype setters.
-        mcpServers: Object.freeze(
-          Object.fromEntries(mcpServerEntries),
-        ),
+        mcpServers: Object.freeze(Object.fromEntries(mcpServerEntries)),
         shellEnabled: hostTools.length > 0,
       })
     }
 
-    const bridge = new CodexToolBridge(
-      javaScriptTools,
-      context,
-    )
+    const bridge = new CodexToolBridge(javaScriptTools, context)
     const connection = await bridge.start(context.signal)
 
-    if (
-      declaredNames.has(connection.name) ||
-      Object.hasOwn(suppliedMcpOverrides, connection.name)
-    ) {
+    if (declaredNames.has(connection.name) || Object.hasOwn(suppliedMcpOverrides, connection.name)) {
       try {
         await bridge.close()
       } catch (cleanupError) {
         throw new AggregateError(
-          [
-            new TypeError(
-              `Codex Tool bridge name "${connection.name}" collides with MCP configuration`,
-            ),
-            cleanupError,
-          ],
-          "Codex Tool bridge collision and cleanup failed",
+          [new TypeError(`Codex Tool bridge name "${connection.name}" collides with MCP configuration`), cleanupError],
+          "Codex Tool bridge collision and cleanup failed"
         )
       }
 
-      throw new TypeError(
-        `Codex Tool bridge name "${connection.name}" collides with MCP configuration`,
-      )
+      throw new TypeError(`Codex Tool bridge name "${connection.name}" collides with MCP configuration`)
     }
 
     mcpServerEntries.push([
@@ -180,9 +131,7 @@ export class CodexCapabilityAttachment {
       Object.freeze({
         default_tools_approval_mode: "approve",
         enabled: true,
-        enabled_tools: Object.freeze(
-          javaScriptTools.map((tool) => tool.name),
-        ),
+        enabled_tools: Object.freeze(javaScriptTools.map(tool => tool.name)),
         http_headers: Object.freeze({
           ...connection.headers,
         }),
@@ -194,9 +143,7 @@ export class CodexCapabilityAttachment {
     return new CodexCapabilityAttachment({
       bridge,
       developerInstructions,
-      mcpServers: Object.freeze(
-        Object.fromEntries(mcpServerEntries),
-      ),
+      mcpServers: Object.freeze(Object.fromEntries(mcpServerEntries)),
       shellEnabled: hostTools.length > 0,
     })
   }
@@ -213,9 +160,7 @@ export class CodexCapabilityAttachment {
    */
   static #serverConfig(
     server: AgentMcpServer,
-    suppliedMcpOverrides: Readonly<
-      Record<string, CodexConfigValue>
-    >,
+    suppliedMcpOverrides: Readonly<Record<string, CodexConfigValue>>
   ): CodexConfig {
     const common = {
       default_tools_approval_mode: "approve",
@@ -236,14 +181,8 @@ export class CodexCapabilityAttachment {
       // Presence is materially different from absence at this authority
       // boundary. Never reinterpret malformed explicit configuration as an
       // ambient server with the same name.
-      if (
-        typeof suppliedOverride !== "object" ||
-        suppliedOverride === null ||
-        Array.isArray(suppliedOverride)
-      ) {
-        throw new TypeError(
-          `Codex MCP server "${server.name}" configuration must be an object`,
-        )
+      if (typeof suppliedOverride !== "object" || suppliedOverride === null || Array.isArray(suppliedOverride)) {
+        throw new TypeError(`Codex MCP server "${server.name}" configuration must be an object`)
       }
 
       return Object.freeze({
@@ -261,12 +200,8 @@ export class CodexCapabilityAttachment {
         args: Object.freeze([...(transport.args ?? [])]),
         command: transport.command,
         ...common,
-        ...(transport.cwd === undefined
-          ? {}
-          : { cwd: transport.cwd }),
-        ...(transport.env === undefined
-          ? {}
-          : { env: Object.freeze({ ...transport.env }) }),
+        ...(transport.cwd === undefined ? {} : { cwd: transport.cwd }),
+        ...(transport.env === undefined ? {} : { env: Object.freeze({ ...transport.env }) }),
       })
     }
 
@@ -288,47 +223,33 @@ export class CodexCapabilityAttachment {
    */
   static #validateMcpName(name: string): void {
     if (!CODEX_MCP_NAME.test(name)) {
-      throw new TypeError(
-        `Codex MCP server name "${name}" must contain only letters, digits, "_" or "-"`,
-      )
+      throw new TypeError(`Codex MCP server name "${name}" must contain only letters, digits, "_" or "-"`)
     }
   }
 
   /**
    * Tells Codex how to find invocation Tools hidden by deferred discovery.
    */
-  static #developerInstructions(
-    tools: readonly AgentJavaScriptTool[],
-    servers: readonly AgentMcpServer[],
-  ): string {
+  static #developerInstructions(tools: readonly AgentJavaScriptTool[], servers: readonly AgentMcpServer[]): string {
     const sections: string[] = []
 
     if (tools.length > 0) {
-      const declarations = tools
-        .map(
-          (tool) =>
-            `- ${tool.name}: ${tool.description}`,
-        )
-        .join("\n")
+      const declarations = tools.map(tool => `- ${tool.name}: ${tool.description}`).join("\n")
 
       sections.push(
         [
           "AML granted these exact JavaScript Tools through an invocation-local MCP server:",
           declarations,
           "When the requested Tool is deferred, use Codex tool discovery with its exact name, then call it. Do not substitute repository search, shell commands, or another similarly named capability.",
-        ].join("\n"),
+        ].join("\n")
       )
     }
 
     if (servers.length > 0) {
       sections.push(
         `AML granted these MCP server names for this Agent: ${servers
-          .map((server) =>
-            server.kind === "named"
-              ? server.name
-              : server.definition.name,
-          )
-          .join(", ")}.`,
+          .map(server => (server.kind === "named" ? server.name : server.definition.name))
+          .join(", ")}.`
       )
     }
 

@@ -1,7 +1,4 @@
-import {
-  AmlNode,
-  type AmlRenderable,
-} from "../../core/aml-node.js"
+import { AmlNode, type AmlRenderable } from "../../core/aml-node.js"
 
 /**
  * Local and inline instruction content plus optional model-facing labels.

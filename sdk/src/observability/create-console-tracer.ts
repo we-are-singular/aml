@@ -1,7 +1,4 @@
-import type {
-  AmlTraceAttribute,
-  AmlTraceEvent,
-} from "./trace-event.js"
+import type { AmlTraceAttribute, AmlTraceEvent } from "./trace-event.js"
 import type { TraceSink } from "./trace-sink.js"
 
 /**
@@ -22,32 +19,23 @@ export interface ConsoleTracerOptions {
 /**
  * Creates a compact tree-oriented trace consumer for local development.
  */
-export function createConsoleTracer(
-  options: ConsoleTracerOptions = {},
-): TraceSink {
+export function createConsoleTracer(options: ConsoleTracerOptions = {}): TraceSink {
   const captureContent = options.captureContent ?? false
   const write = options.write ?? ((line: string) => console.log(line))
 
   if (typeof captureContent !== "boolean") {
-    throw new TypeError(
-      "createConsoleTracer captureContent must be a boolean",
-    )
+    throw new TypeError("createConsoleTracer captureContent must be a boolean")
   }
 
   if (typeof write !== "function") {
-    throw new TypeError(
-      "createConsoleTracer write must be a function",
-    )
+    throw new TypeError("createConsoleTracer write must be a function")
   }
 
   const runs = new Map<string, Map<string, number>>()
   const sink = ((event: AmlTraceEvent) => {
     const depths = runs.get(event.runId) ?? new Map<string, number>()
     runs.set(event.runId, depths)
-    const depth =
-      event.parentSpanId === undefined
-        ? 0
-        : (depths.get(event.parentSpanId) ?? 0) + 1
+    const depth = event.parentSpanId === undefined ? 0 : (depths.get(event.parentSpanId) ?? 0) + 1
     depths.set(event.spanId, depth)
 
     const indent = "  ".repeat(depth)
@@ -70,10 +58,7 @@ export function createConsoleTracer(
     } finally {
       // Evaluation completion is the last event in one run. Cleanup belongs in
       // finally because a custom writer may throw on the terminal line.
-      if (
-        event.type === "span.end" &&
-        event.kind === "evaluation"
-      ) {
+      if (event.type === "span.end" && event.kind === "evaluation") {
         runs.delete(event.runId)
       }
     }
@@ -97,25 +82,19 @@ export function createConsoleTracer(
 /**
  * Produces one stable metadata suffix without terminal-specific color codes.
  */
-function formatAttributes(
-  attributes: Readonly<Record<string, AmlTraceAttribute>>,
-): string {
+function formatAttributes(attributes: Readonly<Record<string, AmlTraceAttribute>>): string {
   const entries = Object.entries(attributes)
 
   if (entries.length === 0) {
     return ""
   }
 
-  return ` ${entries
-    .map(([key, value]) => `${key}=${JSON.stringify(value)}`)
-    .join(" ")}`
+  return ` ${entries.map(([key, value]) => `${key}=${JSON.stringify(value)}`).join(" ")}`
 }
 
 /**
  * Keeps short spans readable while retaining sub-millisecond timing.
  */
 function formatDuration(durationMs: number): string {
-  return durationMs < 10
-    ? `${durationMs.toFixed(1)}ms`
-    : `${Math.round(durationMs)}ms`
+  return durationMs < 10 ? `${durationMs.toFixed(1)}ms` : `${Math.round(durationMs)}ms`
 }

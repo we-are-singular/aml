@@ -1,25 +1,14 @@
 import type { AmlTraceIdentity } from "./trace-identity.js"
-import { AmlEventBus } from "./aml-event-bus.js"
+import type { AmlEventBus } from "./aml-event-bus.js"
 import { AmlEventScope } from "./aml-event-scope.js"
 import type { AmlEventSubscriber } from "./aml-event-subscriber.js"
 import { AgentScheduler } from "./agent-scheduler.js"
 import { EvaluationError } from "./evaluation-error.js"
-import {
-  TraceDispatcher,
-  type TraceSpan,
-} from "../observability/trace-dispatcher.js"
-import type {
-  AmlTraceAttribute,
-  AmlTraceEventName,
-  AmlTraceSpanKind,
-} from "../observability/trace-event.js"
-import type {
-  TraceErrorHandler,
-} from "../observability/trace-sink.js"
+import { TraceDispatcher, type TraceSpan } from "../observability/trace-dispatcher.js"
+import type { AmlTraceAttribute, AmlTraceEventName, AmlTraceSpanKind } from "../observability/trace-event.js"
+import type { TraceErrorHandler } from "../observability/trace-sink.js"
 
-type TraceAttributes = Readonly<
-  Record<string, AmlTraceAttribute>
->
+type TraceAttributes = Readonly<Record<string, AmlTraceAttribute>>
 
 /**
  * Owns cancellation and correlation identity for one complete evaluation.
@@ -49,20 +38,14 @@ export class EvaluationContext {
     events: AmlEventBus,
     trace: {
       readonly onError: TraceErrorHandler | undefined
-    },
+    }
   ) {
-    this.#agentScheduler = new AgentScheduler(
-      maxConcurrentAgents,
-      signal,
-    )
+    this.#agentScheduler = new AgentScheduler(maxConcurrentAgents, signal)
     this.#maxAgentCalls = maxAgentCalls
     this.#maxStateTransitions = maxStateTransitions
     this.#signal = signal
     this.#eventScope = new AmlEventScope(events)
-    this.#traceDispatcher = new TraceDispatcher(
-      this.#eventScope,
-      trace.onError,
-    )
+    this.#traceDispatcher = new TraceDispatcher(this.#eventScope, trace.onError)
   }
 
   /**
@@ -108,14 +91,10 @@ export class EvaluationContext {
       Object.freeze({
         runId: this.#runId,
         signal: this.#signal,
-      }),
+      })
     )
     this.#signal.throwIfAborted()
-    this.#rootSpan = this.#traceDispatcher.startSpan(
-      this.#identity("trace-0"),
-      "evaluation",
-      "evaluate",
-    )
+    this.#rootSpan = this.#traceDispatcher.startSpan(this.#identity("trace-0"), "evaluation", "evaluate")
   }
 
   /**
@@ -124,24 +103,16 @@ export class EvaluationContext {
   createTrace(parentSpanId?: string): AmlTraceIdentity {
     this.#spanSequence += 1
 
-    return this.#identity(
-      `span-${this.#spanSequence}`,
-      parentSpanId,
-    )
+    return this.#identity(`span-${this.#spanSequence}`, parentSpanId)
   }
 
   /**
    * Allocates instrumentation-only identity without shifting provider traces.
    */
-  createObservationTrace(
-    parentSpanId?: string,
-  ): AmlTraceIdentity {
+  createObservationTrace(parentSpanId?: string): AmlTraceIdentity {
     this.#observationSpanSequence += 1
 
-    return this.#identity(
-      `trace-${this.#observationSpanSequence}`,
-      parentSpanId,
-    )
+    return this.#identity(`trace-${this.#observationSpanSequence}`, parentSpanId)
   }
 
   /**
@@ -152,15 +123,9 @@ export class EvaluationContext {
     kind: AmlTraceSpanKind,
     name: string,
     attributes: TraceAttributes = {},
-    sensitiveAttributes: TraceAttributes = {},
+    sensitiveAttributes: TraceAttributes = {}
   ): TraceSpan {
-    return this.#traceDispatcher.startSpan(
-      trace,
-      kind,
-      name,
-      attributes,
-      sensitiveAttributes,
-    )
+    return this.#traceDispatcher.startSpan(trace, kind, name, attributes, sensitiveAttributes)
   }
 
   /**
@@ -170,14 +135,9 @@ export class EvaluationContext {
     span: TraceSpan,
     status: "error" | "ok",
     attributes: TraceAttributes = {},
-    sensitiveAttributes: TraceAttributes = {},
+    sensitiveAttributes: TraceAttributes = {}
   ): void {
-    this.#traceDispatcher.endSpan(
-      span,
-      status,
-      attributes,
-      sensitiveAttributes,
-    )
+    this.#traceDispatcher.endSpan(span, status, attributes, sensitiveAttributes)
   }
 
   /**
@@ -194,14 +154,9 @@ export class EvaluationContext {
     trace: AmlTraceIdentity,
     name: AmlTraceEventName,
     attributes: TraceAttributes = {},
-    sensitiveAttributes: TraceAttributes = {},
+    sensitiveAttributes: TraceAttributes = {}
   ): void {
-    this.#traceDispatcher.event(
-      trace,
-      name,
-      attributes,
-      sensitiveAttributes,
-    )
+    this.#traceDispatcher.event(trace, name, attributes, sensitiveAttributes)
   }
 
   /**
@@ -210,13 +165,8 @@ export class EvaluationContext {
   reserveAgentCall(trace: AmlTraceIdentity): void {
     this.#signal.throwIfAborted()
 
-    if (
-      this.#maxAgentCalls !== 0 &&
-      this.#agentCalls >= this.#maxAgentCalls
-    ) {
-      throw new EvaluationError(
-        `AML evaluation exceeded maxAgentCalls ${this.#maxAgentCalls} at Agent ${trace.spanId}`,
-      )
+    if (this.#maxAgentCalls !== 0 && this.#agentCalls >= this.#maxAgentCalls) {
+      throw new EvaluationError(`AML evaluation exceeded maxAgentCalls ${this.#maxAgentCalls} at Agent ${trace.spanId}`)
     }
 
     this.#agentCalls += 1
@@ -225,19 +175,12 @@ export class EvaluationContext {
   /**
    * Reserves one complete Loop commit across the evaluation domain.
    */
-  reserveStateTransition(
-    name: string,
-    iteration: number,
-    trace: AmlTraceIdentity,
-  ): void {
+  reserveStateTransition(name: string, iteration: number, trace: AmlTraceIdentity): void {
     this.#signal.throwIfAborted()
 
-    if (
-      this.#maxStateTransitions !== 0 &&
-      this.#stateTransitions >= this.#maxStateTransitions
-    ) {
+    if (this.#maxStateTransitions !== 0 && this.#stateTransitions >= this.#maxStateTransitions) {
       throw new EvaluationError(
-        `AML evaluation exceeded maxStateTransitions ${this.#maxStateTransitions} at Loop "${name}" iteration ${iteration}`,
+        `AML evaluation exceeded maxStateTransitions ${this.#maxStateTransitions} at Loop "${name}" iteration ${iteration}`
       )
     }
 
@@ -252,9 +195,7 @@ export class EvaluationContext {
   /**
    * Schedules one reserved provider call in this domain.
    */
-  async scheduleAgent<Result>(
-    operation: () => PromiseLike<Result> | Result,
-  ): Promise<Result> {
+  async scheduleAgent<Result>(operation: () => PromiseLike<Result> | Result): Promise<Result> {
     return await this.#agentScheduler.run(operation)
   }
 
@@ -274,7 +215,7 @@ export class EvaluationContext {
           runId: this.#runId,
           signal: this.#signal,
           status: failed ? "error" : "ok",
-        }),
+        })
       )
     } catch (listenerError) {
       finishFailed = true
@@ -284,10 +225,7 @@ export class EvaluationContext {
     let terminalError = error
 
     if (failed && finishFailed) {
-      terminalError = new AggregateError(
-        [error, finishError],
-        "AML evaluation and finish listeners both failed",
-      )
+      terminalError = new AggregateError([error, finishError], "AML evaluation and finish listeners both failed")
     } else if (finishFailed) {
       terminalError = finishError
     }
@@ -295,10 +233,7 @@ export class EvaluationContext {
     // A failed start hook has no execution trace to close.
     if (this.#rootSpan !== undefined) {
       if (failed || finishFailed) {
-        this.#traceDispatcher.failSpan(
-          this.#rootSpan,
-          terminalError,
-        )
+        this.#traceDispatcher.failSpan(this.#rootSpan, terminalError)
       } else {
         this.#traceDispatcher.endSpan(this.#rootSpan, "ok")
       }
@@ -315,10 +250,7 @@ export class EvaluationContext {
   /**
    * Creates one frozen identity without exposing the evaluation sequence.
    */
-  #identity(
-    spanId: string,
-    parentSpanId?: string,
-  ): AmlTraceIdentity {
+  #identity(spanId: string, parentSpanId?: string): AmlTraceIdentity {
     return Object.freeze({
       ...(parentSpanId === undefined ? {} : { parentSpanId }),
       runId: this.#runId,

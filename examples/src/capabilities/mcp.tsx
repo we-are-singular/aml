@@ -1,5 +1,5 @@
-import { Agent, defineMcpServer, Mcp } from "@aml/sdk"
-import { DeterministicAgentProvider } from "@aml/sdk/testing"
+import { Agent, defineMcpServer, Mcp } from "@aml-jsx/sdk"
+import { DeterministicAgentProvider } from "@aml-jsx/sdk/testing"
 
 /**
  * Describes an MCP server without connecting to it in the AML runtime.
@@ -19,18 +19,12 @@ const ExampleProvider = new DeterministicAgentProvider({
   respond(request) {
     if (request.prompt === "Inspect the project.") {
       return {
-        text:
-          request.mcpServers.length === 1
-            ? "MCP attached. "
-            : "MCP missing. ",
+        text: request.mcpServers.length === 1 ? "MCP attached. " : "MCP missing. ",
       }
     }
 
     return {
-      text:
-        request.mcpServers.length === 0
-          ? "Sibling isolated."
-          : "MCP leaked.",
+      text: request.mcpServers.length === 0 ? "Sibling isolated." : "MCP leaked.",
     }
   },
 })
@@ -45,9 +39,7 @@ export default function McpExample() {
         <Mcp use={ExampleMcp} />
         Inspect the project.
       </Agent>
-      <Agent provider={ExampleProvider}>
-        Summarize without capabilities.
-      </Agent>
+      <Agent provider={ExampleProvider}>Summarize without capabilities.</Agent>
     </>
   )
 }

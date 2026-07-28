@@ -1,12 +1,9 @@
-import type {
-  StandardJSONSchemaV1,
-  StandardSchemaV1,
-} from "@standard-schema/spec"
+import type { StandardJSONSchemaV1, StandardSchemaV1 } from "@standard-schema/spec"
 
 import type { AmlJsonValue } from "../../core/aml-json-value.js"
 import type { AmlTraceIdentity } from "../../core/trace-identity.js"
 
-const AML_TOOL_REGISTRY = Symbol.for("@aml/sdk/tool-registry")
+const AML_TOOL_REGISTRY = Symbol.for("@aml-jsx/sdk/tool-registry")
 
 interface AmlToolGlobal {
   [AML_TOOL_REGISTRY]?: WeakMap<object, AgentJavaScriptTool>
@@ -18,9 +15,8 @@ interface AmlToolGlobal {
  * Standard Schema validates provider input while Standard JSON Schema produces
  * the model-facing declaration from the same source of truth.
  */
-export type AmlToolSchema<Input = unknown, Output = Input> =
-  StandardSchemaV1<Input, Output> &
-    StandardJSONSchemaV1<Input, Output>
+export type AmlToolSchema<Input = unknown, Output = Input> = StandardSchemaV1<Input, Output> &
+  StandardJSONSchemaV1<Input, Output>
 
 /**
  * Invocation-scoped information supplied to a JavaScript Tool.
@@ -47,10 +43,7 @@ export interface AgentJavaScriptTool {
   /**
    * Executes the capability with provider-supplied input and evaluation context.
    */
-  execute(
-    input: unknown,
-    context: AgentToolExecutionContext,
-  ): Promise<AmlJsonValue>
+  execute(input: unknown, context: AgentToolExecutionContext): Promise<AmlJsonValue>
   readonly inputSchema: Readonly<Record<string, unknown>>
   readonly kind: "javascript"
   readonly name: string
@@ -79,22 +72,15 @@ export interface AmlTool extends AgentJavaScriptTool {
  * JavaScript realm must recognize each other's definitions without accepting
  * clones, derived objects, or forwarding proxies.
  */
-export function registerAmlTool(
-  tool: AmlTool,
-  execution: AgentJavaScriptTool,
-): void {
+export function registerAmlTool(tool: AmlTool, execution: AgentJavaScriptTool): void {
   toolRegistry().set(tool, execution)
 }
 
 /**
  * Returns the SDK-owned execution port only for an exact registered identity.
  */
-export function registeredAmlTool(
-  value: unknown,
-): AgentJavaScriptTool | undefined {
-  return typeof value === "object" && value !== null
-    ? toolRegistry().get(value)
-    : undefined
+export function registeredAmlTool(value: unknown): AgentJavaScriptTool | undefined {
+  return typeof value === "object" && value !== null ? toolRegistry().get(value) : undefined
 }
 
 /**

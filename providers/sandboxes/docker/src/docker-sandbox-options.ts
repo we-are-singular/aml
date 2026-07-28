@@ -63,9 +63,7 @@ export interface ParsedDockerSandboxOptions {
 /**
  * Validates provider factory options without starting Docker or reading disk.
  */
-export function parseDockerSandboxOptions(
-  value: DockerSandboxOptions,
-): Readonly<ParsedDockerSandboxOptions> {
+export function parseDockerSandboxOptions(value: DockerSandboxOptions): Readonly<ParsedDockerSandboxOptions> {
   if (typeof value !== "object" || value === null) {
     throw new TypeError("Docker Sandbox options must be an object")
   }
@@ -74,41 +72,26 @@ export function parseDockerSandboxOptions(
   const hasImage = value.image !== undefined
 
   if (hasDockerfile === hasImage) {
-    throw new TypeError(
-      "Docker Sandbox requires exactly one of image or dockerfile",
-    )
+    throw new TypeError("Docker Sandbox requires exactly one of image or dockerfile")
   }
 
   if (hasImage && value.buildContext !== undefined) {
-    throw new TypeError(
-      "Docker Sandbox buildContext requires dockerfile",
-    )
+    throw new TypeError("Docker Sandbox buildContext requires dockerfile")
   }
 
   const dockerfile =
     value.dockerfile === undefined
       ? undefined
-      : path.resolve(
-          requireNormalizedString(
-            value.dockerfile,
-            "Dockerfile path",
-          ),
-        )
+      : path.resolve(requireNormalizedString(value.dockerfile, "Dockerfile path"))
   const buildContext =
     dockerfile === undefined
       ? undefined
       : path.resolve(
           value.buildContext === undefined
             ? path.dirname(dockerfile)
-            : requireNormalizedString(
-                value.buildContext,
-                "Docker build context",
-              ),
+            : requireNormalizedString(value.buildContext, "Docker build context")
         )
-  const cpus = requirePositiveNumber(
-    value.cpus ?? DEFAULT_CPUS,
-    "Docker cpus",
-  )
+  const cpus = requirePositiveNumber(value.cpus ?? DEFAULT_CPUS, "Docker cpus")
   const client = value.client ?? new Dockerode()
 
   assertSameHostDockerClient(client)
@@ -121,40 +104,18 @@ export function parseDockerSandboxOptions(
     ...(value.image === undefined
       ? {}
       : {
-          image: requireNormalizedString(
-            value.image,
-            "Docker image",
-          ),
+          image: requireNormalizedString(value.image, "Docker image"),
         }),
-    maxOutputBytes: requirePositiveInteger(
-      value.maxOutputBytes ?? DEFAULT_MAX_OUTPUT_BYTES,
-      "Docker maxOutputBytes",
-    ),
-    memoryBytes: requirePositiveInteger(
-      value.memoryBytes ?? DEFAULT_MEMORY_BYTES,
-      "Docker memoryBytes",
-    ),
+    maxOutputBytes: requirePositiveInteger(value.maxOutputBytes ?? DEFAULT_MAX_OUTPUT_BYTES, "Docker maxOutputBytes"),
+    memoryBytes: requirePositiveInteger(value.memoryBytes ?? DEFAULT_MEMORY_BYTES, "Docker memoryBytes"),
     nanoCpus: toNanoCpus(cpus),
-    pidsLimit: requirePositiveInteger(
-      value.pidsLimit ?? DEFAULT_PIDS_LIMIT,
-      "Docker pidsLimit",
-    ),
-    tmpfsBytes: requirePositiveInteger(
-      value.tmpfsBytes ?? DEFAULT_TMPFS_BYTES,
-      "Docker tmpfsBytes",
-    ),
-    user: requireNonRootUser(
-      value.user ?? defaultDockerUser(),
-    ),
+    pidsLimit: requirePositiveInteger(value.pidsLimit ?? DEFAULT_PIDS_LIMIT, "Docker pidsLimit"),
+    tmpfsBytes: requirePositiveInteger(value.tmpfsBytes ?? DEFAULT_TMPFS_BYTES, "Docker tmpfsBytes"),
+    user: requireNonRootUser(value.user ?? defaultDockerUser()),
     ...(value.workspace === undefined
       ? {}
       : {
-          workspace: path.resolve(
-            requireNormalizedString(
-              value.workspace,
-              "Docker workspace",
-            ),
-          ),
+          workspace: path.resolve(requireNormalizedString(value.workspace, "Docker workspace")),
         }),
   })
 }
@@ -172,9 +133,7 @@ function assertSameHostDockerClient(client: Dockerode): void {
     typeof client.modem !== "object" ||
     client.modem === null
   ) {
-    throw new TypeError(
-      "Docker client must be a Dockerode instance",
-    )
+    throw new TypeError("Docker client must be a Dockerode instance")
   }
 
   // Dockerode exposes transport selection through its modem. A configured
@@ -188,9 +147,7 @@ function assertSameHostDockerClient(client: Dockerode): void {
   ).modem.host
 
   if (host !== undefined) {
-    throw new TypeError(
-      "Docker Sandbox requires a same-host local-socket Docker client",
-    )
+    throw new TypeError("Docker Sandbox requires a same-host local-socket Docker client")
   }
 }
 
@@ -199,10 +156,7 @@ function assertSameHostDockerClient(client: Dockerode): void {
  */
 function defaultDockerUser(): string {
   if (typeof process.getuid === "function" && process.getuid() !== 0) {
-    const group =
-      typeof process.getgid === "function" && process.getgid() !== 0
-        ? process.getgid()
-        : process.getuid()
+    const group = typeof process.getgid === "function" && process.getgid() !== 0 ? process.getgid() : process.getuid()
     return `${process.getuid()}:${group}`
   }
 
@@ -216,9 +170,7 @@ function requireNonRootUser(value: unknown): string {
   const user = requireNormalizedString(value, "Docker user")
 
   if (!/^[1-9]\d*(?::[1-9]\d*)?$/.test(user)) {
-    throw new TypeError(
-      "Docker user must be a numeric non-root UID with an optional non-root GID",
-    )
+    throw new TypeError("Docker user must be a numeric non-root UID with an optional non-root GID")
   }
 
   return user
@@ -253,9 +205,7 @@ function toNanoCpus(value: number): number {
   const nanoCpus = Math.round(value * 1_000_000_000)
 
   if (!Number.isSafeInteger(nanoCpus) || nanoCpus <= 0) {
-    throw new RangeError(
-      "Docker cpus cannot be represented as a positive NanoCPUs integer",
-    )
+    throw new RangeError("Docker cpus cannot be represented as a positive NanoCPUs integer")
   }
 
   return nanoCpus
@@ -264,19 +214,9 @@ function toNanoCpus(value: number): number {
 /**
  * Rejects strings that change identity across path and Engine boundaries.
  */
-function requireNormalizedString(
-  value: unknown,
-  label: string,
-): string {
-  if (
-    typeof value !== "string" ||
-    value.length === 0 ||
-    value !== value.trim() ||
-    value.includes("\0")
-  ) {
-    throw new TypeError(
-      `${label} must be a non-empty normalized string`,
-    )
+function requireNormalizedString(value: unknown, label: string): string {
+  if (typeof value !== "string" || value.length === 0 || value !== value.trim() || value.includes("\0")) {
+    throw new TypeError(`${label} must be a non-empty normalized string`)
   }
 
   return value

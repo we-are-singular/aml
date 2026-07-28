@@ -42,9 +42,7 @@ export interface SandboxProvider<Handle = unknown> {
   /**
    * Acquires one environment for an already validated portable policy.
    */
-  acquire(
-    request: SandboxAcquireRequest,
-  ): Promise<SandboxLease<Handle>>
+  acquire(request: SandboxAcquireRequest): Promise<SandboxLease<Handle>>
 }
 
 /**

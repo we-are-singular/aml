@@ -1,8 +1,5 @@
 import { EvaluationError } from "../../core/evaluation-error.js"
-import {
-  type AgentMcpServer,
-  registeredAmlMcpServer,
-} from "./aml-mcp-server.js"
+import { type AgentMcpServer, registeredAmlMcpServer } from "./aml-mcp-server.js"
 import type { McpProps } from "./mcp.js"
 
 /**
@@ -33,31 +30,18 @@ export class McpCollection {
     }
 
     if ((name === undefined) === (use === undefined)) {
-      throw new EvaluationError(
-        "<Mcp> requires exactly one of name or use",
-      )
+      throw new EvaluationError("<Mcp> requires exactly one of name or use")
     }
 
-    const server =
-      use === undefined
-        ? this.#namedServer(name)
-        : this.#configuredServer(use)
-    const serverName =
-      server.kind === "named" ? server.name : server.definition.name
+    const server = use === undefined ? this.#namedServer(name) : this.#configuredServer(use)
+    const serverName = server.kind === "named" ? server.name : server.definition.name
 
     if (this.#names.has(serverName)) {
-      throw new EvaluationError(
-        `Agent declares duplicate MCP server "${serverName}"`,
-      )
+      throw new EvaluationError(`Agent declares duplicate MCP server "${serverName}"`)
     }
 
-    if (
-      this.#allowedNames !== undefined &&
-      !this.#allowedNames.has(serverName)
-    ) {
-      throw new EvaluationError(
-        `MCP server "${serverName}" is not allowed by this runtime`,
-      )
+    if (this.#allowedNames !== undefined && !this.#allowedNames.has(serverName)) {
+      throw new EvaluationError(`MCP server "${serverName}" is not allowed by this runtime`)
     }
 
     this.#names.add(serverName)
@@ -86,9 +70,7 @@ export class McpCollection {
     const server = registeredAmlMcpServer(value)
 
     if (server === undefined) {
-      throw new EvaluationError(
-        "<Mcp use> must be a defined MCP server",
-      )
+      throw new EvaluationError("<Mcp use> must be a defined MCP server")
     }
 
     return Object.freeze({ definition: server, kind: "configured" })
@@ -99,13 +81,7 @@ export class McpCollection {
  * Enforces the shared normalized capability-name contract.
  */
 function validateName(value: unknown): asserts value is string {
-  if (
-    typeof value !== "string" ||
-    value.length === 0 ||
-    value !== value.trim()
-  ) {
-    throw new EvaluationError(
-      "MCP server name must be a non-empty normalized string",
-    )
+  if (typeof value !== "string" || value.length === 0 || value !== value.trim()) {
+    throw new EvaluationError("MCP server name must be a non-empty normalized string")
   }
 }

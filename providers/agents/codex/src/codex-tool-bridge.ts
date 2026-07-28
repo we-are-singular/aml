@@ -1,23 +1,10 @@
 import { randomUUID } from "node:crypto"
-import {
-  createServer,
-  type IncomingMessage,
-  type Server as HttpServer,
-  type ServerResponse,
-} from "node:http"
+import { createServer, type IncomingMessage, type Server as HttpServer, type ServerResponse } from "node:http"
 
 import { Server as McpServer } from "@modelcontextprotocol/sdk/server/index.js"
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js"
-import {
-  CallToolRequestSchema,
-  ListToolsRequestSchema,
-} from "@modelcontextprotocol/sdk/types.js"
-import type {
-  AgentExecutionContext,
-  AgentJavaScriptTool,
-  AgentToolExecutionContext,
-  AmlJsonValue,
-} from "@aml/sdk"
+import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js"
+import type { AgentExecutionContext, AgentJavaScriptTool, AgentToolExecutionContext, AmlJsonValue } from "@aml-jsx/sdk"
 
 /**
  * Private endpoint configuration added to one Codex invocation.
@@ -44,9 +31,7 @@ interface CodexMcpSession {
  */
 export class CodexToolBridge {
   readonly #activeRequests = new Set<Promise<void>>()
-  readonly #activeToolExecutions = new Set<
-    Promise<AmlJsonValue>
-  >()
+  readonly #activeToolExecutions = new Set<Promise<AmlJsonValue>>()
   readonly #authToken = randomUUID()
   readonly #context: AgentExecutionContext
   readonly #http: HttpServer
@@ -61,12 +46,9 @@ export class CodexToolBridge {
   /**
    * Captures one invocation's exact Tool set without opening a socket.
    */
-  constructor(
-    tools: readonly AgentJavaScriptTool[],
-    context: AgentExecutionContext,
-  ) {
+  constructor(tools: readonly AgentJavaScriptTool[], context: AgentExecutionContext) {
     this.#context = context
-    this.#tools = new Map(tools.map((tool) => [tool.name, tool]))
+    this.#tools = new Map(tools.map(tool => [tool.name, tool]))
     this.#http = createServer((request, response) => {
       const handling = this.#handleRequest(request, response)
       this.#activeRequests.add(handling)
@@ -85,7 +67,7 @@ export class CodexToolBridge {
           } else {
             response.destroy()
           }
-        },
+        }
       )
     })
   }
@@ -115,9 +97,7 @@ export class CodexToolBridge {
   /**
    * Performs the abortable listener startup once.
    */
-  async #start(
-    signal: AbortSignal,
-  ): Promise<CodexToolBridgeConnection> {
+  async #start(signal: AbortSignal): Promise<CodexToolBridgeConnection> {
     signal.throwIfAborted()
 
     try {
@@ -142,10 +122,7 @@ export class CodexToolBridge {
       try {
         await this.close()
       } catch (cleanupError) {
-        throw new AggregateError(
-          [startupError, cleanupError],
-          "AML Codex Tool bridge startup and cleanup failed",
-        )
+        throw new AggregateError([startupError, cleanupError], "AML Codex Tool bridge startup and cleanup failed")
       }
 
       throw startupError
@@ -154,17 +131,12 @@ export class CodexToolBridge {
     const address = this.#http.address()
 
     if (!address || typeof address === "string") {
-      const addressError = new Error(
-        "AML Codex Tool bridge has no TCP address",
-      )
+      const addressError = new Error("AML Codex Tool bridge has no TCP address")
 
       try {
         await this.close()
       } catch (cleanupError) {
-        throw new AggregateError(
-          [addressError, cleanupError],
-          "AML Codex Tool bridge startup and cleanup failed",
-        )
+        throw new AggregateError([addressError, cleanupError], "AML Codex Tool bridge startup and cleanup failed")
       }
 
       throw addressError
@@ -186,16 +158,10 @@ export class CodexToolBridge {
   /**
    * Authenticates and routes one request to its stateful MCP session.
    */
-  async #handleRequest(
-    request: IncomingMessage,
-    response: ServerResponse,
-  ): Promise<void> {
+  async #handleRequest(request: IncomingMessage, response: ServerResponse): Promise<void> {
     // The same response hides invalid paths and credentials so a local caller
     // cannot probe which part of this private endpoint it guessed correctly.
-    if (
-      request.url !== "/mcp" ||
-      request.headers.authorization !== `Bearer ${this.#authToken}`
-    ) {
+    if (request.url !== "/mcp" || request.headers.authorization !== `Bearer ${this.#authToken}`) {
       response.writeHead(404).end()
       return
     }
@@ -207,10 +173,7 @@ export class CodexToolBridge {
 
     const sessionHeader = request.headers["mcp-session-id"]
 
-    if (
-      sessionHeader !== undefined &&
-      typeof sessionHeader !== "string"
-    ) {
+    if (sessionHeader !== undefined && typeof sessionHeader !== "string") {
       response.writeHead(400).end()
       return
     }
@@ -265,18 +228,17 @@ export class CodexToolBridge {
 
     const controller = new AbortController()
     const server = this.#createMcpServer(controller.signal)
-    let session!: CodexMcpSession
     const transport = new StreamableHTTPServerTransport({
       sessionIdGenerator: randomUUID,
-      onsessionclosed: (sessionId) => {
+      onsessionclosed: sessionId => {
         this.#sessions.delete(sessionId)
       },
-      onsessioninitialized: (sessionId) => {
+      onsessioninitialized: sessionId => {
         this.#uninitializedSessions.delete(session)
         this.#sessions.set(sessionId, session)
       },
     })
-    session = {
+    const session: CodexMcpSession = {
       controller,
       closed: false,
       server,
@@ -302,22 +264,17 @@ export class CodexToolBridge {
    * Builds an isolated MCP Server that advertises only authored AML Tools.
    */
   #createMcpServer(sessionSignal: AbortSignal): McpServer {
-    const toolSummary = [...this.#tools.values()]
-      .map((tool) => `${tool.name}: ${tool.description}`)
-      .join("\n")
+    const toolSummary = [...this.#tools.values()].map(tool => `${tool.name}: ${tool.description}`).join("\n")
     const server = new McpServer(
       { name: this.#name, version: "0.0.0" },
       {
         capabilities: { tools: {} },
-        instructions: [
-          "Call the exact AML JavaScript Tool requested by the user.",
-          toolSummary,
-        ].join("\n"),
-      },
+        instructions: ["Call the exact AML JavaScript Tool requested by the user.", toolSummary].join("\n"),
+      }
     )
 
     server.setRequestHandler(ListToolsRequestSchema, async () => ({
-      tools: [...this.#tools.values()].map((tool) => ({
+      tools: [...this.#tools.values()].map(tool => ({
         description: tool.description,
         inputSchema: tool.inputSchema as {
           type: "object"
@@ -326,74 +283,58 @@ export class CodexToolBridge {
         name: tool.name,
       })),
     }))
-    server.setRequestHandler(
-      CallToolRequestSchema,
-      async (request, extra) => {
-        const tool = this.#tools.get(request.params.name)
+    server.setRequestHandler(CallToolRequestSchema, async (request, extra) => {
+      const tool = this.#tools.get(request.params.name)
 
-        if (!tool) {
-          return {
-            content: [
-              {
-                text: `Unknown AML Tool "${request.params.name}"`,
-                type: "text" as const,
-              },
-            ],
-            isError: true,
-          }
+      if (!tool) {
+        return {
+          content: [
+            {
+              text: `Unknown AML Tool "${request.params.name}"`,
+              type: "text" as const,
+            },
+          ],
+          isError: true,
         }
+      }
 
-        // A Tool stops cooperatively when either its model request or the
-        // complete AML evaluation is cancelled.
-        const toolContext: AgentToolExecutionContext = Object.freeze({
-          signal: AbortSignal.any([
-            this.#context.signal,
-            extra.signal,
-            sessionSignal,
-          ]),
-          trace: this.#context.trace,
-        })
+      // A Tool stops cooperatively when either its model request or the
+      // complete AML evaluation is cancelled.
+      const toolContext: AgentToolExecutionContext = Object.freeze({
+        signal: AbortSignal.any([this.#context.signal, extra.signal, sessionSignal]),
+        trace: this.#context.trace,
+      })
 
-        // Begin through a Promise boundary so synchronous Tool throws are also
-        // registered with the provider close barrier.
-        const execution = Promise.resolve().then(
-          async () =>
-            await tool.execute(
-              request.params.arguments,
-              toolContext,
-            ),
-        )
-        this.#activeToolExecutions.add(execution)
+      // Begin through a Promise boundary so synchronous Tool throws are also
+      // registered with the provider close barrier.
+      const execution = Promise.resolve().then(async () => await tool.execute(request.params.arguments, toolContext))
+      this.#activeToolExecutions.add(execution)
 
-        try {
-          const result = await execution
+      try {
+        const result = await execution
 
-          return {
-            content: [
-              {
-                text: CodexToolBridge.#resultText(result),
-                type: "text" as const,
-              },
-            ],
-          }
-        } catch (error) {
-          return {
-            content: [
-              {
-                text:
-                  error instanceof Error
-                    ? error.message
-                    : "AML Tool execution failed",
-                type: "text" as const,
-              },
-            ],
-            isError: true,
-          }
-        } finally {
-          this.#activeToolExecutions.delete(execution)
+        return {
+          content: [
+            {
+              text: CodexToolBridge.#resultText(result),
+              type: "text" as const,
+            },
+          ],
         }
-      },
-    )
+      } catch (error) {
+        return {
+          content: [
+            {
+              text: error instanceof Error ? error.message : "AML Tool execution failed",
+              type: "text" as const,
+            },
+          ],
+          isError: true,
+        }
+      } finally {
+        this.#activeToolExecutions.delete(execution)
+      }
+    })
 
     return server
   }
@@ -425,10 +366,7 @@ export class CodexToolBridge {
     }
 
     if (errors.length > 1) {
-      throw new AggregateError(
-        errors,
-        "AML Codex Tool bridge cleanup failed",
-      )
+      throw new AggregateError(errors, "AML Codex Tool bridge cleanup failed")
     }
   }
 
@@ -441,9 +379,7 @@ export class CodexToolBridge {
     }
 
     session.closed = true
-    session.controller.abort(
-      new Error("AML Codex Tool bridge session closed"),
-    )
+    session.controller.abort(new Error("AML Codex Tool bridge session closed"))
     await session.server.close()
   }
 
@@ -452,12 +388,8 @@ export class CodexToolBridge {
    */
   #closeListener(): Promise<void> {
     const closed = new Promise<void>((resolve, reject) => {
-      this.#http.close((error) => {
-        if (
-          error &&
-          (error as NodeJS.ErrnoException).code !==
-            "ERR_SERVER_NOT_RUNNING"
-        ) {
+      this.#http.close(error => {
+        if (error && (error as NodeJS.ErrnoException).code !== "ERR_SERVER_NOT_RUNNING") {
           reject(error)
           return
         }
@@ -477,10 +409,7 @@ export class CodexToolBridge {
    * Closes the complete current session set while preserving every failure.
    */
   async #closeKnownSessions(errors: unknown[]): Promise<void> {
-    const sessions = new Set([
-      ...this.#sessions.values(),
-      ...this.#uninitializedSessions,
-    ])
+    const sessions = new Set([...this.#sessions.values(), ...this.#uninitializedSessions])
     this.#sessions.clear()
     this.#uninitializedSessions.clear()
 
@@ -499,14 +428,8 @@ export class CodexToolBridge {
   async #drainActiveWork(): Promise<void> {
     // Settling one request can schedule its Tool or final session cleanup, so
     // re-snapshot until both tracked sets are empty at the same boundary.
-    while (
-      this.#activeRequests.size > 0 ||
-      this.#activeToolExecutions.size > 0
-    ) {
-      await Promise.allSettled([
-        ...this.#activeRequests,
-        ...this.#activeToolExecutions,
-      ])
+    while (this.#activeRequests.size > 0 || this.#activeToolExecutions.size > 0) {
+      await Promise.allSettled([...this.#activeRequests, ...this.#activeToolExecutions])
     }
   }
 
@@ -514,8 +437,6 @@ export class CodexToolBridge {
    * Converts snapshotted Tool output into MCP text content.
    */
   static #resultText(result: AmlJsonValue): string {
-    return typeof result === "string"
-      ? result
-      : JSON.stringify(result)
+    return typeof result === "string" ? result : JSON.stringify(result)
   }
 }

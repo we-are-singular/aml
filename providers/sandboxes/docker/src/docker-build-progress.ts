@@ -3,10 +3,7 @@ import type Dockerode from "dockerode"
 /**
  * Resolves when Dockerode has decoded a complete image-build stream.
  */
-export function followDockerBuildProgress(
-  client: Dockerode,
-  stream: NodeJS.ReadableStream,
-): Promise<void> {
+export function followDockerBuildProgress(client: Dockerode, stream: NodeJS.ReadableStream): Promise<void> {
   return new Promise((resolve, reject) => {
     // Dockerode 5 exposes BuildKit-aware progress decoding while its current
     // DefinitelyTyped declaration still exposes only the underlying modem.
@@ -14,10 +11,7 @@ export function followDockerBuildProgress(
       client as Dockerode & {
         followProgress(
           input: NodeJS.ReadableStream,
-          done: (
-            error: Error | null,
-            output: readonly unknown[],
-          ) => void,
+          done: (error: Error | null, output: readonly unknown[]) => void
         ): void
       }
     ).followProgress
@@ -45,9 +39,7 @@ export function followDockerBuildProgress(
 /**
  * Extracts a structured Engine failure from decoded Docker progress events.
  */
-function findDockerProgressError(
-  output: readonly unknown[],
-): string | undefined {
+function findDockerProgressError(output: readonly unknown[]): string | undefined {
   for (const value of output) {
     if (typeof value !== "object" || value === null) {
       continue

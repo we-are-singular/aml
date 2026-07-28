@@ -1,29 +1,29 @@
 {
-  "name": "@aml/workspace-local",
+  "name": "@aml-jsx/workspace-local",
   "version": "0.0.0",
   "private": true,
-  "type": "module",
-  "sideEffects": false,
   "files": [
     "dist"
   ],
+  "type": "module",
+  "sideEffects": false,
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
     }
   },
-  "dependencies": {
-    "@aml/sdk": "*",
-    "proper-lockfile": "^4.1.2"
-  },
-  "devDependencies": {
-    "@types/proper-lockfile": "^4.1.4"
-  },
   "scripts": {
     "build": "vite build && tsc --project tsconfig.build.json",
     "package:check": "node scripts/check-package.ts",
     "test": "vitest run",
     "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@aml-jsx/sdk": "*",
+    "proper-lockfile": "^4.1.2"
+  },
+  "devDependencies": {
+    "@types/proper-lockfile": "^4.1.4"
   }
 }

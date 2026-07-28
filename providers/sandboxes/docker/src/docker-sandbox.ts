@@ -1,29 +1,18 @@
 import { randomUUID } from "node:crypto"
-import {
-  chmod,
-  mkdtemp,
-  realpath,
-  rm,
-  stat,
-  writeFile,
-} from "node:fs/promises"
+import { chmod, mkdtemp, realpath, rm, stat, writeFile } from "node:fs/promises"
 import path from "node:path"
 import { setTimeout as delay } from "node:timers/promises"
 
-import Dockerode from "dockerode"
+import type Dockerode from "dockerode"
 
 import {
   defineSandboxProvider,
   type SandboxAcquireRequest,
   type SandboxLease,
   type SandboxProvider,
-} from "@aml/sdk"
+} from "@aml-jsx/sdk"
 
-import type {
-  DockerCommandResult,
-  DockerExecOptions,
-  DockerSandboxHandle,
-} from "./docker-sandbox-handle.js"
+import type { DockerCommandResult, DockerExecOptions, DockerSandboxHandle } from "./docker-sandbox-handle.js"
 import { followDockerBuildProgress } from "./docker-build-progress.js"
 import { captureDockerCommandOutput } from "./docker-command-output.js"
 import {
@@ -48,9 +37,7 @@ interface HostNamespaceProbe {
   readonly token: string
 }
 
-const AMBIGUOUS_CREATE_RECONCILIATION_DELAYS = [
-  0, 50, 100, 250, 500, 1_000,
-] as const
+const AMBIGUOUS_CREATE_RECONCILIATION_DELAYS = [0, 50, 100, 250, 500, 1_000] as const
 
 /**
  * Creates a lazy Docker provider with an optional standalone host fallback.
@@ -59,14 +46,8 @@ const AMBIGUOUS_CREATE_RECONCILIATION_DELAYS = [
  * `<Sandbox>` uses its active Workspace first, creates one hardened container,
  * and leaves release ownership with AML.
  */
-export function dockerSandbox(
-  options: DockerSandboxOptions,
-): Readonly<SandboxProvider<DockerSandboxHandle>> {
-  return defineSandboxProvider(
-    new DockerSandboxProvider(
-      parseDockerSandboxOptions(options),
-    ),
-  )
+export function dockerSandbox(options: DockerSandboxOptions): Readonly<SandboxProvider<DockerSandboxHandle>> {
+  return defineSandboxProvider(new DockerSandboxProvider(parseDockerSandboxOptions(options)))
 }
 
 /**
@@ -75,9 +56,7 @@ export function dockerSandbox(
  * Dockerode owns protocol transport, Engine errors, exec streams, and builds.
  * This adapter owns only the AML policy mapping and lease lifecycle.
  */
-class DockerSandboxProvider
-  implements SandboxProvider<DockerSandboxHandle>
-{
+class DockerSandboxProvider implements SandboxProvider<DockerSandboxHandle> {
   readonly #options: Readonly<ParsedDockerSandboxOptions>
   #builtImage: string | undefined
   readonly name = "docker"
@@ -92,23 +71,16 @@ class DockerSandboxProvider
   /**
    * Creates and starts one hardened container for an AML Sandbox lease.
    */
-  async acquire(
-    request: SandboxAcquireRequest,
-  ): Promise<SandboxLease<DockerSandboxHandle>> {
+  async acquire(request: SandboxAcquireRequest): Promise<SandboxLease<DockerSandboxHandle>> {
     request.signal.throwIfAborted()
     const resolvedSource = await this.#resolveSource(request)
     const image = await this.#resolveImage(request.signal)
     let namespaceProbe: Readonly<HostNamespaceProbe>
 
     try {
-      namespaceProbe = await createHostNamespaceProbe(
-        resolvedSource.source,
-      )
+      namespaceProbe = await createHostNamespaceProbe(resolvedSource.source)
     } catch (cause) {
-      throw new Error(
-        "Docker Sandbox selected source must be writable for namespace verification",
-        { cause },
-      )
+      throw new Error("Docker Sandbox selected source must be writable for namespace verification", { cause })
     }
 
     if (request.signal.aborted) {
@@ -117,7 +89,7 @@ class DockerSandboxProvider
       } catch (cleanupError) {
         throw new AggregateError(
           [request.signal.reason, cleanupError],
-          "Docker Sandbox cancellation and namespace-probe cleanup both failed",
+          "Docker Sandbox cancellation and namespace-probe cleanup both failed"
         )
       }
 
@@ -136,10 +108,7 @@ class DockerSandboxProvider
         AttachStderr: false,
         AttachStdin: false,
         AttachStdout: false,
-        Cmd: [
-          "-c",
-          "trap 'exit 0' TERM INT; while :; do sleep 3600 & wait $!; done",
-        ],
+        Cmd: ["-c", "trap 'exit 0' TERM INT; while :; do sleep 3600 & wait $!; done"],
         Entrypoint: ["sh"],
         HostConfig: {
           AutoRemove: true,
@@ -190,7 +159,7 @@ class DockerSandboxProvider
           : new Error("Docker Sandbox creation failed", {
               cause: error,
             }),
-        !hasDockerStatusCode(error),
+        !hasDockerStatusCode(error)
       )
     }
 
@@ -200,18 +169,14 @@ class DockerSandboxProvider
         containerName,
         namespaceProbe,
         request.signal.reason,
-        false,
+        false
       )
     }
 
     try {
       await container.start({ abortSignal: request.signal })
       request.signal.throwIfAborted()
-      await this.#verifyHostNamespace(
-        container,
-        request,
-        namespaceProbe.token,
-      )
+      await this.#verifyHostNamespace(container, request, namespaceProbe.token)
       await removeHostNamespaceProbe(namespaceProbe)
     } catch (error) {
       return await this.#throwAfterAcquisitionCleanup(
@@ -220,13 +185,10 @@ class DockerSandboxProvider
         namespaceProbe,
         request.signal.aborted
           ? request.signal.reason
-          : new Error(
-              "Docker Sandbox startup or namespace verification failed",
-              {
+          : new Error("Docker Sandbox startup or namespace verification failed", {
               cause: error,
-              },
-            ),
-        false,
+            }),
+        false
       )
     }
 
@@ -247,54 +209,33 @@ class DockerSandboxProvider
   async #verifyHostNamespace(
     container: Dockerode.Container,
     request: SandboxAcquireRequest,
-    expectedToken: string,
+    expectedToken: string
   ): Promise<void> {
     const result = await this.#executeInContainer(
       container,
       request,
-      [
-        "sh",
-        "-c",
-        "IFS= read -r value < /run/aml-host-namespace/identity; printf %s \"$value\"",
-      ],
+      ["sh", "-c", 'IFS= read -r value < /run/aml-host-namespace/identity; printf %s "$value"'],
       {
         cwd: request.cwd,
         signal: request.signal,
       },
-      128,
+      128
     )
 
-    if (
-      result.exitCode !== 0 ||
-      result.stderr !== "" ||
-      result.stdout !== expectedToken
-    ) {
-      throw new Error(
-        "Docker daemon does not share AML's workspace filesystem namespace",
-      )
+    if (result.exitCode !== 0 || result.stderr !== "" || result.stdout !== expectedToken) {
+      throw new Error("Docker daemon does not share AML's workspace filesystem namespace")
     }
   }
 
   /**
    * Produces the opaque capability consumed by compatible Agent adapters.
    */
-  #createHandle(
-    container: Dockerode.Container,
-    request: SandboxAcquireRequest,
-  ): Readonly<DockerSandboxHandle> {
+  #createHandle(container: Dockerode.Container, request: SandboxAcquireRequest): Readonly<DockerSandboxHandle> {
     return Object.freeze({
       access: request.access,
       containerId: container.id,
-      exec: async (
-        command: readonly string[],
-        options: DockerExecOptions,
-      ) =>
-        await this.#executeInContainer(
-          container,
-          request,
-          command,
-          options,
-        ),
+      exec: async (command: readonly string[], options: DockerExecOptions) =>
+        await this.#executeInContainer(container, request, command, options),
       kind: "docker",
       root: request.root,
     })
@@ -308,21 +249,16 @@ class DockerSandboxProvider
     request: SandboxAcquireRequest,
     command: readonly string[],
     options: DockerExecOptions,
-    maxOutputBytes = this.#options.maxOutputBytes,
+    maxOutputBytes = this.#options.maxOutputBytes
   ): Promise<DockerCommandResult> {
     const capturedCommand = captureContainerCommand(command)
 
     if (typeof options !== "object" || options === null) {
-      throw new TypeError(
-        "Docker Sandbox command options with an effective cwd are required",
-      )
+      throw new TypeError("Docker Sandbox command options with an effective cwd are required")
     }
 
     const signal = options.signal ?? request.signal
-    const workingDirectory = toContainerPath(
-      request.root,
-      options.cwd,
-    )
+    const workingDirectory = toContainerPath(request.root, options.cwd)
     signal.throwIfAborted()
 
     try {
@@ -339,20 +275,14 @@ class DockerSandboxProvider
         Tty: false,
         abortSignal: signal,
       })
-      const output = await captureDockerCommandOutput(
-        this.#options.client,
-        stream,
-        maxOutputBytes,
-      )
+      const output = await captureDockerCommandOutput(this.#options.client, stream, maxOutputBytes)
       const inspection = await execution.inspect({
         abortSignal: signal,
       })
       signal.throwIfAborted()
 
       if (inspection.ExitCode === null) {
-        throw new Error(
-          "Docker Sandbox command ended without an exit code",
-        )
+        throw new Error("Docker Sandbox command ended without an exit code")
       }
 
       return Object.freeze({
@@ -398,12 +328,9 @@ class DockerSandboxProvider
           rm: true,
           t: this.#options.buildTag,
           version: "2",
-        },
+        }
       )
-      await followDockerBuildProgress(
-        this.#options.client,
-        stream,
-      )
+      await followDockerBuildProgress(this.#options.client, stream)
       signal.throwIfAborted()
     } catch (cause) {
       signal.throwIfAborted()
@@ -421,17 +348,13 @@ class DockerSandboxProvider
   /**
    * Resolves the Dockerfile relative to its real build context.
    */
-  async #resolveBuildContext(
-    signal: AbortSignal,
-  ): Promise<ResolvedBuildContext> {
+  async #resolveBuildContext(signal: AbortSignal): Promise<ResolvedBuildContext> {
     const context = await realpath(this.#options.buildContext!)
     signal.throwIfAborted()
     const contextStat = await stat(context)
 
     if (!contextStat.isDirectory()) {
-      throw new TypeError(
-        "Docker Sandbox build context must be a directory",
-      )
+      throw new TypeError("Docker Sandbox build context must be a directory")
     }
 
     const dockerfile = await realpath(this.#options.dockerfile!)
@@ -454,26 +377,19 @@ class DockerSandboxProvider
   /**
    * Resolves the selected bind mount and cwd through host symlinks.
    */
-  async #resolveSource(
-    request: SandboxAcquireRequest,
-  ): Promise<ResolvedSource> {
+  async #resolveSource(request: SandboxAcquireRequest): Promise<ResolvedSource> {
     // An active durable materialization always wins over the provider's
     // standalone fallback; silently mounting different files would violate
     // the Workspace-to-Sandbox attachment contract.
-    const workspaceDirectory =
-      request.workspace?.directory ?? this.#options.workspace
+    const workspaceDirectory = request.workspace?.directory ?? this.#options.workspace
 
     if (workspaceDirectory === undefined) {
-      throw new TypeError(
-        "Docker Sandbox requires an active Workspace or configured workspace",
-      )
+      throw new TypeError("Docker Sandbox requires an active Workspace or configured workspace")
     }
 
     const workspace = await realpath(workspaceDirectory)
     request.signal.throwIfAborted()
-    const source = await realpath(
-      path.resolve(workspace, request.root),
-    )
+    const source = await realpath(path.resolve(workspace, request.root))
     request.signal.throwIfAborted()
     assertPathWithin(workspace, source, "Sandbox root")
     const sourceStat = await stat(source)
@@ -482,9 +398,7 @@ class DockerSandboxProvider
       throw new TypeError("Docker Sandbox root must be a directory")
     }
 
-    const cwd = await realpath(
-      path.resolve(workspace, request.cwd),
-    )
+    const cwd = await realpath(path.resolve(workspace, request.cwd))
     request.signal.throwIfAborted()
     assertPathWithin(source, cwd, "Sandbox cwd")
     const cwdStat = await stat(cwd)
@@ -499,9 +413,7 @@ class DockerSandboxProvider
   /**
    * Removes a container and treats an already-absent resource as released.
    */
-  async #removeContainer(
-    container: Dockerode.Container,
-  ): Promise<void> {
+  async #removeContainer(container: Dockerode.Container): Promise<void> {
     try {
       await container.remove({ force: true })
     } catch (cause) {
@@ -509,10 +421,7 @@ class DockerSandboxProvider
         return
       }
 
-      throw new Error(
-        `Docker Sandbox "${container.id}" cleanup failed`,
-        { cause },
-      )
+      throw new Error(`Docker Sandbox "${container.id}" cleanup failed`, { cause })
     }
   }
 
@@ -524,7 +433,7 @@ class DockerSandboxProvider
     containerName: string,
     namespaceProbe: HostNamespaceProbe,
     primaryError: unknown,
-    reconcileByName: boolean,
+    reconcileByName: boolean
   ): Promise<never> {
     const cleanupErrors: unknown[] = []
 
@@ -534,9 +443,7 @@ class DockerSandboxProvider
       } else if (reconcileByName) {
         await this.#reconcileContainerName(containerName)
       } else {
-        await this.#removeContainer(
-          this.#options.client.getContainer(containerName),
-        )
+        await this.#removeContainer(this.#options.client.getContainer(containerName))
       }
     } catch (cleanupError) {
       cleanupErrors.push(cleanupError)
@@ -549,10 +456,7 @@ class DockerSandboxProvider
     }
 
     if (cleanupErrors.length > 0) {
-      throw new AggregateError(
-        [primaryError, ...cleanupErrors],
-        "Docker Sandbox acquisition and cleanup both failed",
-      )
+      throw new AggregateError([primaryError, ...cleanupErrors], "Docker Sandbox acquisition and cleanup both failed")
     }
 
     throw primaryError
@@ -561,9 +465,7 @@ class DockerSandboxProvider
   /**
    * Rechecks an ambiguous create failure before declaring its name absent.
    */
-  async #reconcileContainerName(
-    containerName: string,
-  ): Promise<void> {
+  async #reconcileContainerName(containerName: string): Promise<void> {
     const container = this.#options.client.getContainer(containerName)
 
     // A transport error cannot tell whether Engine committed the request. The
@@ -580,16 +482,13 @@ class DockerSandboxProvider
         return
       } catch (error) {
         if (!isDockerNotFound(error)) {
-          throw new Error(
-            `Docker Sandbox "${containerName}" reconciliation failed`,
-            { cause: error },
-          )
+          throw new Error(`Docker Sandbox "${containerName}" reconciliation failed`, { cause: error })
         }
       }
     }
 
     throw new Error(
-      `Docker Sandbox "${containerName}" remained absent during bounded reconciliation; cleanup cannot be proven`,
+      `Docker Sandbox "${containerName}" remained absent during bounded reconciliation; cleanup cannot be proven`
     )
   }
 }
@@ -597,13 +496,9 @@ class DockerSandboxProvider
 /**
  * Creates an ephemeral identity mount beneath the exact selected source.
  */
-async function createHostNamespaceProbe(
-  source: string,
-): Promise<Readonly<HostNamespaceProbe>> {
+async function createHostNamespaceProbe(source: string): Promise<Readonly<HostNamespaceProbe>> {
   const token = randomUUID()
-  const directory = await mkdtemp(
-    path.join(source, ".aml-docker-namespace-"),
-  )
+  const directory = await mkdtemp(path.join(source, ".aml-docker-namespace-"))
 
   try {
     // The container runs as a non-root UID, so it needs traverse/read access
@@ -616,10 +511,7 @@ async function createHostNamespaceProbe(
     try {
       await rm(directory, { force: true, recursive: true })
     } catch (cleanupError) {
-      throw new AggregateError(
-        [primaryError, cleanupError],
-        "Docker namespace probe setup and cleanup both failed",
-      )
+      throw new AggregateError([primaryError, cleanupError], "Docker namespace probe setup and cleanup both failed")
     }
 
     throw primaryError
@@ -631,33 +523,21 @@ async function createHostNamespaceProbe(
 /**
  * Removes the host-side identity mount after startup or failed acquisition.
  */
-async function removeHostNamespaceProbe(
-  probe: HostNamespaceProbe,
-): Promise<void> {
+async function removeHostNamespaceProbe(probe: HostNamespaceProbe): Promise<void> {
   await rm(probe.directory, { force: true, recursive: true })
 }
 
 /**
  * Copies and validates model-controlled command arguments.
  */
-function captureContainerCommand(
-  value: readonly string[],
-): readonly string[] {
+function captureContainerCommand(value: readonly string[]): readonly string[] {
   if (!Array.isArray(value) || value.length === 0) {
-    throw new TypeError(
-      "Docker Sandbox command must contain an executable",
-    )
+    throw new TypeError("Docker Sandbox command must contain an executable")
   }
 
   const command = value.map((argument, index) => {
-    if (
-      typeof argument !== "string" ||
-      argument.includes("\0") ||
-      (index === 0 && argument.length === 0)
-    ) {
-      throw new TypeError(
-        "Docker Sandbox command contains an invalid argument",
-      )
+    if (typeof argument !== "string" || argument.includes("\0") || (index === 0 && argument.length === 0)) {
+      throw new TypeError("Docker Sandbox command contains an invalid argument")
     }
 
     return argument
@@ -671,18 +551,12 @@ function captureContainerCommand(
  */
 function toContainerPath(root: string, cwd: unknown): string {
   if (typeof cwd !== "string" || cwd.length === 0) {
-    throw new TypeError(
-      "Docker Sandbox cwd must be a non-empty string",
-    )
+    throw new TypeError("Docker Sandbox cwd must be a non-empty string")
   }
 
   const relative = path.posix.relative(root, cwd)
 
-  if (
-    path.posix.isAbsolute(relative) ||
-    relative === ".." ||
-    relative.startsWith("../")
-  ) {
+  if (path.posix.isAbsolute(relative) || relative === ".." || relative.startsWith("../")) {
     throw new TypeError("Docker Sandbox cwd cannot escape its root")
   }
 
@@ -692,45 +566,24 @@ function toContainerPath(root: string, cwd: unknown): string {
 /**
  * Enforces real host containment after symlink resolution.
  */
-function assertPathWithin(
-  root: string,
-  candidate: string,
-  label: string,
-): void {
+function assertPathWithin(root: string, candidate: string, label: string): void {
   const relative = path.relative(root, candidate)
 
-  if (
-    path.isAbsolute(relative) ||
-    relative === ".." ||
-    relative.startsWith(`..${path.sep}`)
-  ) {
-    throw new TypeError(
-      `${label} resolves outside its configured boundary`,
-    )
+  if (path.isAbsolute(relative) || relative === ".." || relative.startsWith(`..${path.sep}`)) {
+    throw new TypeError(`${label} resolves outside its configured boundary`)
   }
 }
-
 
 /**
  * Recognizes Docker Engine's idempotent already-absent cleanup result.
  */
 function isDockerNotFound(value: unknown): boolean {
-  return (
-    typeof value === "object" &&
-    value !== null &&
-    "statusCode" in value &&
-    value.statusCode === 404
-  )
+  return typeof value === "object" && value !== null && "statusCode" in value && value.statusCode === 404
 }
 
 /**
  * Distinguishes Engine responses from transport failures with unknown outcome.
  */
 function hasDockerStatusCode(value: unknown): boolean {
-  return (
-    typeof value === "object" &&
-    value !== null &&
-    "statusCode" in value &&
-    typeof value.statusCode === "number"
-  )
+  return typeof value === "object" && value !== null && "statusCode" in value && typeof value.statusCode === "number"
 }

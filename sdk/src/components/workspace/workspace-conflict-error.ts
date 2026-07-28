@@ -20,10 +20,7 @@ export class WorkspaceConflictError extends Error {
   /**
    * Recognizes the public structural contract across duplicated SDK packages.
    */
-  static is(
-    value: unknown,
-    workspaceId?: string,
-  ): value is WorkspaceConflictError {
+  static is(value: unknown, workspaceId?: string): value is WorkspaceConflictError {
     if (typeof value !== "object" || value === null) {
       return false
     }
@@ -47,8 +44,7 @@ export class WorkspaceConflictError extends Error {
     return (
       code === "AML_WORKSPACE_CONFLICT" &&
       typeof capturedWorkspaceId === "string" &&
-      (workspaceId === undefined ||
-        capturedWorkspaceId === workspaceId)
+      (workspaceId === undefined || capturedWorkspaceId === workspaceId)
     )
   }
 }

@@ -28,11 +28,7 @@ export class ContextScope {
   readonly #parent: ContextScope | undefined
   readonly #value: unknown
 
-  private constructor(
-    parent?: ContextScope,
-    definition?: RegisteredContext,
-    value?: unknown,
-  ) {
+  private constructor(parent?: ContextScope, definition?: RegisteredContext, value?: unknown) {
     this.#definition = definition
     this.#parent = parent
     this.#value = value
@@ -42,10 +38,7 @@ export class ContextScope {
   /**
    * Returns a new lexical scope with one exact Context identity shadowed.
    */
-  provide(
-    definition: RegisteredContext,
-    value: unknown,
-  ): ContextScope {
+  provide(definition: RegisteredContext, value: unknown): ContextScope {
     return new ContextScope(this, definition, value)
   }
 

@@ -1,10 +1,5 @@
 import { z } from "zod"
-import {
-  describe,
-  expect,
-  expectTypeOf,
-  it,
-} from "vitest"
+import { describe, expect, expectTypeOf, it } from "vitest"
 
 import { Agent } from "../src/components/agent/agent.js"
 import type { AgentExecutionContext } from "../src/components/agent/agent-execution-context.js"
@@ -24,9 +19,7 @@ import { DeterministicAgentProvider } from "../src/testing/deterministic-agent-p
 
 describe("AML Context", () => {
   it("provides one exact dependency identity to descendant components", async () => {
-    const Session = createContext<{ readonly userId: string }>(
-      "Session",
-    )
+    const Session = createContext<{ readonly userId: string }>("Session")
     const session = { userId: "user-42" }
     let observed: unknown
 
@@ -42,8 +35,8 @@ describe("AML Context", () => {
       new AmlRuntime().evaluate(
         <Session.Provider value={session}>
           <Reader />
-        </Session.Provider>,
-      ),
+        </Session.Provider>
+      )
     ).resolves.toBe("user:user-42")
     expect(observed).toBe(session)
     expect(Object.isFrozen(session)).toBe(false)
@@ -64,8 +57,8 @@ describe("AML Context", () => {
             <Reader />
           </Session.Provider>
           :<Reader />
-        </Session.Provider>,
-      ),
+        </Session.Provider>
+      )
     ).resolves.toBe("outer:inner:outer")
   })
 
@@ -81,35 +74,26 @@ describe("AML Context", () => {
       new AmlRuntime().evaluate(
         <First.Provider value="first-provided">
           <Reader />
-        </First.Provider>,
-      ),
+        </First.Provider>
+      )
     ).resolves.toBe("first-provided:second-default")
   })
 
   it("distinguishes omitted defaults from explicit undefined", async () => {
     const Required = createContext<string>("Required")
-    const Optional = createContext<string | undefined>(
-      "Optional",
-      undefined,
-    )
+    const Optional = createContext<string | undefined>("Optional", undefined)
 
     function ReadOptional() {
-      return useContext(Optional) === undefined
-        ? "undefined-default"
-        : "unexpected"
+      return useContext(Optional) === undefined ? "undefined-default" : "unexpected"
     }
 
     function ReadRequired() {
       return useContext(Required)
     }
 
-    await expect(
-      new AmlRuntime().evaluate(<ReadOptional />),
-    ).resolves.toBe("undefined-default")
-    await expect(
-      new AmlRuntime().evaluate(<ReadRequired />),
-    ).rejects.toThrow(
-      'Context "Required" has no Provider or default value',
+    await expect(new AmlRuntime().evaluate(<ReadOptional />)).resolves.toBe("undefined-default")
+    await expect(new AmlRuntime().evaluate(<ReadRequired />)).rejects.toThrow(
+      'Context "Required" has no Provider or default value'
     )
   })
 
@@ -118,9 +102,7 @@ describe("AML Context", () => {
     const provider = new DeterministicAgentProvider({
       respond(request) {
         expect(request.system).toBe("system:careful")
-        expect(request.tools.map((tool) => tool.name)).toEqual([
-          "session_lookup",
-        ])
+        expect(request.tools.map(tool => tool.name)).toEqual(["session_lookup"])
         return { text: request.prompt }
       },
     })
@@ -134,10 +116,7 @@ describe("AML Context", () => {
         name: "session_lookup",
       })
 
-      return [
-        <System>system:{instruction}</System>,
-        <Tool use={lookup} />,
-      ]
+      return [<System>system:{instruction}</System>, <Tool use={lookup} />]
     }
 
     await expect(
@@ -147,8 +126,8 @@ describe("AML Context", () => {
             <Capabilities />
           </Instructions.Provider>
           act
-        </Agent>,
-      ),
+        </Agent>
+      )
     ).resolves.toBe("act")
   })
 
@@ -166,7 +145,7 @@ describe("AML Context", () => {
       const shadowed = await evaluate(
         <Session.Provider value="nested">
           <Reader />
-        </Session.Provider>,
+        </Session.Provider>
       )
 
       return `${inherited}:${shadowed}:${useContext(Session)}`
@@ -176,8 +155,8 @@ describe("AML Context", () => {
       new AmlRuntime().evaluate(
         <Session.Provider value="root">
           <Workflow />
-        </Session.Provider>,
-      ),
+        </Session.Provider>
+      )
     ).resolves.toBe("root:nested:root")
     expect(renders).toBe(1)
   })
@@ -185,15 +164,11 @@ describe("AML Context", () => {
   it("isolates concurrent nested branches while preserving their parent binding", async () => {
     const Session = createContext<string>("Session")
     let releaseFirst: (() => void) | undefined
-    const firstGate = new Promise<void>((resolve) => {
+    const firstGate = new Promise<void>(resolve => {
       releaseFirst = resolve
     })
 
-    async function Reader({
-      gate,
-    }: {
-      readonly gate?: Promise<void>
-    }) {
+    async function Reader({ gate }: { readonly gate?: Promise<void> }) {
       const before = useContext(Session)
       await gate
       return `${before}/${useContext(Session)}`
@@ -204,12 +179,12 @@ describe("AML Context", () => {
         evaluate(
           <Session.Provider value="first">
             <Reader gate={firstGate} />
-          </Session.Provider>,
+          </Session.Provider>
         ),
         evaluate(
           <Session.Provider value="second">
             <Reader />
-          </Session.Provider>,
+          </Session.Provider>
         ),
       ])
 
@@ -225,8 +200,8 @@ describe("AML Context", () => {
       new AmlRuntime().evaluate(
         <Session.Provider value="parent">
           <Workflow />
-        </Session.Provider>,
-      ),
+        </Session.Provider>
+      )
     ).resolves.toBe("first/first:second/second:parent")
   })
 
@@ -244,12 +219,12 @@ describe("AML Context", () => {
       runtime.evaluate(
         <Session.Provider value="one">
           <Reader />
-        </Session.Provider>,
+        </Session.Provider>
       ),
       runtime.evaluate(
         <Session.Provider value="two">
           <Reader />
-        </Session.Provider>,
+        </Session.Provider>
       ),
     ])
 
@@ -280,7 +255,7 @@ describe("AML Context", () => {
             <Prompt />
           </Agent>
         </Session.Provider>,
-        Result,
+        Result
       )
       expectTypeOf(result).toEqualTypeOf<{
         session: string
@@ -288,11 +263,7 @@ describe("AML Context", () => {
       return result.session
     }
 
-    await expect(
-      new AmlRuntime({ agentProvider: provider }).evaluate(
-        <Workflow />,
-      ),
-    ).resolves.toBe("provided")
+    await expect(new AmlRuntime({ agentProvider: provider }).evaluate(<Workflow />)).resolves.toBe("provided")
   })
 
   it("preserves Context while selecting a Loop Agent wrapper", async () => {
@@ -317,8 +288,8 @@ describe("AML Context", () => {
             </Session.Provider>
           )}
           schema={State}
-        />,
-      ),
+        />
+      )
     ).resolves.toBe("loop:iteration")
   })
 
@@ -330,29 +301,19 @@ describe("AML Context", () => {
         return ["order-1", "order-2"]
       },
     }
-    const SessionRepository = createContext<
-      typeof repository
-    >("SessionRepository")
+    const SessionRepository = createContext<typeof repository>("SessionRepository")
     const events: AmlTraceEvent[] = []
-    const trace = Object.assign(
-      (event: AmlTraceEvent) => events.push(event),
-      { captureContent: true as const },
-    )
+    const trace = Object.assign((event: AmlTraceEvent) => events.push(event), { captureContent: true as const })
     let toolRepository: unknown
     const provider = new DeterministicAgentProvider({
       async respond(request, context) {
-        const tool = request.tools.find(
-          (candidate) => candidate.name === "load_session_orders",
-        )
+        const tool = request.tools.find(candidate => candidate.name === "load_session_orders")
 
         if (tool?.kind !== "javascript") {
           throw new Error("session Tool was not granted")
         }
 
-        const result = await tool.execute(
-          {},
-          toolContext(context),
-        )
+        const result = await tool.execute({}, toolContext(context))
         return { text: JSON.stringify(result) }
       },
     })
@@ -382,17 +343,13 @@ describe("AML Context", () => {
       }).evaluate(
         <SessionRepository.Provider value={repository}>
           <SessionAgent />
-        </SessionRepository.Provider>,
-      ),
+        </SessionRepository.Provider>
+      )
     ).resolves.toBe('["order-1","order-2"]')
 
     expect(toolRepository).toBe(repository)
-    expect(provider.calls[0]?.request.prompt).toBe(
-      "Load the active session orders.",
-    )
-    expect(JSON.stringify(provider.calls[0]?.request)).not.toContain(
-      secret,
-    )
+    expect(provider.calls[0]?.request.prompt).toBe("Load the active session orders.")
+    expect(JSON.stringify(provider.calls[0]?.request)).not.toContain(secret)
     expect(JSON.stringify(events)).not.toContain(secret)
   })
 
@@ -401,7 +358,7 @@ describe("AML Context", () => {
     const providerErrors: unknown[] = []
     const detachedErrors: unknown[] = []
     let detachedDone: (() => void) | undefined
-    const detached = new Promise<void>((resolve) => {
+    const detached = new Promise<void>(resolve => {
       detachedDone = resolve
     })
     const provider = new DeterministicAgentProvider({
@@ -434,30 +391,24 @@ describe("AML Context", () => {
       new AmlRuntime({ agentProvider: provider }).evaluate(
         <Session.Provider value="provided">
           <Workflow />
-        </Session.Provider>,
-      ),
+        </Session.Provider>
+      )
     ).resolves.toBe("done")
     await detached
 
     expect(providerErrors).toHaveLength(1)
     expect(detachedErrors).toHaveLength(1)
     expect(providerErrors[0]).toMatchObject({
-      message:
-        "useContext() is only available while an AML component is active",
+      message: "useContext() is only available while an AML component is active",
     })
     expect(detachedErrors[0]).toMatchObject({
-      message:
-        "useContext() is only available while an AML component is active",
+      message: "useContext() is only available while an AML component is active",
     })
   })
 
   it("rejects invalid definitions, lookalikes, and Provider props", async () => {
-    expect(() => createContext("")).toThrow(
-      "Context name must be a non-empty normalized string",
-    )
-    expect(() => createContext(" Session ")).toThrow(
-      "Context name must be a non-empty normalized string",
-    )
+    expect(() => createContext("")).toThrow("Context name must be a non-empty normalized string")
+    expect(() => createContext(" Session ")).toThrow("Context name must be a non-empty normalized string")
 
     const Session = createContext<string>("Session")
     const fake = {
@@ -469,17 +420,11 @@ describe("AML Context", () => {
       return useContext(fake)
     }
 
-    await expect(
-      new AmlRuntime().evaluate(<ReadFake />),
-    ).rejects.toThrow(
-      "useContext() requires a Context returned by createContext()",
+    await expect(new AmlRuntime().evaluate(<ReadFake />)).rejects.toThrow(
+      "useContext() requires a Context returned by createContext()"
     )
-    await expect(
-      new AmlRuntime().evaluate(
-        jsx(Session.Provider, {} as never),
-      ),
-    ).rejects.toThrow(
-      "<Session.Provider> requires a value prop",
+    await expect(new AmlRuntime().evaluate(jsx(Session.Provider, {} as never))).rejects.toThrow(
+      "<Session.Provider> requires a value prop"
     )
   })
 
@@ -496,30 +441,23 @@ describe("AML Context", () => {
       const node = forgedProviderNode(
         Session,
         reads,
-        boundary === "evaluation"
-          ? <Reader />
-          : (
-              <Agent>
-                <Reader />
-              </Agent>
-            ),
+        boundary === "evaluation" ? (
+          <Reader />
+        ) : (
+          <Agent>
+            <Reader />
+          </Agent>
+        )
       )
       const provider = new DeterministicAgentProvider()
       const tree =
-        boundary === "evaluation"
-          ? node
-          : (
-              <Loop
-                initial={{ done: true }}
-                name="hostile-context-loop"
-                render={() => node}
-                schema={State}
-              />
-            )
+        boundary === "evaluation" ? (
+          node
+        ) : (
+          <Loop initial={{ done: true }} name="hostile-context-loop" render={() => node} schema={State} />
+        )
 
-      await expect(
-        new AmlRuntime({ agentProvider: provider }).evaluate(tree),
-      ).resolves.toBe("provided")
+      await expect(new AmlRuntime({ agentProvider: provider }).evaluate(tree)).resolves.toBe("provided")
       expect(reads).toEqual(["value", "children"])
     }
   })
@@ -527,9 +465,7 @@ describe("AML Context", () => {
   it("rejects useContext outside an active component even with a default", () => {
     const Session = createContext("Session", "fallback")
 
-    expect(() => useContext(Session)).toThrow(
-      "useContext() is only available while an AML component is active",
-    )
+    expect(() => useContext(Session)).toThrow("useContext() is only available while an AML component is active")
   })
 })
 
@@ -539,11 +475,7 @@ describe("AML Context", () => {
  * AmlNode's realm-wide brand deliberately supports physical package copies, so
  * runtime boundaries must not assume every accepted descriptor has plain props.
  */
-function forgedProviderNode(
-  context: AmlContext<string>,
-  reads: string[],
-  children: AmlRenderable,
-): AmlRenderable {
+function forgedProviderNode(context: AmlContext<string>, reads: string[], children: AmlRenderable): AmlRenderable {
   const props = Object.defineProperties(
     {},
     {
@@ -561,11 +493,11 @@ function forgedProviderNode(
           return "provided"
         },
       },
-    },
+    }
   )
 
   return {
-    $$typeof: Symbol.for("@aml/sdk/node"),
+    $$typeof: Symbol.for("@aml-jsx/sdk/node"),
     props,
     type: context.Provider,
   } as unknown as AmlRenderable
@@ -574,9 +506,7 @@ function forgedProviderNode(
 /**
  * Narrows provider execution context to the JavaScript Tool contract.
  */
-function toolContext(
-  context: AgentExecutionContext,
-): Readonly<{
+function toolContext(context: AgentExecutionContext): Readonly<{
   signal: AbortSignal
   trace: AgentExecutionContext["trace"]
 }> {

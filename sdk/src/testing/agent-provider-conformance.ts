@@ -7,9 +7,7 @@ import { createAgentExecutionContext } from "./create-agent-execution-context.js
 /**
  * Exercises the provider-neutral call boundary without a test-runner dependency.
  */
-export async function agentProviderConformance(
-  provider: AgentProvider,
-): Promise<void> {
+export async function agentProviderConformance(provider: AgentProvider): Promise<void> {
   const validatedProvider = validateAgentProvider(provider)
 
   const trace = Object.freeze({
@@ -29,17 +27,12 @@ export async function agentProviderConformance(
   const context = createAgentExecutionContext({
     trace,
   })
-  const response: AgentResponse = await Reflect.apply(
-    validatedProvider.run,
-    validatedProvider.provider,
-    [request, context],
-  )
+  const response: AgentResponse = await Reflect.apply(validatedProvider.run, validatedProvider.provider, [
+    request,
+    context,
+  ])
 
-  if (
-    typeof response !== "object" ||
-    response === null ||
-    typeof response.text !== "string"
-  ) {
+  if (typeof response !== "object" || response === null || typeof response.text !== "string") {
     throw new TypeError("Agent provider must return a text response")
   }
 }

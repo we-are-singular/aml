@@ -1,6 +1,4 @@
-const AML_MCP_SERVER_REGISTRY = Symbol.for(
-  "@aml/sdk/mcp-server-registry",
-)
+const AML_MCP_SERVER_REGISTRY = Symbol.for("@aml-jsx/sdk/mcp-server-registry")
 
 interface AmlMcpServerGlobal {
   [AML_MCP_SERVER_REGISTRY]?: WeakMap<object, AmlMcpServer>
@@ -29,9 +27,7 @@ export interface AmlMcpStreamableHttpTransport {
 /**
  * Complete immutable transport normalized by `defineMcpServer()`.
  */
-export type AmlMcpTransport =
-  | AmlMcpStdioTransport
-  | AmlMcpStreamableHttpTransport
+export type AmlMcpTransport = AmlMcpStdioTransport | AmlMcpStreamableHttpTransport
 
 /**
  * Exact immutable MCP server identity accepted by `<Mcp use>`.
@@ -70,12 +66,8 @@ export function registerAmlMcpServer(server: AmlMcpServer): void {
 /**
  * Recovers only an exact identity previously created by `defineMcpServer()`.
  */
-export function registeredAmlMcpServer(
-  value: unknown,
-): AmlMcpServer | undefined {
-  return typeof value === "object" && value !== null
-    ? registry.get(value)
-    : undefined
+export function registeredAmlMcpServer(value: unknown): AmlMcpServer | undefined {
+  return typeof value === "object" && value !== null ? registry.get(value) : undefined
 }
 
 /**
@@ -87,9 +79,7 @@ function mcpServerRegistry(): WeakMap<object, AmlMcpServer> {
 
   if (existing !== undefined) {
     if (!(existing instanceof WeakMap)) {
-      throw new TypeError(
-        "AML MCP server registry has an invalid global value",
-      )
+      throw new TypeError("AML MCP server registry has an invalid global value")
     }
 
     return existing

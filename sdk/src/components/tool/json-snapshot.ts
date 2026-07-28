@@ -61,11 +61,7 @@ export class JsonSnapshot {
           throw new TypeError(`${frame.label} contains a sparse array`)
         }
 
-        const child = JsonSnapshot.#start(
-          Reflect.get(frame.source, index),
-          `${frame.label}[${index}]`,
-          active,
-        )
+        const child = JsonSnapshot.#start(Reflect.get(frame.source, index), `${frame.label}[${index}]`, active)
         frame.target.push(child.value)
 
         if (child.frame) {
@@ -85,11 +81,7 @@ export class JsonSnapshot {
 
       const key = frame.keys[frame.index]!
       frame.index += 1
-      const child = JsonSnapshot.#start(
-        Reflect.get(frame.source, key),
-        `${frame.label}.${key}`,
-        active,
-      )
+      const child = JsonSnapshot.#start(Reflect.get(frame.source, key), `${frame.label}.${key}`, active)
 
       // Assignment to __proto__ mutates an ordinary object's prototype.
       Object.defineProperty(frame.target, key, {
@@ -110,16 +102,8 @@ export class JsonSnapshot {
   /**
    * Validates one value and creates a traversal frame for containers.
    */
-  static #start(
-    value: unknown,
-    label: string,
-    active: Set<object>,
-  ): SnapshotValue {
-    if (
-      value === null ||
-      typeof value === "string" ||
-      typeof value === "boolean"
-    ) {
+  static #start(value: unknown, label: string, active: Set<object>): SnapshotValue {
+    if (value === null || typeof value === "string" || typeof value === "boolean") {
       return { value }
     }
 
@@ -132,9 +116,7 @@ export class JsonSnapshot {
     }
 
     if (typeof value !== "object") {
-      throw new TypeError(
-        `${label} contains unsupported ${typeof value} data`,
-      )
+      throw new TypeError(`${label} contains unsupported ${typeof value} data`)
     }
 
     if (active.has(value)) {
@@ -159,9 +141,7 @@ export class JsonSnapshot {
     const prototype = Object.getPrototypeOf(value)
 
     if (prototype !== Object.prototype && prototype !== null) {
-      throw new TypeError(
-        `${label} contains a non-plain object`,
-      )
+      throw new TypeError(`${label} contains a non-plain object`)
     }
 
     if (Object.getOwnPropertySymbols(value).length > 0) {

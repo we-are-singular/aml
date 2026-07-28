@@ -1,13 +1,8 @@
 import { AmlNode, type AmlRenderable } from "../../core/aml-node.js"
 import { EvaluationError } from "../../core/evaluation-error.js"
-import type {
-  AmlContext,
-  ContextProviderProps,
-} from "./aml-context.js"
+import type { AmlContext, ContextProviderProps } from "./aml-context.js"
 
-const AML_CONTEXT_REGISTRY = Symbol.for(
-  "@aml/sdk/context-registry",
-)
+const AML_CONTEXT_REGISTRY = Symbol.for("@aml-jsx/sdk/context-registry")
 
 /**
  * Runtime metadata shared by a Context handle and its Provider component.
@@ -51,21 +46,13 @@ export class ContextRegistry {
   /**
    * Creates one frozen public Context and registers its runtime-only metadata.
    */
-  static create<Value>(
-    name: string,
-    hasDefault: boolean,
-    defaultValue: Value | undefined,
-  ): AmlContext<Value> {
+  static create<Value>(name: string, hasDefault: boolean, defaultValue: Value | undefined): AmlContext<Value> {
     /**
      * The runtime recognizes this function by exact registration and evaluates
      * its children inside a new lexical binding. Direct invocation is invalid.
      */
-    function Provider(
-      _props: ContextProviderProps<Value>,
-    ): never {
-      throw new Error(
-        `<${name}.Provider> can only be evaluated by AmlRuntime`,
-      )
+    function Provider(_props: ContextProviderProps<Value>): never {
+      throw new Error(`<${name}.Provider> can only be evaluated by AmlRuntime`)
     }
 
     AmlNode.markPrimitive(Provider, "context")
@@ -82,14 +69,8 @@ export class ContextRegistry {
       provider: Provider,
     })
 
-    ContextRegistry.#storage.contexts.set(
-      context,
-      definition,
-    )
-    ContextRegistry.#storage.providers.set(
-      Provider,
-      definition,
-    )
+    ContextRegistry.#storage.contexts.set(context, definition)
+    ContextRegistry.#storage.providers.set(Provider, definition)
 
     return context
   }
@@ -97,25 +78,15 @@ export class ContextRegistry {
   /**
    * Resolves a public Context handle or rejects an unregistered lookalike.
    */
-  static fromContext<Value>(
-    context: AmlContext<Value>,
-  ): RegisteredContext {
-    if (
-      (typeof context !== "object" || context === null) &&
-      typeof context !== "function"
-    ) {
-      throw new TypeError(
-        "useContext() requires a Context returned by createContext()",
-      )
+  static fromContext<Value>(context: AmlContext<Value>): RegisteredContext {
+    if ((typeof context !== "object" || context === null) && typeof context !== "function") {
+      throw new TypeError("useContext() requires a Context returned by createContext()")
     }
 
-    const definition =
-      ContextRegistry.#storage.contexts.get(context as object)
+    const definition = ContextRegistry.#storage.contexts.get(context as object)
 
     if (definition === undefined) {
-      throw new TypeError(
-        "useContext() requires a Context returned by createContext()",
-      )
+      throw new TypeError("useContext() requires a Context returned by createContext()")
     }
 
     return definition
@@ -124,9 +95,7 @@ export class ContextRegistry {
   /**
    * Returns metadata for an exact registered Provider component.
    */
-  static fromProvider(
-    provider: Function,
-  ): RegisteredContext | undefined {
+  static fromProvider(provider: Function): RegisteredContext | undefined {
     return ContextRegistry.#storage.providers.get(provider)
   }
 
@@ -136,22 +105,15 @@ export class ContextRegistry {
    * Both the main evaluator and Loop outer-Agent selector use this boundary so
    * Context placement cannot drift into subtly different runtime semantics.
    */
-  static captureProvider(
-    provider: Function,
-    props: Readonly<Record<string, unknown>>,
-  ): ContextProviderBinding {
+  static captureProvider(provider: Function, props: Readonly<Record<string, unknown>>): ContextProviderBinding {
     const definition = ContextRegistry.fromProvider(provider)
 
     if (definition === undefined) {
-      throw new EvaluationError(
-        "AML encountered an unregistered Context Provider",
-      )
+      throw new EvaluationError("AML encountered an unregistered Context Provider")
     }
 
     if (!Object.hasOwn(props, "value")) {
-      throw new EvaluationError(
-        `<${definition.name}.Provider> requires a value prop`,
-      )
+      throw new EvaluationError(`<${definition.name}.Provider> requires a value prop`)
     }
 
     // Preserve authored prop order across both evaluators. A cross-copy node
@@ -182,9 +144,7 @@ function contextRegistryStorage(): ContextRegistryStorage {
       !(existing.contexts instanceof WeakMap) ||
       !(existing.providers instanceof WeakMap)
     ) {
-      throw new TypeError(
-        "AML Context registry has an invalid global value",
-      )
+      throw new TypeError("AML Context registry has an invalid global value")
     }
 
     return existing

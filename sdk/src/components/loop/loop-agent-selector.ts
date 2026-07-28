@@ -1,11 +1,8 @@
 import type { AmlModelSchema } from "../agent/aml-model-schema.js"
 import type { AgentProps } from "../agent/agent.js"
 import { ContextRegistry } from "../context/context-registry.js"
-import { ContextScope } from "../context/context-scope.js"
-import {
-  AmlNode,
-  type AmlRenderable,
-} from "../../core/aml-node.js"
+import type { ContextScope } from "../context/context-scope.js"
+import { AmlNode, type AmlRenderable } from "../../core/aml-node.js"
 import { ComponentEvaluationContext } from "../../core/component-evaluation-context.js"
 import { EvaluationError } from "../../core/evaluation-error.js"
 
@@ -71,8 +68,8 @@ export class LoopAgentSelector {
       schema: AmlModelSchema<unknown, unknown> | undefined,
       depth: number,
       activeAncestors: ReadonlySet<object>,
-      contextScope: ContextScope,
-    ) => Promise<unknown>,
+      contextScope: ContextScope
+    ) => Promise<unknown>
   ): Promise<LoopAgentSelection> {
     const activeValues = new Set(activeAncestors)
     const frames: SelectionFrame[] = [
@@ -118,19 +115,13 @@ export class LoopAgentSelector {
 
       const current = frame.value
 
-      if (
-        current === null ||
-        current === undefined ||
-        typeof current === "boolean"
-      ) {
+      if (current === null || current === undefined || typeof current === "boolean") {
         continue
       }
 
       if (Array.isArray(current)) {
         if (activeValues.has(current)) {
-          throw new EvaluationError(
-            "<Loop> render arrays cannot contain cycles",
-          )
+          throw new EvaluationError("<Loop> render arrays cannot contain cycles")
         }
 
         activeValues.add(current)
@@ -148,34 +139,23 @@ export class LoopAgentSelector {
       if (AmlNode.is(current)) {
         const nodeDepth = frame.depth + 1
 
-        if (
-          this.#maxDepth !== 0 &&
-          nodeDepth > this.#maxDepth
-        ) {
-          throw new EvaluationError(
-            `AML evaluation exceeded maxDepth ${this.#maxDepth}`,
-          )
+        if (this.#maxDepth !== 0 && nodeDepth > this.#maxDepth) {
+          throw new EvaluationError(`AML evaluation exceeded maxDepth ${this.#maxDepth}`)
         }
 
         if (activeValues.has(current)) {
-          throw new EvaluationError(
-            "<Loop> render nodes cannot contain cycles",
-          )
+          throw new EvaluationError("<Loop> render nodes cannot contain cycles")
         }
 
         if (typeof current.type !== "function") {
-          throw new EvaluationError(
-            "<Loop> render must resolve to exactly one <Agent>",
-          )
+          throw new EvaluationError("<Loop> render must resolve to exactly one <Agent>")
         }
 
         const primitiveKind = AmlNode.primitiveKind(current.type)
 
         if (primitiveKind === "agent") {
           if (selection !== undefined) {
-            throw new EvaluationError(
-              "<Loop> render must resolve to exactly one <Agent>",
-            )
+            throw new EvaluationError("<Loop> render must resolve to exactly one <Agent>")
           }
 
           // Capture the wrapper ancestry before its release frames run. Agent
@@ -192,18 +172,12 @@ export class LoopAgentSelector {
         // Context Provider is the only built-in wrapper that can be selected
         // without executing Agent children or acquiring a runtime resource.
         if (primitiveKind === "context") {
-          const binding = ContextRegistry.captureProvider(
-            current.type,
-            current.props,
-          )
+          const binding = ContextRegistry.captureProvider(current.type, current.props)
 
           activeValues.add(current)
           frames.push({ kind: "release", value: current })
           frames.push({
-            contextScope: frame.contextScope.provide(
-              binding.definition,
-              binding.value,
-            ),
+            contextScope: frame.contextScope.provide(binding.definition, binding.value),
             depth: nodeDepth,
             kind: "resolve",
             value: binding.children,
@@ -214,27 +188,18 @@ export class LoopAgentSelector {
         // Every other built-in primitive owns execution behavior rather than
         // transparent composition and is invalid around a Loop's outer Agent.
         if (primitiveKind !== undefined) {
-          throw new EvaluationError(
-            "<Loop> render must resolve to exactly one <Agent>",
-          )
+          throw new EvaluationError("<Loop> render must resolve to exactly one <Agent>")
         }
 
         activeValues.add(current)
         frames.push({ kind: "release", value: current })
 
-        const componentOutput =
-          await ComponentEvaluationContext.invoke(
-            () => current.type(current.props),
-            async (nestedValue, nestedSchema) =>
-              await evaluateNested(
-                nestedValue,
-                nestedSchema,
-                nodeDepth,
-                new Set(activeValues),
-                frame.contextScope,
-              ),
-            frame.contextScope,
-          )
+        const componentOutput = await ComponentEvaluationContext.invoke(
+          () => current.type(current.props),
+          async (nestedValue, nestedSchema) =>
+            await evaluateNested(nestedValue, nestedSchema, nodeDepth, new Set(activeValues), frame.contextScope),
+          frame.contextScope
+        )
 
         signal.throwIfAborted()
         frames.push({
@@ -251,17 +216,15 @@ export class LoopAgentSelector {
 
         if (typeof then === "function") {
           // Match the main evaluator's one-read custom-thenable semantics.
-          const resolved = await new Promise<unknown>(
-            (resolve, reject) => {
-              queueMicrotask(() => {
-                try {
-                  Reflect.apply(then, current, [resolve, reject])
-                } catch (error) {
-                  reject(error)
-                }
-              })
-            },
-          )
+          const resolved = await new Promise<unknown>((resolve, reject) => {
+            queueMicrotask(() => {
+              try {
+                Reflect.apply(then, current, [resolve, reject])
+              } catch (error) {
+                reject(error)
+              }
+            })
+          })
 
           signal.throwIfAborted()
           frames.push({
@@ -275,15 +238,11 @@ export class LoopAgentSelector {
       }
 
       // Text and numbers are output, not transparent wrappers around an Agent.
-      throw new EvaluationError(
-        "<Loop> render must resolve to exactly one <Agent>",
-      )
+      throw new EvaluationError("<Loop> render must resolve to exactly one <Agent>")
     }
 
     if (selection === undefined) {
-      throw new EvaluationError(
-        "<Loop> render must resolve to exactly one <Agent>",
-      )
+      throw new EvaluationError("<Loop> render must resolve to exactly one <Agent>")
     }
 
     return selection

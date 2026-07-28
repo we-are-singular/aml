@@ -35,9 +35,7 @@ export interface ParsedLocalWorkspaceOptions {
 /**
  * Validates configuration without reading or creating filesystem entries.
  */
-export function parseLocalWorkspaceOptions(
-  value: LocalWorkspaceOptions,
-): Readonly<ParsedLocalWorkspaceOptions> {
+export function parseLocalWorkspaceOptions(value: LocalWorkspaceOptions): Readonly<ParsedLocalWorkspaceOptions> {
   if (typeof value !== "object" || value === null) {
     throw new TypeError("Local Workspace options must be an object")
   }
@@ -49,39 +47,28 @@ export function parseLocalWorkspaceOptions(
     // redirect filesystem authority after validation.
     directory = value.directory
   } catch (cause) {
-    throw new TypeError(
-      "Local Workspace directory must be readable",
-      { cause },
-    )
+    throw new TypeError("Local Workspace directory must be readable", { cause })
   }
 
-  if (
-    typeof directory !== "string" ||
-    directory.length === 0 ||
-    directory !== directory.trim()
-  ) {
-    throw new TypeError(
-      "Local Workspace directory must be a non-empty normalized string",
-    )
+  if (typeof directory !== "string" || directory.length === 0 || directory !== directory.trim()) {
+    throw new TypeError("Local Workspace directory must be a non-empty normalized string")
   }
 
   const staleMs = requireBoundedInteger(
     value.staleMs ?? DEFAULT_STALE_MS,
     "Local Workspace staleMs",
     MINIMUM_STALE_MS,
-    MAXIMUM_TIMER_MS,
+    MAXIMUM_TIMER_MS
   )
   const updateMs = requireBoundedInteger(
     value.updateMs ?? DEFAULT_UPDATE_MS,
     "Local Workspace updateMs",
     MINIMUM_UPDATE_MS,
-    MAXIMUM_TIMER_MS,
+    MAXIMUM_TIMER_MS
   )
 
   if (updateMs > staleMs / 2) {
-    throw new RangeError(
-      "Local Workspace updateMs must not exceed half of staleMs",
-    )
+    throw new RangeError("Local Workspace updateMs must not exceed half of staleMs")
   }
 
   return Object.freeze({
@@ -94,21 +81,9 @@ export function parseLocalWorkspaceOptions(
 /**
  * Keeps lock timing inside proper-lockfile's supported integer range.
  */
-function requireBoundedInteger(
-  value: unknown,
-  label: string,
-  minimum: number,
-  maximum: number,
-): number {
-  if (
-    typeof value !== "number" ||
-    !Number.isSafeInteger(value) ||
-    value < minimum ||
-    value > maximum
-  ) {
-    throw new RangeError(
-      `${label} must be a safe integer from ${minimum} through ${maximum}`,
-    )
+function requireBoundedInteger(value: unknown, label: string, minimum: number, maximum: number): number {
+  if (typeof value !== "number" || !Number.isSafeInteger(value) || value < minimum || value > maximum) {
+    throw new RangeError(`${label} must be a safe integer from ${minimum} through ${maximum}`)
   }
 
   return value

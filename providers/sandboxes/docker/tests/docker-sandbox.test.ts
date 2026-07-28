@@ -1,13 +1,5 @@
 import { PassThrough, Readable } from "node:stream"
-import {
-  chmod,
-  mkdtemp,
-  mkdir,
-  readFile,
-  rm,
-  symlink,
-  writeFile,
-} from "node:fs/promises"
+import { chmod, mkdtemp, mkdir, readFile, rm, symlink, writeFile } from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
 
@@ -19,14 +11,10 @@ import type {
   SandboxLeaseReference,
   SandboxSession,
   WorkspaceMaterializationReference,
-} from "@aml/sdk"
-import { sandboxProviderConformance } from "@aml/sdk/testing"
+} from "@aml-jsx/sdk"
+import { sandboxProviderConformance } from "@aml-jsx/sdk/testing"
 
-import {
-  dockerSandbox,
-  supportsDockerSandbox,
-  type DockerSandboxHandle,
-} from "../src/index.js"
+import { dockerSandbox, supportsDockerSandbox, type DockerSandboxHandle } from "../src/index.js"
 
 interface DockerHarness {
   readonly client: Dockerode
@@ -42,10 +30,7 @@ const temporaryDirectories: string[] = []
 afterEach(async () => {
   vi.restoreAllMocks()
   await Promise.all(
-    temporaryDirectories.splice(0).map(
-      async (directory) =>
-        await rm(directory, { force: true, recursive: true }),
-    ),
+    temporaryDirectories.splice(0).map(async directory => await rm(directory, { force: true, recursive: true }))
   )
 })
 
@@ -89,23 +74,15 @@ describe("dockerSandbox()", () => {
       ReadonlyRootfs: true,
       SecurityOpt: ["no-new-privileges"],
     })
-    expect(create?.HostConfig?.Tmpfs?.["/tmp"]).toContain(
-      `size=${64 * 1024 * 1024}`,
-    )
+    expect(create?.HostConfig?.Tmpfs?.["/tmp"]).toContain(`size=${64 * 1024 * 1024}`)
     expect(mount).toMatchObject({
       ReadOnly: true,
       Target: "/workspace",
       Type: "bind",
     })
-    expect(mount?.Source).toBe(
-      path.join(workspace, "repository"),
-    )
-    expect(JSON.stringify(create)).not.toContain(
-      "/var/run/docker.sock",
-    )
-    expect(docker.startRequests).toEqual([
-      { abortSignal: request.signal },
-    ])
+    expect(mount?.Source).toBe(path.join(workspace, "repository"))
+    expect(JSON.stringify(create)).not.toContain("/var/run/docker.sock")
+    expect(docker.startRequests).toEqual([{ abortSignal: request.signal }])
     expect(lease.id).toBe("container-123")
     expect(lease.handle).toMatchObject({
       access: "read-only",
@@ -137,13 +114,10 @@ describe("dockerSandbox()", () => {
     const lease = await provider.acquire(request)
     const controller = new AbortController()
 
-    const result = await lease.handle.exec(
-      ["printf", "%s", "hello; still one argument", ""],
-      {
-        cwd: "repository/src",
-        signal: controller.signal,
-      },
-    )
+    const result = await lease.handle.exec(["printf", "%s", "hello; still one argument", ""], {
+      cwd: "repository/src",
+      signal: controller.signal,
+    })
 
     expect(result).toEqual({
       exitCode: 7,
@@ -153,19 +127,12 @@ describe("dockerSandbox()", () => {
     expect(docker.execRequests.at(-1)).toEqual({
       AttachStderr: true,
       AttachStdout: true,
-      Cmd: [
-        "printf",
-        "%s",
-        "hello; still one argument",
-        "",
-      ],
+      Cmd: ["printf", "%s", "hello; still one argument", ""],
       Tty: false,
       WorkingDir: "/workspace/src",
       abortSignal: controller.signal,
     })
-    expect(
-      docker.createRequests[0]?.HostConfig?.Mounts?.[0]?.ReadOnly,
-    ).toBe(false)
+    expect(docker.createRequests[0]?.HostConfig?.Mounts?.[0]?.ReadOnly).toBe(false)
 
     await lease.release()
   })
@@ -181,25 +148,15 @@ describe("dockerSandbox()", () => {
       maxOutputBytes: 4,
       workspace,
     })
-    const lease = await provider.acquire(
-      rootRequest({ root: "repository" }),
-    )
+    const lease = await provider.acquire(rootRequest({ root: "repository" }))
 
-    await expect(
-      lease.handle.exec([], { cwd: "repository" }),
-    ).rejects.toThrow(
-      "must contain an executable",
-    )
-    await expect(
-      lease.handle.exec([""], { cwd: "repository" }),
-    ).rejects.toThrow("contains an invalid argument")
-    await expect(
-      lease.handle.exec(["pwd"], { cwd: "outside" }),
-    ).rejects.toThrow("cwd cannot escape its root")
+    await expect(lease.handle.exec([], { cwd: "repository" })).rejects.toThrow("must contain an executable")
+    await expect(lease.handle.exec([""], { cwd: "repository" })).rejects.toThrow("contains an invalid argument")
+    await expect(lease.handle.exec(["pwd"], { cwd: "outside" })).rejects.toThrow("cwd cannot escape its root")
     await expect(
       lease.handle.exec(["print-lots"], {
         cwd: "repository",
-      }),
+      })
     ).rejects.toThrow("Docker Sandbox command failed")
 
     await lease.release()
@@ -209,29 +166,25 @@ describe("dockerSandbox()", () => {
     const workspace = await createWorkspace()
     const docker = createDockerHarness()
     let builds = 0
-    const buildImage = vi
-      .spyOn(docker.client, "buildImage")
-      .mockImplementation(async (_context, options) => {
-        builds += 1
+    const buildImage = vi.spyOn(docker.client, "buildImage").mockImplementation(async (_context, options) => {
+      builds += 1
 
-        if (builds === 1) {
-          return Readable.from([
-            `${JSON.stringify({
-              error: "first build failed",
-              errorDetail: { message: "first build failed" },
-            })}\n`,
-          ])
-        }
-
-        expect(options).toMatchObject({
-          dockerfile: "Dockerfile",
-          networkmode: "none",
-          version: "2",
-        })
+      if (builds === 1) {
         return Readable.from([
-          `${JSON.stringify({ stream: "build complete\n" })}\n`,
+          `${JSON.stringify({
+            error: "first build failed",
+            errorDetail: { message: "first build failed" },
+          })}\n`,
         ])
+      }
+
+      expect(options).toMatchObject({
+        dockerfile: "Dockerfile",
+        networkmode: "none",
+        version: "2",
       })
+      return Readable.from([`${JSON.stringify({ stream: "build complete\n" })}\n`])
+    })
     const provider = dockerSandbox({
       buildContext: workspace,
       client: docker.client,
@@ -239,9 +192,7 @@ describe("dockerSandbox()", () => {
       workspace,
     })
 
-    await expect(provider.acquire(rootRequest())).rejects.toThrow(
-      "Docker Sandbox image build failed",
-    )
+    await expect(provider.acquire(rootRequest())).rejects.toThrow("Docker Sandbox image build failed")
     const first = await provider.acquire(rootRequest())
     const second = await provider.acquire(rootRequest())
 
@@ -250,12 +201,8 @@ describe("dockerSandbox()", () => {
       context: workspace,
       src: ["."],
     })
-    expect(
-      docker.createRequests[0]?.Image,
-    ).toMatch(/^aml-sandbox-[a-f0-9-]+:latest$/)
-    expect(docker.createRequests[1]?.Image).toBe(
-      docker.createRequests[0]?.Image,
-    )
+    expect(docker.createRequests[0]?.Image).toMatch(/^aml-sandbox-[a-f0-9-]+:latest$/)
+    expect(docker.createRequests[1]?.Image).toBe(docker.createRequests[0]?.Image)
 
     await first.release()
     await second.release()
@@ -263,19 +210,11 @@ describe("dockerSandbox()", () => {
 
   it("rejects mount and Dockerfile symlinks that escape their boundaries", async () => {
     const workspace = await createWorkspace()
-    const outside = await mkdtemp(
-      path.join(os.tmpdir(), "aml-docker-outside-"),
-    )
+    const outside = await mkdtemp(path.join(os.tmpdir(), "aml-docker-outside-"))
     temporaryDirectories.push(outside)
-    await writeFile(
-      path.join(outside, "Dockerfile"),
-      "FROM alpine:3.22\n",
-    )
+    await writeFile(path.join(outside, "Dockerfile"), "FROM alpine:3.22\n")
     await symlink(outside, path.join(workspace, "escape"))
-    await symlink(
-      path.join(outside, "Dockerfile"),
-      path.join(workspace, "Escaping.Dockerfile"),
-    )
+    await symlink(path.join(outside, "Dockerfile"), path.join(workspace, "Escaping.Dockerfile"))
     const docker = createDockerHarness()
 
     const imageProvider = dockerSandbox({
@@ -283,12 +222,8 @@ describe("dockerSandbox()", () => {
       image: "alpine:3.22",
       workspace,
     })
-    await expect(
-      imageProvider.acquire(
-        rootRequest({ cwd: "escape", root: "escape" }),
-      ),
-    ).rejects.toThrow(
-      "Sandbox root resolves outside its configured boundary",
+    await expect(imageProvider.acquire(rootRequest({ cwd: "escape", root: "escape" }))).rejects.toThrow(
+      "Sandbox root resolves outside its configured boundary"
     )
 
     const buildProvider = dockerSandbox({
@@ -298,7 +233,7 @@ describe("dockerSandbox()", () => {
       workspace,
     })
     await expect(buildProvider.acquire(rootRequest())).rejects.toThrow(
-      "Dockerfile resolves outside its configured boundary",
+      "Dockerfile resolves outside its configured boundary"
     )
     expect(docker.createRequests).toHaveLength(0)
   })
@@ -321,11 +256,9 @@ describe("dockerSandbox()", () => {
           rootRequest({
             access: "read-only",
             root: "repository",
-          }),
-        ),
-      ).rejects.toThrow(
-        "selected source must be writable for namespace verification",
-      )
+          })
+        )
+      ).rejects.toThrow("selected source must be writable for namespace verification")
       expect(docker.createRequests).toHaveLength(0)
     } finally {
       await chmod(repository, 0o755)
@@ -339,29 +272,25 @@ describe("dockerSandbox()", () => {
     const cancellation = new Error("cancel Docker create")
     let createStarted: (() => void) | undefined
     let finishCreate: (() => void) | undefined
-    const started = new Promise<void>((resolve) => {
+    const started = new Promise<void>(resolve => {
       createStarted = resolve
     })
-    const finish = new Promise<void>((resolve) => {
+    const finish = new Promise<void>(resolve => {
       finishCreate = resolve
     })
 
-    vi.spyOn(docker.client, "createContainer").mockImplementationOnce(
-      async (options) => {
-        docker.createRequests.push(options)
-        createStarted?.()
-        await finish
-        return docker.container
-      },
-    )
+    vi.spyOn(docker.client, "createContainer").mockImplementationOnce(async options => {
+      docker.createRequests.push(options)
+      createStarted?.()
+      await finish
+      return docker.container
+    })
     const provider = dockerSandbox({
       client: docker.client,
       image: "alpine:3.22",
       workspace,
     })
-    const pending = provider.acquire(
-      rootRequest({ signal: controller.signal }),
-    )
+    const pending = provider.acquire(rootRequest({ signal: controller.signal }))
 
     await started
     controller.abort(cancellation)
@@ -376,27 +305,18 @@ describe("dockerSandbox()", () => {
   it("attributes Engine failures and preserves failed compensation", async () => {
     const workspace = await createWorkspace()
     const docker = createDockerHarness()
-    const engineError = Object.assign(
-      new Error("daemon unavailable"),
-      { statusCode: 500 },
-    )
+    const engineError = Object.assign(new Error("daemon unavailable"), { statusCode: 500 })
     const cleanupError = new Error("cleanup unavailable")
 
-    vi.spyOn(docker.client, "createContainer").mockRejectedValueOnce(
-      engineError,
-    )
-    vi.spyOn(docker.container, "remove").mockRejectedValueOnce(
-      cleanupError,
-    )
+    vi.spyOn(docker.client, "createContainer").mockRejectedValueOnce(engineError)
+    vi.spyOn(docker.container, "remove").mockRejectedValueOnce(cleanupError)
     const provider = dockerSandbox({
       client: docker.client,
       image: "alpine:3.22",
       workspace,
     })
 
-    const error = await provider.acquire(rootRequest()).catch(
-      (cause: unknown) => cause,
-    )
+    const error = await provider.acquire(rootRequest()).catch((cause: unknown) => cause)
 
     expect(error).toBeInstanceOf(AggregateError)
     expect((error as AggregateError).errors).toHaveLength(2)
@@ -415,29 +335,23 @@ describe("dockerSandbox()", () => {
     const notFound = { statusCode: 404 }
     let inspections = 0
 
-    vi.spyOn(docker.client, "createContainer").mockRejectedValueOnce(
-      new Error("connection reset after request"),
-    )
-    vi.spyOn(docker.container, "inspect").mockImplementation(
-      async () => {
-        inspections += 1
+    vi.spyOn(docker.client, "createContainer").mockRejectedValueOnce(new Error("connection reset after request"))
+    vi.spyOn(docker.container, "inspect").mockImplementation(async () => {
+      inspections += 1
 
-        if (inspections < 3) {
-          throw notFound
-        }
+      if (inspections < 3) {
+        throw notFound
+      }
 
-        return {} as Dockerode.ContainerInspectInfo
-      },
-    )
+      return {} as Dockerode.ContainerInspectInfo
+    })
     const provider = dockerSandbox({
       client: docker.client,
       image: "alpine:3.22",
       workspace,
     })
 
-    await expect(provider.acquire(rootRequest())).rejects.toThrow(
-      "Docker Sandbox creation failed",
-    )
+    await expect(provider.acquire(rootRequest())).rejects.toThrow("Docker Sandbox creation failed")
     expect(inspections).toBe(3)
     expect(docker.removeRequests).toEqual([{ force: true }])
   })
@@ -446,34 +360,24 @@ describe("dockerSandbox()", () => {
     const workspace = await createWorkspace()
     const docker = createDockerHarness()
 
-    vi.spyOn(docker.client, "createContainer").mockImplementationOnce(
-      async (options) => {
-        docker.createRequests.push(options)
-        const probe = options.HostConfig?.Mounts?.find(
-          (mount) =>
-            mount.Target === "/run/aml-host-namespace",
-        )
+    vi.spyOn(docker.client, "createContainer").mockImplementationOnce(async options => {
+      docker.createRequests.push(options)
+      const probe = options.HostConfig?.Mounts?.find(mount => mount.Target === "/run/aml-host-namespace")
 
-        if (probe === undefined) {
-          throw new Error("namespace probe mount was not configured")
-        }
+      if (probe === undefined) {
+        throw new Error("namespace probe mount was not configured")
+      }
 
-        await writeFile(
-          path.join(probe.Source, "identity"),
-          "daemon sees different content",
-        )
-        return docker.container
-      },
-    )
+      await writeFile(path.join(probe.Source, "identity"), "daemon sees different content")
+      return docker.container
+    })
     const provider = dockerSandbox({
       client: docker.client,
       image: "alpine:3.22",
       workspace,
     })
 
-    await expect(provider.acquire(rootRequest())).rejects.toThrow(
-      "startup or namespace verification failed",
-    )
+    await expect(provider.acquire(rootRequest())).rejects.toThrow("startup or namespace verification failed")
     expect(docker.removeRequests).toEqual([{ force: true }])
   })
 
@@ -483,43 +387,41 @@ describe("dockerSandbox()", () => {
         image: "alpine",
         dockerfile: "./Dockerfile",
         workspace: ".",
-      }),
+      })
     ).toThrow("requires exactly one of image or dockerfile")
     expect(() =>
       dockerSandbox({
         buildContext: ".",
         image: "alpine",
         workspace: ".",
-      }),
+      })
     ).toThrow("buildContext requires dockerfile")
     expect(() =>
       dockerSandbox({
         cpus: 0,
         image: "alpine",
         workspace: ".",
-      }),
+      })
     ).toThrow("Docker cpus must be a positive finite number")
     expect(() =>
       dockerSandbox({
         cpus: Number.MAX_VALUE,
         image: "alpine",
         workspace: ".",
-      }),
+      })
     ).toThrow("cannot be represented as a positive NanoCPUs integer")
     expect(() =>
       dockerSandbox({
         image: "alpine",
         memoryBytes: 1.5,
         workspace: ".",
-      }),
-    ).toThrow(
-      "Docker memoryBytes must be a positive safe integer",
-    )
+      })
+    ).toThrow("Docker memoryBytes must be a positive safe integer")
     expect(() =>
       dockerSandbox({
         image: " alpine ",
         workspace: ".",
-      }),
+      })
     ).toThrow("Docker image must be a non-empty normalized string")
     for (const user of ["0", "0:0", "root", "1000:0"]) {
       expect(() =>
@@ -527,7 +429,7 @@ describe("dockerSandbox()", () => {
           image: "alpine",
           user,
           workspace: ".",
-        }),
+        })
       ).toThrow("Docker user must be a numeric non-root UID")
     }
     expect(() =>
@@ -538,7 +440,7 @@ describe("dockerSandbox()", () => {
         }),
         image: "alpine",
         workspace: ".",
-      }),
+      })
     ).toThrow("requires a same-host local-socket Docker client")
   })
 
@@ -551,20 +453,15 @@ describe("dockerSandbox()", () => {
       image: "alpine:3.22",
       workspace: fallback,
     })
-    const workspace: WorkspaceMaterializationReference =
-      Object.freeze({
-        directory: active,
-        handle: {},
-        leaseId: "workspace-lease",
-        provider: { name: "local-workspace" },
-        workspaceId: "review-42",
-      })
-    const lease = await provider.acquire(
-      rootRequest({ workspace }),
-    )
-    const mount = docker.createRequests[0]?.HostConfig?.Mounts?.find(
-      (candidate) => candidate.Target === "/workspace",
-    )
+    const workspace: WorkspaceMaterializationReference = Object.freeze({
+      directory: active,
+      handle: {},
+      leaseId: "workspace-lease",
+      provider: { name: "local-workspace" },
+      workspaceId: "review-42",
+    })
+    const lease = await provider.acquire(rootRequest({ workspace }))
+    const mount = docker.createRequests[0]?.HostConfig?.Mounts?.find(candidate => candidate.Target === "/workspace")
 
     expect(mount?.Source).toBe(active)
     await lease.release()
@@ -578,7 +475,7 @@ describe("dockerSandbox()", () => {
     })
 
     await expect(provider.acquire(rootRequest())).rejects.toThrow(
-      "requires an active Workspace or configured workspace",
+      "requires an active Workspace or configured workspace"
     )
     expect(docker.createRequests).toHaveLength(0)
   })
@@ -591,9 +488,7 @@ describe("dockerSandbox()", () => {
       image: "alpine:3.22",
       workspace,
     })
-    const acquired = await provider.acquire(
-      rootRequest({ root: "repository" }),
-    )
+    const acquired = await provider.acquire(rootRequest({ root: "repository" }))
     const lease: SandboxLeaseReference<DockerSandboxHandle> = {
       handle: acquired.handle,
       id: acquired.id,
@@ -608,17 +503,13 @@ describe("dockerSandbox()", () => {
     }
 
     expect(supportsDockerSandbox(base)).toBe(true)
-    expect(
-      supportsDockerSandbox({ ...base, root: "repository/src" }),
-    ).toBe(false)
-    expect(
-      supportsDockerSandbox({ ...base, access: "read-write" }),
-    ).toBe(false)
+    expect(supportsDockerSandbox({ ...base, root: "repository/src" })).toBe(false)
+    expect(supportsDockerSandbox({ ...base, access: "read-write" })).toBe(false)
     expect(
       supportsDockerSandbox({
         ...base,
         provider: { name: "other" },
-      }),
+      })
     ).toBe(false)
 
     await acquired.release()
@@ -633,9 +524,7 @@ describe("dockerSandbox()", () => {
       workspace,
     })
 
-    await expect(
-      sandboxProviderConformance(provider),
-    ).resolves.toBeUndefined()
+    await expect(sandboxProviderConformance(provider)).resolves.toBeUndefined()
   })
 })
 
@@ -647,7 +536,7 @@ function createDockerHarness(
     readonly exitCode?: number
     readonly stderr?: string
     readonly stdout?: string
-  } = {},
+  } = {}
 ): DockerHarness {
   const client = new Dockerode()
   const container = client.getContainer("container-123")
@@ -658,21 +547,17 @@ function createDockerHarness(
   const startRequests: Dockerode.ContainerStartOptions[] = []
 
   vi.spyOn(client, "getContainer").mockReturnValue(container)
-  vi.spyOn(client, "createContainer").mockImplementation(
-    async (options) => {
-      createRequests.push(options)
-      return container
-    },
-  )
+  vi.spyOn(client, "createContainer").mockImplementation(async options => {
+    createRequests.push(options)
+    return container
+  })
   vi.spyOn(container, "start").mockImplementation(async (options = {}) => {
     startRequests.push(options)
   })
-  vi.spyOn(container, "remove").mockImplementation(
-    async (options = {}) => {
-      removeRequests.push(options)
-    },
-  )
-  vi.spyOn(container, "exec").mockImplementation(async (options) => {
+  vi.spyOn(container, "remove").mockImplementation(async (options = {}) => {
+    removeRequests.push(options)
+  })
+  vi.spyOn(container, "exec").mockImplementation(async options => {
     execRequests.push(options)
     return execution
   })
@@ -681,33 +566,21 @@ function createDockerHarness(
     const namespaceProbe = isNamespaceProbeCommand(request)
     const probeMount = createRequests
       .at(-1)
-      ?.HostConfig?.Mounts?.find(
-        (mount) => mount.Target === "/run/aml-host-namespace",
-      )
+      ?.HostConfig?.Mounts?.find(mount => mount.Target === "/run/aml-host-namespace")
     const stdout =
       namespaceProbe && probeMount !== undefined
-        ? await readFile(
-            path.join(probeMount.Source, "identity"),
-            "utf8",
-          )
-        : output.stdout ?? ""
+        ? await readFile(path.join(probeMount.Source, "identity"), "utf8")
+        : (output.stdout ?? "")
     const stream = new PassThrough()
-    stream.end(
-      Buffer.concat([
-        dockerFrame(1, stdout),
-        dockerFrame(
-          2,
-          namespaceProbe ? "" : output.stderr ?? "",
-        ),
-      ]),
-    )
+    stream.end(Buffer.concat([dockerFrame(1, stdout), dockerFrame(2, namespaceProbe ? "" : (output.stderr ?? ""))]))
     return stream
   })
-  vi.spyOn(execution, "inspect").mockImplementation(async () => ({
-    ExitCode: isNamespaceProbeCommand(execRequests.at(-1))
-      ? 0
-      : output.exitCode ?? 0,
-  }) as Dockerode.ExecInspectInfo)
+  vi.spyOn(execution, "inspect").mockImplementation(
+    async () =>
+      ({
+        ExitCode: isNamespaceProbeCommand(execRequests.at(-1)) ? 0 : (output.exitCode ?? 0),
+      }) as Dockerode.ExecInspectInfo
+  )
 
   return {
     client,
@@ -722,25 +595,18 @@ function createDockerHarness(
 /**
  * Recognizes the provider's host-namespace verification command.
  */
-function isNamespaceProbeCommand(
-  request: Dockerode.ExecCreateOptions | undefined,
-): boolean {
+function isNamespaceProbeCommand(request: Dockerode.ExecCreateOptions | undefined): boolean {
   return (
     request?.Cmd?.[0] === "sh" &&
     request.Cmd[1] === "-c" &&
-    request.Cmd[2]?.includes(
-      "/run/aml-host-namespace/identity",
-    ) === true
+    request.Cmd[2]?.includes("/run/aml-host-namespace/identity") === true
   )
 }
 
 /**
  * Encodes one Docker raw-stream frame for the real Dockerode demultiplexer.
  */
-function dockerFrame(
-  stream: 1 | 2,
-  value: string,
-): Buffer {
+function dockerFrame(stream: 1 | 2, value: string): Buffer {
   const content = Buffer.from(value)
   const header = Buffer.alloc(8)
   header.writeUInt8(stream, 0)
@@ -752,30 +618,20 @@ function dockerFrame(
  * Creates one real host workspace for filesystem-containment tests.
  */
 async function createWorkspace(): Promise<string> {
-  const workspace = await mkdtemp(
-    path.join(os.tmpdir(), "aml-docker-test-"),
-  )
+  const workspace = await mkdtemp(path.join(os.tmpdir(), "aml-docker-test-"))
   temporaryDirectories.push(workspace)
   await mkdir(path.join(workspace, "repository", "src"), {
     recursive: true,
   })
-  await writeFile(
-    path.join(workspace, "repository", "src", "source.txt"),
-    "fixture",
-  )
-  await writeFile(
-    path.join(workspace, "Dockerfile"),
-    "FROM alpine:3.22\n",
-  )
+  await writeFile(path.join(workspace, "repository", "src", "source.txt"), "fixture")
+  await writeFile(path.join(workspace, "Dockerfile"), "FROM alpine:3.22\n")
   return workspace
 }
 
 /**
  * Builds one direct provider request with a live cancellation boundary.
  */
-function rootRequest(
-  overrides: Partial<SandboxAcquireRequest> = {},
-): SandboxAcquireRequest {
+function rootRequest(overrides: Partial<SandboxAcquireRequest> = {}): SandboxAcquireRequest {
   const root = overrides.root ?? "."
 
   return {
@@ -784,14 +640,8 @@ function rootRequest(
     evaluationId: "evaluation-123",
     root,
     signal: new AbortController().signal,
-    ...(overrides.evaluationId === undefined
-      ? {}
-      : { evaluationId: overrides.evaluationId }),
-    ...(overrides.signal === undefined
-      ? {}
-      : { signal: overrides.signal }),
-    ...(overrides.workspace === undefined
-      ? {}
-      : { workspace: overrides.workspace }),
+    ...(overrides.evaluationId === undefined ? {} : { evaluationId: overrides.evaluationId }),
+    ...(overrides.signal === undefined ? {} : { signal: overrides.signal }),
+    ...(overrides.workspace === undefined ? {} : { workspace: overrides.workspace }),
   }
 }

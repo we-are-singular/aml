@@ -8,7 +8,7 @@ import { validateAgentProvider } from "./validate-agent-provider.js"
  * implementation's exact inferred TypeScript type.
  */
 export function defineAgentProvider<const Provider extends AgentProvider>(
-  implementation: Provider,
+  implementation: Provider
 ): Readonly<Provider> {
   validateAgentProvider(implementation)
   return Object.freeze(implementation)

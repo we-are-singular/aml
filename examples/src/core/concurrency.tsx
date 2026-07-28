@@ -1,5 +1,5 @@
-import { Agent, evaluate } from "@aml/sdk"
-import { DeterministicAgentProvider } from "@aml/sdk/testing"
+import { Agent, evaluate } from "@aml-jsx/sdk"
+import { DeterministicAgentProvider } from "@aml-jsx/sdk/testing"
 
 /**
  * Finishes specialists out of order so the example can show authored ordering.
@@ -8,12 +8,12 @@ const ExampleProvider = new DeterministicAgentProvider({
   name: "concurrency-example",
   async respond(request) {
     if (request.prompt === "review") {
-      await new Promise((resolve) => setTimeout(resolve, 30))
+      await new Promise(resolve => setTimeout(resolve, 30))
       return { text: "review-result" }
     }
 
     if (request.prompt === "audit") {
-      await new Promise((resolve) => setTimeout(resolve, 5))
+      await new Promise(resolve => setTimeout(resolve, 5))
       return { text: "audit-result" }
     }
 

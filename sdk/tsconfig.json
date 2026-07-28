@@ -3,14 +3,14 @@
   "compilerOptions": {
     "customConditions": ["aml-source"],
     "jsxImportSource": "#aml",
-    "noEmit": true
+    "noEmit": true,
+    "paths": {
+      "@aml-jsx/agent-codex": ["../providers/agents/codex/src/index.ts"],
+      "@aml-jsx/agent-opencode": ["../providers/agents/opencode/src/index.ts"],
+      "@aml-jsx/sandbox-docker": ["../providers/sandboxes/docker/src/index.ts"],
+      "@aml-jsx/sdk": ["./src/core.ts"],
+      "@aml-jsx/workspace-local": ["../providers/workspaces/local/src/index.ts"]
+    }
   },
-  "include": [
-    "scripts/**/*.ts",
-    "src/**/*.ts",
-    "src/**/*.tsx",
-    "tests/**/*.ts",
-    "tests/**/*.tsx",
-    "vite.config.ts"
-  ]
+  "include": ["scripts/**/*.ts", "src/**/*.ts", "src/**/*.tsx", "tests/**/*.ts", "tests/**/*.tsx", "vite.config.ts"]
 }

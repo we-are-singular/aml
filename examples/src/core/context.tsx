@@ -1,11 +1,5 @@
-import {
-  Agent,
-  createContext,
-  defineTool,
-  Tool,
-  useContext,
-} from "@aml/sdk"
-import { DeterministicAgentProvider } from "@aml/sdk/testing"
+import { Agent, createContext, defineTool, Tool, useContext } from "@aml-jsx/sdk"
+import { DeterministicAgentProvider } from "@aml-jsx/sdk/testing"
 import { z } from "zod"
 
 class SessionRepository {
@@ -24,9 +18,7 @@ const Repository = createContext<SessionRepository>("SessionRepository")
  */
 const ExampleProvider = new DeterministicAgentProvider({
   async respond(request, context) {
-    const tool = request.tools.find(
-      (candidate) => candidate.name === "list_session_orders",
-    )
+    const tool = request.tools.find(candidate => candidate.name === "list_session_orders")
 
     if (tool?.kind !== "javascript") {
       throw new Error("Session Tool was not granted")
@@ -37,7 +29,7 @@ const ExampleProvider = new DeterministicAgentProvider({
       Object.freeze({
         signal: context.signal,
         trace: context.trace,
-      }),
+      })
     )
 
     return { text: `orders:${JSON.stringify(orders)}` }

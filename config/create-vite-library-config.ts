@@ -21,11 +21,7 @@ export function createViteLibraryConfig(options: {
         formats: ["es"],
       },
       rolldownOptions: {
-        external: [
-          /^node:/,
-          /^@aml\/sdk(?:\/.*)?$/,
-          ...options.external,
-        ],
+        external: [/^node:/, /^@aml-jsx\/sdk(?:\/.*)?$/, ...options.external],
         output: {
           minifyInternalExports: false,
         },

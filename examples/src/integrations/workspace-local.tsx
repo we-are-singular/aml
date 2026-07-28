@@ -1,6 +1,6 @@
 import { tmpdir } from "node:os"
 
-import { Agent, Sandbox, Workspace } from "@aml/sdk"
+import { Agent, Sandbox, Workspace } from "@aml-jsx/sdk"
 
 import { createLocalWorkspaceFixture } from "../shared/create-local-workspace-fixture.js"
 

@@ -1,7 +1,4 @@
-import type {
-  AmlComponent,
-  AmlRenderable,
-} from "../../core/aml-node.js"
+import type { AmlComponent, AmlRenderable } from "../../core/aml-node.js"
 
 /**
  * Props accepted by the lexical Provider owned by one AML Context.
