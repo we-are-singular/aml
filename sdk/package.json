@@ -64,6 +64,7 @@
     "build": "vite build",
     "package:check": "node scripts/check-package.ts",
     "prepublishOnly": "npm run build && npm run package:check",
+    "release": "release-it",
     "test": "vitest run",
     "typecheck": "tsc --noEmit"
   },

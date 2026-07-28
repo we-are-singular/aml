@@ -211,6 +211,26 @@ npm run test:integration --workspace=@aml-jsx/sandbox-docker
 Commits are checked with lint-staged and commitlint. Pushes run the same formatting, linting, test, and build
 contract enforced by GitHub Actions.
 
+## Releasing
+
+Releases are manual and publish only `@aml-jsx/sdk`. Authenticate with npm and GitHub, then run the interactive
+release:
+
+```sh
+npm login
+GITHUB_TOKEN="$(gh auth token)" npm run release
+```
+
+Release It runs the full release checks, prompts for the next version, updates `sdk/package.json` and the lockfile,
+creates a `release: vX.Y.Z` commit and `vX.Y.Z` tag, publishes the SDK to npm, pushes the release, and creates the
+matching GitHub release. npm prompts for OTP or passkey approval when required.
+
+Preview the flow without changing Git, npm, or GitHub:
+
+```sh
+GITHUB_TOKEN="$(gh auth token)" npm run release -- --dry-run
+```
+
 The website runs locally at `http://localhost:5173/` with:
 
 ```sh

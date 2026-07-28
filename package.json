@@ -17,6 +17,8 @@
     "lint:fix": "oxlint --fix .",
     "pack:check": "turbo run package:check",
     "prepare": "husky",
+    "release": "npm run release --workspace=@aml-jsx/sdk --",
+    "release:check": "npm run format:check && npm run lint && npm run test && npm run build && npm run pack:check",
     "test": "turbo run test",
     "typecheck": "turbo run typecheck"
   },
@@ -28,6 +30,7 @@
     "lint-staged": "^17.2.0",
     "oxfmt": "^0.61.0",
     "oxlint": "^1.76.0",
+    "release-it": "^21.0.0",
     "turbo": "^2.10.7",
     "typescript": "^7.0.2",
     "vite": "^8.1.5",
