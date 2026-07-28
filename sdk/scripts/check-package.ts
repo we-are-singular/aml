@@ -53,6 +53,7 @@ interface BuiltSdk {
   readonly dockerSandbox: unknown
   readonly localWorkspace: unknown
   readonly opencodeAgent: unknown
+  readonly piAgent: unknown
   readonly WorkspaceConflictError: {
     is(value: unknown, workspaceId?: string): boolean
     new (workspaceId: string): {
@@ -175,6 +176,7 @@ const {
   localWorkspace,
   Loop: publicLoop,
   opencodeAgent,
+  piAgent,
   Workspace: publicWorkspace,
   WorkspaceConflictError,
 } = (await import(pathToFileURL(resolvedEntries.index).href)) as BuiltSdk
@@ -191,6 +193,7 @@ const {
 if (
   typeof codexAgent !== "function" ||
   typeof opencodeAgent !== "function" ||
+  typeof piAgent !== "function" ||
   typeof dockerSandbox !== "function" ||
   typeof localWorkspace !== "function"
 ) {
@@ -412,6 +415,7 @@ try {
   }
 
   for (const dependency of [
+    "@earendil-works/pi-coding-agent",
     "@modelcontextprotocol/sdk",
     "@openai/codex-sdk",
     "@opencode-ai/sdk",
@@ -419,6 +423,7 @@ try {
     "dockerode",
     "execa",
     "proper-lockfile",
+    "typebox",
   ]) {
     const fixtureDependency = join(copyFixtureDirectory, "node_modules", dependency)
     mkdirSync(dirname(fixtureDependency), { recursive: true })
@@ -666,6 +671,7 @@ for (const expectedFile of [
   "dist/jsx-runtime.js",
   "dist/providers/agents/codex/src/index.d.ts",
   "dist/providers/agents/opencode/src/index.d.ts",
+  "dist/providers/agents/pi/src/index.d.ts",
   "dist/providers/sandboxes/docker/src/index.d.ts",
   "dist/providers/workspaces/local/src/index.d.ts",
   "dist/sdk/src/index.d.ts",

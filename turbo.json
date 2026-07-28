@@ -8,7 +8,7 @@
     "example": {
       "dependsOn": ["^build"],
       "cache": false,
-      "passThroughEnv": ["AML_*"]
+      "passThroughEnv": ["AML_*", "OPENCODE_API_KEY"]
     },
     "package:check": {
       "dependsOn": ["build", "^build"],

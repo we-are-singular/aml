@@ -26,6 +26,7 @@ export interface OpenCodeServerOptions {
  * Configures the OpenCode adapter and its resource ownership.
  */
 export interface OpenCodeAgentOptions {
+  readonly config?: ServerOptions["config"]
   readonly directory?: string
   readonly model?: string
   readonly server?: OpenCodeServerOptions
@@ -36,6 +37,7 @@ export interface OpenCodeAgentOptions {
  * Stable provider configuration after the external options boundary is read.
  */
 export interface CapturedOpenCodeAgentOptions {
+  readonly config?: ServerOptions["config"]
   readonly directory?: string
   readonly model?: string
   readonly server?: Readonly<OpenCodeServerOptions>
@@ -52,6 +54,7 @@ export function captureOpenCodeAgentOptions(options: OpenCodeAgentOptions): Read
 
   // Capture every external property once. Accessor-backed configuration must
   // not validate one authority and substitute another when the Agent runs.
+  const config = captureConfig(options.config)
   const directory = options.directory
   const model = options.model
   const serverValue = options.server
@@ -73,11 +76,62 @@ export function captureOpenCodeAgentOptions(options: OpenCodeAgentOptions): Read
   const sessionClient = sessionClientValue === undefined ? undefined : captureSessionClient(sessionClientValue)
 
   return Object.freeze({
+    ...(config === undefined ? {} : { config }),
     ...(directory === undefined ? {} : { directory }),
     ...(model === undefined ? {} : { model }),
     ...(server === undefined ? {} : { server }),
     ...(sessionClient === undefined ? {} : { sessionClient }),
   })
+}
+
+/**
+ * Snapshots OpenCode's JSON-native config without adapting its vendor schema.
+ */
+function captureConfig(value: ServerOptions["config"]): ServerOptions["config"] {
+  if (value === undefined) {
+    return undefined
+  }
+
+  return captureJson(value, "OpenCode config") as NonNullable<ServerOptions["config"]>
+}
+
+function captureJson(value: unknown, label: string, seen = new WeakSet<object>()): unknown {
+  if (value === null || typeof value === "string" || typeof value === "boolean") {
+    return value
+  }
+
+  if (typeof value === "number") {
+    if (!Number.isFinite(value)) {
+      throw new TypeError(`${label} must contain only finite JSON numbers`)
+    }
+
+    return value
+  }
+
+  if (typeof value !== "object") {
+    throw new TypeError(`${label} must contain only JSON values`)
+  }
+
+  if (seen.has(value)) {
+    throw new TypeError(`${label} must not contain cycles`)
+  }
+
+  seen.add(value)
+
+  if (Array.isArray(value)) {
+    const captured = value.map(item => captureJson(item, label, seen))
+    seen.delete(value)
+    return Object.freeze(captured)
+  }
+
+  const captured: Record<string, unknown> = {}
+
+  for (const key of Object.keys(value)) {
+    captured[key] = captureJson(Reflect.get(value, key), label, seen)
+  }
+
+  seen.delete(value)
+  return Object.freeze(captured)
 }
 
 /**
@@ -161,7 +215,9 @@ function captureSessionClientMethod<Name extends keyof OpenCodeSessionClient>(
   try {
     method = Reflect.get(client, name)
   } catch (cause) {
-    throw new TypeError(`OpenCode sessionClient ${name} must be readable`, { cause })
+    throw new TypeError(`OpenCode sessionClient ${name} must be readable`, {
+      cause,
+    })
   }
 
   if (typeof method !== "function") {
@@ -170,3 +226,4 @@ function captureSessionClientMethod<Name extends keyof OpenCodeSessionClient>(
 
   return method as OpenCodeSessionClient[Name]
 }
+import type { ServerOptions } from "@opencode-ai/sdk/v2"

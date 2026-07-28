@@ -14,6 +14,7 @@
     "src/**/*.tsx",
     "../providers/agents/codex/src/**/*.ts",
     "../providers/agents/opencode/src/**/*.ts",
+    "../providers/agents/pi/src/**/*.ts",
     "../providers/sandboxes/docker/src/**/*.ts",
     "../providers/workspaces/local/src/**/*.ts"
   ],

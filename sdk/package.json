@@ -69,6 +69,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@earendil-works/pi-coding-agent": "0.82.1",
     "@modelcontextprotocol/sdk": "^1.29.0",
     "@openai/codex-sdk": "0.145.0",
     "@opencode-ai/sdk": "1.18.5",
@@ -78,7 +79,8 @@
     "execa": "^10.0.0",
     "hookable": "^6.1.1",
     "p-limit": "^7.3.1",
-    "proper-lockfile": "^4.1.2"
+    "proper-lockfile": "^4.1.2",
+    "typebox": "1.1.38"
   },
   "devDependencies": {
     "@types/proper-lockfile": "^4.1.4",

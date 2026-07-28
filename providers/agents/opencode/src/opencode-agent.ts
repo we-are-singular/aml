@@ -38,6 +38,7 @@ interface OpenCodeEvaluationState {
 
 class OpenCodeAgentImplementation implements OpenCodeAgentProvider {
   readonly #directory: string | undefined
+  readonly #config: CapturedOpenCodeAgentOptions["config"]
   readonly #evaluations = new Map<string, OpenCodeEvaluationState>()
   readonly #model: string | undefined
   readonly #serverOptions: OpenCodeServerOptions | undefined
@@ -50,6 +51,7 @@ class OpenCodeAgentImplementation implements OpenCodeAgentProvider {
    * Captures adapter configuration without creating an OpenCode server.
    */
   constructor(options: CapturedOpenCodeAgentOptions) {
+    this.#config = options.config
     this.#directory = options.directory
     this.#model = options.model
     this.#serverOptions = options.server
@@ -116,6 +118,7 @@ class OpenCodeAgentImplementation implements OpenCodeAgentProvider {
     // belongs to this invocation and must end even when the session fails.
     const owned = await createIsolatedOpencode({
       ...(this.#serverOptions === undefined ? {} : this.#serverOptions),
+      ...(this.#config === undefined ? {} : { config: this.#config }),
       // Disposable hosts must not contend with the reusable configured port or
       // with another concurrent dynamic-capability invocation.
       port: 0,
@@ -215,7 +218,10 @@ class OpenCodeAgentImplementation implements OpenCodeAgentProvider {
    * Starts one evaluation-scoped reusable OpenCode host.
    */
   async #createClient(evaluation: OpenCodeEvaluationState): Promise<OpenCodeSessionClient> {
-    const owned = await createIsolatedOpencode(this.#serverOptions === undefined ? {} : { ...this.#serverOptions })
+    const owned = await createIsolatedOpencode({
+      ...(this.#serverOptions === undefined ? {} : this.#serverOptions),
+      ...(this.#config === undefined ? {} : { config: this.#config }),
+    })
     evaluation.ownedServer = owned.server
     return new OpenCodeSdkClient(owned.client)
   }

@@ -524,7 +524,17 @@ describe("opencodeAgent", () => {
         return serverOptionReads === 1 ? server : undefined
       },
     })
-    const provider = opencodeAgent(options)
+    const config = {
+      provider: {
+        custom: {
+          name: "Custom",
+          npm: "@ai-sdk/openai-compatible",
+          options: { apiKey: "secret", baseURL: "https://example.test/v1" },
+        },
+      },
+    }
+    const provider = opencodeAgent({ ...options, config })
+    config.provider.custom.options.apiKey = "changed"
 
     expect(openCodeHost.createIsolatedOpencode).not.toHaveBeenCalled()
     expect(serverOptionReads).toBe(1)
@@ -536,6 +546,15 @@ describe("opencodeAgent", () => {
 
     await expect(provider.run(createRequest(), createContext())).resolves.toEqual({ text: "owned response" })
     expect(openCodeHost.createIsolatedOpencode).toHaveBeenCalledWith({
+      config: {
+        provider: {
+          custom: {
+            name: "Custom",
+            npm: "@ai-sdk/openai-compatible",
+            options: { apiKey: "secret", baseURL: "https://example.test/v1" },
+          },
+        },
+      },
       hostname: "127.0.0.1",
       port: 0,
       timeout: 10_000,

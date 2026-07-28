@@ -1,0 +1,28 @@
+{
+  "name": "@aml-jsx/agent-pi",
+  "version": "0.0.0",
+  "private": true,
+  "files": [
+    "dist"
+  ],
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "vite build && tsc --project tsconfig.build.json",
+    "package:check": "node scripts/check-package.ts",
+    "test": "vitest run",
+    "test:integration": "vitest run tests/pi-agent.integration.test.tsx",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@aml-jsx/sdk": "*",
+    "@earendil-works/pi-coding-agent": "0.82.1",
+    "typebox": "1.1.38"
+  }
+}

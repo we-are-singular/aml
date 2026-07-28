@@ -15,6 +15,7 @@ export default defineConfig({
     alias: {
       "@aml-jsx/agent-codex": resolve(import.meta.dirname, "../providers/agents/codex/src/index.ts"),
       "@aml-jsx/agent-opencode": resolve(import.meta.dirname, "../providers/agents/opencode/src/index.ts"),
+      "@aml-jsx/agent-pi": resolve(import.meta.dirname, "../providers/agents/pi/src/index.ts"),
       "@aml-jsx/sandbox-docker": resolve(import.meta.dirname, "../providers/sandboxes/docker/src/index.ts"),
       "@aml-jsx/sdk": resolve(import.meta.dirname, "src/core.ts"),
       "@aml-jsx/workspace-local": resolve(import.meta.dirname, "../providers/workspaces/local/src/index.ts"),
@@ -28,6 +29,7 @@ export default defineConfig({
         "src",
         "../providers/agents/codex/src",
         "../providers/agents/opencode/src",
+        "../providers/agents/pi/src",
         "../providers/sandboxes/docker/src",
         "../providers/workspaces/local/src",
       ],
@@ -52,11 +54,13 @@ export default defineConfig({
       external: [
         /^node:/,
         /^@modelcontextprotocol\/sdk(?:\/.*)?$/,
+        /^@earendil-works\/pi-coding-agent(?:\/.*)?$/,
         /^@openai\/codex-sdk$/,
         /^@opencode-ai\/sdk(?:\/.*)?$/,
         /^dockerode$/,
         /^execa$/,
         /^proper-lockfile$/,
+        /^typebox(?:\/.*)?$/,
       ],
       output: {
         minifyInternalExports: false,
