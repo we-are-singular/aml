@@ -1,7 +1,8 @@
 {
   "$schema": "https://unpkg.com/release-it@21/schema/release-it.json",
   "hooks": {
-    "before:init": "npm run release:check --prefix .."
+    "before:init": "npm run release:check --prefix ..",
+    "after:bump": "npm install --package-lock-only --ignore-scripts --prefix .. && git add ../package-lock.json"
   },
   "git": {
     "commitMessage": "release: v${version}",
