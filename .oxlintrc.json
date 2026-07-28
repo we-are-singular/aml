@@ -1,0 +1,67 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "plugins": ["eslint", "typescript", "oxc", "import"],
+  "categories": {
+    "correctness": "error",
+    "suspicious": "off",
+    "style": "off",
+    "pedantic": "off"
+  },
+  "env": {
+    "es2024": true
+  },
+  "ignorePatterns": ["**/node_modules/**", "**/.turbo/**", "**/dist/**", "**/coverage/**", "poc/**"],
+  "rules": {
+    "eslint/no-unused-vars": "warn",
+    "typescript/no-unused-vars": "warn",
+    "eslint/no-undef": "error",
+    "eslint/no-duplicate-imports": ["error", { "allowSeparateTypeImports": true }],
+    "import/no-unassigned-import": ["error", { "allow": ["**/*.css"] }],
+    "eslint/no-var": "error",
+    "eslint/prefer-const": "error",
+    "eslint/prefer-template": "error",
+    "eslint/eqeqeq": "error",
+    "eslint/no-debugger": "error",
+    "eslint/no-async-promise-executor": "error",
+    "typescript/consistent-type-imports": "error",
+    "typescript/consistent-type-exports": "error",
+    "typescript/no-unnecessary-type-constraint": "error",
+    "typescript/no-this-alias": "off",
+    "unicorn/no-thenable": "off"
+  },
+  "overrides": [
+    {
+      "files": ["apps/website/src/**/*.{js,jsx,ts,tsx}"],
+      "env": {
+        "browser": true
+      }
+    },
+    {
+      "files": [
+        "config/**/*.{js,mjs,cjs,ts,mts,cts}",
+        "examples/**/*.{js,mjs,cjs,ts,mts,cts,tsx}",
+        "providers/**/*.{js,mjs,cjs,ts,mts,cts,tsx}",
+        "sdk/**/*.{js,mjs,cjs,ts,mts,cts,tsx}",
+        "*.config.{js,mjs,cjs,ts,mts,cts}"
+      ],
+      "env": {
+        "node": true
+      }
+    },
+    {
+      "files": [
+        "**/*.{test,spec}.{js,jsx,mjs,cjs,ts,tsx,mts,cts}",
+        "**/test/**/*.{js,jsx,mjs,cjs,ts,tsx,mts,cts}",
+        "**/tests/**/*.{js,jsx,mjs,cjs,ts,tsx,mts,cts}"
+      ],
+      "rules": {
+        "eslint/no-constant-condition": "off",
+        "eslint/no-unsafe-optional-chaining": "off",
+        "typescript/no-explicit-any": "off",
+        "typescript/no-non-null-assertion": "off",
+        "unicorn/filename-case": "off",
+        "unicorn/no-new-array": "off"
+      }
+    }
+  ]
+}
