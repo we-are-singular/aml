@@ -36,9 +36,9 @@ The canonical application entry point is an ordinary `main.tsx`:
 const runtime = new AmlRuntime({
   agentProvider: provider,
   ...options,
-});
-const result = await runtime.evaluate(<Application />);
-console.log(result);
+})
+const result = await runtime.evaluate(<Application />)
+console.log(result)
 ```
 
 The runtime Agent provider is optional until an `<Agent>` requires it. Applications own provider construction, credentials, runtime configuration, and cleanup. A CLI is outside the AML language contract. Any `aml run main.tsx` command must execute the same TypeScript entry point and must not introduce a second AML syntax or require an `.aml` filename.
@@ -75,33 +75,25 @@ The runtime may supply a default Agent provider, and each Agent may override it 
 
 ### 1.3 Package boundary
 
-AML is developed as an npm workspace monorepo. Its provider-neutral runtime is distributed as `@aml/sdk`, and concrete integrations are independently installable packages:
+AML is developed as an npm workspace monorepo and distributed as one public package:
 
 ```text
-@aml/agent-opencode
-@aml/agent-codex
-@aml/agent-claude
-@aml/sandbox-local
-@aml/sandbox-docker
-@aml/sandbox-daytona
-@aml/sandbox-cloudflare
-@aml/workspace-local
-@aml/workspace-s3
+@aml-jsx/sdk
 ```
 
-`@aml/sdk` owns the JSX runtime, evaluator, primitives, public provider interfaces, provider definition helpers, and conformance contracts. It must not import concrete providers or their vendor dependencies. Concrete provider packages depend on `@aml/sdk`, own their vendor-specific configuration and lifecycle, and expose configured factories.
+`@aml-jsx/sdk` owns the JSX runtime, evaluator, primitives, public provider interfaces, provider definition helpers, conformance contracts, and the concrete integrations included in the current release. Built-in provider factories such as `opencodeAgent()`, `codexAgent()`, `dockerSandbox()`, and `localWorkspace()` are exported from the package root.
 
-The SDK exports both `@aml/sdk/jsx-runtime` and `@aml/sdk/jsx-dev-runtime` for TypeScript and Vite's automatic production and development JSX transforms.
+The SDK exports both `@aml-jsx/sdk/jsx-runtime` and `@aml-jsx/sdk/jsx-dev-runtime` for TypeScript and Vite's automatic production and development JSX transforms.
 
-Each distributable package owns one leaf build over its complete source import graph. Neutral workspace source may be compiled directly when it is not a public package boundary. A concrete provider build consumes the built public `@aml/sdk` contract first and keeps it external rather than embedding another SDK copy. A build must not reverse the package boundaries above: in particular, `@aml/sdk` never imports or bundles a concrete provider.
+Concrete providers remain separate private workspaces so their contracts, tests, and vendor-specific lifecycle code have clear owners. The SDK's Vite build follows those provider source graphs and emits one publishable distribution. Provider source imports the provider-neutral SDK core through build aliases, so the public bundle contains one AML runtime and no dependency on private workspace package names.
 
-Examples and applications consume built package exports for every distributable package under proof. They must not bypass those exports through source paths or TypeScript aliases.
+Examples and applications consume the built `@aml-jsx/sdk` exports. They must not bypass the public package through workspace source paths or private package names.
 
 An example module exports one default function that returns its AML tree directly. It does not return a runner descriptor, construct or configure `AmlRuntime`, or expose a cleanup callback. The shared runner owns cross-cutting evaluation concerns such as tracing. Agent, Sandbox, and Workspace providers own their resource lifecycles through the runtime contracts below.
 
-AML node and primitive interoperability markers must be copy-stable. The exported JSX node type uses a structural symbol-valued discriminant rather than a copy-local unique-symbol key, so an arbitrary `{ type, props }` object is not renderable while TypeScript code using one physical `@aml/sdk` copy can compose nodes evaluated by another compatible copy.
+AML node and primitive interoperability markers must be copy-stable. The exported JSX node type uses a structural symbol-valued discriminant rather than a copy-local unique-symbol key, so an arbitrary `{ type, props }` object is not renderable while TypeScript code using one physical `@aml-jsx/sdk` copy can compose nodes evaluated by another compatible copy.
 
-AML does not use names such as `@aml/agents/opencode` for independently installed providers because npm interprets that form as the `opencode` subpath of one `@aml/agents` package. Convenience aggregator packages are non-normative and may exist later, but cannot replace independently installable adapters.
+Separate provider packages may be considered later if dependency weight or release cadence justifies that public boundary. They are not part of the current package contract.
 
 ## 2. Evaluation model
 
@@ -142,7 +134,7 @@ For a normal nested Agent:
 
 ```tsx
 function GetContext() {
-  return <Agent>Find the customer context.</Agent>;
+  return <Agent>Find the customer context.</Agent>
 }
 
 const workflow = (
@@ -150,7 +142,7 @@ const workflow = (
     <GetContext />
     {"\nDecide what to do next."}
   </Agent>
-);
+)
 ```
 
 AML:
@@ -165,10 +157,7 @@ AML:
 AML evaluates JSX siblings from left to right. Independent work can run concurrently through ordinary JavaScript:
 
 ```tsx
-const [review, audit] = await Promise.all([
-  evaluate(<Reviewer />, ReviewResult),
-  evaluate(<Auditor />, AuditResult),
-]);
+const [review, audit] = await Promise.all([evaluate(<Reviewer />, ReviewResult), evaluate(<Auditor />, AuditResult)])
 ```
 
 Implicit sibling concurrency is outside the normative evaluation model. Parent/child dependencies remain post-order.
@@ -190,10 +179,10 @@ The root evaluation accepts a caller-owned cancellation signal:
 
 ```ts
 interface AmlEvaluationOptions {
-  signal?: AbortSignal;
+  signal?: AbortSignal
 }
 
-runtime.evaluate(tree, { signal });
+runtime.evaluate(tree, { signal })
 ```
 
 An already-aborted signal rejects before evaluation begins. A signal aborted during evaluation is propagated to active provider calls and prevents the runtime from advancing to another AML frame. AML cannot forcibly interrupt arbitrary component Promises or reverse effects that already completed; components and providers must cooperate with cancellation at their own boundaries.
@@ -215,27 +204,27 @@ AML cannot automatically roll back arbitrary effects already performed by an Age
 
 ### 3.1 Normative surface
 
-| Surface | Purpose | Result |
-| --- | --- | --- |
-| `<Fragment>` / `<>` | Group authored siblings | Ordered child results |
-| `AmlRuntime` | Own one complete evaluation | Final string |
-| `<Agent>` | Execute one Agent boundary | Final text |
-| `<System>` | Contribute resolved text to an Agent's system prompt | System descriptor |
-| `defineAgentProvider()` | Define an Agent harness adapter | `AgentProvider` |
-| `<Tool>` | Grant a host or JavaScript capability | Tool descriptor |
-| `defineTool()` | Expose a JavaScript function to an Agent | Tool definition |
-| `<Skill>` | Resolve reusable instruction text | Text |
-| `<Sandbox>` | Scope an ephemeral execution lease and restrictive filesystem policy | Descendant execution scope |
-| `defineSandboxProvider()` | Define an ephemeral execution adapter | `SandboxProvider` |
-| `<Workspace>` | Load and save one durable working directory | Descendant filesystem root |
-| `defineWorkspaceProvider()` | Define a durable workspace adapter | `WorkspaceProvider` |
-| `<Mcp>` | Grant a provider-native or explicitly configured MCP server | MCP server descriptor |
-| `defineMcpServer()` | Define an explicitly configured MCP server grant | MCP server definition |
-| `evaluate()` | Evaluate AML as component-local data | `Promise<string \| T>` |
-| `<FollowUp>` | Stage another input in the same Agent session | Turn descriptor |
-| `<Loop>` | Repeat fresh Agents over validated state snapshots | Final text |
-| `<Context.Provider>` | Scope an immutable dependency downward | Descendant context |
-| `createContext()` / `useContext()` | Define and read scoped dependencies | Typed value |
+| Surface                            | Purpose                                                              | Result                     |
+| ---------------------------------- | -------------------------------------------------------------------- | -------------------------- |
+| `<Fragment>` / `<>`                | Group authored siblings                                              | Ordered child results      |
+| `AmlRuntime`                       | Own one complete evaluation                                          | Final string               |
+| `<Agent>`                          | Execute one Agent boundary                                           | Final text                 |
+| `<System>`                         | Contribute resolved text to an Agent's system prompt                 | System descriptor          |
+| `defineAgentProvider()`            | Define an Agent harness adapter                                      | `AgentProvider`            |
+| `<Tool>`                           | Grant a host or JavaScript capability                                | Tool descriptor            |
+| `defineTool()`                     | Expose a JavaScript function to an Agent                             | Tool definition            |
+| `<Skill>`                          | Resolve reusable instruction text                                    | Text                       |
+| `<Sandbox>`                        | Scope an ephemeral execution lease and restrictive filesystem policy | Descendant execution scope |
+| `defineSandboxProvider()`          | Define an ephemeral execution adapter                                | `SandboxProvider`          |
+| `<Workspace>`                      | Load and save one durable working directory                          | Descendant filesystem root |
+| `defineWorkspaceProvider()`        | Define a durable workspace adapter                                   | `WorkspaceProvider`        |
+| `<Mcp>`                            | Grant a provider-native or explicitly configured MCP server          | MCP server descriptor      |
+| `defineMcpServer()`                | Define an explicitly configured MCP server grant                     | MCP server definition      |
+| `evaluate()`                       | Evaluate AML as component-local data                                 | `Promise<string \| T>`     |
+| `<FollowUp>`                       | Stage another input in the same Agent session                        | Turn descriptor            |
+| `<Loop>`                           | Repeat fresh Agents over validated state snapshots                   | Final text                 |
+| `<Context.Provider>`               | Scope an immutable dependency downward                               | Descendant context         |
+| `createContext()` / `useContext()` | Define and read scoped dependencies                                  | Typed value                |
 
 `<Loop>`, `<Context.Provider>`, and `createContext()` / `useContext()` are draft design targets. Their sections remain in this specification so the intended boundaries can be reviewed, but they are not part of the current public reference or release-ready primitive count.
 
@@ -243,17 +232,17 @@ AML cannot automatically roll back arbitrary effects already performed by an Age
 
 The normative surface is delivered in phases so the public API grows only after each earlier boundary has deterministic proof.
 
-| Phase | Surface | Purpose |
-| --- | --- | --- |
-| Foundation | JSX values, Fragments, async components, `AmlRuntime` | Prove single-invocation asynchronous evaluation |
-| MVP 1 | `<Agent>`, `<System>`, `defineAgentProvider()` | Establish the provider-neutral execution and message-channel boundary |
-| MVP 2 | `<Tool>`, `defineTool()` | Add scoped host and JavaScript capabilities |
-| MVP 3 | `<Skill>` | Add reusable instruction resolution |
-| MVP 4 | `<Sandbox>`, `defineSandboxProvider()` | Add ephemeral execution scope |
-| MVP 5 | `<Workspace>`, `defineWorkspaceProvider()` | Add durable filesystem scope and complete the MVP |
-| Post-MVP capabilities | `<Mcp>`, `defineMcpServer()` | Attach MCP servers without making the SDK own an Agent harness |
-| Post-MVP orchestration | `evaluate()`, structured output, `<FollowUp>`; draft: `<Loop>` | Add richer dataflow and same-session or iterative execution |
-| Draft late surface | `createContext()`, `useContext()`, `<Context.Provider>` | Add immutable dependency scope only after the execution and resource model is stable |
+| Phase                  | Surface                                                        | Purpose                                                                              |
+| ---------------------- | -------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| Foundation             | JSX values, Fragments, async components, `AmlRuntime`          | Prove single-invocation asynchronous evaluation                                      |
+| MVP 1                  | `<Agent>`, `<System>`, `defineAgentProvider()`                 | Establish the provider-neutral execution and message-channel boundary                |
+| MVP 2                  | `<Tool>`, `defineTool()`                                       | Add scoped host and JavaScript capabilities                                          |
+| MVP 3                  | `<Skill>`                                                      | Add reusable instruction resolution                                                  |
+| MVP 4                  | `<Sandbox>`, `defineSandboxProvider()`                         | Add ephemeral execution scope                                                        |
+| MVP 5                  | `<Workspace>`, `defineWorkspaceProvider()`                     | Add durable filesystem scope and complete the MVP                                    |
+| Post-MVP capabilities  | `<Mcp>`, `defineMcpServer()`                                   | Attach MCP servers without making the SDK own an Agent harness                       |
+| Post-MVP orchestration | `evaluate()`, structured output, `<FollowUp>`; draft: `<Loop>` | Add richer dataflow and same-session or iterative execution                          |
+| Draft late surface     | `createContext()`, `useContext()`, `<Context.Provider>`        | Add immutable dependency scope only after the execution and resource model is stable |
 
 This is a delivery order, not a hierarchy of importance. Later primitives remain normative desired state, but they must not shape earlier implementations beyond the explicit extension points in their contracts.
 
@@ -287,8 +276,8 @@ AML awaits sibling results in authored order. A Promise created before AML recei
 
 ```tsx
 async function CustomerContext() {
-  const customer = await database.customers.find(42);
-  return `Customer: ${customer.name}`;
+  const customer = await database.customers.find(42)
+  return `Customer: ${customer.name}`
 }
 ```
 
@@ -300,9 +289,9 @@ AML invokes a component exactly once for each evaluated occurrence and awaits it
 
 ```tsx
 async function Workflow() {
-  const research = await evaluate(<Agent>Research the customer.</Agent>);
+  const research = await evaluate(<Agent>Research the customer.</Agent>)
 
-  return <Agent>Decide using: {research}</Agent>;
+  return <Agent>Decide using: {research}</Agent>
 }
 ```
 
@@ -319,7 +308,7 @@ function Reviewer({ deep }: { deep: boolean }) {
       {deep ? <Skill src="./skills/deep.md" /> : "Run a compact review."}
       Review the patch.
     </Agent>
-  );
+  )
 }
 ```
 
@@ -330,11 +319,7 @@ AML does not define `<If>`, `<Else>`, `<Map>`, or `<Sequence>`. Those would dupl
 An `<Agent>` is one Agent-session boundary. It may contain one initial input and multiple sequential provider turns through `<FollowUp>`.
 
 ```tsx
-<Agent
-  model="opencode-go/minimax-m3"
-  provider={openCode}
-  system="You are a support operations lead."
->
+<Agent model="opencode-go/minimax-m3" provider={openCode} system="You are a support operations lead.">
   <System>Prefer concrete operational evidence.</System>
   <Tool name="support.search" />
   Investigate customer 42.
@@ -345,10 +330,10 @@ Props:
 
 ```ts
 interface AgentProps {
-  children?: AmlRenderable;
-  model?: string;
-  provider?: AgentProvider;
-  system?: string;
+  children?: AmlRenderable
+  model?: string
+  provider?: AgentProvider
+  system?: string
 }
 ```
 
@@ -364,13 +349,13 @@ AML completely resolves Agent children before opening the provider session. The 
 
 ```ts
 interface AgentPlan {
-  initialPrompt: string;
-  followUps: readonly string[];
-  mcpServers: readonly AgentMcpServer[];
-  model?: string;
-  system: string;
-  systemFragments: readonly string[];
-  tools: readonly AgentTool[];
+  initialPrompt: string
+  followUps: readonly string[]
+  mcpServers: readonly AgentMcpServer[]
+  model?: string
+  system: string
+  systemFragments: readonly string[]
+  tools: readonly AgentTool[]
 }
 ```
 
@@ -531,11 +516,11 @@ Model, provider, Sandbox, Workspace, system instructions, Tool grants, and MCP g
 
 The word state refers to three different things:
 
-| State | Visibility in the next FollowUp |
-| --- | --- |
-| Provider conversation history | Visible automatically in the same session |
-| Filesystem, database, and tool effects | Visible if the same resource scope exposes them |
-| AML Loop state | Still staged; committed only after the complete Agent session |
+| State                                  | Visibility in the next FollowUp                               |
+| -------------------------------------- | ------------------------------------------------------------- |
+| Provider conversation history          | Visible automatically in the same session                     |
+| Filesystem, database, and tool effects | Visible if the same resource scope exposes them               |
+| AML Loop state                         | Still staged; committed only after the complete Agent session |
 
 A FollowUp never causes JSX to re-evaluate. If an Agent inside `<Loop>` calls `aml_set_state` during its initial input, later FollowUps know about the tool call through conversation history, but they do not receive a newly rendered state snapshot. The Loop commits only after the Agent session finishes.
 
@@ -558,16 +543,13 @@ A FollowUp cannot be dynamically authored from a preceding response because all 
 Use typed Agent boundaries and TypeScript for response-dependent branching:
 
 ```tsx
-const classification = await evaluate(
-  <Agent>Classify this defect.</Agent>,
-  Classification,
-);
+const classification = await evaluate(<Agent>Classify this defect.</Agent>, Classification)
 
 return classification.kind === "security" ? (
   <Agent>Perform a security review: {classification.summary}</Agent>
 ) : (
   <Agent>Perform a correctness review: {classification.summary}</Agent>
-);
+)
 ```
 
 This starts a new Agent session. Host-controlled dynamic branching within a retained session is outside the FollowUp contract and is discussed in Futurology.
@@ -633,37 +615,29 @@ Tools are capabilities, not render-time calls.
 `<Tool>` is a capitalized exported component. AML does not define lowercase HTML-like intrinsic elements.
 
 ```ts
-type ToolProps = { name: string; use?: never } | { name?: never; use: AmlTool };
+type ToolProps = { name: string; use?: never } | { name?: never; use: AmlTool }
 
 type AmlJsonValue =
-  | null
-  | boolean
-  | number
-  | string
-  | readonly AmlJsonValue[]
-  | { readonly [key: string]: AmlJsonValue };
+  null | boolean | number | string | readonly AmlJsonValue[] | { readonly [key: string]: AmlJsonValue }
 
 interface AgentHostTool {
-  kind: "host";
-  name: string;
+  kind: "host"
+  name: string
 }
 
 interface AgentJavaScriptTool {
-  description: string;
-  execute(
-    input: unknown,
-    context: AgentToolExecutionContext,
-  ): Promise<AmlJsonValue>;
-  inputSchema: Readonly<Record<string, unknown>>;
-  kind: "javascript";
-  name: string;
+  description: string
+  execute(input: unknown, context: AgentToolExecutionContext): Promise<AmlJsonValue>
+  inputSchema: Readonly<Record<string, unknown>>
+  kind: "javascript"
+  name: string
 }
 
-type AgentTool = AgentHostTool | AgentJavaScriptTool;
+type AgentTool = AgentHostTool | AgentJavaScriptTool
 
 interface AgentToolExecutionContext {
-  signal: AbortSignal;
-  trace: AmlTraceIdentity;
+  signal: AbortSignal
+  trace: AmlTraceIdentity
 }
 
 interface AmlTool extends AgentJavaScriptTool {
@@ -723,20 +697,20 @@ The tool may be asynchronous. It may capture request context, repositories, or s
 
 ```tsx
 function SupportAgent() {
-  const session = useContext(SessionContext);
+  const session = useContext(SessionContext)
   const getOrders = defineTool({
     name: "get_current_user_orders",
     description: "Load orders for the current user.",
     input: z.object({}),
     execute: () => session.database.orders.findByUser(session.userId),
-  });
+  })
 
   return (
     <Agent>
       <Tool use={getOrders} />
       Review this user's orders.
     </Agent>
-  );
+  )
 }
 ```
 
@@ -750,7 +724,7 @@ Every Agent declares its own Tools. Tools are not inherited from parent Agents. 
 const runtime = new AmlRuntime({
   agentProvider: provider,
   allowedTools: ["read", "lookup_customer"],
-});
+})
 ```
 
 An undeclared name fails before the Agent executes. When the allowlist is omitted, AML adds no runtime name restriction.
@@ -783,21 +757,19 @@ const projectMcp = defineMcpServer({
     command: "node",
     args: ["./servers/project.mjs"],
   },
-});
+})
 
-<Agent>
+;<Agent>
   <Mcp name="github" />
   <Mcp use={projectMcp} />
   Investigate the reported issue.
-</Agent>;
+</Agent>
 ```
 
 Props:
 
 ```ts
-type McpProps =
-  | { name: string; use?: never }
-  | { name?: never; use: AmlMcpServer };
+type McpProps = { name: string; use?: never } | { name?: never; use: AmlMcpServer }
 ```
 
 A named MCP server refers to configuration owned by the selected Agent provider or its native host. Provider execution must fail closed when that exact name cannot be attached. An adapter may preflight configuration it can inspect or delegate late-bound resolution to a native host whose ambient configuration is intentionally opaque, but it must not silently omit the authored grant. This makes existing provider-native MCP configuration available without copying credentials or vendor configuration into AML.
@@ -807,36 +779,34 @@ A named MCP server refers to configuration owned by the selected Agent provider 
 ```ts
 type AmlMcpTransport =
   | {
-      type: "stdio";
-      command: string;
-      args?: readonly string[];
-      cwd?: string;
-      env?: Readonly<Record<string, string>>;
+      type: "stdio"
+      command: string
+      args?: readonly string[]
+      cwd?: string
+      env?: Readonly<Record<string, string>>
     }
   | {
-      type: "streamable-http";
-      url: string;
-      headers?: Readonly<Record<string, string>>;
-    };
+      type: "streamable-http"
+      url: string
+      headers?: Readonly<Record<string, string>>
+    }
 
 type DefineMcpServerOptions = {
-  name: string;
+  name: string
   transport:
     | AmlMcpTransport
     | (Omit<Extract<AmlMcpTransport, { type: "streamable-http" }>, "url"> & {
-        url: string | URL;
-      });
-};
-
-interface AmlMcpServer {
-  readonly __amlMcpServer: true;
-  readonly name: string;
-  readonly transport: AmlMcpTransport;
+        url: string | URL
+      })
 }
 
-type AgentMcpServer =
-  | { kind: "named"; name: string }
-  | { definition: AmlMcpServer; kind: "configured" };
+interface AmlMcpServer {
+  readonly __amlMcpServer: true
+  readonly name: string
+  readonly transport: AmlMcpTransport
+}
+
+type AgentMcpServer = { kind: "named"; name: string } | { definition: AmlMcpServer; kind: "configured" }
 ```
 
 `defineMcpServer()` is synchronous and performs no I/O. It requires a non-empty normalized server name, requires a non-empty normalized `stdio` command or an HTTP(S) Streamable HTTP URL, validates every transport field, snapshots arrays and string records, normalizes a URL input to its string form, and freezes the complete descriptor. `<Mcp use>` accepts only the exact identity returned by `defineMcpServer()`, including across physical SDK copies; clones and structurally similar objects are not definitions. The Agent provider remains the MCP client: it maps the descriptor to its native configuration, launches or connects to the server, performs MCP initialization, exposes supported server capabilities to the Agent session, and owns shutdown.
@@ -884,10 +854,10 @@ async function Workflow() {
     <Agent>
       <Tool name="read" />
       Research the customer.
-    </Agent>,
-  );
+    </Agent>
+  )
 
-  return <Agent>Make a decision using: {research}</Agent>;
+  return <Agent>Make a decision using: {research}</Agent>
 }
 ```
 
@@ -897,12 +867,9 @@ The returned Promise resolves to text. Supplying a schema that satisfies both St
 const Research = z.object({
   risks: z.array(z.string()),
   summary: z.string(),
-});
+})
 
-const research = await evaluate(
-  <Agent>Return structured research.</Agent>,
-  Research,
-);
+const research = await evaluate(<Agent>Return structured research.</Agent>, Research)
 ```
 
 With a schema, the supplied AML must resolve to exactly one Agent, optionally through Fragments, Context Providers, or ordinary function components. Non-empty text outside that Agent is invalid because it would create a second result channel. AML generates and snapshots draft 2020-12 JSON Schema before the provider boundary, sends that portable JSON document through `AgentRequest.output.jsonSchema`, and validates the provider's returned unknown value again through the original Standard Schema. Providers never receive or invoke the application-owned schema object. The component receives Standard Schema's inferred output, including an authored transformation; only the provider-facing value and JSON Schema must remain JSON.
@@ -931,10 +898,7 @@ Nested calls share the root evaluation's:
 Independent calls may be started together:
 
 ```tsx
-const [review, audit] = await Promise.all([
-  evaluate(<Reviewer />, ReviewResult),
-  evaluate(<Auditor />, AuditResult),
-]);
+const [review, audit] = await Promise.all([evaluate(<Reviewer />, ReviewResult), evaluate(<Auditor />, AuditResult)])
 ```
 
 `maxConcurrentAgents` limits active Agent sessions. `Promise.all()` preserves result array order even when Agents finish out of order.
@@ -951,44 +915,41 @@ Use `Promise.allSettled()` only when partial failure is an explicit application 
 
 ```tsx
 interface Session {
-  database: OrderDatabase;
-  userId: string;
+  database: OrderDatabase
+  userId: string
 }
 
-const SessionContext = createContext<Session>("Session");
+const SessionContext = createContext<Session>("Session")
 
 function OrderAgent() {
-  const session = useContext(SessionContext);
-  return <Agent>Review orders for user {session.userId}.</Agent>;
+  const session = useContext(SessionContext)
+  return <Agent>Review orders for user {session.userId}.</Agent>
 }
 
 await runtime.evaluate(
   <SessionContext.Provider value={requestSession}>
     <OrderAgent />
-  </SessionContext.Provider>,
-);
+  </SessionContext.Provider>
+)
 ```
 
 The public contract is:
 
 ```ts
 interface AmlContext<Value> {
-  readonly name: string;
-  readonly Provider: AmlComponent<ContextProviderProps<Value>>;
+  readonly name: string
+  readonly Provider: AmlComponent<ContextProviderProps<Value>>
 }
 
 interface ContextProviderProps<Value> {
-  readonly children?: AmlRenderable;
-  readonly value: Value;
+  readonly children?: AmlRenderable
+  readonly value: Value
 }
 
-function createContext<Value>(name: string): AmlContext<Value>;
-function createContext<Value>(
-  name: string,
-  defaultValue: Value,
-): AmlContext<Value>;
+function createContext<Value>(name: string): AmlContext<Value>
+function createContext<Value>(name: string, defaultValue: Value): AmlContext<Value>
 
-function useContext<Value>(context: AmlContext<Value>): Value;
+function useContext<Value>(context: AmlContext<Value>): Value
 ```
 
 The context name must be a non-empty normalized string and appears in diagnostics. Omitting the second `createContext()` argument creates a required context. Passing a second argument creates a defaulted context, including when that argument is explicitly `undefined`.
@@ -1006,7 +967,7 @@ Context obeys lexical scope:
 
 `useContext()` is synchronous and valid only while AML is invoking an ordinary function component. It reads the nearest binding active at that component occurrence. Calling it outside component invocation, from provider-owned callbacks, or from detached work after a component settles fails closed. A component-local `evaluate()` inherits the binding map active at the calling component, while Providers created inside that nested tree remain local to that tree.
 
-Context identity is the exact object returned by `createContext()`, not its name. Two contexts with the same name do not share values. Compatible physical copies of `@aml/sdk` in one JavaScript realm share the context-definition registry and component invocation storage, so a Context authored through one copy can be provided, consumed, and evaluated through another.
+Context identity is the exact object returned by `createContext()`, not its name. Two contexts with the same name do not share values. Compatible physical copies of `@aml-jsx/sdk` in one JavaScript realm share the context-definition registry and component invocation storage, so a Context authored through one copy can be provided, consumed, and evaluated through another.
 
 Context is not reactive state. It has no setter, subscription, invalidation, re-render, or implicit propagation into later unrelated evaluations. Use it for request identity, repositories, policy objects, configuration, and trace baggage. Sandbox handles remain available through `AgentExecutionContext`; putting one in Context does not change Sandbox ownership or confinement.
 
@@ -1045,22 +1006,11 @@ const ResearchState = z.object({
 Props:
 
 ```ts
-interface LoopProps<
-  Schema extends StandardSchemaV1<
-    unknown,
-    Record<string, unknown>
-  >,
-> {
-  initial: StandardSchemaV1.InferInput<Schema>;
-  name?: string;
-  render(context: {
-    iteration: number;
-    state: DeepReadonly<StandardSchemaV1.InferOutput<Schema>>;
-  }): AmlRenderable;
-  schema: StandardSchemaV1.InferOutput<Schema> extends
-    StandardSchemaV1.InferInput<Schema>
-      ? Schema
-      : never;
+interface LoopProps<Schema extends StandardSchemaV1<unknown, Record<string, unknown>>> {
+  initial: StandardSchemaV1.InferInput<Schema>
+  name?: string
+  render(context: { iteration: number; state: DeepReadonly<StandardSchemaV1.InferOutput<Schema>> }): AmlRenderable
+  schema: StandardSchemaV1.InferOutput<Schema> extends StandardSchemaV1.InferInput<Schema> ? Schema : never
 }
 ```
 
@@ -1070,7 +1020,7 @@ The render result must resolve to exactly one Agent, optionally through a Fragme
 
 ```ts
 {
-  updates: Record<string, unknown>;
+  updates: Record<string, unknown>
 }
 ```
 
@@ -1153,12 +1103,7 @@ The state Tool expires when its Agent finishes. Providers must complete or cance
 `<Sandbox>` scopes an ephemeral execution environment:
 
 ```tsx
-<Sandbox
-  provider={remoteSandbox}
-  root="."
-  cwd="packages/api"
-  access="read-write"
->
+<Sandbox provider={remoteSandbox} root="." cwd="packages/api" access="read-write">
   <Agent>Implement and test the API change.</Agent>
 </Sandbox>
 ```
@@ -1179,13 +1124,13 @@ A provider may be supplied directly or configured once on the runtime:
 const runtime = new AmlRuntime({
   agentProvider,
   sandboxProvider: remoteSandbox,
-});
+})
 
 await runtime.evaluate(
   <Sandbox root="repository">
     <Agent>Inspect the repository.</Agent>
-  </Sandbox>,
-);
+  </Sandbox>
+)
 ```
 
 An outermost Sandbox without either provider is invalid. Its access defaults to `"read-only"`; `root` and `cwd` default to `"."`.
@@ -1240,47 +1185,47 @@ AML owns acquisition and release. The provider owns the real environment:
 
 ```ts
 interface SandboxProvider<Handle = unknown> {
-  readonly name: string;
-  acquire(request: SandboxAcquireRequest): Promise<SandboxLease<Handle>>;
+  readonly name: string
+  acquire(request: SandboxAcquireRequest): Promise<SandboxLease<Handle>>
 }
 
 interface SandboxAcquireRequest {
-  access: "read-only" | "read-write";
-  cwd: string;
-  evaluationId: string;
-  root: string;
-  signal: AbortSignal;
-  workspace?: WorkspaceMaterializationReference;
+  access: "read-only" | "read-write"
+  cwd: string
+  evaluationId: string
+  root: string
+  signal: AbortSignal
+  workspace?: WorkspaceMaterializationReference
 }
 
 interface SandboxLease<Handle = unknown> {
-  handle: Handle;
-  id: string;
-  release(): Promise<void>;
+  handle: Handle
+  id: string
+  release(): Promise<void>
 }
 
 interface SandboxSession<Handle = unknown> {
-  access: "read-only" | "read-write";
-  cwd: string;
+  access: "read-only" | "read-write"
+  cwd: string
   lease: {
-    handle: Handle;
-    id: string;
-  };
-  nested: boolean;
+    handle: Handle
+    id: string
+  }
+  nested: boolean
   provider: {
-    name: string;
-  };
-  root: string;
+    name: string
+  }
+  root: string
 }
 
 interface WorkspaceMaterializationReference<Handle = unknown> {
-  directory: string;
-  handle: Handle;
-  leaseId: string;
+  directory: string
+  handle: Handle
+  leaseId: string
   provider: {
-    name: string;
-  };
-  workspaceId: string;
+    name: string
+  }
+  workspaceId: string
 }
 ```
 
@@ -1309,19 +1254,19 @@ When an outer Sandbox is inside a Workspace, `workspace` carries the active immu
 A Node-specific Docker provider uses the configured factory form:
 
 ```tsx
-import { dockerSandbox } from "@aml/sandbox-docker";
+import { dockerSandbox } from "@aml-jsx/sdk"
 
 const docker = dockerSandbox({
   buildContext: "./docker",
   dockerfile: "./docker/Dockerfile",
   workspace: approvedHostDirectory,
-});
+})
 
 await runtime.evaluate(
   <Sandbox provider={docker} root="repository" access="read-only">
     <Agent>Inspect the repository.</Agent>
-  </Sandbox>,
-);
+  </Sandbox>
+)
 ```
 
 The factory requires exactly one of `image` or `dockerfile`. Its optional `workspace` is the approved host-directory fallback for a standalone Sandbox. An active `<Workspace>` materialization supersedes that fallback; acquisition rejects if neither exists. `buildContext`, `cpus`, `maxOutputBytes`, `memoryBytes`, `pidsLimit`, `tmpfsBytes`, `user`, and an injected Dockerode client are provider configuration, not AML props. `user` is a numeric non-zero UID with an optional numeric non-zero GID. The injected client must use a local socket, and the Docker daemon must resolve paths in the same filesystem namespace as the AML process. A local socket alone does not prove that condition, so every acquisition creates, mounts, reads, and removes a random identity beneath the exact selected root before exposing the lease. The selected host root must therefore be writable by the AML process during acquisition even when the container receives `"read-only"` access; no probe remains when descendant AML begins. Remote Docker providers require an explicit Workspace transfer or volume contract and are outside this provider.
@@ -1416,32 +1361,32 @@ The Workspace provider owns durable storage and exposes one acquired materializa
 
 ```ts
 interface WorkspaceProvider<Handle = unknown> {
-  readonly name: string;
-  acquire(request: WorkspaceAcquireRequest): Promise<WorkspaceLease<Handle>>;
+  readonly name: string
+  acquire(request: WorkspaceAcquireRequest): Promise<WorkspaceLease<Handle>>
 }
 
 interface WorkspaceAcquireRequest {
-  evaluationId: string;
-  id: string;
-  signal: AbortSignal;
+  evaluationId: string
+  id: string
+  signal: AbortSignal
 }
 
 interface WorkspaceLease<Handle = unknown> {
-  directory: string;
-  handle: Handle;
-  id: string;
-  release(): Promise<void>;
-  save(): Promise<void>;
+  directory: string
+  handle: Handle
+  id: string
+  release(): Promise<void>
+  save(): Promise<void>
 }
 
 interface WorkspaceMaterializationReference<Handle = unknown> {
-  directory: string;
-  handle: Handle;
-  leaseId: string;
+  directory: string
+  handle: Handle
+  leaseId: string
   provider: {
-    name: string;
-  };
-  workspaceId: string;
+    name: string
+  }
+  workspaceId: string
 }
 ```
 
@@ -1465,7 +1410,7 @@ await runtime.evaluate(
     <Sandbox provider={docker}>
       <Agent>Review and update the repository.</Agent>
     </Sandbox>
-  </Workspace>,
+  </Workspace>
 )
 ```
 
@@ -1487,44 +1432,41 @@ The provider boundary is:
 
 ```ts
 interface AmlTraceIdentity {
-  parentSpanId?: string;
-  runId: string;
-  spanId: string;
+  parentSpanId?: string
+  runId: string
+  spanId: string
 }
 
 interface AgentProvider {
-  readonly name: string;
-  run(
-    request: AgentRequest,
-    context: AgentExecutionContext,
-  ): Promise<AgentResponse>;
-  supportsSandbox?(sandbox: SandboxSession): boolean;
+  readonly name: string
+  run(request: AgentRequest, context: AgentExecutionContext): Promise<AgentResponse>
+  supportsSandbox?(sandbox: SandboxSession): boolean
 }
 
 interface AgentRequest {
-  followUps?: readonly string[];
-  mcpServers: readonly AgentMcpServer[];
-  model?: string;
+  followUps?: readonly string[]
+  mcpServers: readonly AgentMcpServer[]
+  model?: string
   output?: {
-    jsonSchema: Readonly<Record<string, AmlJsonValue>>;
-    type: "json";
-  };
-  prompt: string;
-  system: string;
-  tools: readonly AgentTool[];
-  trace?: AmlTraceIdentity;
+    jsonSchema: Readonly<Record<string, AmlJsonValue>>
+    type: "json"
+  }
+  prompt: string
+  system: string
+  tools: readonly AgentTool[]
+  trace?: AmlTraceIdentity
 }
 
 interface AgentResponse {
-  structured?: unknown;
-  text: string;
+  structured?: unknown
+  text: string
 }
 
 interface AgentExecutionContext {
-  events: AmlEventSubscriber;
-  signal: AbortSignal;
-  sandbox?: SandboxSession;
-  trace: AmlTraceIdentity;
+  events: AmlEventSubscriber
+  signal: AbortSignal
+  sandbox?: SandboxSession
+  trace: AmlTraceIdentity
 }
 ```
 
@@ -1564,12 +1506,12 @@ Public provider integrations must use configured factory functions:
 const sandbox = dockerSandbox({
   dockerfile: "./Dockerfile",
   workspace: repositoryRoot,
-});
+})
 
 const workspace = s3Workspace({
   bucket: "agent-workspaces",
   region: "eu-west-1",
-});
+})
 ```
 
 This combines an injected Strategy with an Adapter-specific factory:
@@ -1602,13 +1544,13 @@ The model prop is the one intentionally portable per-Agent provider override. Ot
 
 ### 15.4 Definition helpers
 
-`@aml/sdk` exports capability and provider definition helpers:
+`@aml-jsx/sdk` exports capability and provider definition helpers:
 
 ```ts
-defineMcpServer(definition);
-defineAgentProvider(implementation);
-defineSandboxProvider(implementation);
-defineWorkspaceProvider(implementation);
+defineMcpServer(definition)
+defineAgentProvider(implementation)
+defineSandboxProvider(implementation)
+defineWorkspaceProvider(implementation)
 ```
 
 These helpers are the supported authoring surface for official and third-party adapters. Each helper preserves the implementation's generic types, validates its stable identity and contract, and returns the corresponding public SDK type. Provider names must already be non-empty and equal to their trimmed form; provider helpers reject non-normalized names instead of rewriting a runtime value behind its inferred TypeScript type. Definition helpers perform no network access, client creation, resource acquisition, or vendor-option interpretation. Provider helpers perform no global registration. `defineTool()` and `defineMcpServer()` register only the weak exact identities documented below.
@@ -1618,10 +1560,10 @@ A configured provider's identity and invocation method are captured when it ente
 Official provider packages use the same public helpers available to application authors:
 
 ```ts
-import { defineAgentProvider, type AgentProvider } from "@aml/sdk";
+import { defineAgentProvider, type AgentProvider } from "@aml-jsx/sdk"
 
 export interface OpenCodeAgentOptions {
-  model?: string;
+  model?: string
   // OpenCode-specific configuration remains owned by this package.
 }
 
@@ -1630,9 +1572,9 @@ export function opencodeAgent(options: OpenCodeAgentOptions): AgentProvider {
     name: "opencode",
     async run(request, context) {
       // Create or reuse OpenCode resources only when this call needs them.
-      return runOpenCode(options, request, context);
+      return runOpenCode(options, request, context)
     },
-  });
+  })
 }
 ```
 
@@ -1660,33 +1602,33 @@ const runtime = new AmlRuntime({
   maxStateTransitions: 16,
   maxTurnsPerAgent: 16,
   onTraceError(error, event) {
-    console.error("Trace listener failed", event.type, error);
+    console.error("Trace listener failed", event.type, error)
   },
   system: "Global application instructions.",
-});
+})
 
-runtime.on("trace", createConsoleTracer());
+runtime.on("trace", createConsoleTracer())
 runtime.once("finish", async ({ status }) => {
-  await recordRunCompletion(status);
-});
+  await recordRunCompletion(status)
+})
 ```
 
 Defaults:
 
-| Option | Default | Meaning |
-| --- | --: | --- |
-| `agentProvider` | none | Default provider for Agents without a `provider` prop |
-| `maxAgentCalls` | `32` | Maximum Agent sessions in one evaluation |
-| `maxConcurrentAgents` | `4` | Maximum active Agent sessions |
-| `maxDepth` | `16` | Maximum recursive AML evaluation depth |
-| `maxStateTransitions` | `16` | Maximum committed Loop transitions |
-| `maxTurnsPerAgent` | `16` | Maximum authored inputs in one Agent session |
-| `onTraceError` | stderr once | Out-of-band trace failure handler |
-| `allowedMcpServers` | unrestricted | Optional MCP-server-name allowlist |
-| `allowedTools` | unrestricted | Optional Tool-name allowlist |
-| `cwd` | `process.cwd()` | Base directory for relative local Skill files |
-| `system` | empty | First system fragment for every Agent |
-| `trace` | none | Synchronous execution-event callback |
+| Option                |         Default | Meaning                                               |
+| --------------------- | --------------: | ----------------------------------------------------- |
+| `agentProvider`       |            none | Default provider for Agents without a `provider` prop |
+| `maxAgentCalls`       |            `32` | Maximum Agent sessions in one evaluation              |
+| `maxConcurrentAgents` |             `4` | Maximum active Agent sessions                         |
+| `maxDepth`            |            `16` | Maximum recursive AML evaluation depth                |
+| `maxStateTransitions` |            `16` | Maximum committed Loop transitions                    |
+| `maxTurnsPerAgent`    |            `16` | Maximum authored inputs in one Agent session          |
+| `onTraceError`        |     stderr once | Out-of-band trace failure handler                     |
+| `allowedMcpServers`   |    unrestricted | Optional MCP-server-name allowlist                    |
+| `allowedTools`        |    unrestricted | Optional Tool-name allowlist                          |
+| `cwd`                 | `process.cwd()` | Base directory for relative local Skill files         |
+| `system`              |           empty | First system fragment for every Agent                 |
+| `trace`               |            none | Synchronous execution-event callback                  |
 
 For every `max*` option, `0` means unlimited. Supplied values must be non-negative safe integers.
 
@@ -1700,34 +1642,27 @@ The runtime is the only event publisher. `AmlRuntime` exposes `on()` and `once()
 
 ```ts
 interface AmlEventSubscriber {
-  on<Name extends AmlEventName>(
-    name: Name,
-    listener: AmlEventListener<Name>,
-  ): () => void;
-  once<Name extends AmlEventName>(
-    name: Name,
-    listener: AmlEventListener<Name>,
-  ): () => void;
+  on<Name extends AmlEventName>(name: Name, listener: AmlEventListener<Name>): () => void
+  once<Name extends AmlEventName>(name: Name, listener: AmlEventListener<Name>): () => void
 }
 
-type AmlEventName = "start" | "finish" | "trace";
+type AmlEventName = "start" | "finish" | "trace"
 
 interface AmlEvaluationStartEvent {
-  readonly runId: string;
-  readonly signal: AbortSignal;
+  readonly runId: string
+  readonly signal: AbortSignal
 }
 
 interface AmlEvaluationFinishEvent {
-  readonly error?: unknown;
-  readonly runId: string;
-  readonly signal: AbortSignal;
-  readonly status: "error" | "ok";
+  readonly error?: unknown
+  readonly runId: string
+  readonly signal: AbortSignal
+  readonly status: "error" | "ok"
 }
 
-type AmlEventListener<Name extends AmlEventName> =
-  Name extends "trace"
-    ? TraceSink
-    : (event: AmlEventMap[Name]) => Promise<void> | void;
+type AmlEventListener<Name extends AmlEventName> = Name extends "trace"
+  ? TraceSink
+  : (event: AmlEventMap[Name]) => Promise<void> | void
 ```
 
 `on()` returns an unsubscribe function. `once()` removes its listener before the first matching call. Context listeners receive events only from their evaluation and are removed when it finishes; runtime listeners may observe every evaluation executed by that runtime.
@@ -1743,66 +1678,50 @@ The SDK uses Hookable as the typed registration and dispatch substrate instead o
 AML publishes one immutable, provider-neutral event stream:
 
 ```ts
-type AmlTraceAttribute =
-  | boolean
-  | number
-  | string
-  | readonly string[];
+type AmlTraceAttribute = boolean | number | string | readonly string[]
 
 type AmlTraceSpanKind =
-  | "evaluation"
-  | "component"
-  | "agent"
-  | "system"
-  | "skill"
-  | "tool"
-  | "loop"
-  | "sandbox"
-  | "workspace";
+  "evaluation" | "component" | "agent" | "system" | "skill" | "tool" | "loop" | "sandbox" | "workspace"
 
 type AmlTraceEvent =
   | {
-      type: "span.start";
-      kind: AmlTraceSpanKind;
-      name: string;
-      attributes: Readonly<Record<string, AmlTraceAttribute>>;
-      runId: string;
-      spanId: string;
-      parentSpanId?: string;
-      sequence: number;
-      timestamp: number;
+      type: "span.start"
+      kind: AmlTraceSpanKind
+      name: string
+      attributes: Readonly<Record<string, AmlTraceAttribute>>
+      runId: string
+      spanId: string
+      parentSpanId?: string
+      sequence: number
+      timestamp: number
     }
   | {
-      type: "span.end";
-      kind: AmlTraceSpanKind;
-      name: string;
-      status: "ok" | "error";
-      durationMs: number;
-      attributes: Readonly<Record<string, AmlTraceAttribute>>;
-      runId: string;
-      spanId: string;
-      parentSpanId?: string;
-      sequence: number;
-      timestamp: number;
+      type: "span.end"
+      kind: AmlTraceSpanKind
+      name: string
+      status: "ok" | "error"
+      durationMs: number
+      attributes: Readonly<Record<string, AmlTraceAttribute>>
+      runId: string
+      spanId: string
+      parentSpanId?: string
+      sequence: number
+      timestamp: number
     }
   | {
-      type: "event";
-      name:
-        | "agent.turn"
-        | "capability.mcp"
-        | "capability.tool"
-        | "loop.transition";
-      attributes: Readonly<Record<string, AmlTraceAttribute>>;
-      runId: string;
-      spanId: string;
-      parentSpanId?: string;
-      sequence: number;
-      timestamp: number;
-    };
+      type: "event"
+      name: "agent.turn" | "capability.mcp" | "capability.tool" | "loop.transition"
+      attributes: Readonly<Record<string, AmlTraceAttribute>>
+      runId: string
+      spanId: string
+      parentSpanId?: string
+      sequence: number
+      timestamp: number
+    }
 
 interface TraceSink {
-  (event: AmlTraceEvent): unknown;
-  readonly captureContent?: boolean;
+  (event: AmlTraceEvent): unknown
+  readonly captureContent?: boolean
 }
 ```
 
@@ -1828,23 +1747,21 @@ The package exports:
 
 ```ts
 interface OpenCodeAgentOptions {
-  directory?: string;
-  model?: string;
+  directory?: string
+  model?: string
   server?: {
-    hostname?: string;
-    port?: number;
-    timeout?: number;
-  };
-  sessionClient?: OpenCodeSessionClient;
+    hostname?: string
+    port?: number
+    timeout?: number
+  }
+  sessionClient?: OpenCodeSessionClient
 }
 
 interface OpenCodeAgentProvider extends AgentProvider {
-  close(): Promise<void>;
+  close(): Promise<void>
 }
 
-function opencodeAgent(
-  options?: OpenCodeAgentOptions,
-): OpenCodeAgentProvider;
+function opencodeAgent(options?: OpenCodeAgentOptions): OpenCodeAgentProvider
 ```
 
 `opencodeAgent()` is synchronous and performs no I/O. When `sessionClient` is supplied, the package uses that injected provider-owned port and does not start or stop an OpenCode server; that port owns complete Tool and MCP attachment and cleanup. `sessionClient` and `server` are mutually exclusive. Without `sessionClient`, the first ordinary Agent call in an evaluation lazily starts one package-owned local OpenCode server shared only by that evaluation. When it creates that evaluation state, the adapter registers one `events.once("finish", ...)` listener. The listener waits for active calls, stops the host, and leaves the provider reusable so concurrent and later AML evaluations receive independent lifecycle state. An Agent with a JavaScript Tool or MCP grant uses a disposable package-owned OpenCode server because OpenCode can disconnect but cannot remove a dynamically added MCP configuration from a long-lived server and MCP connections are host-scoped rather than session-scoped. Every disposable server requests port `0` so it cannot collide with the evaluation host or another concurrent capability invocation; an explicit `server.port` configures only the ordinary evaluation host. Other server settings still apply. The disposable server is closed after the complete Agent session and capability cleanup settle, so registrations and connections cannot accumulate or leak into sibling Agents. Named grants connect an exact server already present in the disposable host's provider configuration. Explicit grants are added dynamically. OpenCode's per-prompt Tool map disables `"*"` and enables only declared host Tools, JavaScript Tools, and each declared MCP server's normalized `<server>_*` namespace. A structured request additionally grants exactly OpenCode's provider-owned `StructuredOutput` Tool because that is how the harness implements JSON Schema output; text requests never receive it, and a structured Agent cannot also declare a host Tool with that reserved provider-equivalent name. Capability isolation mirrors OpenCode's permission equivalence by normalizing backslashes to slashes and comparing case-insensitively on Windows. Because this adapter must mirror OpenCode server internals to secure those grants, it preflights `/global/health` and accepts only reviewed server versions `1.18.4` and `1.18.5` for any capability-bearing Agent. Its generated OpenCode SDK dependency is pinned separately at `1.18.5` for API compatibility. An upgrade must revalidate punctuation normalization, platform equivalence, namespace overlap, and both client and server versions before expanding either compatibility boundary. `close()` remains an idempotent permanent shutdown escape hatch for direct provider use outside normal AML evaluation; components and examples do not call it. Credentials remain in the OpenCode environment and configuration; AML does not read or copy them.
@@ -1874,27 +1791,22 @@ OpenCode owns its internal tool loop.
 #### Codex
 
 ```ts
-type CodexReasoningEffort =
-  | "minimal"
-  | "low"
-  | "medium"
-  | "high"
-  | "xhigh";
+type CodexReasoningEffort = "minimal" | "low" | "medium" | "high" | "xhigh"
 
 interface CodexAgentOptions {
-  apiKey?: string;
-  baseUrl?: string;
-  clientFactory?: CodexClientFactory;
-  codexPathOverride?: string;
-  config?: CodexConfig;
-  env?: Readonly<Record<string, string>>;
-  model?: string;
-  reasoningEffort?: CodexReasoningEffort;
-  skipGitRepoCheck?: boolean;
-  workingDirectory?: string;
+  apiKey?: string
+  baseUrl?: string
+  clientFactory?: CodexClientFactory
+  codexPathOverride?: string
+  config?: CodexConfig
+  env?: Readonly<Record<string, string>>
+  model?: string
+  reasoningEffort?: CodexReasoningEffort
+  skipGitRepoCheck?: boolean
+  workingDirectory?: string
 }
 
-function codexAgent(options?: CodexAgentOptions): AgentProvider;
+function codexAgent(options?: CodexAgentOptions): AgentProvider
 ```
 
 `codexAgent()` is synchronous and performs no filesystem, process, or network work. It snapshots provider-specific configuration and creates a Codex SDK client only inside `run()`. `clientFactory` is the narrow provider-owned dependency-injection port used by deterministic tests and alternative Codex SDK hosts; it receives the complete invocation configuration because system text, Tool bridges, and explicit MCP grants vary per Agent. Provider configuration and structured-output schemas deeper than 128 nested containers reject at their owning adapter boundary instead of risking JavaScript call-stack overflow or failing later in the Codex CLI.
@@ -1993,30 +1905,28 @@ These are product and runtime decisions, not missing tags to add by default.
 const Finding = z.object({
   file: z.string(),
   problem: z.string(),
-});
+})
 
-const Session = createContext<ReviewSession>("ReviewSession");
+const Session = createContext<ReviewSession>("ReviewSession")
 
 function Reviewer() {
-  const session = useContext(Session);
+  const session = useContext(Session)
   const loadPatch = defineTool({
     name: "load_patch",
     description: "Load the patch for this review session.",
     input: z.object({}),
     execute: () => session.repository.loadPatch(),
-  });
+  })
 
   return (
     <Agent>
       <Tool use={loadPatch} />
       <Skill src="./skills/evidence.md" />
       Review the patch and identify the highest-risk finding.
-      <FollowUp>
-        Challenge that finding against the surrounding implementation.
-      </FollowUp>
+      <FollowUp>Challenge that finding against the surrounding implementation.</FollowUp>
       <FollowUp>Return the final finding as structured output.</FollowUp>
     </Agent>
-  );
+  )
 }
 
 async function ReviewWorkflow() {
@@ -2026,23 +1936,23 @@ async function ReviewWorkflow() {
       <Agent>
         <Tool name="read" />
         Describe the architecture affected by this patch.
-      </Agent>,
+      </Agent>
     ),
-  ]);
+  ])
 
   return (
     <Agent>
       Synthesize the review. Finding: {JSON.stringify(finding)}
       Architecture: {architecture}
     </Agent>
-  );
+  )
 }
 
 const runtime = new AmlRuntime({
   agentProvider: provider,
   allowedTools: ["load_patch", "read"],
   trace: createConsoleTracer(),
-});
+})
 
 const output = await runtime.evaluate(
   <Session.Provider value={reviewSession}>
@@ -2051,8 +1961,8 @@ const output = await runtime.evaluate(
         <ReviewWorkflow />
       </Sandbox>
     </Workspace>
-  </Session.Provider>,
-);
+  </Session.Provider>
+)
 ```
 
 This example combines Sandbox confinement with durable Workspace lifecycle.
