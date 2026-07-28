@@ -1,4 +1,4 @@
-import type { Writable } from "node:stream"
+import { PassThrough } from "node:stream"
 
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
@@ -21,9 +21,9 @@ interface CapturedSpawnOptions {
   readonly forceKillAfterDelay: number
   readonly killDescendants: boolean
   readonly reject: boolean
-  readonly stderr: Writable
+  readonly stderr: "pipe"
   readonly stdin: string
-  readonly stdout: Writable
+  readonly stdout: "pipe"
 }
 
 interface FakeProcessResult {
@@ -41,12 +41,16 @@ interface FakeProcessResult {
 function installFakeProcess(): {
   readonly captured: () => CapturedSpawnOptions
   readonly resolve: (result: FakeProcessResult) => void
+  readonly stderr: PassThrough
+  readonly stdout: PassThrough
 } {
   let captured: CapturedSpawnOptions | undefined
   let resolveProcess: ((result: FakeProcessResult) => void) | undefined
   const process = new Promise<FakeProcessResult>(resolve => {
     resolveProcess = resolve
   })
+  const stderr = new PassThrough()
+  const stdout = new PassThrough()
 
   dependencies.execa.mockImplementation((_command: string, _args: readonly string[], options: CapturedSpawnOptions) => {
     captured = options
@@ -62,7 +66,7 @@ function installFakeProcess(): {
       },
       { once: true }
     )
-    return process
+    return Object.assign(process, { stderr, stdout })
   })
 
   return {
@@ -76,6 +80,8 @@ function installFakeProcess(): {
     resolve(result) {
       resolveProcess?.(result)
     },
+    stderr,
+    stdout,
   }
 }
 
@@ -101,7 +107,7 @@ describe("createIsolatedOpencode", () => {
         timeout: 10_000,
       })
       const spawn = fake.captured()
-      spawn.stdout.write("booting\nopencode server listening on http://127.0.0.2:43210\n")
+      fake.stdout.write("booting\nopencode server listening on http://127.0.0.2:43210\n")
       const owned = await starting
 
       expect(dependencies.execa).toHaveBeenCalledWith(
@@ -118,7 +124,9 @@ describe("createIsolatedOpencode", () => {
           forceKillAfterDelay: 5_000,
           killDescendants: true,
           reject: false,
+          stderr: "pipe",
           stdin: "ignore",
+          stdout: "pipe",
         })
       )
       expect(process.env.OPENCODE_DB).toBe("/caller/opencode.db")
@@ -146,9 +154,8 @@ describe("createIsolatedOpencode", () => {
   it("preserves bounded startup diagnostics from an early exit", async () => {
     const fake = installFakeProcess()
     const starting = createIsolatedOpencode({ timeout: 10_000 })
-    const spawn = fake.captured()
 
-    spawn.stderr.write("configuration failed")
+    fake.stderr.write("configuration failed")
     fake.resolve({
       exitCode: 1,
       failed: true,
@@ -162,18 +169,17 @@ describe("createIsolatedOpencode", () => {
   it("waits for a complete readiness line before publishing its URL", async () => {
     const fake = installFakeProcess()
     const starting = createIsolatedOpencode({ timeout: 10_000 })
-    const spawn = fake.captured()
     let settled = false
 
     void starting.then(() => {
       settled = true
     })
-    spawn.stdout.write("opencode server listening on http://127.0.0.1:43")
+    fake.stdout.write("opencode server listening on http://127.0.0.1:43")
     await Promise.resolve()
 
     expect(settled).toBe(false)
 
-    spawn.stdout.write("210\n")
+    fake.stdout.write("210\n")
     const owned = await starting
 
     expect(owned.server.url).toBe("http://127.0.0.1:43210")
@@ -183,11 +189,10 @@ describe("createIsolatedOpencode", () => {
   it("preserves bounded diagnostics when a ready server later fails", async () => {
     const fake = installFakeProcess()
     const starting = createIsolatedOpencode({ timeout: 10_000 })
-    const spawn = fake.captured()
 
-    spawn.stdout.write("opencode server listening on http://127.0.0.1:43210\n")
+    fake.stdout.write("opencode server listening on http://127.0.0.1:43210\n")
     const owned = await starting
-    spawn.stderr.write("database became unavailable")
+    fake.stderr.write("database became unavailable")
     fake.resolve({
       exitCode: 2,
       failed: true,

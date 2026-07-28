@@ -120,10 +120,13 @@ export async function createIsolatedOpencode(options: ServerOptions): Promise<Ow
     forceKillAfterDelay: 5_000,
     killDescendants: true,
     reject: false,
-    stderr,
+    stderr: "pipe",
     stdin: "ignore",
-    stdout,
+    stdout: "pipe",
   })
+  child.stdout.pipe(stdout)
+  child.stderr.pipe(stderr)
+
   const completion = child.then(result => {
     if (!ready) {
       rejectReady?.(cancelSignal.aborted ? cancelSignal.reason : serverExitError(result, processOutput))
