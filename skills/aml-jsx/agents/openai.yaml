@@ -1,0 +1,4 @@
+interface:
+  display_name: "AML JSX"
+  short_description: "Build provider-agnostic agent workflows"
+  default_prompt: "Use $aml-jsx to build this agent workflow with @aml-jsx/sdk."

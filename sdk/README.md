@@ -26,6 +26,16 @@ const runtime = new AmlRuntime()
 const result = await runtime.evaluate(<Agent provider={opencodeAgent({})}>Summarize this repository.</Agent>)
 ```
 
+## Coding agents
+
+Install AML's coding-agent skill for current workflow patterns, runtime semantics, providers, and testing guidance:
+
+```sh
+npx skills add we-are-singular/aml --skill aml-jsx
+```
+
+Add `-g` for a global installation.
+
 AML is under active development. Public APIs and examples may change before the first stable release.
 
 - [Documentation and examples](https://github.com/we-are-singular/aml)

@@ -1,3 +1,217 @@
 # Agent Markup Language (AML)
 
-Language-model documentation is being prepared.
+> AML is an asynchronous TypeScript and JSX runtime for composing complex, provider-agnostic agent workflows.
+
+AML gives JSX a new job. Instead of describing a user interface, the tree describes an agent workflow. The runtime resolves that tree from the leaves upward, manages provider and resource lifecycles, and returns the final Agent output as text or schema-validated structured data.
+
+Website: https://aml.wearesingular.com/
+Package: `@aml-jsx/sdk`
+License: MIT
+Status: under active development; public APIs and examples may change before the first stable release.
+
+## Why AML
+
+Most AI SDKs are designed around chat: send a message, call a model, and stream a response. Agentic workflows need more around that conversation: multiple agents, tools, permissions, sandboxed execution, persistent files, explicit dataflow, provider adapters, and useful traces.
+
+AML brings those concerns into one executable async JSX tree. Developers use ordinary TypeScript, functions, promises, conditions, and schemas instead of learning a separate orchestration DSL. Editors already understand JSX, TypeScript already checks it, and coding agents already know how to write it.
+
+AML workflows are:
+
+- Composable: package agents, prompts, capabilities, and control flow as async JSX components.
+- Provider-agnostic: use OpenCode, Codex, deterministic test providers, or custom provider adapters without rewriting the tree.
+- Explicit: child results appear in parent prompts at authored positions; parallel work starts through ordinary JavaScript.
+- Scoped: Tools, MCP servers, Sandboxes, and Workspaces are granted only where they are declared.
+- Observable: runtime lifecycle and trace events describe what happened during evaluation.
+
+## Installation
+
+```sh
+npm install @aml-jsx/sdk
+```
+
+Configure TypeScript to use AML's automatic JSX runtime:
+
+```json
+{
+  "compilerOptions": {
+    "jsx": "react-jsx",
+    "jsxImportSource": "@aml-jsx/sdk"
+  }
+}
+```
+
+Use `.tsx` for files containing AML markup. AML is not React and does not require React.
+
+## First workflow
+
+```tsx
+import { Agent, AmlRuntime, opencodeAgent } from "@aml-jsx/sdk"
+
+const OpenCode = opencodeAgent({})
+const runtime = new AmlRuntime()
+
+const result = await runtime.evaluate(
+  <Agent provider={OpenCode}>Summarize this repository.</Agent>,
+)
+```
+
+Root evaluation starts with `runtime.evaluate(tree)`. The standalone `evaluate(tree)` API is for work started inside an actively evaluated AML function component.
+
+## Evaluation model
+
+AML resolves the tree from the leaves upward:
+
+1. Resolve ordinary values, promises, fragments, and function components.
+2. Resolve capability and prompt descriptors into their nearest Agent.
+3. Run child Agents before their parents.
+4. Insert child output into the parent prompt at its authored position.
+5. Acquire and release Sandbox and Workspace resources around descendant work.
+6. Return the final text or structured result.
+
+JSX children resolve in authored order. Sibling JSX does not imply concurrency. Start independent branches explicitly with `Promise.all()` and `evaluate()`:
+
+```tsx
+import { Agent, evaluate } from "@aml-jsx/sdk"
+
+async function WeeklyStandup() {
+  const [linear, github] = await Promise.all([
+    evaluate(<Agent provider={OpenCode}>Gather this week's Linear updates.</Agent>),
+    evaluate(<Agent provider={Codex}>Gather this week's GitHub updates.</Agent>),
+  ])
+
+  return (
+    <Agent provider={OpenCode}>
+      Prepare our weekly standup.
+      Linear: {linear}
+      GitHub: {github}
+    </Agent>
+  )
+}
+```
+
+## Core primitives
+
+- `<Agent>` runs one provider-owned Agent session after its prompt, system content, capabilities, and child Agent results resolve.
+- `<System>` adds resolved content to the nearest Agent's system prompt.
+- `<Tool>` grants a provider-native Tool name or a JavaScript Tool created with `defineTool()`.
+- `<Skill>` adds reusable inline instructions or instructions loaded from a local file.
+- `<Mcp>` grants a provider-native MCP name or a server created with `defineMcpServer()`.
+- `<FollowUp>` adds an ordered later turn to the same provider-owned Agent session.
+- `<Sandbox>` acquires ephemeral execution and scopes a narrowed filesystem policy to descendants.
+- `<Workspace>` materializes durable files that can survive across disposable Sandbox leases.
+- `<>...</>` groups AML values without adding prompt text or another runtime boundary.
+
+Scoped Context and `<Loop>` exist as draft surfaces. Do not depend on them for stable workflows yet.
+
+## Core APIs
+
+- `AmlRuntime`: evaluates a complete AML tree and owns defaults, budgets, resource lifecycles, events, and tracing.
+- `evaluate()`: starts nested AML evaluation inside an active async component and optionally validates structured output.
+- `defineTool()`: creates an immutable schema-validated JavaScript Tool.
+- `defineMcpServer()`: creates a provider-neutral stdio or Streamable HTTP MCP descriptor.
+- `defineAgentProvider()`: implements an Agent harness adapter.
+- `defineSandboxProvider()`: implements ephemeral execution.
+- `defineWorkspaceProvider()`: implements durable filesystem materialization.
+- `runtime.on()` and `runtime.once()`: subscribe to runtime lifecycle and trace events.
+
+## Providers and integrations
+
+The public SDK currently exports the runtime, built-in providers, and their types from `@aml-jsx/sdk`:
+
+- `opencodeAgent({})`: OpenCode sessions with model overrides, JavaScript Tools, MCP grants, FollowUps, cancellation, and structured output.
+- `codexAgent({})`: Codex SDK threads with model overrides, read-only host Tools, JavaScript Tools, MCP grants, FollowUps, and structured output.
+- `dockerSandbox({ image })`: confined Docker leases with filesystem, identity, capability, and resource policies.
+- `localWorkspace({ directory })`: durable local-directory materialization with cross-process writer locking.
+- `@aml-jsx/sdk/testing`: deterministic Agent, Sandbox, and Workspace providers plus provider conformance suites.
+
+OpenCode, Codex, Docker, and local disk are implemented. Other agent harnesses, sandbox platforms, and storage providers shown on the website are roadmap candidates, not current package exports.
+
+## Capabilities
+
+Define a typed JavaScript Tool and grant it to one Agent:
+
+```tsx
+import { readFile } from "node:fs/promises"
+
+import { Agent, defineTool, Tool } from "@aml-jsx/sdk"
+import { z } from "zod"
+
+const ReadSource = defineTool({
+  name: "read_source",
+  description: "Read one source file from the current project",
+  input: z.object({ path: z.string() }),
+  execute: async ({ path }) => await readFile(path, "utf8"),
+})
+
+<Agent provider={OpenCode}>
+  <Tool use={ReadSource} />
+  Read src/index.ts and summarize it.
+</Agent>
+```
+
+Tool, MCP, Skill, and FollowUp declarations belong to their nearest Agent. Grants do not leak into sibling Agents.
+
+## Sandboxes and workspaces
+
+A Sandbox is ephemeral execution. A Workspace is durable materialization. Use them together when disposable execution must read or write persistent files:
+
+```tsx
+<Workspace id="review-42" provider={Project}>
+  <Sandbox provider={Docker} access="read-write">
+    <Agent provider={OpenCode}>Write findings.md.</Agent>
+  </Sandbox>
+  <Sandbox provider={Docker} access="read-only">
+    <Agent provider={Codex}>Review findings.md.</Agent>
+  </Sandbox>
+</Workspace>
+```
+
+An outer Sandbox acquires a lease. Nested Sandboxes narrow that lease rather than acquiring another environment.
+
+## Coding-agent skill
+
+Install the repository's AML skill so a supported coding agent can author workflows using the current API and semantics:
+
+```sh
+npx skills add we-are-singular/aml --skill aml-jsx
+```
+
+Add `-g` for a global installation. The skill includes workflow-authoring, capability, resource, provider, and testing guidance.
+
+## Development
+
+Repository requirements:
+
+- Node.js 26 or newer.
+- npm 11 or newer.
+- Docker only for Docker integration tests and examples.
+- Configured OpenCode or Codex credentials only for live Agent examples.
+
+Common repository commands:
+
+```sh
+npm install
+npm run format:check
+npm run lint
+npm run test
+npm run build
+npm run pack:check
+```
+
+Deterministic examples are snapshot-tested. Live model, Docker, and filesystem integrations are opt-in.
+
+## Documentation
+
+- [Project website](https://aml.wearesingular.com/): Product overview, evaluation walkthrough, integrations, reference, and getting started.
+- [Repository README](https://github.com/we-are-singular/aml#readme): Complete project overview, examples, development, and release instructions.
+- [Package README](https://github.com/we-are-singular/aml/blob/main/sdk/README.md): Concise package installation and first evaluation.
+- [Specification](https://github.com/we-are-singular/aml/blob/main/SPEC.md): Normative runtime semantics and provider contracts.
+- [Examples](https://github.com/we-are-singular/aml/tree/main/examples/src): Executable TSX examples for dataflow, capabilities, resources, and integrations.
+- [AML coding-agent skill](https://github.com/we-are-singular/aml/tree/main/skills/aml-jsx): Installable instructions for building with AML.
+- [Provider roadmap](https://github.com/we-are-singular/aml/blob/main/PROVIDERS.md): Implemented providers and future integration candidates.
+- [npm package](https://www.npmjs.com/package/@aml-jsx/sdk): Published `@aml-jsx/sdk` package.
+
+## Optional
+
+- [Contributing](https://github.com/we-are-singular/aml#development): Local setup and repository validation commands.
+- [MIT License](https://github.com/we-are-singular/aml/blob/main/LICENSE): License text.

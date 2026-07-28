@@ -87,6 +87,19 @@ console.log(await runtime.evaluate(<Review />))
 
 The workflow stays the same when the provider changes. Replace `OpenCode` with a Codex provider or another `AgentProvider` implementation without rewriting the AML tree.
 
+## Coding agents
+
+Install the repository's `aml-jsx` skill to give supported coding agents the current AML authoring patterns, runtime
+semantics, provider guidance, and testing conventions:
+
+```sh
+npx skills add we-are-singular/aml --skill aml-jsx
+```
+
+The command installs the skill into the current project. Add `-g` to make it available globally. The skill is stored
+in [`skills/aml-jsx`](./skills/aml-jsx) and should be used whenever an agent builds, explains, tests, or debugs
+workflows with `@aml-jsx/sdk`.
+
 ## Primitives
 
 | Primitive            | Purpose                                                                                                                      |
