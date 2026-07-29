@@ -33,20 +33,36 @@ export interface DaytonaSandboxCreateOptions {
   readonly timeout?: number
 }
 
-/**
- * Provider-native Daytona configuration plus AML lifecycle conveniences.
- */
-export interface DaytonaSandboxOptions {
+interface DaytonaSandboxSharedOptions {
   readonly client?: Daytona
   readonly config?: DaytonaConfig
-  readonly create?: CreateSandboxFromImageParams | CreateSandboxFromSnapshotParams
   readonly createOptions?: DaytonaSandboxCreateOptions
   readonly maxOutputBytes?: number
   readonly setup?: string
   readonly workspace?: string
 }
 
-interface ParsedDaytonaSandboxOptions extends DaytonaSandboxOptions {
+/**
+ * Provider-native Daytona configuration plus AML lifecycle conveniences.
+ *
+ * The environment identity is selected at the factory root. `create` retains
+ * Daytona's remaining image- or snapshot-specific creation parameters.
+ */
+export type DaytonaSandboxOptions = DaytonaSandboxSharedOptions &
+  (
+    | {
+        readonly create?: Omit<CreateSandboxFromImageParams, "image">
+        readonly image: CreateSandboxFromImageParams["image"]
+        readonly snapshot?: never
+      }
+    | {
+        readonly create?: Omit<CreateSandboxFromSnapshotParams, "snapshot">
+        readonly image?: never
+        readonly snapshot?: CreateSandboxFromSnapshotParams["snapshot"]
+      }
+  )
+
+type ParsedDaytonaSandboxOptions = DaytonaSandboxOptions & {
   readonly maxOutputBytes: number
 }
 
@@ -199,7 +215,7 @@ class DaytonaSandboxProvider
   }
 
   async #createSandbox(client: Daytona, signal: AbortSignal): Promise<DaytonaSdkSandbox> {
-    const creation = createDaytonaSandbox(client, this.#options.create, this.#options.createOptions)
+    const creation = createDaytonaSandbox(client, this.#options)
 
     try {
       return await abortable(creation, signal)
@@ -387,19 +403,31 @@ async function resolveSource(request: SandboxAcquireRequest, configuredWorkspace
 
 function createDaytonaSandbox(
   client: Daytona,
-  params: DaytonaSandboxOptions["create"],
-  options: DaytonaSandboxCreateOptions | undefined
+  options: Readonly<ParsedDaytonaSandboxOptions>
 ): Promise<DaytonaSdkSandbox> {
-  if (params !== undefined && "image" in params) {
-    return client.create(params, options)
+  if (options.image !== undefined) {
+    const params = {
+      ...options.create,
+      image: options.image,
+    } as CreateSandboxFromImageParams
+
+    return client.create(params, options.createOptions)
   }
 
   const snapshotOptions =
-    options?.timeout === undefined
+    options.createOptions?.timeout === undefined
       ? undefined
       : {
-          timeout: options.timeout,
+          timeout: options.createOptions.timeout,
         }
+
+  const params =
+    options.create === undefined && options.snapshot === undefined
+      ? undefined
+      : ({
+          ...options.create,
+          ...(options.snapshot === undefined ? {} : { snapshot: options.snapshot }),
+        } as CreateSandboxFromSnapshotParams)
 
   return client.create(params as CreateSandboxFromSnapshotParams | undefined, snapshotOptions)
 }
@@ -473,6 +501,16 @@ function parseOptions(value: DaytonaSandboxOptions): Readonly<ParsedDaytonaSandb
 
   if (value.client !== undefined && value.config !== undefined) {
     throw new TypeError("Daytona Sandbox accepts either client or config, not both")
+  }
+
+  const create = value.create as Record<string, unknown> | undefined
+
+  if (create !== undefined && ("image" in create || "snapshot" in create)) {
+    throw new TypeError("Daytona Sandbox image and snapshot are root options, not create options")
+  }
+
+  if (value.image !== undefined && value.snapshot !== undefined) {
+    throw new TypeError("Daytona Sandbox accepts either image or snapshot, not both")
   }
 
   const maxOutputBytes = value.maxOutputBytes ?? DEFAULT_MAX_OUTPUT_BYTES

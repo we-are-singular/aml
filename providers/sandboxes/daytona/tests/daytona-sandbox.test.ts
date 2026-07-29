@@ -9,7 +9,7 @@ import { afterEach, describe, expect, it } from "vitest"
 
 import type { SandboxAcquireRequest } from "@aml-jsx/sdk"
 
-import { daytonaSandbox } from "../src/index.js"
+import { daytonaSandbox, type DaytonaSandboxOptions } from "../src/index.js"
 
 const execFileAsync = promisify(execFile)
 const temporaryDirectories: string[] = []
@@ -31,13 +31,11 @@ describe("daytonaSandbox()", () => {
     await writeFile(path.join(fake.remoteWorkspace, "output.txt"), "downloaded")
     const provider = daytonaSandbox({
       client: fake.client,
-      create: {
-        snapshot: "agent-snapshot",
-      },
       createOptions: {
         timeout: 45,
       },
       setup: "prepare agent",
+      snapshot: "agent-snapshot",
       workspace,
     })
     const lease = await provider.acquire(request())
@@ -78,6 +76,45 @@ describe("daytonaSandbox()", () => {
     expect(fake.deleteCount).toBe(1)
   })
 
+  it("combines a root image with native image creation parameters", async () => {
+    const workspace = await temporaryDirectory("aml-daytona-image-")
+    await mkdir(path.join(workspace, "repository"), { recursive: true })
+    const fake = await FakeDaytona.create()
+    const onSnapshotCreateLogs = () => undefined
+    const lease = await daytonaSandbox({
+      client: fake.client,
+      create: {
+        envVars: {
+          NODE_ENV: "test",
+        },
+      },
+      createOptions: {
+        onSnapshotCreateLogs,
+        timeout: 30,
+      },
+      image: "node:26",
+      workspace,
+    }).acquire(request())
+
+    expect(fake.createCalls).toEqual([
+      {
+        options: {
+          onSnapshotCreateLogs,
+          timeout: 30,
+        },
+        params: {
+          envVars: {
+            NODE_ENV: "test",
+          },
+          image: "node:26",
+        },
+      },
+    ])
+
+    await lease.release()
+    expect(fake.deleteCount).toBe(1)
+  })
+
   it("does not claim read-only enforcement for transferred Workspaces", async () => {
     const workspace = await temporaryDirectory("aml-daytona-read-only-")
     await mkdir(path.join(workspace, "repository"), { recursive: true })
@@ -102,6 +139,22 @@ describe("daytonaSandbox()", () => {
         config: { apiKey: "configured" },
       })
     ).toThrow("either client or config")
+    expect(() =>
+      daytonaSandbox({
+        create: { image: "node:26" },
+      } as unknown as DaytonaSandboxOptions)
+    ).toThrow("image and snapshot are root options")
+    expect(() =>
+      daytonaSandbox({
+        create: { snapshot: "agent-snapshot" },
+      } as unknown as DaytonaSandboxOptions)
+    ).toThrow("image and snapshot are root options")
+    expect(() =>
+      daytonaSandbox({
+        image: "node:26",
+        snapshot: "agent-snapshot",
+      } as unknown as DaytonaSandboxOptions)
+    ).toThrow("either image or snapshot")
     expect(() => daytonaSandbox({ maxOutputBytes: 0 })).toThrow("maxOutputBytes must be a positive safe integer")
     expect(() => daytonaSandbox({ setup: "" })).toThrow("setup must be a non-empty string")
   })
