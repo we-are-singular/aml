@@ -301,7 +301,7 @@
             </div>
             <h3 class="mt-5 text-lg font-semibold">Change providers without starting over</h3>
             <p class="mt-2 text-[14.5px] leading-relaxed text-ink-soft">
-              Move from OpenCode to Codex — or replace both with a deterministic test provider — without rebuilding the
+              Move between OpenCode, Codex, and Pi — or use a deterministic test provider — without rebuilding the
               workflow around a new SDK.
             </p>
           </article>
@@ -440,8 +440,8 @@
             Bring your own agent, sandbox, or storage.
           </h2>
           <p class="reveal mt-5 text-[15px] leading-relaxed text-ink-soft" style="--reveal-delay: 120ms">
-            AML defines the contracts and stays out of the way. Choose the implementations that fit your stack, then
-            swap them without rewriting the workflow.
+            Every built-in Agent runs across every built-in Sandbox. Use OpenCode, Codex, or Pi with trusted local
+            execution, a named Docker image, or a disposable Daytona environment without rewriting the Agent tree.
           </p>
         </div>
 
@@ -571,6 +571,9 @@
               </span>
               <span class="integration-logo" tabindex="0" aria-label="Docker" data-tooltip="Docker">
                 <img src="https://cdn.simpleicons.org/docker" alt="" />
+              </span>
+              <span class="integration-logo" tabindex="0" aria-label="Daytona" data-tooltip="Daytona">
+                <img src="https://avatars.githubusercontent.com/u/130513197?v=4" alt="" />
               </span>
               <span class="integration-roadmap-label">roadmap →</span>
               <span
@@ -827,10 +830,10 @@
             style="--reveal-delay: 180ms"
           >
             <p class="font-mono text-[11px] uppercase tracking-wider text-signal">sandbox</p>
-            <h3 class="mt-2 font-mono text-[15px] font-semibold">dockerSandbox({})</h3>
+            <h3 class="mt-2 font-mono text-[15px] font-semibold">localSandbox({})</h3>
             <p class="mt-2.5 text-[14px] leading-relaxed text-ink-soft">
-              Confined Docker container leases with explicit filesystem, network, identity, capability, and resource
-              policies.
+              Runs the common bounded command runtime as trusted host processes for development and makes no isolation
+              claim.
             </p>
             <p class="mt-4 font-mono text-[12px] text-muted">from @aml-jsx/sdk</p>
           </article>
@@ -838,6 +841,32 @@
           <article
             class="magnetic-card reveal card-hover rounded-2xl border border-line bg-surface p-6"
             style="--reveal-delay: 240ms"
+          >
+            <p class="font-mono text-[11px] uppercase tracking-wider text-signal">sandbox</p>
+            <h3 class="mt-2 font-mono text-[15px] font-semibold">dockerSandbox({})</h3>
+            <p class="mt-2.5 text-[14px] leading-relaxed text-ink-soft">
+              Starts a named image, mounts the Workspace, and runs bounded commands without building the image or
+              installing Agents.
+            </p>
+            <p class="mt-4 font-mono text-[12px] text-muted">from @aml-jsx/sdk</p>
+          </article>
+
+          <article
+            class="magnetic-card reveal card-hover rounded-2xl border border-line bg-surface p-6"
+            style="--reveal-delay: 300ms"
+          >
+            <p class="font-mono text-[11px] uppercase tracking-wider text-signal">sandbox</p>
+            <h3 class="mt-2 font-mono text-[15px] font-semibold">daytonaSandbox({})</h3>
+            <p class="mt-2.5 text-[14px] leading-relaxed text-ink-soft">
+              Creates a disposable image or snapshot, transfers the Workspace, runs bounded commands, reconciles
+              changes, and deletes the remote Sandbox.
+            </p>
+            <p class="mt-4 font-mono text-[12px] text-muted">from @aml-jsx/sdk</p>
+          </article>
+
+          <article
+            class="magnetic-card reveal card-hover rounded-2xl border border-line bg-surface p-6"
+            style="--reveal-delay: 360ms"
           >
             <p class="font-mono text-[11px] uppercase tracking-wider text-ok">workspace</p>
             <h3 class="mt-2 font-mono text-[15px] font-semibold">localWorkspace({})</h3>
@@ -849,7 +878,7 @@
 
           <article
             class="magnetic-card reveal card-hover rounded-2xl border border-line bg-surface p-6"
-            style="--reveal-delay: 300ms"
+            style="--reveal-delay: 420ms"
           >
             <p class="font-mono text-[11px] uppercase tracking-wider text-resolve">testing</p>
             <h3 class="mt-2 font-mono text-[15px] font-semibold">@aml-jsx/sdk/testing</h3>
@@ -862,7 +891,7 @@
 
           <article
             class="magnetic-card reveal card-hover flex flex-col justify-between rounded-2xl border border-dashed border-line-strong bg-paper p-6"
-            style="--reveal-delay: 360ms"
+            style="--reveal-delay: 480ms"
           >
             <div>
               <p class="font-mono text-[11px] uppercase tracking-wider text-muted">yours?</p>

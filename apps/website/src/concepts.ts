@@ -81,7 +81,7 @@ return <Agent>Prepare the standup from: {synthesis}</Agent>`,
     id: "injected-providers",
     group: "Concepts",
     name: "Provider agnostic",
-    signature: "Codex | OpenCode",
+    signature: "Codex | OpenCode | Pi",
     description:
       "The same AML workflow can call different Agent providers side by side. Each adapter owns its model session while AML keeps concurrency, data flow, and lifecycle consistent.",
     note: "Providers are ordinary configured values, so selecting or mixing them is explicit in the authored workflow.",
