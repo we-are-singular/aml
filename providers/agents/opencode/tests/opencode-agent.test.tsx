@@ -813,6 +813,58 @@ describe("opencodeAgent", () => {
     expect(close).toHaveBeenCalledTimes(1)
   })
 
+  it("tracks provider shutdown before the reusable server finishes opening", async () => {
+    const close = vi.fn()
+    let finishStartup!: () => void
+    const startup = new Promise<{
+      client: {
+        session: {
+          abort: ReturnType<typeof vi.fn>
+          create: ReturnType<typeof vi.fn>
+          delete: ReturnType<typeof vi.fn>
+          prompt: ReturnType<typeof vi.fn>
+        }
+      }
+      server: { close: ReturnType<typeof vi.fn> }
+    }>(resolve => {
+      finishStartup = () =>
+        resolve({
+          client: {
+            session: {
+              abort: vi.fn(async () => ({ data: true })),
+              create: vi.fn(async () => ({ data: { id: "opening-session" } })),
+              delete: vi.fn(async () => ({ data: true })),
+              prompt: vi.fn(async () => ({
+                data: {
+                  info: {},
+                  parts: [{ text: "done", type: "text" }],
+                },
+              })),
+            },
+          },
+          server: { close },
+        })
+    })
+    openCodeHost.createIsolatedOpencode.mockReturnValue(startup)
+    const provider = opencodeAgent()
+    const run = provider.run(createRequest(), createContext())
+    const closing = provider.close()
+    let closeSettled = false
+    void closing.finally(() => {
+      closeSettled = true
+    })
+
+    await Promise.resolve()
+    expect(closeSettled).toBe(false)
+    expect(close).not.toHaveBeenCalled()
+
+    finishStartup()
+
+    await expect(run).resolves.toEqual({ text: "done" })
+    await expect(closing).resolves.toBeUndefined()
+    expect(close).toHaveBeenCalledOnce()
+  })
+
   it("releases evaluation hosts automatically and remains reusable", async () => {
     const closes: ReturnType<typeof vi.fn>[] = []
     let session = 0
@@ -931,10 +983,10 @@ describe("OpenCodeSession", () => {
 
     await expect(
       new OpenCodeSession(client, {}).run(createRequest({ followUps: "invalid" as never }), createContext())
-    ).rejects.toThrow("OpenCode followUps must be an array")
+    ).rejects.toThrow('Agent provider "opencode" followUps must be an array')
     await expect(
       new OpenCodeSession(client, {}).run(createRequest({ followUps: [""] }), createContext())
-    ).rejects.toThrow("OpenCode followUps must contain non-empty strings")
+    ).rejects.toThrow('Agent provider "opencode" followUps must contain non-empty strings')
     expect(client.capabilityAttachmentCalls).toHaveLength(0)
     expect(client.createCalls).toHaveLength(0)
   })

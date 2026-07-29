@@ -1,9 +1,10 @@
 import {
+  AbstractAgentProvider,
   defineAgentProvider,
   type AgentExecutionContext,
   type AgentProvider,
+  type AgentProviderSession,
   type AgentRequest,
-  type AgentResponse,
   type SandboxSession,
   supportsSandboxRuntime,
 } from "@aml-jsx/sdk"
@@ -47,16 +48,15 @@ interface CapturedPiAgentOptions {
   readonly workingDirectory?: string
 }
 
-class PiAgentImplementation implements PiAgentProvider {
+class PiAgentImplementation extends AbstractAgentProvider<"pi"> implements PiAgentProvider {
   readonly #clientFactory: PiSessionClientFactory
   readonly #clientFactoryCreate: PiSessionClientFactory["create"]
   readonly #model: string | undefined
   readonly #providers: Readonly<Record<string, ProviderConfig>> | undefined
   readonly #thinkingLevel: PiThinkingLevel | undefined
   readonly #workingDirectory: string | undefined
-  readonly name = "pi" as const
-
   constructor(options: CapturedPiAgentOptions) {
+    super("pi")
     this.#clientFactory = options.clientFactory
     this.#clientFactoryCreate = options.clientFactory.create
     this.#model = options.model
@@ -68,14 +68,14 @@ class PiAgentImplementation implements PiAgentProvider {
   /**
    * Accepts provider-neutral runtimes that enforce the effective Sandbox.
    */
-  supportsSandbox(sandbox: SandboxSession): boolean {
+  override supportsSandbox(sandbox: SandboxSession): boolean {
     return supportsSandboxRuntime(sandbox)
   }
 
   /**
-   * Runs every authored turn through one fresh in-memory Pi session.
+   * Creates one fresh in-memory Pi session with invocation-wide capabilities.
    */
-  async run(request: AgentRequest, context: AgentExecutionContext): Promise<AgentResponse> {
+  protected async openSession(request: AgentRequest, context: AgentExecutionContext): Promise<AgentProviderSession> {
     context.signal.throwIfAborted()
 
     if (request.mcpServers.length > 0) {
@@ -131,32 +131,17 @@ class PiAgentImplementation implements PiAgentProvider {
     // factory defaults, and provider-native nested tables remain intact.
     const input = Object.freeze(defu(imperativeConfig, userInputs, defaults)) as PiSessionCreateInput
     const session = await this.#createSession(input, context.signal)
-    let cancellation: (() => void) | undefined
-    let hasExecutionError = false
-    let executionError: unknown
-    let response: AgentResponse | undefined
 
-    try {
-      cancellation = () => void session.abort().catch(() => undefined)
-      context.signal.addEventListener("abort", cancellation, { once: true })
-      context.signal.throwIfAborted()
+    return {
+      abort: async () => await session.abort(),
+      close: async () => session.dispose(),
+      async runTurn(turn) {
+        const text = await session.prompt(turn.prompt, turn.output?.jsonSchema)
 
-      const followUps = request.followUps ?? []
-      let text =
-        followUps.length === 0
-          ? await session.prompt(request.prompt, request.output?.jsonSchema)
-          : await session.prompt(request.prompt)
+        if (turn.output === undefined) {
+          return Object.freeze({ text })
+        }
 
-      for (const [index, followUp] of followUps.entries()) {
-        context.signal.throwIfAborted()
-        text = await session.prompt(followUp, index === followUps.length - 1 ? request.output?.jsonSchema : undefined)
-      }
-
-      context.signal.throwIfAborted()
-
-      if (request.output === undefined) {
-        response = Object.freeze({ text })
-      } else {
         let structured: unknown
 
         try {
@@ -167,44 +152,9 @@ class PiAgentImplementation implements PiAgentProvider {
           })
         }
 
-        response = Object.freeze({ structured, text })
-      }
-    } catch (error) {
-      hasExecutionError = true
-      executionError = context.signal.aborted ? context.signal.reason : error
-    } finally {
-      if (cancellation !== undefined) {
-        context.signal.removeEventListener("abort", cancellation)
-      }
+        return Object.freeze({ structured, text })
+      },
     }
-
-    let hasCleanupError = false
-    let cleanupError: unknown
-
-    try {
-      session.dispose()
-    } catch (error) {
-      hasCleanupError = true
-      cleanupError = error
-    }
-
-    if (hasExecutionError && hasCleanupError) {
-      throw new AggregateError([executionError, cleanupError], "Pi Agent execution and cleanup failed")
-    }
-
-    if (hasExecutionError) {
-      throw executionError
-    }
-
-    if (hasCleanupError) {
-      throw cleanupError
-    }
-
-    if (response === undefined) {
-      throw new Error("Pi Agent produced no response")
-    }
-
-    return response
   }
 
   /**

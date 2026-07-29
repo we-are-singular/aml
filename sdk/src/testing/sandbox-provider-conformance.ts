@@ -22,7 +22,18 @@ export async function sandboxProviderConformance(provider: SandboxProvider): Pro
   let releaseAttempted = false
 
   try {
-    validateSandboxLease(capture, validatedProvider.name)
+    const lease = validateSandboxLease(capture, validatedProvider.name)
+
+    if (
+      lease.lease.runtime.access !== request.access ||
+      lease.lease.runtime.cwd !== request.cwd ||
+      lease.lease.runtime.root !== request.root
+    ) {
+      throw new TypeError(
+        `Sandbox provider "${validatedProvider.name}" runtime must preserve the acquired access, cwd, and root`
+      )
+    }
+
     releaseAttempted = true
     await capture.release()
   } catch (error) {

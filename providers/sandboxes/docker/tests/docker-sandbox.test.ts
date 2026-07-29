@@ -174,7 +174,9 @@ describe("dockerSandbox()", () => {
     )
 
     expect(runner.calls[0]?.args).toContain(`${path.join(active, "repository")}:/workspace`)
-    await expect(lease.runtime.exec("pwd", [], { cwd: "outside" })).rejects.toThrow("cwd cannot escape its root")
+    await expect(lease.runtime.exec("pwd", [], { cwd: "outside" })).rejects.toThrow(
+      "Sandbox command cwd resolves outside its configured root"
+    )
   })
 
   it("validates the image-first configuration without running Docker", () => {

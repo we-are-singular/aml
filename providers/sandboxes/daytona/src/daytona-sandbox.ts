@@ -13,10 +13,11 @@ import {
   type Sandbox as DaytonaSdkSandbox,
 } from "@daytona/sdk"
 import {
+  AbstractSandboxProvider,
   defineSandboxProvider,
+  SandboxCommand,
+  type ProvisionedSandbox,
   type SandboxAcquireRequest,
-  type SandboxExecOptions,
-  type SandboxLease,
   type SandboxProvider,
   type SandboxRuntime,
 } from "@aml-jsx/sdk"
@@ -54,6 +55,13 @@ export interface DaytonaSandboxHandle {
   readonly sandbox: DaytonaSdkSandbox
 }
 
+interface DaytonaSandboxResource {
+  readonly client: Daytona
+  released: boolean
+  readonly sandbox: DaytonaSdkSandbox
+  readonly source: string
+}
+
 /**
  * Creates disposable Daytona environments and transfers one Workspace into
  * `workspace` under Daytona's default working directory for each acquisition.
@@ -62,97 +70,126 @@ export function daytonaSandbox(options: DaytonaSandboxOptions = {}): Readonly<Sa
   return defineSandboxProvider(new DaytonaSandboxProvider(parseOptions(options)))
 }
 
-class DaytonaSandboxProvider implements SandboxProvider<DaytonaSandboxHandle> {
+class DaytonaSandboxProvider
+  extends AbstractSandboxProvider<"daytona", DaytonaSandboxHandle, DaytonaSandboxResource>
+  implements SandboxProvider<DaytonaSandboxHandle>
+{
   #client: Daytona | undefined
   readonly #options: Readonly<ParsedDaytonaSandboxOptions>
-  readonly name = "daytona"
 
   constructor(options: Readonly<ParsedDaytonaSandboxOptions>) {
+    super("daytona")
     this.#options = options
     this.#client = options.client
   }
 
-  async acquire(request: SandboxAcquireRequest): Promise<SandboxLease<DaytonaSandboxHandle>> {
-    request.signal.throwIfAborted()
+  protected async provision(
+    request: SandboxAcquireRequest
+  ): Promise<Readonly<ProvisionedSandbox<DaytonaSandboxHandle, DaytonaSandboxResource>>> {
     const client = this.#getClient()
     const source = await resolveSource(request, this.#options.workspace)
     const sandbox = await this.#createSandbox(client, request.signal)
-    const maxOutputBytes = this.#options.maxOutputBytes
-    let released = false
-
-    const destroy = async (): Promise<void> => {
-      if (released) {
-        return
-      }
-
-      released = true
-      await client.delete(sandbox)
+    const resource: DaytonaSandboxResource = {
+      client,
+      released: false,
+      sandbox,
+      source,
     }
 
     try {
       await hydrateWorkspace(sandbox, source, this.#options.maxOutputBytes, request.signal)
       request.signal.throwIfAborted()
-      const runtime = createRuntime(request, sandbox, destroy, this.#options.maxOutputBytes)
-
-      if (this.#options.setup !== undefined) {
-        const setup = await runtime.exec("sh", ["-lc", this.#options.setup], {
-          cwd: request.cwd,
-          signal: request.signal,
-        })
-
-        if (setup.exitCode !== 0) {
-          throw new Error(`Daytona Sandbox setup failed with exit code ${setup.exitCode}: ${setup.stdout.trim()}`)
-        }
-      }
-
       return Object.freeze({
         handle: Object.freeze({
           kind: "daytona" as const,
           sandbox,
         }),
         id: sandbox.id,
-        async release() {
-          if (released) {
-            return
-          }
-
-          let reconciliationError: unknown
-
-          if (request.access === "read-write") {
-            try {
-              await reconcileWorkspace(sandbox, source, maxOutputBytes)
-            } catch (cause) {
-              reconciliationError = cause
-            }
-          }
-
-          try {
-            await destroy()
-          } catch (cleanupError) {
-            if (reconciliationError !== undefined) {
-              throw new AggregateError(
-                [reconciliationError, cleanupError],
-                "Daytona Sandbox Workspace reconciliation and cleanup failed"
-              )
-            }
-
-            throw cleanupError
-          }
-
-          if (reconciliationError !== undefined) {
-            throw reconciliationError
-          }
-        },
-        runtime,
+        resource,
       })
     } catch (cause) {
       try {
-        await destroy()
+        await this.#destroy(resource)
       } catch (cleanupError) {
         throw new AggregateError([cause, cleanupError], "Daytona Sandbox acquisition and cleanup failed")
       }
 
       throw cause
+    }
+  }
+
+  protected createRuntime(
+    provisioned: Readonly<ProvisionedSandbox<DaytonaSandboxHandle, DaytonaSandboxResource>>,
+    request: SandboxAcquireRequest
+  ): Readonly<SandboxRuntime> {
+    return createRuntime(
+      request,
+      provisioned.resource.sandbox,
+      async () => await this.#destroy(provisioned.resource),
+      this.#options.maxOutputBytes
+    )
+  }
+
+  protected override async initialize(
+    _provisioned: Readonly<ProvisionedSandbox<DaytonaSandboxHandle, DaytonaSandboxResource>>,
+    runtime: Readonly<SandboxRuntime>,
+    request: SandboxAcquireRequest
+  ): Promise<void> {
+    if (this.#options.setup === undefined) {
+      return
+    }
+
+    const setup = await runtime.exec("sh", ["-lc", this.#options.setup], {
+      cwd: request.cwd,
+      signal: request.signal,
+    })
+
+    if (setup.exitCode !== 0) {
+      throw new Error(`Daytona Sandbox setup failed with exit code ${setup.exitCode}: ${setup.stdout.trim()}`)
+    }
+  }
+
+  protected override async cleanupProvisioned(
+    provisioned: Readonly<ProvisionedSandbox<DaytonaSandboxHandle, DaytonaSandboxResource>>
+  ): Promise<void> {
+    await this.#destroy(provisioned.resource)
+  }
+
+  protected async releaseResource(
+    provisioned: Readonly<ProvisionedSandbox<DaytonaSandboxHandle, DaytonaSandboxResource>>,
+    request: SandboxAcquireRequest
+  ): Promise<void> {
+    const resource = provisioned.resource
+
+    if (resource.released) {
+      return
+    }
+
+    let reconciliationError: unknown
+
+    if (request.access === "read-write") {
+      try {
+        await reconcileWorkspace(resource.sandbox, resource.source, this.#options.maxOutputBytes)
+      } catch (cause) {
+        reconciliationError = cause
+      }
+    }
+
+    try {
+      await this.#destroy(resource)
+    } catch (cleanupError) {
+      if (reconciliationError !== undefined) {
+        throw new AggregateError(
+          [reconciliationError, cleanupError],
+          "Daytona Sandbox Workspace reconciliation and cleanup failed"
+        )
+      }
+
+      throw cleanupError
+    }
+
+    if (reconciliationError !== undefined) {
+      throw reconciliationError
     }
   }
 
@@ -176,6 +213,15 @@ class DaytonaSandboxProvider implements SandboxProvider<DaytonaSandboxHandle> {
       throw cause
     }
   }
+
+  async #destroy(resource: DaytonaSandboxResource): Promise<void> {
+    if (resource.released) {
+      return
+    }
+
+    resource.released = true
+    await resource.client.delete(resource.sandbox)
+  }
 }
 
 function createRuntime(
@@ -194,22 +240,20 @@ function createRuntime(
         )
       }
 
-      assertCommand(command, args)
-      const signal = options.signal ?? request.signal
-      signal.throwIfAborted()
-      const cwd = guestPath(request.root, options.cwd ?? request.cwd)
-      const timeout = timeoutSeconds(options.timeoutMs)
+      const captured = SandboxCommand.from(request, command, args, options)
+      const cwd = guestPath(request.root, captured.cwd)
+      const timeout = timeoutSeconds(captured.timeoutMs)
       const execution = sandbox.process.executeCommand(
-        shellCommand(command, args),
+        shellCommand(captured.command, captured.args),
         cwd,
-        captureEnvironment(options.env),
+        Object.keys(captured.env).length === 0 ? undefined : { ...captured.env },
         timeout
       )
 
       let result
 
       try {
-        result = await abortable(execution, signal)
+        result = await abortable(execution, captured.signal)
       } catch (cause) {
         // Daytona's command API does not expose per-command cancellation. Tear
         // down the disposable environment so work cannot continue remotely.
@@ -380,44 +424,12 @@ function quoteShell(value: string): string {
   return `'${value.replaceAll("'", `'"'"'`)}'`
 }
 
-function captureEnvironment(value: SandboxExecOptions["env"]): Record<string, string> | undefined {
-  if (value === undefined) {
-    return undefined
-  }
-
-  const environment: Record<string, string> = {}
-
-  for (const [key, entry] of Object.entries(value)) {
-    if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(key) || typeof entry !== "string") {
-      throw new TypeError("Daytona Sandbox command env must contain valid string environment entries")
-    }
-
-    environment[key] = entry
-  }
-
-  return environment
-}
-
 function timeoutSeconds(timeoutMs: number | undefined): number | undefined {
   if (timeoutMs === undefined) {
     return undefined
   }
 
-  if (!Number.isSafeInteger(timeoutMs) || timeoutMs <= 0) {
-    throw new RangeError("Daytona Sandbox timeoutMs must be a positive safe integer")
-  }
-
   return Math.max(1, Math.ceil(timeoutMs / 1000))
-}
-
-function assertCommand(command: string, args: readonly string[]): void {
-  if (typeof command !== "string" || command.length === 0 || command.includes("\0")) {
-    throw new TypeError("Daytona Sandbox command must be a non-empty string without null bytes")
-  }
-
-  if (!Array.isArray(args) || args.some(argument => typeof argument !== "string" || argument.includes("\0"))) {
-    throw new TypeError("Daytona Sandbox args must be an array of strings without null bytes")
-  }
 }
 
 function assertPathWithin(root: string, candidate: string, label: string): void {

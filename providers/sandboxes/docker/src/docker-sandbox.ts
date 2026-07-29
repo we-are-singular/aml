@@ -4,11 +4,13 @@ import path from "node:path"
 import { randomUUID } from "node:crypto"
 
 import {
+  AbstractSandboxProvider,
   defineSandboxProvider,
+  SandboxCommand,
+  type ProvisionedSandbox,
   type SandboxAcquireRequest,
   type SandboxExecOptions,
   type SandboxExecResult,
-  type SandboxLease,
   type SandboxProvider,
   type SandboxRuntime,
 } from "@aml-jsx/sdk"
@@ -65,18 +67,22 @@ export function createDockerSandboxProvider(
   return defineSandboxProvider(new DockerSandboxProvider(parseOptions(options), runner))
 }
 
-class DockerSandboxProvider implements SandboxProvider<DockerSandboxHandle> {
+class DockerSandboxProvider
+  extends AbstractSandboxProvider<"docker", DockerSandboxHandle, string>
+  implements SandboxProvider<DockerSandboxHandle>
+{
   readonly #options: Readonly<ParsedDockerSandboxOptions>
   readonly #runner: CommandRunner
-  readonly name = "docker"
 
   constructor(options: Readonly<ParsedDockerSandboxOptions>, runner: CommandRunner) {
+    super("docker")
     this.#options = options
     this.#runner = runner
   }
 
-  async acquire(request: SandboxAcquireRequest): Promise<SandboxLease<DockerSandboxHandle>> {
-    request.signal.throwIfAborted()
+  protected async provision(
+    request: SandboxAcquireRequest
+  ): Promise<Readonly<ProvisionedSandbox<DockerSandboxHandle, string>>> {
     const source = await this.#resolveSource(request)
     const containerName = `aml-${request.evaluationId.slice(0, 12)}-${randomUUID().slice(0, 8)}`
     const mount = `${source}:/workspace${request.access === "read-only" ? ":ro" : ""}`
@@ -121,51 +127,39 @@ class DockerSandboxProvider implements SandboxProvider<DockerSandboxHandle> {
       throw new Error("Docker Sandbox started without returning a container id")
     }
 
-    const runtime = this.#createRuntime(request, containerId)
-
-    if (this.#options.setup !== undefined) {
-      const setup = await runtime.exec("sh", ["-lc", this.#options.setup], {
-        cwd: request.cwd,
-        signal: request.signal,
-      })
-
-      if (setup.exitCode !== 0) {
-        await this.#removeContainer(containerId)
-        throw new Error(`Docker Sandbox setup failed with exit code ${setup.exitCode}: ${setup.stderr.trim()}`)
-      }
-    }
-
     return Object.freeze({
       handle: Object.freeze({
         containerId,
         kind: "docker" as const,
       }),
       id: containerId,
-      release: async () => await this.#removeContainer(containerId),
-      runtime,
+      resource: containerId,
     })
   }
 
-  #createRuntime(request: SandboxAcquireRequest, containerId: string): Readonly<SandboxRuntime> {
+  protected createRuntime(
+    provisioned: Readonly<ProvisionedSandbox<DockerSandboxHandle, string>>,
+    request: SandboxAcquireRequest
+  ): Readonly<SandboxRuntime> {
+    const containerId = provisioned.resource
     const runtime: SandboxRuntime = {
       access: request.access,
       cwd: request.cwd,
       exec: async (command, args = [], options = {}) => {
-        assertCommand(command, args)
-        const cwd = options.cwd ?? request.cwd
-        const dockerArgs = ["exec", "--workdir", guestPath(request.root, cwd)]
+        const captured = SandboxCommand.from(request, command, args, options)
+        const dockerArgs = ["exec", "--workdir", guestPath(request.root, captured.cwd)]
 
-        for (const [key, value] of Object.entries(captureEnvironment(options.env))) {
+        for (const [key, value] of Object.entries(captured.env)) {
           dockerArgs.push("--env", `${key}=${value}`)
         }
 
-        dockerArgs.push(containerId, command, ...args)
+        dockerArgs.push(containerId, captured.command, ...captured.args)
 
         try {
           return await this.#runner.run("docker", dockerArgs, {
             maxOutputBytes: this.#options.maxOutputBytes,
-            signal: options.signal ?? request.signal,
-            ...(options.timeoutMs === undefined ? {} : { timeoutMs: options.timeoutMs }),
+            signal: captured.signal,
+            ...(captured.timeoutMs === undefined ? {} : { timeoutMs: captured.timeoutMs }),
           })
         } catch (cause) {
           // A timed-out or cancelled `docker exec` can leave its remote process
@@ -178,6 +172,31 @@ class DockerSandboxProvider implements SandboxProvider<DockerSandboxHandle> {
     }
 
     return Object.freeze(runtime)
+  }
+
+  protected override async initialize(
+    _provisioned: Readonly<ProvisionedSandbox<DockerSandboxHandle, string>>,
+    runtime: Readonly<SandboxRuntime>,
+    request: SandboxAcquireRequest
+  ): Promise<void> {
+    if (this.#options.setup === undefined) {
+      return
+    }
+
+    const setup = await runtime.exec("sh", ["-lc", this.#options.setup], {
+      cwd: request.cwd,
+      signal: request.signal,
+    })
+
+    if (setup.exitCode !== 0) {
+      throw new Error(`Docker Sandbox setup failed with exit code ${setup.exitCode}: ${setup.stderr.trim()}`)
+    }
+  }
+
+  protected async releaseResource(
+    provisioned: Readonly<ProvisionedSandbox<DockerSandboxHandle, string>>
+  ): Promise<void> {
+    await this.#removeContainer(provisioned.resource)
   }
 
   async #resolveSource(request: SandboxAcquireRequest): Promise<string> {
@@ -300,36 +319,6 @@ function normalizedString(value: unknown, label: string): string {
 
 function optionalNormalizedString(value: string | undefined, label: string): string | undefined {
   return value === undefined ? undefined : normalizedString(value, label)
-}
-
-function assertCommand(command: string, args: readonly string[]): void {
-  normalizedString(command, "Docker Sandbox command")
-
-  if (!Array.isArray(args) || args.some(argument => typeof argument !== "string" || argument.includes("\0"))) {
-    throw new TypeError("Docker Sandbox command arguments must be strings")
-  }
-}
-
-function captureEnvironment(value: Readonly<Record<string, string>> | undefined): Readonly<Record<string, string>> {
-  if (value === undefined) {
-    return Object.freeze({})
-  }
-
-  if (typeof value !== "object" || value === null || Array.isArray(value)) {
-    throw new TypeError("Docker Sandbox command environment must be an object")
-  }
-
-  const result: Record<string, string> = {}
-
-  for (const [key, entry] of Object.entries(value)) {
-    if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(key) || typeof entry !== "string" || entry.includes("\0")) {
-      throw new TypeError("Docker Sandbox command environment contains an invalid entry")
-    }
-
-    result[key] = entry
-  }
-
-  return Object.freeze(result)
 }
 
 function assertPathWithin(root: string, candidate: string, label: string): void {

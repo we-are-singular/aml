@@ -35,4 +35,31 @@ export async function agentProviderConformance(provider: AgentProvider): Promise
   if (typeof response !== "object" || response === null || typeof response.text !== "string") {
     throw new TypeError("Agent provider must return a text response")
   }
+
+  const cancellation = new Error("agent-provider-conformance-cancelled")
+  const controller = new AbortController()
+  controller.abort(cancellation)
+
+  try {
+    await Reflect.apply(validatedProvider.run, validatedProvider.provider, [
+      request,
+      createAgentExecutionContext({
+        signal: controller.signal,
+        trace: Object.freeze({
+          runId: "agent-provider-conformance-cancelled",
+          spanId: "agent-provider-conformance-cancelled",
+        }),
+      }),
+    ])
+  } catch (error) {
+    if (error === cancellation) {
+      return
+    }
+
+    throw new TypeError("Agent provider must reject pre-cancelled execution with the AbortSignal reason", {
+      cause: error,
+    })
+  }
+
+  throw new TypeError("Agent provider must reject pre-cancelled execution")
 }

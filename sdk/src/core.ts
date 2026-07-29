@@ -1,12 +1,16 @@
 // Core agent authoring and provider-neutral execution contracts.
 export { Agent, type AgentProps } from "./components/agent/agent.js"
 export type { AgentExecutionContext } from "./components/agent/agent-execution-context.js"
+export { AbstractAgentProvider } from "./components/agent/abstract-agent-provider.js"
 export type { AmlModelSchema } from "./components/agent/aml-model-schema.js"
 export type { AgentOutputRequest } from "./components/agent/agent-output-request.js"
 export type { AgentProvider } from "./components/agent/agent-provider.js"
+export type { AgentProviderSession, AgentProviderTurn } from "./components/agent/agent-provider-session.js"
 export type { AgentRequest } from "./components/agent/agent-request.js"
 export type { AgentResponse } from "./components/agent/agent-response.js"
+export { createAgentProviderTurns } from "./components/agent/create-agent-provider-turns.js"
 export { defineAgentProvider } from "./components/agent/define-agent-provider.js"
+export { executeAgentProviderSession } from "./components/agent/execute-agent-provider-session.js"
 export type {
   AmlEvaluationFinishEvent,
   AmlEvaluationStartEvent,
@@ -44,7 +48,10 @@ export { Mcp, type McpProps } from "./components/mcp/mcp.js"
 export { Skill, type SkillProps } from "./components/skill/skill.js"
 
 // Ephemeral execution scope and provider-neutral lease contracts.
+export { AbstractSandboxProvider } from "./components/sandbox/abstract-sandbox-provider.js"
 export { defineSandboxProvider } from "./components/sandbox/define-sandbox-provider.js"
+export type { ProvisionedSandbox } from "./components/sandbox/provisioned-sandbox.js"
+export { SandboxCommand } from "./components/sandbox/sandbox-command.js"
 export {
   type SandboxAccess,
   type SandboxAcquireRequest,

@@ -1,4 +1,9 @@
-import type { AgentExecutionContext, AgentRequest, AgentResponse } from "@aml-jsx/sdk"
+import {
+  type AgentExecutionContext,
+  type AgentProviderSession,
+  type AgentProviderTurn,
+  type AgentRequest,
+} from "@aml-jsx/sdk"
 import { defu } from "defu"
 
 import type { CodexClient, CodexReasoningEffort, CodexThread, CodexThreadOptions } from "./codex-client-factory.js"
@@ -17,7 +22,6 @@ interface CodexSessionOptions {
 export class CodexSession {
   readonly #model: string | undefined
   readonly #outputSchema: Readonly<Record<string, unknown>> | undefined
-  readonly #prompts: readonly string[]
   readonly #reasoningEffort: CodexReasoningEffort | undefined
   readonly #skipGitRepoCheck: boolean | undefined
   readonly #workingDirectory: string | undefined
@@ -36,30 +40,12 @@ export class CodexSession {
     this.#reasoningEffort = options.reasoningEffort
     this.#skipGitRepoCheck = options.skipGitRepoCheck
     this.#workingDirectory = options.workingDirectory
-
-    if (request.followUps !== undefined && !Array.isArray(request.followUps)) {
-      throw new TypeError("Codex followUps must be an array")
-    }
-
-    const prompts = [request.prompt]
-
-    for (const followUp of request.followUps ?? []) {
-      if (typeof followUp !== "string" || followUp.length === 0) {
-        throw new TypeError("Codex followUps must contain non-empty strings")
-      }
-
-      prompts.push(followUp)
-    }
-
-    this.#prompts = Object.freeze(prompts)
   }
 
   /**
-   * Executes every authored input through one provider conversation.
+   * Starts one Codex thread and exposes its provider-neutral turn surface.
    */
-  async run(client: CodexClient, context: AgentExecutionContext): Promise<AgentResponse> {
-    context.signal.throwIfAborted()
-
+  open(client: CodexClient): AgentProviderSession {
     const startThread = client.startThread
 
     if (typeof startThread !== "function") {
@@ -95,59 +81,57 @@ export class CodexSession {
       throw new TypeError("Codex thread run must be a function")
     }
 
-    let finalResponse = ""
+    return {
+      async close() {},
+      runTurn: async (turn: Readonly<AgentProviderTurn>, context: AgentExecutionContext) => {
+        const result = await Reflect.apply(run, thread, [
+          turn.prompt,
+          Object.freeze({
+            ...(turn.output !== undefined && this.#outputSchema !== undefined
+              ? { outputSchema: this.#outputSchema }
+              : {}),
+            signal: context.signal,
+          }),
+        ])
+        context.signal.throwIfAborted()
 
-    for (const [index, prompt] of this.#prompts.entries()) {
-      // A cancellation between FollowUps must not admit another authored input
-      // into the retained Codex conversation.
-      context.signal.throwIfAborted()
-      const isFinalTurn = index === this.#prompts.length - 1
-      const turn = await Reflect.apply(run, thread, [
-        prompt,
-        Object.freeze({
-          ...(isFinalTurn && this.#outputSchema !== undefined ? { outputSchema: this.#outputSchema } : {}),
-          signal: context.signal,
-        }),
-      ])
-      context.signal.throwIfAborted()
+        let responseValue: unknown
 
-      let responseValue: unknown
+        // The injected client is an external boundary. Read its result field once
+        // so a stateful getter cannot change the turn after validation.
+        try {
+          responseValue =
+            typeof result === "object" && result !== null ? Reflect.get(result, "finalResponse") : undefined
+        } catch (cause) {
+          throw new TypeError("Codex thread returned an invalid turn result", { cause })
+        }
 
-      // The injected client is an external boundary. Read its result field once
-      // so a stateful getter cannot change the turn after validation.
-      try {
-        responseValue = typeof turn === "object" && turn !== null ? Reflect.get(turn, "finalResponse") : undefined
-      } catch (cause) {
-        throw new TypeError("Codex thread returned an invalid turn result", { cause })
-      }
+        if (typeof result !== "object" || result === null || typeof responseValue !== "string") {
+          throw new TypeError("Codex thread returned an invalid turn result")
+        }
 
-      if (typeof turn !== "object" || turn === null || typeof responseValue !== "string") {
-        throw new TypeError("Codex thread returned an invalid turn result")
-      }
+        // Reading an injected result can execute an accessor. Re-check after the
+        // one trusted-boundary read so cancellation cannot become a success.
+        context.signal.throwIfAborted()
 
-      // Reading an injected result can execute an accessor. Re-check after the
-      // one trusted-boundary read so cancellation cannot become a success.
-      context.signal.throwIfAborted()
-      finalResponse = responseValue
+        if (turn.output === undefined) {
+          return Object.freeze({ text: responseValue })
+        }
+
+        let structured: unknown
+
+        try {
+          structured = JSON.parse(responseValue)
+        } catch (cause) {
+          throw new TypeError("Codex structured response is not valid JSON", { cause })
+        }
+
+        return Object.freeze({
+          structured,
+          text: responseValue,
+        })
+      },
     }
-
-    if (this.#outputSchema === undefined) {
-      return Object.freeze({ text: finalResponse })
-    }
-
-    let structured: unknown
-
-    try {
-      structured = JSON.parse(finalResponse)
-    } catch (cause) {
-      throw new TypeError("Codex structured response is not valid JSON", { cause })
-    }
-
-    context.signal.throwIfAborted()
-    return Object.freeze({
-      structured,
-      text: finalResponse,
-    })
   }
 
   /**

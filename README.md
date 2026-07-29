@@ -141,7 +141,14 @@ workflows with `@aml-jsx/sdk`.
 | `defineMcpServer()`                | Creates an immutable provider-neutral MCP descriptor for a local stdio process or remote Streamable HTTP server. |
 | `createContext()` / `useContext()` | Defines and reads immutable dependencies scoped through the AML tree.                                            |
 | `defineAgentProvider()`            | Defines an Agent harness adapter implementing AML's provider contract.                                           |
+| `AbstractAgentProvider`            | Optional template for provider sessions, authored turns, cancellation, and invocation cleanup.                   |
+| `AgentProviderSession`             | Narrow invocation session implemented by Agent adapters using the lifecycle template.                            |
+| `createAgentProviderTurns()`       | Validates and captures ordered initial and FollowUp turns for a provider session.                                |
+| `executeAgentProviderSession()`    | Executes a captured session with shared cancellation, result selection, and cleanup semantics.                   |
 | `defineSandboxProvider()`          | Defines an ephemeral execution provider.                                                                         |
+| `AbstractSandboxProvider`          | Optional template for staged Sandbox provisioning, initialization, compensation, and release.                    |
+| `ProvisionedSandbox`               | Acknowledged provider resource used by the Sandbox lifecycle template for compensation and release.              |
+| `SandboxCommand`                   | Captures and validates one portable literal Sandbox command before backend translation.                          |
 | `defineWorkspaceProvider()`        | Defines a durable filesystem materialization provider.                                                           |
 | `runtime.on()` / `runtime.once()`  | Subscribes to evaluation lifecycle and trace events.                                                             |
 

@@ -41,12 +41,45 @@ export function validateSandboxRuntime(value: unknown, providerName: string): Re
       command: string,
       args?: readonly string[],
       options?: Readonly<SandboxExecOptions>
-    ): Promise<Readonly<SandboxExecResult>> =>
-      (await Reflect.apply(exec, value, [command, args, options])) as Readonly<SandboxExecResult>,
+    ): Promise<Readonly<SandboxExecResult>> => {
+      const result = await Reflect.apply(exec, value, [command, args, options])
+      return validateSandboxExecResult(result, providerName)
+    },
     root,
   }
 
   return Object.freeze(runtime)
+}
+
+/**
+ * Captures one provider-owned command result before it crosses into an Agent.
+ */
+function validateSandboxExecResult(value: unknown, providerName: string): Readonly<SandboxExecResult> {
+  if (typeof value !== "object" || value === null) {
+    throw new TypeError(`Sandbox provider "${providerName}" returned an invalid command result`)
+  }
+
+  let exitCode: unknown
+  let stderr: unknown
+  let stdout: unknown
+
+  try {
+    exitCode = Reflect.get(value, "exitCode")
+    stderr = Reflect.get(value, "stderr")
+    stdout = Reflect.get(value, "stdout")
+  } catch (cause) {
+    throw new TypeError(`Sandbox provider "${providerName}" returned an unreadable command result`, { cause })
+  }
+
+  if (!Number.isSafeInteger(exitCode) || typeof stderr !== "string" || typeof stdout !== "string") {
+    throw new TypeError(`Sandbox provider "${providerName}" returned an invalid command result`)
+  }
+
+  return Object.freeze({
+    exitCode: exitCode as number,
+    stderr,
+    stdout,
+  })
 }
 
 function assertLogicalPath(value: unknown, providerName: string, field: string): asserts value is string {

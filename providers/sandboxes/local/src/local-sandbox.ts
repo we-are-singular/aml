@@ -4,11 +4,12 @@ import path from "node:path"
 import { randomUUID } from "node:crypto"
 
 import {
+  AbstractSandboxProvider,
   defineSandboxProvider,
+  SandboxCommand,
+  type ProvisionedSandbox,
   type SandboxAcquireRequest,
-  type SandboxExecOptions,
   type SandboxExecResult,
-  type SandboxLease,
   type SandboxProvider,
   type SandboxRuntime,
 } from "@aml-jsx/sdk"
@@ -35,6 +36,11 @@ interface LocalSandboxHandle {
   readonly kind: "local"
 }
 
+interface LocalSandboxResource {
+  readonly root: string
+  readonly workspace: string
+}
+
 /**
  * Runs Sandbox commands as ordinary host processes in one Workspace.
  *
@@ -45,16 +51,20 @@ export function localSandbox(options: LocalSandboxOptions = {}): Readonly<Sandbo
   return defineSandboxProvider(new LocalSandboxProvider(parseOptions(options)))
 }
 
-class LocalSandboxProvider implements SandboxProvider<LocalSandboxHandle> {
+class LocalSandboxProvider
+  extends AbstractSandboxProvider<"local", LocalSandboxHandle, LocalSandboxResource>
+  implements SandboxProvider<LocalSandboxHandle>
+{
   readonly #options: Readonly<ParsedLocalSandboxOptions>
-  readonly name = "local"
 
   constructor(options: Readonly<ParsedLocalSandboxOptions>) {
+    super("local")
     this.#options = options
   }
 
-  async acquire(request: SandboxAcquireRequest): Promise<SandboxLease<LocalSandboxHandle>> {
-    request.signal.throwIfAborted()
+  protected async provision(
+    request: SandboxAcquireRequest
+  ): Promise<Readonly<ProvisionedSandbox<LocalSandboxHandle, LocalSandboxResource>>> {
     const workspaceDirectory = request.workspace?.directory ?? this.#options.workspace
 
     if (workspaceDirectory === undefined) {
@@ -66,29 +76,48 @@ class LocalSandboxProvider implements SandboxProvider<LocalSandboxHandle> {
     await resolveDirectory(workspace, request.cwd, root, "cwd")
     request.signal.throwIfAborted()
 
-    const runtime = createRuntime(request, workspace, root, this.#options.maxOutputBytes)
-
-    if (this.#options.setup !== undefined) {
-      const result = await runtime.exec("sh", ["-lc", this.#options.setup], {
-        cwd: request.cwd,
-        signal: request.signal,
-      })
-
-      if (result.exitCode !== 0) {
-        throw new Error(`Local Sandbox setup failed with exit code ${result.exitCode}: ${result.stderr.trim()}`)
-      }
-    }
-
     return Object.freeze({
       handle: Object.freeze({
         directory: root,
         kind: "local" as const,
       }),
       id: `local:${randomUUID()}`,
-      async release() {},
-      runtime,
+      resource: Object.freeze({ root, workspace }),
     })
   }
+
+  protected createRuntime(
+    provisioned: Readonly<ProvisionedSandbox<LocalSandboxHandle, LocalSandboxResource>>,
+    request: SandboxAcquireRequest
+  ): Readonly<SandboxRuntime> {
+    return createRuntime(
+      request,
+      provisioned.resource.workspace,
+      provisioned.resource.root,
+      this.#options.maxOutputBytes
+    )
+  }
+
+  protected override async initialize(
+    _provisioned: Readonly<ProvisionedSandbox<LocalSandboxHandle, LocalSandboxResource>>,
+    runtime: Readonly<SandboxRuntime>,
+    request: SandboxAcquireRequest
+  ): Promise<void> {
+    if (this.#options.setup === undefined) {
+      return
+    }
+
+    const result = await runtime.exec("sh", ["-lc", this.#options.setup], {
+      cwd: request.cwd,
+      signal: request.signal,
+    })
+
+    if (result.exitCode !== 0) {
+      throw new Error(`Local Sandbox setup failed with exit code ${result.exitCode}: ${result.stderr.trim()}`)
+    }
+  }
+
+  protected async releaseResource(): Promise<void> {}
 }
 
 /**
@@ -108,18 +137,9 @@ function createRuntime(
         throw new Error("Local Sandbox cannot execute under read-only access because host processes cannot enforce it")
       }
 
-      const cwd = await resolveDirectory(workspace, options.cwd ?? request.cwd, root, "command cwd")
-
-      return await execute(
-        command,
-        args,
-        {
-          ...options,
-          cwd,
-          signal: options.signal ?? request.signal,
-        },
-        maxOutputBytes
-      )
+      const captured = SandboxCommand.from(request, command, args, options)
+      const cwd = await resolveDirectory(workspace, captured.cwd, root, "command cwd")
+      return await execute(captured, cwd, maxOutputBytes)
     },
     root: request.root,
   }
@@ -131,34 +151,28 @@ function createRuntime(
  * Executes one literal host command with Node's bounded child-process API.
  */
 async function execute(
-  command: string,
-  args: readonly string[],
-  options: Readonly<SandboxExecOptions & { cwd: string }>,
+  command: SandboxCommand,
+  cwd: string,
   maxOutputBytes: number
 ): Promise<Readonly<SandboxExecResult>> {
-  assertCommand(command, args)
-  const timeout = validateTimeout(options.timeoutMs)
-  const env = captureEnvironment(options.env)
-  options.signal?.throwIfAborted()
-
   return await new Promise<Readonly<SandboxExecResult>>((resolve, reject) => {
     const child = execFile(
-      command,
-      [...args],
+      command.command,
+      [...command.args],
       {
-        cwd: options.cwd,
+        cwd,
         encoding: "utf8",
         // Some coding Agents resolve their project from PWD before asking the
         // operating system for cwd. Keep both views on the attached Workspace.
-        env: { ...process.env, ...env, PWD: options.cwd },
+        env: { ...process.env, ...command.env, PWD: cwd },
         maxBuffer: maxOutputBytes,
-        signal: options.signal,
-        timeout,
+        signal: command.signal,
+        timeout: command.timeoutMs,
         windowsHide: true,
       },
       (error, stdout, stderr) => {
-        if (options.signal?.aborted) {
-          reject(options.signal.reason)
+        if (command.signal.aborted) {
+          reject(command.signal.reason)
           return
         }
 
@@ -240,50 +254,6 @@ function optionalNormalizedString(value: string | undefined, label: string): str
 
   if (typeof value !== "string" || value.length === 0 || value !== value.trim() || value.includes("\0")) {
     throw new TypeError(`${label} must be a non-empty normalized string`)
-  }
-
-  return value
-}
-
-function assertCommand(command: string, args: readonly string[]): void {
-  if (typeof command !== "string" || command.length === 0 || command.includes("\0")) {
-    throw new TypeError("Local Sandbox command must be a non-empty string")
-  }
-
-  if (!Array.isArray(args) || args.some(argument => typeof argument !== "string" || argument.includes("\0"))) {
-    throw new TypeError("Local Sandbox command arguments must be strings")
-  }
-}
-
-function captureEnvironment(value: Readonly<Record<string, string>> | undefined): Readonly<Record<string, string>> {
-  if (value === undefined) {
-    return Object.freeze({})
-  }
-
-  if (typeof value !== "object" || value === null || Array.isArray(value)) {
-    throw new TypeError("Local Sandbox command environment must be an object")
-  }
-
-  const result: Record<string, string> = {}
-
-  for (const [key, entry] of Object.entries(value)) {
-    if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(key) || typeof entry !== "string" || entry.includes("\0")) {
-      throw new TypeError("Local Sandbox command environment contains an invalid entry")
-    }
-
-    result[key] = entry
-  }
-
-  return Object.freeze(result)
-}
-
-function validateTimeout(value: number | undefined): number | undefined {
-  if (value === undefined) {
-    return undefined
-  }
-
-  if (!Number.isSafeInteger(value) || value <= 0 || value > 2_147_483_647) {
-    throw new RangeError("Local Sandbox timeoutMs must be a positive timer-safe integer")
   }
 
   return value

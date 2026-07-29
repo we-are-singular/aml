@@ -1,8 +1,11 @@
 import {
+  AbstractAgentProvider,
   defineAgentProvider,
   supportsSandboxRuntime,
   type AgentExecutionContext,
   type AgentProvider,
+  type AgentProviderSession,
+  type AgentProviderTurn,
   type AgentRequest,
   type AgentResponse,
 } from "@aml-jsx/sdk"
@@ -33,13 +36,13 @@ export interface OpenCodeAgentProvider extends AgentProvider {
 }
 
 interface OpenCodeEvaluationState {
-  readonly activeRuns: Set<Promise<AgentResponse>>
+  readonly activeRuns: Set<Promise<void>>
   closePromise?: Promise<void>
   clientPromise?: Promise<OpenCodeSessionClient>
   ownedServer?: { close(): Promise<void> | void }
 }
 
-class OpenCodeAgentImplementation implements OpenCodeAgentProvider {
+class OpenCodeAgentImplementation extends AbstractAgentProvider<"opencode"> implements OpenCodeAgentProvider {
   readonly #directory: string | undefined
   readonly #config: CapturedOpenCodeAgentOptions["config"]
   readonly #evaluations = new Map<string, OpenCodeEvaluationState>()
@@ -48,12 +51,11 @@ class OpenCodeAgentImplementation implements OpenCodeAgentProvider {
   readonly #sessionClient: OpenCodeSessionClient | undefined
   #closePromise: Promise<void> | undefined
   #closed = false
-  readonly name = "opencode" as const
-
   /**
    * Captures adapter configuration without creating an OpenCode server.
    */
   constructor(options: CapturedOpenCodeAgentOptions) {
+    super("opencode")
     this.#config = options.config
     this.#directory = options.directory
     this.#model = options.model
@@ -61,34 +63,39 @@ class OpenCodeAgentImplementation implements OpenCodeAgentProvider {
     this.#sessionClient = options.sessionClient
   }
 
-  supportsSandbox(sandbox: NonNullable<AgentExecutionContext["sandbox"]>): boolean {
+  override supportsSandbox(sandbox: NonNullable<AgentExecutionContext["sandbox"]>): boolean {
     return supportsSandboxRuntime(sandbox)
   }
 
   /**
-   * Runs one Agent while registering it with the provider close barrier.
+   * Opens one Agent session and registers it with the provider close barrier.
    */
-  async run(request: AgentRequest, context: AgentExecutionContext): Promise<AgentResponse> {
+  protected async openSession(request: AgentRequest, context: AgentExecutionContext): Promise<AgentProviderSession> {
     if (this.#closed) {
       throw new Error("OpenCode Agent provider is closed")
     }
 
     const evaluation = this.#getEvaluation(context)
-    const execution =
-      context.sandbox === undefined ? this.#run(request, context, evaluation) : this.#runInSandbox(request, context)
-    evaluation.activeRuns.add(execution)
+    // Register before opening can suspend so provider.close() cannot miss a
+    // server, capability attachment, or conversation still being constructed.
+    const barrier = new OpenCodeRunBarrier(evaluation.activeRuns)
 
     try {
-      return await execution
-    } finally {
-      evaluation.activeRuns.delete(execution)
+      const session =
+        context.sandbox === undefined
+          ? await this.#open(request, context, evaluation)
+          : await this.#openInSandbox(request, context)
+      return new TrackedOpenCodeSession(session, barrier)
+    } catch (error) {
+      barrier.resolve()
+      throw error
     }
   }
 
   /**
    * Runs an invocation-owned OpenCode CLI beside the Sandbox Workspace.
    */
-  async #runInSandbox(request: AgentRequest, context: AgentExecutionContext): Promise<AgentResponse> {
+  async #openInSandbox(request: AgentRequest, context: AgentExecutionContext): Promise<AgentProviderSession> {
     if (this.#directory !== undefined) {
       throw new TypeError("OpenCode directory cannot be combined with AML Sandbox; use Agent cwd")
     }
@@ -111,7 +118,7 @@ class OpenCodeAgentImplementation implements OpenCodeAgentProvider {
     const imperativeConfig = { sandbox }
     const client = new OpenCodeSandboxSessionClient(defu(imperativeConfig, userInputs))
 
-    return await this.#session(client).run(request, context)
+    return await this.#session(client).open(request, context)
   }
 
   /**
@@ -126,77 +133,49 @@ class OpenCodeAgentImplementation implements OpenCodeAgentProvider {
   /**
    * Selects a reusable or invocation-scoped host from the requested capabilities.
    */
-  async #run(
+  async #open(
     request: AgentRequest,
     context: AgentExecutionContext,
     evaluation: OpenCodeEvaluationState
-  ): Promise<AgentResponse> {
+  ): Promise<AgentProviderSession> {
     // OpenCode disconnects dynamic MCP clients but retains their configuration.
     // JavaScript Tools and MCP grants therefore require a disposable host.
     if (
       !this.#sessionClient &&
       (request.mcpServers.length > 0 || request.tools.some(tool => tool.kind === "javascript"))
     ) {
-      return await this.#runWithDisposableServer(request, context)
+      return await this.#openWithDisposableServer(request, context)
     }
 
     const client = await this.#getClient(evaluation)
-    return await this.#session(client).run(request, context)
+    return await this.#session(client).open(request, context)
   }
 
   /**
    * Owns one temporary OpenCode server for dynamic Agent capabilities.
    */
-  async #runWithDisposableServer(request: AgentRequest, context: AgentExecutionContext): Promise<AgentResponse> {
+  async #openWithDisposableServer(
+    request: AgentRequest,
+    context: AgentExecutionContext
+  ): Promise<AgentProviderSession> {
     // This server is deliberately not stored in evaluation state: its lifetime
     // belongs to this invocation and must end even when the session fails.
     // Disposable hosts must not contend with the reusable configured port or
     // with another concurrent dynamic-capability invocation.
     const owned = await createIsolatedOpencode(defu({ port: 0 }, this.#serverInputs()))
     const client = new OpenCodeSdkClient(owned.client)
-    let hasExecutionError = false
-    let executionError: unknown
-    let response: AgentResponse | undefined
-
-    // Keep execution and server shutdown errors separately so neither masks the
-    // other at this distributed resource boundary.
     try {
-      response = await this.#session(client).run(request, context)
+      const session = await this.#session(client).open(request, context)
+      return new OwnedOpenCodeServerSession(session, owned.server)
     } catch (error) {
-      hasExecutionError = true
-      executionError = error
+      try {
+        await owned.server.close()
+      } catch (cleanupError) {
+        throw new AggregateError([error, cleanupError], "OpenCode disposable server creation and cleanup failed")
+      }
+
+      throw error
     }
-
-    let hasCleanupError = false
-    let cleanupError: unknown
-
-    try {
-      await owned.server.close()
-    } catch (error) {
-      hasCleanupError = true
-      cleanupError = error
-    }
-
-    if (hasExecutionError && hasCleanupError) {
-      throw new AggregateError(
-        [executionError, cleanupError],
-        "OpenCode disposable server execution and cleanup failed"
-      )
-    }
-
-    if (hasExecutionError) {
-      throw executionError
-    }
-
-    if (hasCleanupError) {
-      throw cleanupError
-    }
-
-    if (!response) {
-      throw new Error("OpenCode disposable server produced no response")
-    }
-
-    return response
   }
 
   /**
@@ -314,6 +293,110 @@ class OpenCodeAgentImplementation implements OpenCodeAgentProvider {
 
     if (errors.length > 1) {
       throw new AggregateError(errors, "OpenCode Agent provider cleanup failed")
+    }
+  }
+}
+
+/**
+ * Keeps provider-level close barriers aware of one invocation session.
+ */
+class TrackedOpenCodeSession implements AgentProviderSession {
+  readonly #barrier: OpenCodeRunBarrier
+  readonly #session: AgentProviderSession
+
+  constructor(session: AgentProviderSession, barrier: OpenCodeRunBarrier) {
+    this.#barrier = barrier
+    this.#session = session
+  }
+
+  async abort(): Promise<void> {
+    await this.#session.abort?.()
+  }
+
+  async runTurn(turn: Readonly<AgentProviderTurn>, context: AgentExecutionContext): Promise<AgentResponse> {
+    return await this.#session.runTurn(turn, context)
+  }
+
+  async close(): Promise<void> {
+    try {
+      await this.#session.close()
+    } finally {
+      this.#barrier.resolve()
+    }
+  }
+}
+
+/**
+ * Registers one complete opening-through-cleanup lifetime with provider close.
+ */
+class OpenCodeRunBarrier {
+  readonly #activeRuns: Set<Promise<void>>
+  readonly #promise: Promise<void>
+  readonly #resolvePromise: () => void
+  #resolved = false
+
+  constructor(activeRuns: Set<Promise<void>>) {
+    this.#activeRuns = activeRuns
+    let resolvePromise!: () => void
+    this.#promise = new Promise<void>(resolve => {
+      resolvePromise = resolve
+    })
+    this.#resolvePromise = resolvePromise
+    activeRuns.add(this.#promise)
+  }
+
+  resolve(): void {
+    if (this.#resolved) {
+      return
+    }
+
+    this.#resolved = true
+    this.#activeRuns.delete(this.#promise)
+    this.#resolvePromise()
+  }
+}
+
+/**
+ * Extends invocation cleanup to a disposable OpenCode host.
+ */
+class OwnedOpenCodeServerSession implements AgentProviderSession {
+  readonly #server: { close(): Promise<void> | void }
+  readonly #session: AgentProviderSession
+
+  constructor(session: AgentProviderSession, server: { close(): Promise<void> | void }) {
+    this.#server = server
+    this.#session = session
+  }
+
+  async abort(): Promise<void> {
+    await this.#session.abort?.()
+  }
+
+  async runTurn(turn: Readonly<AgentProviderTurn>, context: AgentExecutionContext): Promise<AgentResponse> {
+    return await this.#session.runTurn(turn, context)
+  }
+
+  async close(): Promise<void> {
+    const errors: unknown[] = []
+
+    try {
+      await this.#session.close()
+    } catch (error) {
+      errors.push(error)
+    }
+
+    try {
+      await this.#server.close()
+    } catch (error) {
+      errors.push(error)
+    }
+
+    if (errors.length === 1) {
+      throw errors[0]
+    }
+
+    if (errors.length > 1) {
+      throw new AggregateError(errors, "OpenCode disposable server cleanup failed")
     }
   }
 }

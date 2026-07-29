@@ -140,6 +140,7 @@ For shared repository trees, object storage synchronization, provider-native vol
 Every new provider should include:
 
 - A configured factory with provider-native options and no hidden global construction.
+- Either the matching optional abstract lifecycle template or a deliberate structural implementation of the same public interface.
 - The relevant SDK conformance suite.
 - Deterministic tests for lifecycle, cancellation, errors, and capability mapping.
 - An opt-in live integration test against the real provider.

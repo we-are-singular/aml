@@ -63,6 +63,7 @@ export class DeterministicAgentProvider implements AgentProvider {
    * Records one immutable call snapshot before invoking the response strategy.
    */
   async run(request: AgentRequest, context: AgentExecutionContext): Promise<AgentResponse> {
+    context.signal.throwIfAborted()
     const callIndex = this.#calls.length
     this.#calls.push(Object.freeze({ context, request }))
     return await this.#respond(request, context, callIndex)

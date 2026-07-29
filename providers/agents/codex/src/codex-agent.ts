@@ -1,8 +1,11 @@
 import {
+  AbstractAgentProvider,
   defineAgentProvider,
   supportsSandboxRuntime,
   type AgentExecutionContext,
   type AgentProvider,
+  type AgentProviderSession,
+  type AgentProviderTurn,
   type AgentRequest,
   type AgentResponse,
 } from "@aml-jsx/sdk"
@@ -61,7 +64,7 @@ interface CapturedCodexAgentOptions {
   readonly workingDirectory?: string
 }
 
-class CodexAgentImplementation implements CodexAgentProvider {
+class CodexAgentImplementation extends AbstractAgentProvider<"codex"> implements CodexAgentProvider {
   readonly #apiKey: string | undefined
   readonly #baseUrl: string | undefined
   readonly #clientFactory: CodexClientFactory
@@ -73,12 +76,11 @@ class CodexAgentImplementation implements CodexAgentProvider {
   readonly #reasoningEffort: CodexReasoningEffort | undefined
   readonly #skipGitRepoCheck: boolean | undefined
   readonly #workingDirectory: string | undefined
-  readonly name = "codex" as const
-
   /**
    * Captures immutable configuration without constructing the Codex SDK.
    */
   constructor(options: CapturedCodexAgentOptions) {
+    super("codex")
     this.#apiKey = options.apiKey
     this.#baseUrl = options.baseUrl
     this.#clientFactory = options.clientFactory
@@ -92,14 +94,14 @@ class CodexAgentImplementation implements CodexAgentProvider {
     this.#workingDirectory = options.workingDirectory
   }
 
-  supportsSandbox(sandbox: NonNullable<AgentExecutionContext["sandbox"]>): boolean {
+  override supportsSandbox(sandbox: NonNullable<AgentExecutionContext["sandbox"]>): boolean {
     return supportsSandboxRuntime(sandbox)
   }
 
   /**
-   * Runs one fresh Codex thread with invocation-local capabilities.
+   * Opens one fresh Codex thread with invocation-local capabilities.
    */
-  async run(request: AgentRequest, context: AgentExecutionContext): Promise<AgentResponse> {
+  protected async openSession(request: AgentRequest, context: AgentExecutionContext): Promise<AgentProviderSession> {
     context.signal.throwIfAborted()
 
     if (typeof request.system !== "string") {
@@ -131,13 +133,8 @@ class CodexAgentImplementation implements CodexAgentProvider {
       "Codex config mcp_servers"
     )
     const attachment = await CodexCapabilityAttachment.create(request, context, suppliedMcpOverrides)
-    let hasExecutionError = false
-    let executionError: unknown
-    let response: AgentResponse | undefined
     let sandboxClient: CodexSandboxClient | undefined
 
-    // Execution and capability cleanup are tracked independently so a failed
-    // Tool bridge shutdown cannot erase the original provider failure.
     try {
       const config = this.#invocationConfig(request, attachment, suppliedMcpOverrides)
       const clientOptions = {
@@ -154,43 +151,16 @@ class CodexAgentImplementation implements CodexAgentProvider {
               ...clientOptions,
               sandbox: context.sandbox,
             }))
-      response = await session.run(client, context)
+      return new CodexAgentProviderSession(session.open(client), attachment, sandboxClient)
     } catch (error) {
-      hasExecutionError = true
-      executionError = error
+      const cleanupErrors = await closeCodexResources(attachment, sandboxClient)
+
+      if (cleanupErrors.length === 0) {
+        throw error
+      }
+
+      throw new AggregateError([error, ...cleanupErrors], "Codex Agent session creation and cleanup failed")
     }
-
-    const cleanupErrors: unknown[] = []
-
-    try {
-      await attachment.close()
-    } catch (error) {
-      cleanupErrors.push(error)
-    }
-
-    try {
-      await sandboxClient?.close()
-    } catch (error) {
-      cleanupErrors.push(error)
-    }
-
-    if (hasExecutionError) {
-      cleanupErrors.unshift(executionError)
-    }
-
-    if (cleanupErrors.length === 1) {
-      throw cleanupErrors[0]
-    }
-
-    if (cleanupErrors.length > 1) {
-      throw new AggregateError(cleanupErrors, "Codex Agent execution and cleanup failed")
-    }
-
-    if (!response) {
-      throw new Error("Codex Agent produced no response")
-    }
-
-    return response
   }
 
   /**
@@ -253,6 +223,62 @@ class CodexAgentImplementation implements CodexAgentProvider {
     // union. The runtime checks above establish the config-table branch.
     return value as CodexConfig
   }
+}
+
+/**
+ * Owns one live Codex thread and its invocation-scoped capability resources.
+ */
+class CodexAgentProviderSession implements AgentProviderSession {
+  readonly #attachment: CodexCapabilityAttachment
+  readonly #sandboxClient: CodexSandboxClient | undefined
+  readonly #session: AgentProviderSession
+
+  constructor(
+    session: AgentProviderSession,
+    attachment: CodexCapabilityAttachment,
+    sandboxClient: CodexSandboxClient | undefined
+  ) {
+    this.#attachment = attachment
+    this.#sandboxClient = sandboxClient
+    this.#session = session
+  }
+
+  async runTurn(turn: Readonly<AgentProviderTurn>, context: AgentExecutionContext): Promise<AgentResponse> {
+    return await this.#session.runTurn(turn, context)
+  }
+
+  async close(): Promise<void> {
+    const errors = await closeCodexResources(this.#attachment, this.#sandboxClient)
+
+    if (errors.length === 1) {
+      throw errors[0]
+    }
+
+    if (errors.length > 1) {
+      throw new AggregateError(errors, "Codex Agent capability cleanup failed")
+    }
+  }
+}
+
+async function closeCodexResources(
+  attachment: CodexCapabilityAttachment,
+  sandboxClient: CodexSandboxClient | undefined
+): Promise<unknown[]> {
+  const errors: unknown[] = []
+
+  try {
+    await attachment.close()
+  } catch (error) {
+    errors.push(error)
+  }
+
+  try {
+    await sandboxClient?.close()
+  } catch (error) {
+    errors.push(error)
+  }
+
+  return errors
 }
 
 /**

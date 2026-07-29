@@ -1,4 +1,12 @@
-import type { AgentExecutionContext, AgentRequest, AgentResponse } from "@aml-jsx/sdk"
+import {
+  createAgentProviderTurns,
+  executeAgentProviderSession,
+  type AgentExecutionContext,
+  type AgentProviderSession,
+  type AgentProviderTurn,
+  type AgentRequest,
+  type AgentResponse,
+} from "@aml-jsx/sdk"
 import { defu } from "defu"
 
 import type {
@@ -63,7 +71,15 @@ export class OpenCodeSession {
    */
   async run(request: AgentRequest, context: AgentExecutionContext): Promise<AgentResponse> {
     context.signal.throwIfAborted()
+    const turns = createAgentProviderTurns(request, "opencode")
+    const session = await this.open(request, context)
+    return await executeAgentProviderSession(session, turns, context, "opencode")
+  }
 
+  /**
+   * Attaches capabilities and creates one fresh OpenCode conversation.
+   */
+  async open(request: AgentRequest, context: AgentExecutionContext): Promise<AgentProviderSession> {
     const defaults = {
       ...(this.#directory === undefined ? {} : { directory: this.#directory }),
       ...(this.#model === undefined ? {} : { model: this.#model }),
@@ -72,21 +88,6 @@ export class OpenCodeSession {
     const resolved = defu(userInputs, defaults) as OpenCodeSessionOptions
     const directory = resolved.directory
     const model = OpenCodeSession.parseModel(resolved.model)
-    const followUps = request.followUps
-
-    if (followUps !== undefined && !Array.isArray(followUps)) {
-      throw new TypeError("OpenCode followUps must be an array")
-    }
-
-    const prompts = [request.prompt]
-
-    for (const followUp of followUps ?? []) {
-      if (typeof followUp !== "string" || followUp.length === 0) {
-        throw new TypeError("OpenCode followUps must contain non-empty strings")
-      }
-
-      prompts.push(followUp)
-    }
 
     // Capability incompatibility and attachment failure must happen before any
     // remote session exists. This is both a side-effect and security boundary.
@@ -212,138 +213,21 @@ export class OpenCodeSession {
       ...(directory === undefined ? {} : { directory }),
       sessionId,
     })
-    let hasAbortError = false
-    let abortError: unknown
-    let abortPromise: Promise<void> | undefined
-
-    const requestAbort = () => {
-      // Multiple abort observations share one provider request and one captured
-      // result; cancellation must not race duplicate session aborts.
-      abortPromise ??= this.#client.abort(location).then(
-        () => undefined,
-        (error: unknown) => {
-          hasAbortError = true
-          abortError = error
-        }
-      )
-    }
-
-    if (context.signal.aborted) {
-      requestAbort()
-    } else {
-      context.signal.addEventListener("abort", requestAbort, { once: true })
-    }
-
-    let hasExecutionError = false
-    let executionError: unknown
-    let response: AgentResponse | undefined
-
-    // Turn execution is separate from cleanup so every failure path still
-    // closes capability resources and deletes the acknowledged session.
-    try {
-      for (const [index, prompt] of prompts.entries()) {
-        // Cancellation between authored turns must not admit another user
-        // message into the retained provider session.
-        context.signal.throwIfAborted()
-        const isFinalTurn = index === prompts.length - 1
-        const result = await this.#client.prompt(
-          defu(
-            {
-              // Intermediate turns remain ordinary text. The schema constrains
-              // only the final response that escapes the Agent boundary.
-              ...(isFinalTurn && request.output !== undefined ? { output: request.output } : {}),
-              prompt,
-              system: request.system,
-              // Capability attachment is session-wide, but OpenCode's internal
-              // StructuredOutput Tool is granted only with the final schema turn.
-              tools: isFinalTurn && request.output !== undefined ? capabilityTools : textTurnTools,
-            },
-            {
-              ...location,
-              ...(model === undefined ? {} : { model }),
-            }
-          ),
-          context.signal
-        )
-
-        context.signal.throwIfAborted()
-        const text = OpenCodeSession.visibleText(result)
-
-        if (isFinalTurn) {
-          response = Object.freeze({
-            ...(Reflect.has(result, "structured") ? { structured: result.structured } : {}),
-            text,
-          })
-        }
-      }
-    } catch (error) {
-      hasExecutionError = true
-      executionError = error
-    } finally {
-      context.signal.removeEventListener("abort", requestAbort)
-    }
-
-    await abortPromise
-
-    let hasCapabilityCleanupError = false
-    let capabilityCleanupError: unknown
-
-    try {
-      await closeCapabilityAttachment()
-    } catch (error) {
-      hasCapabilityCleanupError = true
-      capabilityCleanupError = error
-    }
-
-    let hasCleanupError = false
-    let cleanupError: unknown
-
-    try {
-      await this.#client.delete(location)
-    } catch (error) {
-      hasCleanupError = true
-      cleanupError = error
-    }
-
-    // Cleanup failures are causally significant. Preserve them in deterministic
-    // lifecycle order instead of masking execution or cancellation failures.
-    const errors: unknown[] = []
-
-    if (hasExecutionError) {
-      errors.push(executionError)
-    }
-
-    if (hasAbortError) {
-      errors.push(abortError)
-    }
-
-    if (hasCapabilityCleanupError) {
-      errors.push(capabilityCleanupError)
-    }
-
-    if (hasCleanupError) {
-      errors.push(cleanupError)
-    }
-
-    if (errors.length === 1) {
-      throw errors[0]
-    }
-
-    if (errors.length > 1) {
-      throw new AggregateError(errors, `OpenCode session ${sessionId} failed during execution and cleanup`)
-    }
-
-    if (!response) {
-      throw new Error(`OpenCode session ${sessionId} produced no response`)
-    }
-
-    return response
+    return new ActiveOpenCodeSession({
+      capabilityTools,
+      client: this.#client,
+      closeCapabilityAttachment,
+      location,
+      model,
+      system: request.system,
+      textTurnTools,
+    })
   }
 
   /**
    * Selects only validated, user-visible text from OpenCode response parts.
    */
-  private static visibleText(result: OpenCodeSessionPromptResult): string {
+  static visibleText(result: OpenCodeSessionPromptResult): string {
     const error = result.error
 
     if (error !== undefined) {
@@ -394,5 +278,96 @@ export class OpenCodeSession {
     }
 
     return chunks.join("")
+  }
+}
+
+interface ActiveOpenCodeSessionOptions {
+  readonly capabilityTools: Readonly<Record<string, boolean>>
+  readonly client: OpenCodeSessionClient
+  readonly closeCapabilityAttachment: () => Promise<void>
+  readonly location: OpenCodeSessionLocation
+  readonly model: OpenCodeModel | undefined
+  readonly system: string
+  readonly textTurnTools: Readonly<Record<string, boolean>>
+}
+
+/**
+ * Owns one acknowledged OpenCode session and its capability attachment.
+ */
+class ActiveOpenCodeSession implements AgentProviderSession {
+  readonly #capabilityTools: Readonly<Record<string, boolean>>
+  readonly #client: OpenCodeSessionClient
+  readonly #closeCapabilityAttachment: () => Promise<void>
+  readonly #location: OpenCodeSessionLocation
+  readonly #model: OpenCodeModel | undefined
+  readonly #system: string
+  readonly #textTurnTools: Readonly<Record<string, boolean>>
+
+  constructor(options: ActiveOpenCodeSessionOptions) {
+    this.#capabilityTools = options.capabilityTools
+    this.#client = options.client
+    this.#closeCapabilityAttachment = options.closeCapabilityAttachment
+    this.#location = options.location
+    this.#model = options.model
+    this.#system = options.system
+    this.#textTurnTools = options.textTurnTools
+  }
+
+  async abort(): Promise<void> {
+    await this.#client.abort(this.#location)
+  }
+
+  async runTurn(turn: Readonly<AgentProviderTurn>, context: AgentExecutionContext): Promise<AgentResponse> {
+    const result = await this.#client.prompt(
+      defu(
+        {
+          // Intermediate turns remain ordinary text. The schema constrains
+          // only the final response that escapes the Agent boundary.
+          ...(turn.output === undefined ? {} : { output: turn.output }),
+          prompt: turn.prompt,
+          system: this.#system,
+          // Capability attachment is session-wide, but OpenCode's internal
+          // StructuredOutput Tool is granted only with the final schema turn.
+          tools: turn.output === undefined ? this.#textTurnTools : this.#capabilityTools,
+        },
+        {
+          ...this.#location,
+          ...(this.#model === undefined ? {} : { model: this.#model }),
+        }
+      ),
+      context.signal
+    )
+
+    context.signal.throwIfAborted()
+    const text = OpenCodeSession.visibleText(result)
+
+    return Object.freeze({
+      ...(Reflect.has(result, "structured") ? { structured: result.structured } : {}),
+      text,
+    })
+  }
+
+  async close(): Promise<void> {
+    const errors: unknown[] = []
+
+    try {
+      await this.#closeCapabilityAttachment()
+    } catch (error) {
+      errors.push(error)
+    }
+
+    try {
+      await this.#client.delete(this.#location)
+    } catch (error) {
+      errors.push(error)
+    }
+
+    if (errors.length === 1) {
+      throw errors[0]
+    }
+
+    if (errors.length > 1) {
+      throw new AggregateError(errors, `OpenCode session ${this.#location.sessionId} failed during cleanup`)
+    }
   }
 }

@@ -433,6 +433,8 @@ There is no generic `defineProvider()` because the three provider roles have mat
 
 Interfaces remain public and structurally implementable. Third-party packages may implement them directly, but the definition helpers are the canonical authoring path and all implementations must pass the same conformance contract.
 
+Official Agent and Sandbox packages share optional lifecycle templates without making inheritance part of provider recognition. `AbstractAgentProvider` owns retained-session turn order, cancellation, final response selection, and invocation cleanup through a narrow `AgentProviderSession`. The independently exported `createAgentProviderTurns()` and `executeAgentProviderSession()` helpers expose those same reviewed semantics to lower-level provider session seams without duplicating the algorithm. `AbstractSandboxProvider` owns staged provisioning, initialization compensation, immutable leases, and one release barrier around an acknowledged `ProvisionedSandbox`. Concrete adapters continue to own vendor configuration, capability mapping, environment creation, runtime translation, reconciliation, and destruction. Structural implementations remain supported, and runtime validators plus conformance—not `instanceof`—enforce the public contracts.
+
 ### File and export rules
 
 Each implementation file has one primary export whose name matches the filename:
@@ -445,9 +447,13 @@ Each implementation file has one primary export whose name matches the filename:
 | `agent.tsx`                         | `Agent`                        |
 | `agent-execution-context.ts`        | `AgentExecutionContext`        |
 | `agent-provider.ts`                 | `AgentProvider`                |
+| `agent-provider-session.ts`         | `AgentProviderSession`         |
 | `agent-request.ts`                  | `AgentRequest`                 |
 | `agent-response.ts`                 | `AgentResponse`                |
+| `abstract-agent-provider.ts`        | `AbstractAgentProvider`        |
+| `create-agent-provider-turns.ts`    | `createAgentProviderTurns`     |
 | `define-agent-provider.ts`          | `defineAgentProvider`          |
+| `execute-agent-provider-session.ts` | `executeAgentProviderSession`  |
 | `agent-executor.ts`                 | `AgentExecutor`                |
 | `agent-output-request.ts`           | `AgentOutputRequest`           |
 | `aml-model-schema.ts`               | `AmlModelSchema`               |
@@ -488,6 +494,9 @@ Each implementation file has one primary export whose name matches the filename:
 | `codex-session.ts`                  | `CodexSession`                 |
 | `codex-tool-bridge.ts`              | `CodexToolBridge`              |
 | `prepare-codex-output-schema.ts`    | `prepareCodexOutputSchema`     |
+| `abstract-sandbox-provider.ts`      | `AbstractSandboxProvider`      |
+| `provisioned-sandbox.ts`            | `ProvisionedSandbox`           |
+| `sandbox-command.ts`                | `SandboxCommand`               |
 | `trace-sink.ts`                     | `TraceSink`                    |
 | `aml-json-value.ts`                 | `AmlJsonValue`                 |
 
