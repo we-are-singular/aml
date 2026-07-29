@@ -1,21 +1,18 @@
 # Sandboxing architecture notebook
 
-Status: non-normative design and progress log
+Status: non-normative architecture notes
 
-This document records the investigation and current direction for connecting AML Agents, Sandboxes, and Workspaces. It is intentionally separate from [`SPEC.md`](./SPEC.md). Decisions become normative only after they are moved into the specification and implemented.
+This document records the architecture and current direction for connecting AML Agents, Sandboxes, and Workspaces. It is intentionally separate from [`SPEC.md`](./SPEC.md). Decisions become normative only after they are moved into the specification and implemented.
 
 ## Current direction
 
-The design was narrowed on 2026-07-29 after the first `SandboxRuntime` spike grew into a generic filesystem, process, image-build, and container-security layer.
-
-The current decision is:
+The current design deliberately avoids turning AML into a generic filesystem, process, image-build, or container-security layer:
 
 - AML coordinates Sandboxes; it does not provision their software.
 - Applications select a provider-native image, snapshot, or environment that already contains the required Agent and tools.
 - An explicit `setup` hook may install missing software after acquisition as a convenience, but hidden installation is forbidden.
 - The common runtime starts with bounded process execution and a working directory. That contract is sufficient for Pi's shell bridge and for the implemented Codex and OpenCode CLI harnesses. File transfer, image building, snapshots, ports, and other provider features are not part of the baseline merely because one provider exposes them.
 - Workspace attachment and reconciliation are lifecycle responsibilities, not a model-facing generic filesystem.
-- The broad runtime spike is preserved in the named Git stash `wip broad sandbox runtime spike before responsibility reset`; it is not the implementation baseline.
 
 ## Goal
 
@@ -154,7 +151,7 @@ AML should not attempt to translate `setup` into every provider’s native image
 
 The exact public type remains open. Start with one command string and add multiple or structured commands only when a real use case requires them.
 
-## What the Daytona Codex guide proves
+## Remote harness reference
 
 Daytona’s [Codex SDK guide](https://www.daytona.io/docs/en/guides/codex/codex-sdk-interactive-terminal-sandbox/) uses a remote harness:
 
@@ -173,7 +170,7 @@ The guide passes the model API key into the remote environment, where model-cont
 
 ## Workspace attachment lifecycle
 
-A child Sandbox does not call `WorkspaceProvider.acquire()` itself. AML owns the order:
+A child Sandbox does not acquire the Workspace independently. AML owns the order:
 
 1. `<Workspace>` acquires one materialization.
 2. AML passes a reference to the Sandbox provider.
@@ -213,92 +210,74 @@ The Sandbox provider must enforce Workspace access through its mount, transfer, 
 
 ## Narrow `SandboxRuntime`
 
-The discarded broad spike included stream-first file CRUD, path resolution, process helpers, capability metadata, and provider-specific emulation. It proved that Pi tools can target an abstract runtime, but it also moved too much Sandbox-provider behavior into AML.
+A broader runtime could include stream-first file access, path resolution, process helpers, capability metadata, and provider-specific emulation. That surface would move too much Sandbox-provider behavior into AML before Agent requirements justify it.
 
-The replacement should begin with the smallest process boundary required to start an Agent:
+The common runtime exposes the smallest process boundary required to start an Agent:
 
-```ts
-interface SandboxRuntime {
-  readonly cwd: string
+- one stable logical working directory
+- literal executable and argument values
+- optional working-directory and environment overrides
+- cancellation and timeout support
+- a bounded exit result containing standard output and error
 
-  exec(
-    command: string,
-    options?: {
-      cwd?: string
-      env?: Readonly<Record<string, string>>
-      signal?: AbortSignal
-      timeoutMs?: number
-    }
-  ): Promise<{
-    exitCode: number
-    stdout: string
-    stderr: string
-  }>
-}
-```
+Commands do not implicitly pass through a shell. The explicit `setup` convenience is the only common string interpreted through a provider-selected shell.
 
-The first implementation uses this literal executable/argument form. The explicit `setup` convenience is the only common string interpreted through a provider-selected shell.
+Do not add features until an Agent requirement demands them:
 
-Do not add features until a proof requires them:
-
-- Long-running `spawn`, streaming output, and termination may be needed by interactive or server-based Agent harnesses, but the current Pi, Codex, and OpenCode proofs do not require them.
+- Long-running `spawn`, streaming output, and termination may be needed by interactive or server-based Agent harnesses, but the current Pi, Codex, and OpenCode integrations do not require them.
 - Authenticated port exposure may be needed to connect a local SDK to an Agent server.
 - Provider-native file transfer is needed internally for remote Workspace hydration, but it does not need to be Agent-facing runtime CRUD.
 - Snapshots, forks, and warm starts are control-plane features outside the Agent runtime.
 - A provider-native handle may remain an internal escape hatch for Workspace attachment and provider-specific optimizations.
 
-The API should grow from Agent proofs, not from the union of Daytona, Modal, Cloudflare, Docker, or Sandbox SDK feature lists.
+The API should grow from Agent requirements, not from the union of Daytona, Modal, Cloudflare, Docker, or Sandbox SDK feature lists.
 
 ## Agent adapter strategies
 
 ### Pi
 
-The current Pi proof replaces only Pi’s native `bash` operation with the common `exec()` runtime. The model can still read, write, inspect, and run files through shell programs without forcing generic filesystem CRUD into every Sandbox.
+The Pi integration replaces only Pi’s native `bash` operation with the common `exec()` runtime. The model can still read, write, inspect, and run files through shell programs without forcing generic filesystem CRUD into every Sandbox.
 
-This native-tool bridge deliberately keeps Pi itself in the local AML process, so its Docker proof can use a small Alpine image containing only `sh`. Remote-harness Agents such as Codex and OpenCode remain responsible for selecting images that contain those Agents. Keep the Pi bridge only if it remains materially useful after the remote-harness proof.
+This native-tool bridge deliberately keeps Pi itself in the local AML process, so its Sandbox needs only a compatible shell. Remote-harness Agents such as Codex and OpenCode remain responsible for selecting images that contain those Agents. Keep the Pi bridge only while it remains materially useful beside the remote-harness strategy.
 
 ### Codex
 
-The Codex SDK starts a Codex CLI subprocess and does not expose a native filesystem or command-executor injection point. The implemented Sandbox adapter therefore runs the installed `codex exec --json` CLI directly through bounded `SandboxRuntime.exec()`:
+The Codex SDK starts a CLI subprocess and does not expose a native filesystem or command-executor injection point. The Sandbox adapter therefore runs the installed Codex CLI directly through bounded execution:
 
 - the selected environment must already contain the Codex CLI
-- each AML invocation gets isolated temporary `CODEX_HOME` state outside the Workspace unless the provider explicitly supplies an already-authenticated home through `env`
-- an explicit Codex home must be writable for session state and remains environment-owned, so AML neither replaces nor deletes it
-- AML does not pass `--ignore-user-config`; an explicit home may therefore carry image- or user-owned Codex configuration, while the AML-owned temporary home remains isolated by default
-- the provider's native `apiKey`, `baseUrl`, `model`, reasoning, environment, and recursive Codex `config` are translated to the same CLI boundary used by the SDK
+- each invocation gets isolated writable session state outside the Workspace unless the environment explicitly supplies its own authenticated state
+- environment-owned Agent state and configuration remain outside AML's cleanup ownership
+- provider-native credentials, model selection, reasoning, environment, and configuration are translated to the CLI boundary
 - Codex runs with its working directory at the runtime-mapped Workspace path
-- AML's outer Sandbox owns filesystem isolation, so the remote CLI runs with `--ignore-rules`; Codex's inner sandbox is set to match the Workspace access mode
-- FollowUps resume the emitted Codex thread id
-- JSONL events are reduced to the final Agent response, while remote providers that combine stdout and stderr may interleave non-JSON diagnostic lines
+- AML's outer Sandbox owns filesystem isolation, while Codex's access mode follows the Workspace policy
+- FollowUps resume the same Codex session
+- streamed command events are reduced to the final Agent response while tolerating provider diagnostics
 
 The bridge transports Codex's native shell capability. JavaScript Tools are intentionally rejected in a Sandbox until AML has a secure transport for invocation-local Tool servers.
 
 ### OpenCode
 
-OpenCode exposes a server-oriented SDK, but its installed CLI already provides the bounded protocol AML needs. The implemented Sandbox adapter runs `opencode run --format json` through `SandboxRuntime.exec()`:
+OpenCode exposes a server-oriented SDK, but its installed CLI already provides the bounded protocol AML needs. The Sandbox adapter runs that installed CLI through bounded execution:
 
 - the selected environment must already contain the OpenCode CLI
-- each invocation receives isolated database and XDG state outside the Workspace
-- provider-native OpenCode configuration, including provider API keys, is supplied through `OPENCODE_CONFIG_CONTENT`
-- an invocation-local `aml` Agent grants exactly the authored native Tools and denies undeclared capabilities
-- FollowUps reuse the emitted OpenCode session id
-- the JSON event stream is reduced to the final response
+- each invocation receives isolated application state outside the Workspace
+- provider-native configuration and credentials are supplied to the remote process
+- an invocation-local Agent grants exactly the authored native Tools and denies undeclared capabilities
+- FollowUps reuse the same OpenCode session
+- command events are reduced to the final response
 
-This works with both OpenCode 1.18.7 and the Daytona default snapshot's older 1.1.35 CLI. The older CLI predates the optional `--pure` flag, so isolation comes from explicit state and configuration rather than a version-specific flag. Daytona also combines stdout and stderr; the parser accepts diagnostic lines while still requiring valid session events.
+Isolation comes from explicit state and configuration rather than depending on version-specific convenience flags. The event parser accepts provider diagnostics while still requiring valid session events.
 
-The proof showed that OpenCode does not currently require a server, port exposure, or a long-running `spawn` primitive. JavaScript Tools and structured output are rejected in a Sandbox until their remote transport and CLI contracts are implemented deliberately.
+OpenCode does not currently require a server, port exposure, or a long-running `spawn` primitive. JavaScript Tools and structured output are rejected in a Sandbox until their remote transport and CLI contracts are implemented deliberately.
 
-## Sandbox SDK assessment
+## Third-party Sandbox abstractions
 
-As inspected on 2026-07-29, [Sandbox SDK](https://sandbox-sdk.sh/) is a useful design reference but too early to make an AML dependency:
+[Sandbox SDK](https://sandbox-sdk.sh/) is a useful design reference:
 
-- its core has a thoughtful capability map, files, processes, ports, snapshots, normalized errors, conformance tests, and a raw provider escape hatch
-- it keeps provider construction options on individual adapters
-- the repository is young, has no releases or tags, and its package source versions are `0.0.0`
-- its packages were not available from npm under the documented names during this investigation
-- it has no Docker adapter
+- it models files, processes, ports, snapshots, normalized errors, conformance, and provider escape hatches as explicit capabilities
+- it keeps provider construction options on individual adapters rather than flattening every provider into one configuration object
 
-AML should learn from its provider boundaries without copying the complete feature surface.
+AML should learn from those provider boundaries without copying the complete feature surface or taking a dependency before the external contracts are stable and useful to AML.
 
 ## Security boundaries
 
@@ -310,134 +289,36 @@ AML should learn from its provider boundaries without copying the complete featu
 - Exposed ports may contain bearer URLs, tokens, or required headers and must be treated as credentials.
 - Agent termination, Workspace reconciliation, Sandbox release, and Workspace release need failure-safe ordering.
 
-## Proof plan
+## Smoke matrix
 
-### Smoke matrix
+The credentialed smoke matrix exercises the Cartesian product of supported Agent and Sandbox providers. It is separate from default unit tests because it may require credentials, containers, network access, remote infrastructure, and real model calls.
 
-`npm run smoke -- [--agent <name>] [--sandbox <name>]` owns credentialed Agent × Sandbox proofs. Both filters are optional; omitting one selects that entire axis and omitting both selects the Cartesian product.
+Each Agent has one canonical registration. Each Sandbox supplies the concrete environment needed for every registered Agent, including its image or snapshot, optional setup, and environment-specific configuration. Adding either axis therefore requires an explicit compatibility decision for the other axis rather than silently skipping unknown combinations.
 
-Agents have one canonical registration in `sdk/tests/smoke/smoke-matrix.ts`. Each Sandbox declares its concrete image, setup, and environment label for every Agent directly beside that provider. The selector still creates the Cartesian product automatically, while TypeScript requires a new Agent to receive an explicit environment in every Sandbox. The runner creates only selected tests, so the matrix has no `skipIf` branches and an unsupported production compatibility handshake fails visibly.
+Every selected cell runs the same end-to-end behavior:
 
-Smoke files use `.smoke.ts` or `.smoke.tsx` and a dedicated Vitest configuration. They remain outside default unit tests. Vitest filename filters do not override `test.include`, so the separate configuration is required even when a smoke filename is supplied explicitly.
+1. acquire a durable Workspace
+2. acquire the selected Sandbox and attach or hydrate that Workspace
+3. run the selected Agent through its production Sandbox strategy
+4. have the Agent read an unpredictable input and write an exact output
+5. release the Sandbox and reconcile changes
+6. verify the output from the durable Workspace
 
-Each cell emits the normal AML trace tree plus explicit start, proof, and failure records. The shared proof asks the selected Agent to read one random file through its declared `bash` capability, write another exact value, and verifies the persisted local Workspace after Sandbox release. Provider-specific images and setup commands are literal configuration in the Sandbox registry:
+The matrix emits the normal AML trace tree plus clear cell start and failure context. A failed compatibility handshake is a valid, visible result; the smoke layer must not replace production adapters with permissive test wrappers.
 
-- `AML_CODEX_API_KEY`, `AML_CODEX_BASE_URL`, and `AML_CODEX_MODEL` for an explicit Codex-compatible Responses provider
-- `AML_CODEX_HOME` for an already-authenticated Codex home that exists inside the selected environment
+Provider-specific environment preparation belongs to matrix configuration, while Agent configuration continues to use the same provider factories applications use. Credentials are injected only into the environment that needs them and must never be copied into the Workspace.
 
-These Codex overrides are inputs to the repository's smoke CLI, not a second public configuration system. Applications configure `piAgent()`, `codexAgent()`, and `opencodeAgent()` through their provider-native factory options.
+The matrix supports selecting one Agent, one Sandbox, either complete axis, or the full Cartesian product. Documentation should describe the covered combinations and shared guarantee without copying timestamps, durations, output sizes, or individual run results into this architecture notebook. Current results belong in test output and CI artifacts.
 
-All three adapters use the same internal authority order:
+## Future considerations
 
-1. provider defaults
-2. user inputs, including factory options and portable per-Agent overrides
-3. imperative AML configuration derived from the active Workspace, Sandbox, and authored capabilities
+These are possible extensions, not implementation phases:
 
-`defu` expresses this precedence for known plain configuration tables by receiving the highest-priority layer first. Bespoke final objects handle arrays, client and callback identities, Tools, MCP definitions, and capability policy. This avoids `defu`'s array concatenation where replacement is required and ensures user input cannot weaken the final AML execution boundary.
-
-The matrix is intentionally honest about current support. Pi has a narrow runtime bridge. Codex and OpenCode have production CLI adapters; the smoke runner uses those adapters rather than a permissive test wrapper.
-
-The first complete matrix run on 2026-07-29 produced the expected baseline:
-
-- Pi × Local passed with a persisted 36-byte proof in 22.9 seconds.
-- Pi × Docker passed with a persisted 36-byte proof in 29.2 seconds.
-- Pi × Daytona passed with a persisted 36-byte proof in 14.1 seconds.
-- all six Codex/OpenCode cells failed at the production compatibility handshake with `Agent provider "<name>" cannot run inside Sandbox provider "<name>"`.
-
-Those failures occurred after Sandbox acquisition and were released through the normal AML lifecycle. No Codex or OpenCode model request was made. This is the baseline the remote-harness work must turn green.
-
-The subsequent OpenCode implementation turned all three of its cells green with the same proof:
-
-- OpenCode × Local passed with a persisted 36-byte proof in 32.6 seconds.
-- OpenCode × Docker passed with a persisted 36-byte proof in 28.3 seconds.
-- OpenCode × Daytona passed with a persisted 36-byte proof in 17.7 seconds.
-
-The Docker cell used an explicit smoke-only setup command to install OpenCode in a disposable `node:26` container. The Daytona default snapshot already contains OpenCode 1.1.35; its standard user cannot replace global packages, reinforcing that images and snapshots own installed Agent versions.
-
-These live runs exposed two common Local runtime requirements: the child `PWD` environment must match the effective `cwd`, and bounded execution must close stdin because the runtime has no input-stream contract. Without the first, OpenCode selected the host repository instead of the attached Workspace. Without the second, OpenCode waited indefinitely while probing piped input.
-
-Codex × Local subsequently passed the same real model and file proof in 7.2 seconds. The smoke used an explicitly configured writable `CODEX_HOME` with a local-only link to the machine's existing ChatGPT authentication, then removed the complete temporary home. No authentication material was copied into the Workspace, Docker, or Daytona.
-
-Codex × Docker and Codex × Daytona subsequently reached OpenAI through the real CLI bridge with `gpt-5.3-codex`. The first attempts stopped at the provider until API quota was enabled. The completed proofs exposed three environment and version details:
-
-- the Daytona image's Codex 0.128.0 rejects the newer `agents.enabled=false` shape, so AML uses the stable `features.multi_agent=false` override to disable subagents
-- older Codex versions may leave a background plugin-cache clone settling immediately after the main process exits, so cleanup retries removal of AML-owned temporary state through the same bounded runtime
-- the initial `node:26-alpine` fixture did not contain Bash, so the Codex cell now directly selects `node:26`; the Docker Sandbox itself remains image-only and performs no implicit provisioning
-
-The final complete matrix run passed all nine cells in 119.7 seconds. Every model used its declared shell capability to read a random `input.txt`, write the exact random 36-byte `output.txt`, and persisted that file through Workspace reconciliation:
-
-- Codex × Daytona passed in 8.4 seconds.
-- Codex × Docker passed in 16.2 seconds.
-- Codex × Local passed in 4.9 seconds.
-- OpenCode × Daytona passed in 18.3 seconds.
-- OpenCode × Docker passed in 19.4 seconds.
-- OpenCode × Local passed in 25.5 seconds.
-- Pi × Daytona passed in 16.5 seconds.
-- Pi × Docker passed in 4.6 seconds.
-- Pi × Local passed in 4.7 seconds.
-
-The subsequent fixture cleanup made every environment literal in the matrix registry and changed the Codex and OpenCode Docker cells to `node:26`. A targeted rerun kept all three Docker cells green: Codex in 40.1 seconds including the first image pull, OpenCode in 20.8 seconds, and Pi on `alpine:3.22` in 3.5 seconds.
-
-### Proof 1: narrow local composition
-
-- [x] Replace the broad experimental runtime with the minimal execution contract.
-- [x] Simplify `dockerSandbox()` to a named image, Workspace mount, command execution, and release.
-- [x] Remove Dockerfile building and generic Docker filesystem emulation.
-- [x] Implement the explicit setup hook in Local and Docker providers.
-- [x] Run one unchanged real Pi workflow through Local and Docker over `localWorkspace()`.
-- [x] Prove the real model reads and writes the mounted Workspace through runtime-backed bash.
-- [x] Prove setup failures are surfaced without host fallback.
-
-### Proof 2: same contract on Daytona
-
-- [x] Implement `daytonaSandbox()` with Daytona-native configuration.
-- [x] Hydrate a local Workspace at Daytona's writable guest working directory.
-- [x] Run the same setup and Agent workflow without a Daytona-specific Agent adapter.
-- [x] Reconcile writable additions, changes, and deletions before Sandbox release.
-- [x] Prove a second fresh Daytona Sandbox sees the persisted result.
-
-Passing Proof 2 establishes the important composition claim: one Agent adapter can run through Local, Docker, and Daytona without an Agent × Sandbox integration.
-
-### Proof 3: Agent-specific process needs
-
-- [x] Run `opencodeAgent()` through an installed remote CLI harness on Local, Docker, and Daytona.
-- [x] Prove bounded execution is sufficient for OpenCode without adding `spawn` or ports.
-- [x] Implement and deterministically test the installed Codex CLI bridge, including FollowUp resume.
-- [x] Run `codexAgent()` through Local with an explicitly configured authenticated Codex home.
-- [ ] Run `codexAgent()` through Docker and Daytona with an explicit Responses-compatible provider key.
-- [ ] Verify credentials are available only where needed and never persisted to the Workspace.
-
-### Later
-
-- [ ] Publish a convenient AML Agent image after the runtime contract is stable.
-- [ ] Add Modal and Cloudflare Sandbox providers using their native environment configuration.
-- [ ] Evaluate snapshots for warm starts, retries, and forks.
-- [ ] Revisit Sandbox SDK if it publishes stable packages.
-
-## Current progress
-
-- [x] AML Sandbox and Workspace lifecycle contracts exist.
-- [x] `localWorkspace()` provides a durable local materialization.
-- [x] Pi, Codex, and OpenCode adapter seams have been investigated.
-- [x] Sandbox SDK and Daytona’s Codex remote-harness example have been inspected.
-- [x] The 2,816-line broad spike is preserved in a recoverable Git stash and removed from the implementation baseline.
-- [x] The implemented common runtime contains only access/root/cwd metadata and bounded literal `exec()`.
-- [x] `localSandbox()` and image-only `dockerSandbox()` implement that same runtime.
-- [x] Local and Docker setup hooks run explicitly before descendant Agents.
-- [x] Unit tests, Local tests, Docker tests, and a live Docker integration pass.
-- [x] A credentialed real Pi model read and wrote exact Workspace files through both Local and Docker using the unchanged Agent workflow.
-- [x] `daytonaSandbox()` is the first remote provider and keeps Daytona-native client and creation configuration behind normalized root `image` or `snapshot` selection.
-- [x] Its full-transfer lifecycle mirrors additions, changes, and deletions before cleanup; the selected host and Daytona environment must contain `tar`.
-- [x] A credentialed real Pi model read and wrote exact Workspace files through Daytona using the unchanged Local/Docker workflow.
-- [x] The live result was reconciled back to the local Workspace before the Daytona Sandbox was deleted.
-- [x] A second fresh Daytona Sandbox and Pi session read the reconciled result through the same Workspace.
-- [x] A remote OpenCode process runs beside its Workspace through the same bounded runtime on Local, Docker, and Daytona.
-- [x] The OpenCode proof required no server, port exposure, or long-running process API.
-- [x] The Codex CLI bridge is deterministic-test green and its exact command shape reaches the current Responses transport.
-- [x] A real ChatGPT-authenticated Codex process read and wrote the Local Sandbox Workspace through the same bridge, with a persisted 36-byte proof.
-- [x] OpenCode Go's undocumented `/responses` route was probed rather than assumed compatible. It returned HTTP 200 but exhausted the requested output budget with an empty `output` array, and a real Codex turn consequently produced no message or Tool call. Its documented APIs remain Chat Completions and Messages, so it is not used as a Codex credential fallback.
-- [x] Codex's Docker and Daytona cells reach OpenAI with an explicit API key and an available API model; local ChatGPT auth is not copied into remote Sandboxes.
-- [x] A single complete run passed all nine Agent × Sandbox cells with persisted 36-byte file proofs.
+- publish a convenient, versioned AML Agent image after the environment contract is stable
+- add Sandbox providers only when they preserve provider-native environment configuration
+- evaluate snapshots, warm starts, retries, and forks as control-plane capabilities
+- add streaming processes or authenticated service access only when an Agent requires them
+- revisit third-party Sandbox abstraction libraries when their packages and contracts are stable
 
 ## References
 
