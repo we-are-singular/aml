@@ -1,6 +1,10 @@
-import { Agent, AmlRuntime, defineMcpServer, defineTool, evaluate, FollowUp, Mcp, Tool } from "@aml-jsx/sdk"
+import { Agent, AmlRuntime, defineMcpServer, defineTool, evaluate, FollowUp, Mcp, Sandbox, Tool } from "@aml-jsx/sdk"
 import type { AgentRequest } from "@aml-jsx/sdk"
-import { agentProviderConformance, createAgentExecutionContext } from "@aml-jsx/sdk/testing"
+import {
+  agentProviderConformance,
+  createAgentExecutionContext,
+  DeterministicSandboxProvider,
+} from "@aml-jsx/sdk/testing"
 import { Client as McpClient } from "@modelcontextprotocol/sdk/client/index.js"
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js"
 import { z } from "zod"
@@ -128,7 +132,13 @@ describe("codexAgent", () => {
       clientFactory,
       config: {
         custom: "retained",
-        features: { custom_feature: true },
+        developer_instructions: "user-controlled instructions",
+        features: {
+          custom_feature: true,
+          multi_agent: true,
+          shell_tool: true,
+          unified_exec: true,
+        },
       },
       model: "gpt-5.3-codex-spark",
       reasoningEffort: "high",
@@ -144,7 +154,6 @@ describe("codexAgent", () => {
 
     expect(clientFactory.clientOptions).toHaveLength(1)
     expect(clientFactory.clientOptions[0]?.config).toEqual({
-      agents: { enabled: false },
       custom: "retained",
       developer_instructions: "Follow the provider contract.",
       features: {
@@ -918,11 +927,137 @@ describe("codexAgent", () => {
     await expect(provider.run(createRequest(), createContext(controller.signal))).rejects.toBe(cancelled)
   })
 
-  it("does not claim compatibility with AML Sandbox leases", () => {
+  it("runs the installed Codex CLI through the Sandbox runtime", async () => {
+    const calls: Array<{
+      readonly args: readonly string[]
+      readonly command: string
+      readonly env: Readonly<Record<string, string>> | undefined
+    }> = []
+    let cleanupAttempts = 0
+    const sandbox = new DeterministicSandboxProvider({
+      exec(command, args, _request, options) {
+        calls.push({ args, command, env: options.env })
+
+        if (command === "codex") {
+          return {
+            exitCode: 0,
+            stderr: "",
+            stdout: [
+              "WARNING remote command combined stderr",
+              JSON.stringify({ thread_id: "thread-1", type: "thread.started" }),
+              JSON.stringify({ message: "Reconnecting... 1/5", type: "error" }),
+              JSON.stringify({
+                item: {
+                  text:
+                    calls.filter(call => call.command === "codex").length === 1 ? "first response" : "sandbox response",
+                  type: "agent_message",
+                },
+                type: "item.completed",
+              }),
+              JSON.stringify({ type: "turn.completed" }),
+            ].join("\n"),
+          }
+        }
+
+        if (command === "rm") {
+          cleanupAttempts += 1
+
+          if (cleanupAttempts === 1) {
+            return { exitCode: 1, stderr: "directory not empty", stdout: "" }
+          }
+        }
+
+        return { exitCode: 0, stderr: "", stdout: "" }
+      },
+      name: "sandbox",
+    })
     const provider = codexAgent({
-      clientFactory: new RecordingClientFactory(),
+      apiKey: "codex-key",
+      config: { custom: "retained" },
+      model: "gpt-5.4",
     })
 
-    expect(provider.supportsSandbox).toBeUndefined()
+    await expect(
+      new AmlRuntime({ agentProvider: provider }).evaluate(
+        <Sandbox access="read-write" provider={sandbox}>
+          <Agent>
+            <Tool name="bash" />
+            prompt
+            <FollowUp>follow up</FollowUp>
+          </Agent>
+        </Sandbox>
+      )
+    ).resolves.toBe("sandbox response")
+
+    expect(provider.supportsSandbox).toBeTypeOf("function")
+    const execution = calls.find(call => call.command === "codex")
+    expect(execution?.args).toEqual(
+      expect.arrayContaining([
+        "exec",
+        "--json",
+        "--config",
+        'custom="retained"',
+        "--model",
+        "gpt-5.4",
+        "--sandbox",
+        "danger-full-access",
+        "prompt",
+      ])
+    )
+    expect(execution?.env).toMatchObject({
+      CODEX_API_KEY: "codex-key",
+    })
+    expect(execution?.args).not.toContain("--ignore-user-config")
+    expect(execution?.args).toContain("--ignore-rules")
+    const resumed = calls.filter(call => call.command === "codex")[1]
+    expect(resumed?.args).toEqual(expect.arrayContaining(["resume", "thread-1", "follow up"]))
+    expect(calls.map(call => call.command)).toEqual(["mkdir", "codex", "mkdir", "codex", "rm", "rm"])
+    expect(calls.at(-1)?.command).toBe("rm")
+  })
+
+  it("preserves an explicitly configured Sandbox Codex home", async () => {
+    const calls: Array<{
+      readonly command: string
+      readonly env: Readonly<Record<string, string>> | undefined
+    }> = []
+    const sandbox = new DeterministicSandboxProvider({
+      exec(command, _args, _request, options) {
+        calls.push({ command, env: options.env })
+
+        if (command === "codex") {
+          return {
+            exitCode: 0,
+            stderr: "",
+            stdout: [
+              JSON.stringify({ thread_id: "thread-1", type: "thread.started" }),
+              JSON.stringify({
+                item: { text: "sandbox response", type: "agent_message" },
+                type: "item.completed",
+              }),
+              JSON.stringify({ type: "turn.completed" }),
+            ].join("\n"),
+          }
+        }
+
+        return { exitCode: 0, stderr: "", stdout: "" }
+      },
+      name: "sandbox",
+    })
+    const provider = codexAgent({
+      env: { CODEX_HOME: "/configured/codex-home" },
+    })
+
+    await expect(
+      new AmlRuntime({ agentProvider: provider }).evaluate(
+        <Sandbox access="read-write" provider={sandbox}>
+          <Agent>prompt</Agent>
+        </Sandbox>
+      )
+    ).resolves.toBe("sandbox response")
+
+    expect(calls.find(call => call.command === "codex")?.env).toMatchObject({
+      CODEX_HOME: "/configured/codex-home",
+    })
+    expect(calls.map(call => call.command)).toEqual(["mkdir", "codex"])
   })
 })

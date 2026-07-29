@@ -9,116 +9,212 @@ import {
   type SandboxProvider,
 } from "../../src/index.js"
 
-interface SmokeAgentRegistration {
-  create(): AgentProvider
-  readonly model: string
-  release(provider: AgentProvider): Promise<void>
+export interface SmokeAgentInstance {
+  readonly provider: AgentProvider
+  release?(): Promise<void>
 }
 
-interface SmokeSandboxRegistration {
-  create(agent: SmokeAgentName): SandboxProvider
-  environment(agent: SmokeAgentName): string
+interface SmokeAgentRegistration {
+  create(): SmokeAgentInstance
+  readonly model: string
 }
 
 /**
- * Canonical Agent registry. Every registered Agent automatically participates
- * in every registered Sandbox cell.
+ * Canonical Agent registry. Every Agent automatically participates in every
+ * Sandbox registered below.
  */
-const SMOKE_AGENTS = {
+export const SMOKE_AGENTS = {
   codex: {
     create() {
-      return codexAgent({
-        ...(process.env.OPENAI_API_KEY === undefined ? {} : { apiKey: process.env.OPENAI_API_KEY }),
-        model: process.env.AML_CODEX_MODEL ?? "gpt-5.3-codex-spark",
-      })
+      const apiKey = process.env.AML_CODEX_API_KEY ?? process.env.OPENAI_API_KEY
+      const codexHome = process.env.AML_CODEX_HOME
+
+      if (apiKey === undefined && codexHome === undefined) {
+        throw new Error("Codex smoke requires AML_CODEX_API_KEY, OPENAI_API_KEY, or an authenticated AML_CODEX_HOME")
+      }
+
+      return {
+        provider: codexAgent({
+          ...(apiKey === undefined ? {} : { apiKey }),
+          ...(process.env.AML_CODEX_BASE_URL === undefined ? {} : { baseUrl: process.env.AML_CODEX_BASE_URL }),
+          ...(codexHome === undefined ? {} : { env: { CODEX_HOME: codexHome } }),
+          model: process.env.AML_CODEX_MODEL ?? (apiKey === undefined ? "gpt-5.3-codex-spark" : "gpt-5.3-codex"),
+          skipGitRepoCheck: true,
+        }),
+      }
     },
-    model: process.env.AML_CODEX_MODEL ?? "gpt-5.3-codex-spark",
-    async release() {},
+    get model() {
+      const apiKey = process.env.AML_CODEX_API_KEY ?? process.env.OPENAI_API_KEY
+      return process.env.AML_CODEX_MODEL ?? (apiKey === undefined ? "gpt-5.3-codex-spark" : "gpt-5.3-codex")
+    },
   },
   opencode: {
     create() {
-      return opencodeAgent({
-        model: process.env.AML_OPENCODE_MODEL ?? "opencode-go/glm-5.1",
-        server: { port: 0, timeout: 15_000 },
-      })
-    },
-    model: process.env.AML_OPENCODE_MODEL ?? "opencode-go/glm-5.1",
-    async release(provider) {
-      if ("close" in provider && typeof provider.close === "function") {
-        await provider.close()
+      const apiKey = process.env.OPENCODE_API_KEY
+
+      if (apiKey === undefined) {
+        throw new Error("OpenCode smoke requires OPENCODE_API_KEY")
       }
+
+      const provider = opencodeAgent({
+        config: {
+          provider: {
+            "opencode-go": {
+              options: { apiKey },
+            },
+          },
+        },
+        model: process.env.AML_OPENCODE_MODEL ?? "opencode-go/glm-5.1",
+      })
+
+      return {
+        provider,
+        async release() {
+          await provider.close()
+        },
+      }
+    },
+    get model() {
+      return process.env.AML_OPENCODE_MODEL ?? "opencode-go/glm-5.1"
     },
   },
   pi: {
     create() {
-      const apiKey = requiredEnvironment("OPENCODE_API_KEY", "Pi smoke")
+      const apiKey = process.env.OPENCODE_API_KEY
 
-      return piAgent({
-        model: process.env.AML_PI_MODEL ?? "opencode-go/glm-5.1",
-        providers: {
-          "opencode-go": { apiKey },
-        },
-      })
+      if (apiKey === undefined) {
+        throw new Error("Pi smoke requires OPENCODE_API_KEY")
+      }
+
+      return {
+        provider: piAgent({
+          model: process.env.AML_PI_MODEL ?? "opencode-go/glm-5.1",
+          providers: {
+            "opencode-go": { apiKey },
+          },
+        }),
+      }
     },
-    model: process.env.AML_PI_MODEL ?? "opencode-go/glm-5.1",
-    async release() {},
+    get model() {
+      return process.env.AML_PI_MODEL ?? "opencode-go/glm-5.1"
+    },
   },
 } satisfies Record<string, SmokeAgentRegistration>
 
 export type SmokeAgentName = keyof typeof SMOKE_AGENTS
 
+interface SmokeSandboxRegistration {
+  create(): SandboxProvider
+  readonly environment: string
+}
+
 /**
- * Canonical Sandbox registry. Factories remain provider-specific while the
- * matrix owns only selection and common proof execution.
+ * Each cell owns its complete environment instead of deriving hidden defaults
+ * from the selected Agent name.
  */
-const SMOKE_SANDBOXES = {
+export const SMOKE_SANDBOXES = {
   daytona: {
-    create(agent) {
-      const apiKey = requiredEnvironment("DAYTONA_API_KEY", "Daytona smoke")
-      const image = sandboxEnvironment("DAYTONA", agent, "IMAGE")
-      const snapshot = sandboxEnvironment("DAYTONA", agent, "SNAPSHOT")
+    codex: {
+      create() {
+        const apiKey = process.env.DAYTONA_API_KEY
 
-      if (image !== undefined && snapshot !== undefined) {
-        throw new TypeError(`Daytona smoke for ${agent} accepts an image or snapshot, not both`)
-      }
+        if (apiKey === undefined) {
+          throw new Error("Daytona smoke requires DAYTONA_API_KEY")
+        }
 
-      return daytonaSandbox({
-        config: { apiKey },
-        ...(image === undefined ? {} : { create: { image } }),
-        ...(snapshot === undefined ? {} : { create: { snapshot } }),
-        setup: sandboxSetup("DAYTONA", agent),
-      })
+        return daytonaSandbox({
+          config: { apiKey },
+          setup: "test -f input.txt && command -v codex",
+        })
+      },
+      environment: "default-snapshot",
     },
-    environment(agent) {
-      return (
-        sandboxEnvironment("DAYTONA", agent, "SNAPSHOT") ??
-        sandboxEnvironment("DAYTONA", agent, "IMAGE") ??
-        "default-snapshot"
-      )
+    opencode: {
+      create() {
+        const apiKey = process.env.DAYTONA_API_KEY
+
+        if (apiKey === undefined) {
+          throw new Error("Daytona smoke requires DAYTONA_API_KEY")
+        }
+
+        return daytonaSandbox({
+          config: { apiKey },
+          setup: "test -f input.txt && command -v opencode",
+        })
+      },
+      environment: "default-snapshot",
+    },
+    pi: {
+      create() {
+        const apiKey = process.env.DAYTONA_API_KEY
+
+        if (apiKey === undefined) {
+          throw new Error("Daytona smoke requires DAYTONA_API_KEY")
+        }
+
+        return daytonaSandbox({
+          config: { apiKey },
+          setup: "test -f input.txt",
+        })
+      },
+      environment: "default-snapshot",
     },
   },
   docker: {
-    create(agent) {
-      return dockerSandbox({
-        image: dockerImage(agent),
-        setup: sandboxSetup("DOCKER", agent),
-      })
+    codex: {
+      create() {
+        return dockerSandbox({
+          image: "node:26",
+          setup: "test -f input.txt && npm install --global @openai/codex@0.145.0",
+        })
+      },
+      environment: "node:26",
     },
-    environment: dockerImage,
+    opencode: {
+      create() {
+        return dockerSandbox({
+          image: "node:26",
+          setup: "test -f input.txt && npm install --global opencode-ai@1.18.7",
+        })
+      },
+      environment: "node:26",
+    },
+    pi: {
+      create() {
+        return dockerSandbox({
+          image: "alpine:3.22",
+          setup: "test -f input.txt",
+        })
+      },
+      environment: "alpine:3.22",
+    },
   },
   local: {
-    create(agent) {
-      return localSandbox({
-        setup: sandboxSetup("LOCAL", agent),
-      })
+    codex: {
+      create() {
+        return localSandbox({ setup: "test -f input.txt" })
+      },
+      environment: "host",
     },
-    environment() {
-      return "host"
+    opencode: {
+      create() {
+        return localSandbox({ setup: "test -f input.txt" })
+      },
+      environment: "host",
+    },
+    pi: {
+      create() {
+        return localSandbox({ setup: "test -f input.txt" })
+      },
+      environment: "host",
     },
   },
-} satisfies Record<string, SmokeSandboxRegistration>
+} satisfies Record<string, Record<SmokeAgentName, SmokeSandboxRegistration>>
 
 export type SmokeSandboxName = keyof typeof SMOKE_SANDBOXES
+
+export const SMOKE_AGENT_NAMES = Object.keys(SMOKE_AGENTS).sort() as SmokeAgentName[]
+export const SMOKE_SANDBOX_NAMES = Object.keys(SMOKE_SANDBOXES).sort() as SmokeSandboxName[]
 
 export interface SmokeCase {
   readonly agent: SmokeAgentName
@@ -135,36 +231,14 @@ export type SmokeCommand =
   | { readonly kind: "list"; readonly selection: SmokeSelection }
   | { readonly kind: "run"; readonly selection: SmokeSelection }
 
-/**
- * Computes the selected Cartesian product directly from both registries.
- */
-export function selectSmokeCases(selection: SmokeSelection = {}): readonly Readonly<SmokeCase>[] {
-  const agents = selection.agent === undefined ? smokeAgentNames() : [selection.agent]
-  const sandboxes = selection.sandbox === undefined ? smokeSandboxNames() : [selection.sandbox]
+export function selectSmokeCases(selection: SmokeSelection = {}): SmokeCase[] {
+  const agents = selection.agent === undefined ? SMOKE_AGENT_NAMES : [selection.agent]
+  const sandboxes = selection.sandbox === undefined ? SMOKE_SANDBOX_NAMES : [selection.sandbox]
 
-  return Object.freeze(agents.flatMap(agent => sandboxes.map(sandbox => Object.freeze({ agent, sandbox }))))
+  return agents.flatMap(agent => sandboxes.map(sandbox => ({ agent, sandbox })))
 }
 
-export function smokeAgentNames(): readonly SmokeAgentName[] {
-  return Object.freeze(Object.keys(SMOKE_AGENTS).sort() as SmokeAgentName[])
-}
-
-export function smokeSandboxNames(): readonly SmokeSandboxName[] {
-  return Object.freeze(Object.keys(SMOKE_SANDBOXES).sort() as SmokeSandboxName[])
-}
-
-export function smokeAgent(name: SmokeAgentName): SmokeAgentRegistration {
-  return SMOKE_AGENTS[name]
-}
-
-export function smokeSandbox(name: SmokeSandboxName): SmokeSandboxRegistration {
-  return SMOKE_SANDBOXES[name]
-}
-
-/**
- * Parses the small smoke CLI without leaking its flags into Vitest.
- */
-export function parseSmokeCommand(args: readonly string[]): Readonly<SmokeCommand> {
+export function parseSmokeCommand(args: readonly string[]): SmokeCommand {
   let agent: SmokeAgentName | undefined
   let sandbox: SmokeSandboxName | undefined
   let help = false
@@ -183,100 +257,47 @@ export function parseSmokeCommand(args: readonly string[]): Readonly<SmokeComman
       continue
     }
 
-    if (argument === "--agent" || argument?.startsWith("--agent=")) {
-      if (agent !== undefined) {
-        throw new TypeError("Smoke --agent may be provided only once")
+    if (argument === "--agent") {
+      const value = args[++index]
+
+      if (value === undefined) {
+        throw new TypeError("--agent requires a value")
       }
 
-      const value = optionValue(argument, args[index + 1], "--agent")
-      index += argument === "--agent" ? 1 : 0
-      agent = parseAgentName(value)
+      if (!SMOKE_AGENT_NAMES.includes(value as SmokeAgentName)) {
+        throw new TypeError(`Unknown smoke Agent "${value}". Available: ${SMOKE_AGENT_NAMES.join(", ")}`)
+      }
+
+      agent = value as SmokeAgentName
       continue
     }
 
-    if (argument === "--sandbox" || argument?.startsWith("--sandbox=")) {
-      if (sandbox !== undefined) {
-        throw new TypeError("Smoke --sandbox may be provided only once")
+    if (argument === "--sandbox") {
+      const value = args[++index]
+
+      if (value === undefined) {
+        throw new TypeError("--sandbox requires a value")
       }
 
-      const value = optionValue(argument, args[index + 1], "--sandbox")
-      index += argument === "--sandbox" ? 1 : 0
-      sandbox = parseSandboxName(value)
+      if (!SMOKE_SANDBOX_NAMES.includes(value as SmokeSandboxName)) {
+        throw new TypeError(`Unknown smoke Sandbox "${value}". Available: ${SMOKE_SANDBOX_NAMES.join(", ")}`)
+      }
+
+      sandbox = value as SmokeSandboxName
       continue
     }
 
-    throw new TypeError(`Unknown smoke argument "${argument ?? ""}"`)
+    throw new TypeError(`Unknown smoke argument "${argument}"`)
   }
 
   if (help) {
-    return Object.freeze({ kind: "help" })
+    return { kind: "help" }
   }
 
-  const selection = Object.freeze({
+  const selection = {
     ...(agent === undefined ? {} : { agent }),
     ...(sandbox === undefined ? {} : { sandbox }),
-  })
-
-  return Object.freeze(list ? { kind: "list", selection } : { kind: "run", selection })
-}
-
-export function smokeHelp(): string {
-  return [
-    "Usage: npm run smoke -- [--agent <name>] [--sandbox <name>] [--list]",
-    "",
-    `Agents: ${smokeAgentNames().join(", ")}`,
-    `Sandboxes: ${smokeSandboxNames().join(", ")}`,
-    "",
-    "Omitted filters run the complete Agent x Sandbox matrix.",
-  ].join("\n")
-}
-
-function optionValue(argument: string, next: string | undefined, option: string): string {
-  const equals = argument.indexOf("=")
-  const value = equals === -1 ? next : argument.slice(equals + 1)
-
-  if (value === undefined || value.length === 0 || value.startsWith("--")) {
-    throw new TypeError(`${option} requires a value`)
   }
 
-  return value
-}
-
-function parseAgentName(value: string): SmokeAgentName {
-  if (!smokeAgentNames().includes(value as SmokeAgentName)) {
-    throw new TypeError(`Unknown smoke Agent "${value}". Available: ${smokeAgentNames().join(", ")}`)
-  }
-
-  return value as SmokeAgentName
-}
-
-function parseSandboxName(value: string): SmokeSandboxName {
-  if (!smokeSandboxNames().includes(value as SmokeSandboxName)) {
-    throw new TypeError(`Unknown smoke Sandbox "${value}". Available: ${smokeSandboxNames().join(", ")}`)
-  }
-
-  return value as SmokeSandboxName
-}
-
-function dockerImage(agent: SmokeAgentName): string {
-  return sandboxEnvironment("DOCKER", agent, "IMAGE") ?? "alpine:3.22"
-}
-
-function sandboxSetup(provider: string, agent: SmokeAgentName): string {
-  const configured = sandboxEnvironment(provider, agent, "SETUP")
-  return configured === undefined ? "test -f input.txt" : `test -f input.txt && (${configured})`
-}
-
-function sandboxEnvironment(provider: string, agent: SmokeAgentName, suffix: string): string | undefined {
-  return process.env[`AML_${provider}_${agent.toUpperCase()}_${suffix}`] ?? process.env[`AML_${provider}_${suffix}`]
-}
-
-function requiredEnvironment(name: string, label: string): string {
-  const value = process.env[name]
-
-  if (value === undefined || value.length === 0) {
-    throw new Error(`${label} requires ${name}`)
-  }
-
-  return value
+  return list ? { kind: "list", selection } : { kind: "run", selection }
 }

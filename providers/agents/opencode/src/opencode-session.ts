@@ -1,4 +1,5 @@
 import type { AgentExecutionContext, AgentRequest, AgentResponse } from "@aml-jsx/sdk"
+import { defu } from "defu"
 
 import type {
   OpenCodeModel,
@@ -63,7 +64,14 @@ export class OpenCodeSession {
   async run(request: AgentRequest, context: AgentExecutionContext): Promise<AgentResponse> {
     context.signal.throwIfAborted()
 
-    const model = OpenCodeSession.parseModel(request.model ?? this.#model)
+    const defaults = {
+      ...(this.#directory === undefined ? {} : { directory: this.#directory }),
+      ...(this.#model === undefined ? {} : { model: this.#model }),
+    }
+    const userInputs = request.model === undefined ? {} : { model: request.model }
+    const resolved = defu(userInputs, defaults) as OpenCodeSessionOptions
+    const directory = resolved.directory
+    const model = OpenCodeSession.parseModel(resolved.model)
     const followUps = request.followUps
 
     if (followUps !== undefined && !Array.isArray(followUps)) {
@@ -83,13 +91,15 @@ export class OpenCodeSession {
     // Capability incompatibility and attachment failure must happen before any
     // remote session exists. This is both a side-effect and security boundary.
     const capabilityAttachment = await this.#client.attachCapabilities(
-      {
-        ...(this.#directory === undefined ? {} : { directory: this.#directory }),
-        context,
-        mcpServers: request.mcpServers,
-        structuredOutput: request.output !== undefined,
-        tools: request.tools,
-      },
+      defu(
+        {
+          context,
+          mcpServers: request.mcpServers,
+          structuredOutput: request.output !== undefined,
+          tools: request.tools,
+        },
+        directory === undefined ? {} : { directory }
+      ),
       context.signal
     )
     let closeCapabilityAttachment: (() => Promise<void>) | undefined
@@ -167,11 +177,15 @@ export class OpenCodeSession {
     try {
       context.signal.throwIfAborted()
       sessionId = await this.#client.create(
-        {
-          ...(this.#directory === undefined ? {} : { directory: this.#directory }),
-          ...(model === undefined ? {} : { model }),
-          title: `AML ${context.trace.spanId}`,
-        },
+        defu(
+          {
+            title: `AML ${context.trace.spanId}`,
+          },
+          {
+            ...(directory === undefined ? {} : { directory }),
+            ...(model === undefined ? {} : { model }),
+          }
+        ),
         context.signal
       )
 
@@ -195,7 +209,7 @@ export class OpenCodeSession {
     }
 
     const location: OpenCodeSessionLocation = Object.freeze({
-      ...(this.#directory === undefined ? {} : { directory: this.#directory }),
+      ...(directory === undefined ? {} : { directory }),
       sessionId,
     })
     let hasAbortError = false
@@ -233,18 +247,22 @@ export class OpenCodeSession {
         context.signal.throwIfAborted()
         const isFinalTurn = index === prompts.length - 1
         const result = await this.#client.prompt(
-          {
-            ...location,
-            ...(model === undefined ? {} : { model }),
-            // Intermediate turns remain ordinary text. The schema constrains
-            // only the final response that escapes the Agent boundary.
-            ...(isFinalTurn && request.output !== undefined ? { output: request.output } : {}),
-            prompt,
-            system: request.system,
-            // Capability attachment is session-wide, but OpenCode's internal
-            // StructuredOutput Tool is granted only with the final schema turn.
-            tools: isFinalTurn && request.output !== undefined ? capabilityTools : textTurnTools,
-          },
+          defu(
+            {
+              // Intermediate turns remain ordinary text. The schema constrains
+              // only the final response that escapes the Agent boundary.
+              ...(isFinalTurn && request.output !== undefined ? { output: request.output } : {}),
+              prompt,
+              system: request.system,
+              // Capability attachment is session-wide, but OpenCode's internal
+              // StructuredOutput Tool is granted only with the final schema turn.
+              tools: isFinalTurn && request.output !== undefined ? capabilityTools : textTurnTools,
+            },
+            {
+              ...location,
+              ...(model === undefined ? {} : { model }),
+            }
+          ),
           context.signal
         )
 

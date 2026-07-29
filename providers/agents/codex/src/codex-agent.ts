@@ -1,10 +1,12 @@
 import {
   defineAgentProvider,
+  supportsSandboxRuntime,
   type AgentExecutionContext,
   type AgentProvider,
   type AgentRequest,
   type AgentResponse,
 } from "@aml-jsx/sdk"
+import { defu } from "defu"
 
 import { CodexCapabilityAttachment } from "./codex-capability-attachment.js"
 import type {
@@ -16,6 +18,7 @@ import type {
   CodexReasoningEffort,
 } from "./codex-client-factory.js"
 import { CodexSdkClientFactory } from "./codex-sdk-client-factory.js"
+import { CodexSandboxClient } from "./codex-sandbox-client.js"
 import { CodexSession } from "./codex-session.js"
 
 const REASONING_EFFORTS = new Set<CodexReasoningEffort>(["minimal", "low", "medium", "high", "xhigh"])
@@ -89,6 +92,10 @@ class CodexAgentImplementation implements CodexAgentProvider {
     this.#workingDirectory = options.workingDirectory
   }
 
+  supportsSandbox(sandbox: NonNullable<AgentExecutionContext["sandbox"]>): boolean {
+    return supportsSandboxRuntime(sandbox)
+  }
+
   /**
    * Runs one fresh Codex thread with invocation-local capabilities.
    */
@@ -99,13 +106,23 @@ class CodexAgentImplementation implements CodexAgentProvider {
       throw new TypeError("Codex system must be a string")
     }
 
+    if (context.sandbox !== undefined && this.#workingDirectory !== undefined) {
+      throw new TypeError("Codex workingDirectory cannot be combined with AML Sandbox; use Agent cwd")
+    }
+
+    if (context.sandbox !== undefined && request.tools.some(tool => tool.kind === "javascript")) {
+      throw new TypeError("Codex JavaScript Tools are not yet transportable into AML Sandbox")
+    }
+
     // Constructing the plan first makes invalid FollowUps and models fail
     // before the optional localhost Tool bridge performs external work.
     const session = new CodexSession(request, {
       ...(this.#model === undefined ? {} : { model: this.#model }),
       ...(this.#reasoningEffort === undefined ? {} : { reasoningEffort: this.#reasoningEffort }),
       ...(this.#skipGitRepoCheck === undefined ? {} : { skipGitRepoCheck: this.#skipGitRepoCheck }),
-      ...(this.#workingDirectory === undefined ? {} : { workingDirectory: this.#workingDirectory }),
+      ...(context.sandbox !== undefined || this.#workingDirectory === undefined
+        ? {}
+        : { workingDirectory: this.#workingDirectory }),
     })
     // This table contains only explicit factory options. Ambient repository
     // and user MCP configuration remains visible only to the Codex host.
@@ -117,44 +134,56 @@ class CodexAgentImplementation implements CodexAgentProvider {
     let hasExecutionError = false
     let executionError: unknown
     let response: AgentResponse | undefined
+    let sandboxClient: CodexSandboxClient | undefined
 
     // Execution and capability cleanup are tracked independently so a failed
     // Tool bridge shutdown cannot erase the original provider failure.
     try {
       const config = this.#invocationConfig(request, attachment, suppliedMcpOverrides)
-      const client = this.#createClient({
+      const clientOptions = {
         ...(this.#apiKey === undefined ? {} : { apiKey: this.#apiKey }),
         ...(this.#baseUrl === undefined ? {} : { baseUrl: this.#baseUrl }),
         ...(this.#codexPathOverride === undefined ? {} : { codexPathOverride: this.#codexPathOverride }),
         config,
         ...(this.#env === undefined ? {} : { env: this.#env }),
-      })
+      }
+      const client =
+        context.sandbox === undefined
+          ? this.#createClient(clientOptions)
+          : (sandboxClient = new CodexSandboxClient({
+              ...clientOptions,
+              sandbox: context.sandbox,
+            }))
       response = await session.run(client, context)
     } catch (error) {
       hasExecutionError = true
       executionError = error
     }
 
-    let hasCleanupError = false
-    let cleanupError: unknown
+    const cleanupErrors: unknown[] = []
 
     try {
       await attachment.close()
     } catch (error) {
-      hasCleanupError = true
-      cleanupError = error
+      cleanupErrors.push(error)
     }
 
-    if (hasExecutionError && hasCleanupError) {
-      throw new AggregateError([executionError, cleanupError], "Codex Agent execution and capability cleanup failed")
+    try {
+      await sandboxClient?.close()
+    } catch (error) {
+      cleanupErrors.push(error)
     }
 
     if (hasExecutionError) {
-      throw executionError
+      cleanupErrors.unshift(executionError)
     }
 
-    if (hasCleanupError) {
-      throw cleanupError
+    if (cleanupErrors.length === 1) {
+      throw cleanupErrors[0]
+    }
+
+    if (cleanupErrors.length > 1) {
+      throw new AggregateError(cleanupErrors, "Codex Agent execution and cleanup failed")
     }
 
     if (!response) {
@@ -185,24 +214,22 @@ class CodexAgentImplementation implements CodexAgentProvider {
     attachment: CodexCapabilityAttachment,
     suppliedMcpOverrides: Readonly<Record<string, CodexConfigValue>>
   ): CodexConfig {
-    const agents = CodexAgentImplementation.#configTable(this.#config.agents, "Codex config agents")
-    const features = CodexAgentImplementation.#configTable(this.#config.features, "Codex config features")
+    const userFeatures = CodexAgentImplementation.#configTable(this.#config.features, "Codex config features")
+    const imperativeFeatures = {
+      multi_agent: false,
+      shell_tool: attachment.shellEnabled,
+      unified_exec: attachment.shellEnabled,
+    }
 
+    // Preserve the provider's complete native top-level shape. Only known
+    // nested tables are defaulted recursively; authority-bearing AML values
+    // are then written explicitly so arrays and MCP definitions never combine.
     return Object.freeze({
       ...this.#config,
-      agents: Object.freeze({
-        ...agents,
-        enabled: false,
-      }),
       developer_instructions: [request.system, attachment.developerInstructions]
         .filter(fragment => fragment.length > 0)
         .join("\n"),
-      features: Object.freeze({
-        ...features,
-        multi_agent: false,
-        shell_tool: attachment.shellEnabled,
-        unified_exec: attachment.shellEnabled,
-      }),
+      features: Object.freeze(defu(imperativeFeatures, userFeatures)),
       mcp_servers: Object.freeze({
         ...suppliedMcpOverrides,
         ...attachment.mcpServers,

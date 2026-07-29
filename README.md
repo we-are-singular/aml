@@ -164,6 +164,8 @@ The public SDK includes the runtime, built-in integrations, and testing utilitie
 
 Provider factories retain their vendor configuration shapes: `opencodeAgent({ config })` accepts OpenCode's SDK config, while `piAgent({ providers })` accepts Pi's provider map. Both still support their vendor's ambient credential discovery, but neither requires a local profile when configuration is supplied explicitly.
 
+Every Agent adapter resolves configuration with the same authority order: provider defaults, then user inputs, then AML's imperative runtime policy. The implementation uses `defu` for known plain configuration tables and bespoke final objects for arrays, clients, callbacks, Tools, MCP grants, and other authority-bearing values. This preserves each vendor's native schema while preventing user configuration from weakening an authored Sandbox or capability boundary.
+
 Sandbox factories follow the same rule. `daytonaSandbox({ config, create })` accepts Daytona's SDK configuration and native image or snapshot creation parameters. Docker accepts only an existing image name; AML does not build images or silently install Agents. Each Sandbox may run an explicit trusted `setup` command after its Workspace is visible.
 
 ## Examples
@@ -251,6 +253,8 @@ npm run test:integration --workspace=@aml-jsx/sandbox-docker
 ```
 
 Smoke files use a dedicated Vitest configuration and stay outside default unit tests. Omitting both smoke filters runs every registered Agent against every registered Sandbox. npm requires the `--` separator before smoke-runner options.
+
+The smoke runner loads the repository's untracked `.env`. Pi and OpenCode use `OPENCODE_API_KEY`, and Daytona uses `DAYTONA_API_KEY`. Codex accepts `OPENAI_API_KEY` or the explicit `AML_CODEX_API_KEY`, `AML_CODEX_BASE_URL`, and `AML_CODEX_MODEL` combination for another Responses-compatible provider. `AML_CODEX_HOME` may instead select an already-authenticated writable Codex home that exists inside the chosen environment; AML does not transfer a host login into remote Sandboxes. These environment names configure only the repository's smoke CLI. Applications configure Agents through `piAgent()`, `codexAgent()`, and `opencodeAgent()` options.
 
 Commits are checked with lint-staged and commitlint. Pushes run the same formatting, linting, test, and build
 contract enforced by GitHub Actions.

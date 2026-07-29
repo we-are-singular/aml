@@ -1,4 +1,5 @@
 import type { AgentExecutionContext, AgentRequest, AgentResponse } from "@aml-jsx/sdk"
+import { defu } from "defu"
 
 import type { CodexClient, CodexReasoningEffort, CodexThread, CodexThreadOptions } from "./codex-client-factory.js"
 import { prepareCodexOutputSchema } from "./prepare-codex-output-schema.js"
@@ -25,7 +26,12 @@ export class CodexSession {
    * Validates every turn before capability setup can perform external work.
    */
   constructor(request: AgentRequest, options: CodexSessionOptions) {
-    this.#model = CodexSession.#validateModel(request.model ?? options.model)
+    const resolved = defu(
+      request.model === undefined ? {} : { model: request.model },
+      options.model === undefined ? {} : { model: options.model }
+    )
+
+    this.#model = CodexSession.#validateModel(resolved.model)
     this.#outputSchema = request.output === undefined ? undefined : prepareCodexOutputSchema(request.output.jsonSchema)
     this.#reasoningEffort = options.reasoningEffort
     this.#skipGitRepoCheck = options.skipGitRepoCheck
@@ -60,20 +66,23 @@ export class CodexSession {
       throw new TypeError("Codex client startThread must be a function")
     }
 
-    const threadOptions: CodexThreadOptions = Object.freeze({
-      approvalPolicy: "never",
+    const userInputs = {
       ...(this.#model === undefined ? {} : { model: this.#model }),
       ...(this.#reasoningEffort === undefined
         ? {}
         : {
             modelReasoningEffort: this.#reasoningEffort,
           }),
+      ...(this.#skipGitRepoCheck === undefined ? {} : { skipGitRepoCheck: this.#skipGitRepoCheck }),
+      ...(this.#workingDirectory === undefined ? {} : { workingDirectory: this.#workingDirectory }),
+    }
+    const imperativeConfig = {
+      approvalPolicy: "never",
       networkAccessEnabled: false,
       sandboxMode: "read-only",
-      ...(this.#skipGitRepoCheck === undefined ? {} : { skipGitRepoCheck: this.#skipGitRepoCheck }),
       webSearchMode: "disabled",
-      ...(this.#workingDirectory === undefined ? {} : { workingDirectory: this.#workingDirectory }),
-    })
+    } as const
+    const threadOptions = Object.freeze(defu(imperativeConfig, userInputs)) as CodexThreadOptions
     const thread = Reflect.apply(startThread, client, [threadOptions]) as CodexThread
 
     if (typeof thread !== "object" || thread === null) {

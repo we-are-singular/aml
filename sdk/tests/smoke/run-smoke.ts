@@ -3,12 +3,12 @@ import path from "node:path"
 
 import { execa } from "execa"
 
-import { parseSmokeCommand, selectSmokeCases, smokeHelp } from "./smoke-matrix.js"
+import { parseSmokeCommand, selectSmokeCases, SMOKE_AGENT_NAMES, SMOKE_SANDBOX_NAMES } from "./smoke-matrix.js"
 
 try {
   process.loadEnvFile(path.resolve(import.meta.dirname, "../../../.env"))
 } catch (error) {
-  if (!isMissingFile(error)) {
+  if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
     throw error
   }
 }
@@ -21,7 +21,16 @@ async function main(): Promise<void> {
   const command = parseSmokeCommand(process.argv.slice(2))
 
   if (command.kind === "help") {
-    console.log(smokeHelp())
+    console.log(
+      [
+        "Usage: npm run smoke -- [--agent <name>] [--sandbox <name>] [--list]",
+        "",
+        `Agents: ${SMOKE_AGENT_NAMES.join(", ")}`,
+        `Sandboxes: ${SMOKE_SANDBOX_NAMES.join(", ")}`,
+        "",
+        "Omitted filters run the complete Agent x Sandbox matrix.",
+      ].join("\n")
+    )
     return
   }
 
@@ -60,10 +69,6 @@ async function main(): Promise<void> {
   )
 
   process.exitCode = result.exitCode
-}
-
-function isMissingFile(value: unknown): boolean {
-  return typeof value === "object" && value !== null && "code" in value && value.code === "ENOENT"
 }
 
 await main()

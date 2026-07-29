@@ -44,6 +44,37 @@ describe("localSandbox()", () => {
     await lease.release()
   })
 
+  it("keeps PWD aligned with the effective command cwd", async () => {
+    const workspace = await createWorkspace()
+    const provider = localSandbox({ workspace })
+    const lease = await provider.acquire(request())
+    const result = await lease.runtime.exec(process.execPath, ["-e", "process.stdout.write(process.env.PWD ?? '')"])
+
+    expect(result).toEqual({
+      exitCode: 0,
+      stderr: "",
+      stdout: path.join(workspace, "repository"),
+    })
+    await lease.release()
+  })
+
+  it("closes stdin because the bounded runtime exposes no input channel", async () => {
+    const workspace = await createWorkspace()
+    const provider = localSandbox({ workspace })
+    const lease = await provider.acquire(request())
+    const result = await lease.runtime.exec(process.execPath, [
+      "-e",
+      "process.stdin.resume();process.stdin.once('end',()=>process.stdout.write('eof'))",
+    ])
+
+    expect(result).toEqual({
+      exitCode: 0,
+      stderr: "",
+      stdout: "eof",
+    })
+    await lease.release()
+  })
+
   it("runs explicit setup before returning the lease", async () => {
     const workspace = await createWorkspace()
     const provider = localSandbox({

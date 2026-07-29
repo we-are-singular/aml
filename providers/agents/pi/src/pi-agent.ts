@@ -8,6 +8,7 @@ import {
   supportsSandboxRuntime,
 } from "@aml-jsx/sdk"
 import type { ProviderConfig } from "@earendil-works/pi-coding-agent"
+import { defu } from "defu"
 
 import { PiSdkSessionClientFactory } from "./pi-sdk-session-client.js"
 import type {
@@ -81,7 +82,7 @@ class PiAgentImplementation implements PiAgentProvider {
       throw new Error("Pi Agent does not yet support AML MCP servers")
     }
 
-    const model = validateModel(request.model ?? this.#model)
+    const requestedModel = validateModel(request.model)
     const tools = request.tools.map(tool => {
       if (tool.kind === "host") {
         if (!PI_HOST_TOOLS.has(tool.name)) {
@@ -104,10 +105,16 @@ class PiAgentImplementation implements PiAgentProvider {
       throw new Error("Pi Agent received an incompatible Sandbox runtime")
     }
 
-    const input: PiSessionCreateInput = Object.freeze({
+    const defaults = {
       cwd: this.#workingDirectory ?? process.cwd(),
-      ...(model === undefined ? {} : { model }),
+      ...(this.#model === undefined ? {} : { model: this.#model }),
       ...(this.#providers === undefined ? {} : { providers: this.#providers }),
+      ...(this.#thinkingLevel === undefined ? {} : { thinkingLevel: this.#thinkingLevel }),
+    }
+    const userInputs = {
+      ...(requestedModel === undefined ? {} : { model: requestedModel }),
+    }
+    const imperativeConfig = {
       ...(sandbox === undefined
         ? {}
         : {
@@ -117,10 +124,12 @@ class PiAgentImplementation implements PiAgentProvider {
             }),
           }),
       system: request.system,
-      ...(this.#thinkingLevel === undefined ? {} : { thinkingLevel: this.#thinkingLevel }),
       tools: Object.freeze(tools),
       trace: context.trace,
-    })
+    }
+    // defu is priority-first: AML policy wins, authored input overrides
+    // factory defaults, and provider-native nested tables remain intact.
+    const input = Object.freeze(defu(imperativeConfig, userInputs, defaults)) as PiSessionCreateInput
     const session = await this.#createSession(input, context.signal)
     let cancellation: (() => void) | undefined
     let hasExecutionError = false

@@ -1,6 +1,7 @@
 import { Writable } from "node:stream"
 
 import { createOpencodeClient, type OpencodeClient, type ServerOptions } from "@opencode-ai/sdk/v2"
+import { defu } from "defu"
 import { execa } from "execa"
 
 const DEFAULT_HOSTNAME = "127.0.0.1"
@@ -33,16 +34,21 @@ interface OpenCodeProcessResult {
  * directly to each child without mutating process-wide state.
  */
 export async function createIsolatedOpencode(options: ServerOptions): Promise<OwnedOpenCodeHost> {
-  const hostname = options.hostname ?? DEFAULT_HOSTNAME
-  const port = options.port ?? DEFAULT_PORT
-  const startupTimeout = options.timeout ?? DEFAULT_STARTUP_TIMEOUT_MS
+  const resolved = defu(options, {
+    hostname: DEFAULT_HOSTNAME,
+    port: DEFAULT_PORT,
+    timeout: DEFAULT_STARTUP_TIMEOUT_MS,
+  })
+  const hostname = resolved.hostname
+  const port = resolved.port
+  const startupTimeout = resolved.timeout
   const lifecycle = new AbortController()
   const cancelSignal =
-    options.signal === undefined ? lifecycle.signal : AbortSignal.any([lifecycle.signal, options.signal])
+    resolved.signal === undefined ? lifecycle.signal : AbortSignal.any([lifecycle.signal, resolved.signal])
   const args = ["serve", `--hostname=${hostname}`, `--port=${port}`]
 
-  if (options.config?.logLevel !== undefined) {
-    args.push(`--log-level=${options.config.logLevel}`)
+  if (resolved.config?.logLevel !== undefined) {
+    args.push(`--log-level=${resolved.config.logLevel}`)
   }
 
   let processOutput = ""
@@ -113,7 +119,7 @@ export async function createIsolatedOpencode(options: ServerOptions): Promise<Ow
   const child = execa("opencode", args, {
     cancelSignal,
     env: {
-      OPENCODE_CONFIG_CONTENT: JSON.stringify(options.config ?? {}),
+      OPENCODE_CONFIG_CONTENT: JSON.stringify(resolved.config ?? {}),
       OPENCODE_DB: ":memory:",
     },
     extendEnv: true,

@@ -142,13 +142,15 @@ async function execute(
   options.signal?.throwIfAborted()
 
   return await new Promise<Readonly<SandboxExecResult>>((resolve, reject) => {
-    execFile(
+    const child = execFile(
       command,
       [...args],
       {
         cwd: options.cwd,
         encoding: "utf8",
-        env: { ...process.env, ...env },
+        // Some coding Agents resolve their project from PWD before asking the
+        // operating system for cwd. Keep both views on the attached Workspace.
+        env: { ...process.env, ...env, PWD: options.cwd },
         maxBuffer: maxOutputBytes,
         signal: options.signal,
         timeout,
@@ -176,6 +178,10 @@ async function execute(
         )
       }
     )
+
+    // The common runtime has no stdin channel. Close the implicit pipe so
+    // programs that probe piped input observe EOF instead of waiting forever.
+    child.stdin?.end()
   })
 }
 

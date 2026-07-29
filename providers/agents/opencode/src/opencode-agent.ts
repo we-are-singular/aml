@@ -1,10 +1,12 @@
 import {
   defineAgentProvider,
+  supportsSandboxRuntime,
   type AgentExecutionContext,
   type AgentProvider,
   type AgentRequest,
   type AgentResponse,
 } from "@aml-jsx/sdk"
+import { defu } from "defu"
 
 import { createIsolatedOpencode } from "./create-isolated-opencode.js"
 import {
@@ -14,6 +16,7 @@ import {
   type OpenCodeServerOptions,
 } from "./opencode-agent-options.js"
 import { OpenCodeSdkClient } from "./opencode-sdk-client.js"
+import { OpenCodeSandboxSessionClient } from "./opencode-sandbox-session-client.js"
 import type { OpenCodeSessionClient } from "./opencode-session-client.js"
 import { OpenCodeSession } from "./opencode-session.js"
 
@@ -58,6 +61,10 @@ class OpenCodeAgentImplementation implements OpenCodeAgentProvider {
     this.#sessionClient = options.sessionClient
   }
 
+  supportsSandbox(sandbox: NonNullable<AgentExecutionContext["sandbox"]>): boolean {
+    return supportsSandboxRuntime(sandbox)
+  }
+
   /**
    * Runs one Agent while registering it with the provider close barrier.
    */
@@ -67,7 +74,8 @@ class OpenCodeAgentImplementation implements OpenCodeAgentProvider {
     }
 
     const evaluation = this.#getEvaluation(context)
-    const execution = this.#run(request, context, evaluation)
+    const execution =
+      context.sandbox === undefined ? this.#run(request, context, evaluation) : this.#runInSandbox(request, context)
     evaluation.activeRuns.add(execution)
 
     try {
@@ -75,6 +83,35 @@ class OpenCodeAgentImplementation implements OpenCodeAgentProvider {
     } finally {
       evaluation.activeRuns.delete(execution)
     }
+  }
+
+  /**
+   * Runs an invocation-owned OpenCode CLI beside the Sandbox Workspace.
+   */
+  async #runInSandbox(request: AgentRequest, context: AgentExecutionContext): Promise<AgentResponse> {
+    if (this.#directory !== undefined) {
+      throw new TypeError("OpenCode directory cannot be combined with AML Sandbox; use Agent cwd")
+    }
+
+    if (this.#serverOptions !== undefined) {
+      throw new TypeError("OpenCode server options cannot be combined with AML Sandbox")
+    }
+
+    if (this.#sessionClient !== undefined) {
+      throw new TypeError("OpenCode sessionClient cannot be combined with AML Sandbox")
+    }
+
+    const sandbox = context.sandbox
+
+    if (sandbox === undefined) {
+      throw new Error("OpenCode Sandbox execution requires an active Sandbox")
+    }
+
+    const userInputs = this.#config === undefined ? {} : { config: this.#config }
+    const imperativeConfig = { sandbox }
+    const client = new OpenCodeSandboxSessionClient(defu(imperativeConfig, userInputs))
+
+    return await this.#session(client).run(request, context)
   }
 
   /**
@@ -104,10 +141,7 @@ class OpenCodeAgentImplementation implements OpenCodeAgentProvider {
     }
 
     const client = await this.#getClient(evaluation)
-    return await new OpenCodeSession(client, {
-      ...(this.#directory === undefined ? {} : { directory: this.#directory }),
-      ...(this.#model === undefined ? {} : { model: this.#model }),
-    }).run(request, context)
+    return await this.#session(client).run(request, context)
   }
 
   /**
@@ -116,13 +150,9 @@ class OpenCodeAgentImplementation implements OpenCodeAgentProvider {
   async #runWithDisposableServer(request: AgentRequest, context: AgentExecutionContext): Promise<AgentResponse> {
     // This server is deliberately not stored in evaluation state: its lifetime
     // belongs to this invocation and must end even when the session fails.
-    const owned = await createIsolatedOpencode({
-      ...(this.#serverOptions === undefined ? {} : this.#serverOptions),
-      ...(this.#config === undefined ? {} : { config: this.#config }),
-      // Disposable hosts must not contend with the reusable configured port or
-      // with another concurrent dynamic-capability invocation.
-      port: 0,
-    })
+    // Disposable hosts must not contend with the reusable configured port or
+    // with another concurrent dynamic-capability invocation.
+    const owned = await createIsolatedOpencode(defu({ port: 0 }, this.#serverInputs()))
     const client = new OpenCodeSdkClient(owned.client)
     let hasExecutionError = false
     let executionError: unknown
@@ -131,10 +161,7 @@ class OpenCodeAgentImplementation implements OpenCodeAgentProvider {
     // Keep execution and server shutdown errors separately so neither masks the
     // other at this distributed resource boundary.
     try {
-      response = await new OpenCodeSession(client, {
-        ...(this.#directory === undefined ? {} : { directory: this.#directory }),
-        ...(this.#model === undefined ? {} : { model: this.#model }),
-      }).run(request, context)
+      response = await this.#session(client).run(request, context)
     } catch (error) {
       hasExecutionError = true
       executionError = error
@@ -218,12 +245,29 @@ class OpenCodeAgentImplementation implements OpenCodeAgentProvider {
    * Starts one evaluation-scoped reusable OpenCode host.
    */
   async #createClient(evaluation: OpenCodeEvaluationState): Promise<OpenCodeSessionClient> {
-    const owned = await createIsolatedOpencode({
-      ...(this.#serverOptions === undefined ? {} : this.#serverOptions),
-      ...(this.#config === undefined ? {} : { config: this.#config }),
-    })
+    const owned = await createIsolatedOpencode(this.#serverInputs())
     evaluation.ownedServer = owned.server
     return new OpenCodeSdkClient(owned.client)
+  }
+
+  /**
+   * Builds the user-controlled server layer without inventing a shared schema.
+   */
+  #serverInputs(): Parameters<typeof createIsolatedOpencode>[0] {
+    return {
+      ...(this.#serverOptions === undefined ? {} : this.#serverOptions),
+      ...(this.#config === undefined ? {} : { config: this.#config }),
+    }
+  }
+
+  /**
+   * Applies configured defaults to one fresh provider-owned session.
+   */
+  #session(client: OpenCodeSessionClient): OpenCodeSession {
+    return new OpenCodeSession(client, {
+      ...(this.#directory === undefined ? {} : { directory: this.#directory }),
+      ...(this.#model === undefined ? {} : { model: this.#model }),
+    })
   }
 
   /**

@@ -1,5 +1,5 @@
 import type { SandboxAcquireRequest, SandboxLease, SandboxProvider } from "../components/sandbox/sandbox-provider.js"
-import type { SandboxExecResult, SandboxRuntime } from "../components/sandbox/sandbox-runtime.js"
+import type { SandboxExecOptions, SandboxExecResult, SandboxRuntime } from "../components/sandbox/sandbox-runtime.js"
 
 /**
  * Default opaque handle exposed by the deterministic Sandbox fixture.
@@ -18,7 +18,8 @@ export interface DeterministicSandboxProviderOptions<Handle> {
   readonly exec?: (
     command: string,
     args: readonly string[],
-    request: SandboxAcquireRequest
+    request: SandboxAcquireRequest,
+    options: Readonly<SandboxExecOptions>
   ) => SandboxExecResult | PromiseLike<SandboxExecResult>
   readonly name?: string
   readonly release?: (lease: Readonly<{ handle: Handle; id: string }>, acquisition: number) => void | PromiseLike<void>
@@ -93,7 +94,8 @@ export class DeterministicSandboxProvider<Handle = DeterministicSandboxHandle> i
     const runtime: SandboxRuntime = Object.freeze({
       access: request.access,
       cwd: request.cwd,
-      exec: async (command: string, args: readonly string[] = []) => await this.#exec(command, args, request),
+      exec: async (command: string, args: readonly string[] = [], options = {}) =>
+        await this.#exec(command, args, request, options),
       root: request.root,
     })
 

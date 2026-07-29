@@ -24,6 +24,7 @@
     "@aml-jsx/sdk": "*",
     "@modelcontextprotocol/sdk": "^1.29.0",
     "@opencode-ai/sdk": "1.18.5",
+    "defu": "^6.1.7",
     "execa": "^10.0.0",
     "zod": "^4.4.3"
   }

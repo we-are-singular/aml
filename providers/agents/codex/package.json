@@ -23,7 +23,8 @@
   "dependencies": {
     "@aml-jsx/sdk": "*",
     "@modelcontextprotocol/sdk": "^1.29.0",
-    "@openai/codex-sdk": "0.145.0"
+    "@openai/codex-sdk": "0.145.0",
+    "defu": "^6.1.7"
   },
   "devDependencies": {
     "zod": "^4.4.3"

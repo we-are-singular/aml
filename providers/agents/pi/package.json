@@ -23,6 +23,7 @@
   "dependencies": {
     "@aml-jsx/sdk": "*",
     "@earendil-works/pi-coding-agent": "0.82.1",
+    "defu": "^6.1.7",
     "typebox": "1.1.38"
   }
 }

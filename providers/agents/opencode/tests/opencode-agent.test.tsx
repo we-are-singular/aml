@@ -1,6 +1,10 @@
 import type { AgentRequest } from "@aml-jsx/sdk"
-import { Agent, AmlRuntime, defineMcpServer, defineTool, evaluate, FollowUp, Mcp, Tool } from "@aml-jsx/sdk"
-import { agentProviderConformance, createAgentExecutionContext } from "@aml-jsx/sdk/testing"
+import { Agent, AmlRuntime, defineMcpServer, defineTool, evaluate, FollowUp, Mcp, Sandbox, Tool } from "@aml-jsx/sdk"
+import {
+  agentProviderConformance,
+  createAgentExecutionContext,
+  DeterministicSandboxProvider,
+} from "@aml-jsx/sdk/testing"
 import { Client as McpClient } from "@modelcontextprotocol/sdk/client/index.js"
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js"
 import { z } from "zod"
@@ -211,6 +215,102 @@ describe("opencodeAgent", () => {
       { directory: "/workspace", sessionId: "session-2" },
     ])
 
+    await provider.close()
+  })
+
+  it("runs the installed OpenCode CLI through the Sandbox runtime", async () => {
+    const calls: Array<{
+      readonly args: readonly string[]
+      readonly command: string
+      readonly env: Readonly<Record<string, string>> | undefined
+    }> = []
+    const sandbox = new DeterministicSandboxProvider({
+      exec(command, args, _request, options) {
+        calls.push({ args, command, env: options.env })
+
+        if (command === "opencode") {
+          return {
+            exitCode: 0,
+            stderr: "",
+            stdout: [
+              "INFO service=models.dev refreshing",
+              JSON.stringify({
+                part: { text: "sandbox response", type: "text" },
+                sessionID: "session-1",
+                type: "text",
+              }),
+            ].join("\n"),
+          }
+        }
+
+        return { exitCode: 0, stderr: "", stdout: "" }
+      },
+      name: "sandbox",
+    })
+    const provider = opencodeAgent({
+      config: {
+        agent: {
+          aml: {
+            mode: "subagent",
+            permission: { bash: "deny" },
+            prompt: "user-controlled prompt",
+            tools: { "*": true },
+          },
+          retained: {
+            mode: "subagent",
+          },
+        },
+        default_agent: "user-controlled",
+        plugin: ["user-plugin"],
+        provider: {
+          "opencode-go": {
+            options: { apiKey: "opencode-key" },
+          },
+        },
+        tools: { "*": true },
+      },
+      model: "opencode-go/glm-5.1",
+    })
+
+    await expect(
+      new AmlRuntime({ agentProvider: provider }).evaluate(
+        <Sandbox access="read-write" provider={sandbox}>
+          <Agent>
+            <Tool name="bash" />
+            prompt
+          </Agent>
+        </Sandbox>
+      )
+    ).resolves.toBe("sandbox response")
+
+    expect(provider.supportsSandbox).toBeTypeOf("function")
+    const execution = calls.find(call => call.command === "opencode")
+    expect(execution?.args).toEqual(
+      expect.arrayContaining(["run", "--format", "json", "--agent", "aml", "--model", "opencode-go/glm-5.1", "prompt"])
+    )
+    const config = JSON.parse(execution?.env?.OPENCODE_CONFIG_CONTENT ?? "{}")
+    expect(config).toMatchObject({
+      agent: {
+        aml: {
+          mode: "primary",
+          permission: { bash: "allow" },
+          prompt: "",
+          tools: { "*": false, bash: true },
+        },
+        retained: {
+          mode: "subagent",
+        },
+      },
+      default_agent: "aml",
+      plugin: [],
+      provider: {
+        "opencode-go": {
+          options: { apiKey: "opencode-key" },
+        },
+      },
+      tools: { "*": false, bash: true },
+    })
+    expect(calls.map(call => call.command)).toEqual(["mkdir", "opencode", "rm"])
     await provider.close()
   })
 

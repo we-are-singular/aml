@@ -5,6 +5,7 @@ import { CodexToolBridge } from "./codex-tool-bridge.js"
 
 const CODEX_MCP_NAME = /^[A-Za-z0-9_-]+$/
 const READ_ONLY_SHELL_TOOLS = new Set(["glob", "grep", "read"])
+const SANDBOX_SHELL_TOOLS = new Set(["bash", ...READ_ONLY_SHELL_TOOLS])
 
 /**
  * Complete invocation-scoped capability configuration and cleanup boundary.
@@ -65,7 +66,9 @@ export class CodexCapabilityAttachment {
       toolNames.add(tool.name)
 
       if (tool.kind === "host") {
-        if (!READ_ONLY_SHELL_TOOLS.has(tool.name)) {
+        const supportedShellTools = context.sandbox === undefined ? READ_ONLY_SHELL_TOOLS : SANDBOX_SHELL_TOOLS
+
+        if (!supportedShellTools.has(tool.name)) {
           throw new TypeError(`Codex host Tool "${tool.name}" is unsupported`)
         }
 

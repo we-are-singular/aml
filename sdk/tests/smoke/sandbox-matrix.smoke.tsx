@@ -10,8 +10,9 @@ import { Agent, AmlRuntime, createConsoleTracer, localWorkspace, Sandbox, Tool, 
 import {
   parseSmokeCommand,
   selectSmokeCases,
-  smokeAgent,
-  smokeSandbox,
+  SMOKE_AGENTS,
+  SMOKE_SANDBOXES,
+  type SmokeAgentInstance,
   type SmokeAgentName,
   type SmokeSandboxName,
 } from "./smoke-matrix.js"
@@ -37,18 +38,20 @@ async function runFileProof(agentName: SmokeAgentName, sandboxName: SmokeSandbox
   const directory = await mkdtemp(path.join(os.tmpdir(), `aml-smoke-${agentName}-${sandboxName}-`))
   const input = randomUUID()
   const output = randomUUID()
-  const agentRegistration = smokeAgent(agentName)
-  const sandboxRegistration = smokeSandbox(sandboxName)
-  const agentProvider = agentRegistration.create()
-  const sandboxProvider = sandboxRegistration.create(agentName)
+  const agentRegistration = SMOKE_AGENTS[agentName]
+  const agent: SmokeAgentInstance = agentRegistration.create()
+  const sandboxRegistration = SMOKE_SANDBOXES[sandboxName][agentName]
+  const sandboxProvider = sandboxRegistration.create()
+  const proofCommand = `test "$(cat input.txt)" = "${input}" && printf %s "${output}" > output.txt && test "$(cat output.txt)" = "${output}"`
   const startedAt = performance.now()
+  let response: unknown
 
   await writeFile(path.join(directory, "input.txt"), input)
   console.log(
-    `[smoke:start] agent=${agentName} model=${agentRegistration.model} sandbox=${sandboxName} environment=${sandboxRegistration.environment(agentName)}`
+    `[smoke:start] agent=${agentName} model=${agentRegistration.model} sandbox=${sandboxName} environment=${sandboxRegistration.environment}`
   )
 
-  const runtime = new AmlRuntime({ agentProvider })
+  const runtime = new AmlRuntime({ agentProvider: agent.provider })
   runtime.on(
     "trace",
     createConsoleTracer({
@@ -57,39 +60,35 @@ async function runFileProof(agentName: SmokeAgentName, sandboxName: SmokeSandbox
   )
 
   try {
-    const result = await runtime.evaluate(
+    response = await runtime.evaluate(
       <Workspace id={`smoke-${agentName}-${sandboxName}-${randomUUID()}`} provider={localWorkspace({ directory })}>
         <Sandbox access="read-write" provider={sandboxProvider}>
           <Agent>
             <Tool name="bash" />
-            Use bash to read input.txt and confirm it contains exactly "{input}". Then use bash to create output.txt
-            containing exactly "{output}" with no trailing newline. Verify output.txt with bash, then reply with
-            exactly: done
+            Call bash with this exact command and do not claim success without executing it:
+            {proofCommand}
+            After the command exits successfully, reply with exactly: done
           </Agent>
         </Sandbox>
       </Workspace>
     )
     const persisted = await readFile(path.join(directory, "output.txt"), "utf8")
 
-    expect(result).toContain("done")
+    expect(response).toContain("done")
     expect(persisted).toBe(output)
     console.log(
       `[smoke:proof] agent=${agentName} sandbox=${sandboxName} response=done persisted=true bytes=${Buffer.byteLength(persisted)} durationMs=${Math.round(performance.now() - startedAt)}`
     )
   } catch (error) {
     console.error(
-      `[smoke:failure] agent=${agentName} sandbox=${sandboxName} durationMs=${Math.round(performance.now() - startedAt)} error=${errorMessage(error)}`
+      `[smoke:failure] agent=${agentName} sandbox=${sandboxName} durationMs=${Math.round(performance.now() - startedAt)} response=${JSON.stringify(response)} error=${error instanceof Error ? error.message : String(error)}`
     )
     throw error
   } finally {
     try {
-      await agentRegistration.release(agentProvider)
+      await agent.release?.()
     } finally {
       await rm(directory, { force: true, recursive: true })
     }
   }
-}
-
-function errorMessage(value: unknown): string {
-  return value instanceof Error ? value.message : String(value)
 }
