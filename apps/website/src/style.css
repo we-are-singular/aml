@@ -529,6 +529,61 @@ body {
   text-transform: uppercase;
 }
 
+/* ---------- provider demo picker rows ---------- */
+
+.pick-row {
+  @apply flex w-full items-center justify-between gap-3 rounded-lg border border-line bg-surface px-3 py-2 font-mono text-[12.5px] font-medium transition-all hover:border-line-strong;
+}
+
+.pick-row-label {
+  @apply flex min-w-0 items-center gap-2;
+}
+
+.pick-row-icon {
+  @apply size-4 shrink-0;
+}
+
+.pick-row-fn {
+  @apply text-[10.5px] font-normal text-muted;
+}
+
+.pick-row.is-active {
+  border-color: var(--color-resolve);
+  background: var(--color-resolve-soft);
+  color: var(--color-resolve);
+  font-weight: 600;
+}
+
+.pick-row.is-active .pick-row-fn {
+  color: var(--color-resolve);
+  opacity: 0.68;
+}
+
+.provider-code {
+  border: 0;
+  border-radius: 0;
+}
+
+/* transient pulse on the code lines a picker change just rewrote */
+@keyframes line-flash {
+  0% {
+    background-color: color-mix(in srgb, var(--color-resolve) 42%, transparent);
+  }
+  100% {
+    background-color: color-mix(in srgb, var(--color-resolve) 16%, transparent);
+  }
+}
+
+.code-line.flash {
+  animation: line-flash 0.8s ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .code-line.flash {
+    animation: none;
+  }
+}
+
 .ref-list-scroll {
   max-height: min(28rem, 60vh);
   overflow-y: auto;
