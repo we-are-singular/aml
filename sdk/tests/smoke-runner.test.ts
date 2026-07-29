@@ -5,7 +5,7 @@ import { parseSmokeCommand, selectSmokeCases, SMOKE_AGENT_NAMES, SMOKE_SANDBOX_N
 describe("smoke matrix runner", () => {
   it("derives the complete Cartesian product from both registries", () => {
     expect(SMOKE_AGENT_NAMES).toEqual(["codex", "opencode", "pi"])
-    expect(SMOKE_SANDBOX_NAMES).toEqual(["daytona", "docker", "local"])
+    expect(SMOKE_SANDBOX_NAMES).toEqual(["daytona", "docker", "local", "modal"])
     expect(selectSmokeCases()).toHaveLength(SMOKE_AGENT_NAMES.length * SMOKE_SANDBOX_NAMES.length)
     expect(selectSmokeCases()).toContainEqual({ agent: "codex", sandbox: "daytona" })
     expect(selectSmokeCases()).toContainEqual({ agent: "pi", sandbox: "local" })

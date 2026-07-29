@@ -11,6 +11,7 @@
       "@aml-jsx/sandbox-docker": ["../providers/sandboxes/docker/src/index.ts"],
       "@aml-jsx/sandbox-daytona": ["../providers/sandboxes/daytona/src/index.ts"],
       "@aml-jsx/sandbox-local": ["../providers/sandboxes/local/src/index.ts"],
+      "@aml-jsx/sandbox-modal": ["../providers/sandboxes/modal/src/index.ts"],
       "@aml-jsx/sdk": ["./src/core.ts"],
       "@aml-jsx/workspace-local": ["../providers/workspaces/local/src/index.ts"]
     }

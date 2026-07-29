@@ -78,6 +78,7 @@
     "@standard-schema/spec": "^1.1.0",
     "execa": "^10.0.0",
     "hookable": "^6.1.1",
+    "modal": "0.9.0",
     "p-limit": "^7.3.1",
     "proper-lockfile": "^4.1.2",
     "typebox": "1.1.38"

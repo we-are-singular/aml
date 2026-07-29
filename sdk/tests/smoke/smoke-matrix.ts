@@ -3,6 +3,7 @@ import {
   daytonaSandbox,
   dockerSandbox,
   localSandbox,
+  modalSandbox,
   opencodeAgent,
   piAgent,
   type AgentProvider,
@@ -207,6 +208,65 @@ export const SMOKE_SANDBOXES = {
         return localSandbox({ setup: "test -f input.txt" })
       },
       environment: "host",
+    },
+  },
+  modal: {
+    codex: {
+      create() {
+        const tokenId = process.env.MODAL_API_KEY
+        const tokenSecret = process.env.MODAL_API_SECRET
+
+        if (tokenId === undefined || tokenSecret === undefined) {
+          throw new Error("Modal smoke requires MODAL_API_KEY and MODAL_API_SECRET")
+        }
+
+        return modalSandbox({
+          appName: "aml-jsx-smoke",
+          config: { tokenId, tokenSecret },
+          create: { memoryMiB: 2_048, timeoutMs: 120_000 },
+          image: "node:26",
+          setup: "test -f input.txt && npm install --global @openai/codex@0.145.0",
+        })
+      },
+      environment: "node:26",
+    },
+    opencode: {
+      create() {
+        const tokenId = process.env.MODAL_API_KEY
+        const tokenSecret = process.env.MODAL_API_SECRET
+
+        if (tokenId === undefined || tokenSecret === undefined) {
+          throw new Error("Modal smoke requires MODAL_API_KEY and MODAL_API_SECRET")
+        }
+
+        return modalSandbox({
+          appName: "aml-jsx-smoke",
+          config: { tokenId, tokenSecret },
+          create: { memoryMiB: 2_048, timeoutMs: 120_000 },
+          image: "node:26",
+          setup: "test -f input.txt && npm install --global opencode-ai@1.18.7",
+        })
+      },
+      environment: "node:26",
+    },
+    pi: {
+      create() {
+        const tokenId = process.env.MODAL_API_KEY
+        const tokenSecret = process.env.MODAL_API_SECRET
+
+        if (tokenId === undefined || tokenSecret === undefined) {
+          throw new Error("Modal smoke requires MODAL_API_KEY and MODAL_API_SECRET")
+        }
+
+        return modalSandbox({
+          appName: "aml-jsx-smoke",
+          config: { tokenId, tokenSecret },
+          create: { timeoutMs: 120_000 },
+          image: "alpine:3.22",
+          setup: "test -f input.txt",
+        })
+      },
+      environment: "alpine:3.22",
     },
   },
 } satisfies Record<string, Record<SmokeAgentName, SmokeSandboxRegistration>>

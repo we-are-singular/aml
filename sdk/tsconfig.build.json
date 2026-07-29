@@ -16,6 +16,9 @@
     "../providers/agents/opencode/src/**/*.ts",
     "../providers/agents/pi/src/**/*.ts",
     "../providers/sandboxes/docker/src/**/*.ts",
+    "../providers/sandboxes/daytona/src/**/*.ts",
+    "../providers/sandboxes/local/src/**/*.ts",
+    "../providers/sandboxes/modal/src/**/*.ts",
     "../providers/workspaces/local/src/**/*.ts"
   ],
   "exclude": ["scripts", "tests", "vite.config.ts"]

@@ -54,6 +54,7 @@ interface BuiltSdk {
   readonly dockerSandbox: unknown
   readonly localSandbox: unknown
   readonly localWorkspace: unknown
+  readonly modalSandbox: unknown
   readonly opencodeAgent: unknown
   readonly piAgent: unknown
   readonly WorkspaceConflictError: {
@@ -179,6 +180,7 @@ const {
   localWorkspace,
   localSandbox,
   Loop: publicLoop,
+  modalSandbox,
   opencodeAgent,
   piAgent,
   Workspace: publicWorkspace,
@@ -201,6 +203,7 @@ if (
   typeof daytonaSandbox !== "function" ||
   typeof dockerSandbox !== "function" ||
   typeof localSandbox !== "function" ||
+  typeof modalSandbox !== "function" ||
   typeof localWorkspace !== "function"
 ) {
   throw new Error("SDK root does not expose its configured provider factories")
@@ -428,6 +431,7 @@ try {
     "@opencode-ai/sdk",
     "@standard-schema/spec",
     "execa",
+    "modal",
     "proper-lockfile",
     "typebox",
   ]) {
