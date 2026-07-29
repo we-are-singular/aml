@@ -81,7 +81,7 @@ AML is developed as an npm workspace monorepo and distributed as one public pack
 @aml-jsx/sdk
 ```
 
-`@aml-jsx/sdk` owns the JSX runtime, evaluator, primitives, public provider interfaces, provider definition helpers, conformance contracts, and the concrete integrations included in the current release. Built-in provider factories such as `opencodeAgent()`, `codexAgent()`, `dockerSandbox()`, and `localWorkspace()` are exported from the package root.
+`@aml-jsx/sdk` owns the JSX runtime, evaluator, primitives, public provider interfaces, provider definition helpers, conformance contracts, and the concrete integrations included in the current release. The package root exports the built-in Agent factories `opencodeAgent()`, `codexAgent()`, and `piAgent()`; the Sandbox factories `localSandbox()`, `dockerSandbox()`, and `daytonaSandbox()`; and the durable `localWorkspace()` factory.
 
 The SDK exports both `@aml-jsx/sdk/jsx-runtime` and `@aml-jsx/sdk/jsx-dev-runtime` for TypeScript and Vite's automatic production and development JSX transforms.
 
@@ -1177,6 +1177,8 @@ The selected Agent adapter must explicitly support the effective Sandbox session
 
 The model may be remote while its filesystem and Tool execution occur in the current Sandbox. Model location and execution-environment location are separate concerns.
 
+The built-in Codex, OpenCode, and Pi adapters implement `supportsSandbox()` against the same `SandboxRuntime` contract. Compatibility means the runtime enforces the effective root and access view; it does not imply that every provider-native Tool or transport is available inside every Sandbox. Unsupported capabilities must reject before the Agent starts rather than fall back to the AML host.
+
 Trusted `defineTool()` functions run in the AML process unless they explicitly use Sandbox-scoped capabilities. JSX placement alone cannot confine arbitrary JavaScript.
 
 ### 13.3 Provider and lease contract
@@ -1811,6 +1813,14 @@ Prompts, System and Skill contents, Tool input/output, MCP configuration, filesy
 
 ### 16.3 Agent adapter requirements
 
+Every built-in Agent adapter resolves configuration in the same authority order:
+
+1. provider defaults
+2. explicit factory options and portable per-Agent overrides
+3. imperative AML policy derived from the authored System, capabilities, Workspace, and Sandbox
+
+The final AML layer must replace authority-bearing arrays, callbacks, clients, Tool grants, MCP grants, and capability policy rather than recursively combining them with user input. Vendor-native configuration remains native everywhere that AML has not defined a portable contract.
+
 #### OpenCode
 
 The package exports:
@@ -1840,6 +1850,8 @@ function opencodeAgent(options?: OpenCodeAgentOptions): OpenCodeAgentProvider
 `opencodeAgent()` is synchronous and performs no I/O. When `sessionClient` is supplied, the package uses that injected provider-owned port and does not start or stop an OpenCode server; that port owns complete Tool and MCP attachment and cleanup. `sessionClient` and `server` are mutually exclusive. Without `sessionClient`, the first ordinary Agent call in an evaluation lazily starts one package-owned local OpenCode server shared only by that evaluation. When it creates that evaluation state, the adapter registers one `events.once("finish", ...)` listener. The listener waits for active calls, stops the host, and leaves the provider reusable so concurrent and later AML evaluations receive independent lifecycle state. An Agent with a JavaScript Tool or MCP grant uses a disposable package-owned OpenCode server because OpenCode can disconnect but cannot remove a dynamically added MCP configuration from a long-lived server and MCP connections are host-scoped rather than session-scoped. Every disposable server requests port `0` so it cannot collide with the evaluation host or another concurrent capability invocation; an explicit `server.port` configures only the ordinary evaluation host. Other server settings still apply. The disposable server is closed after the complete Agent session and capability cleanup settle, so registrations and connections cannot accumulate or leak into sibling Agents. Named grants connect an exact server already present in the disposable host's provider configuration. Explicit grants are added dynamically. OpenCode's per-prompt Tool map disables `"*"` and enables only declared host Tools, JavaScript Tools, and each declared MCP server's normalized `<server>_*` namespace. A structured request additionally grants exactly OpenCode's provider-owned `StructuredOutput` Tool because that is how the harness implements JSON Schema output; text requests never receive it, and a structured Agent cannot also declare a host Tool with that reserved provider-equivalent name. Capability isolation mirrors OpenCode's permission equivalence by normalizing backslashes to slashes and comparing case-insensitively on Windows. Because this adapter must mirror OpenCode server internals to secure those grants, it preflights `/global/health` and accepts only reviewed server versions `1.18.4` and `1.18.5` for any capability-bearing Agent. Its generated OpenCode SDK dependency is pinned separately at `1.18.5` for API compatibility. An upgrade must revalidate punctuation normalization, platform equivalence, namespace overlap, and both client and server versions before expanding either compatibility boundary. `close()` remains an idempotent permanent shutdown escape hatch for direct provider use outside normal AML evaluation; components and examples do not call it. Credentials remain in the OpenCode environment and configuration; AML does not read or copy them.
 
 `directory` selects the OpenCode working directory. `model` is the configured default and is overridden by `<Agent model>`. Explicit model identifiers use `provider/model` form and are validated before the session is created.
+
+With an active compatible Sandbox, OpenCode bypasses the local SDK server path and runs the installed `opencode run --format json` CLI through `SandboxRuntime.exec()` at the effective Workspace cwd. The adapter supplies captured OpenCode configuration through `OPENCODE_CONFIG_CONTENT`, creates isolated database and XDG state outside the Workspace, and reuses the emitted session id for FollowUps. The selected Sandbox environment must contain the OpenCode CLI. Provider-native host Tools and configured MCP servers remain available when explicitly granted; JavaScript Tools and structured output currently reject because AML has not implemented their remote transports.
 
 The OpenCode adapter:
 
@@ -1904,9 +1916,11 @@ The Codex adapter:
 
 Configured stdio and Streamable HTTP MCP descriptors map directly to Codex `mcp_servers` configuration. Named grants enable an existing Codex MCP server by exact name. Factory-supplied `config.mcp_servers` entries can be retained directly, but their absence does not prove that a name is missing from ambient repository or user configuration. The adapter therefore sends an enabled, required exact-name overlay and delegates late-bound resolution or fail-closed rejection to the real Codex CLI. Injected `CodexClientFactory` implementations must preserve that contract. Codex-compatible MCP names use letters, digits, `_`, and `-`; the adapter rejects names that cannot be represented safely through the SDK's dotted configuration override interface. Duplicate names reject before any bridge or thread starts.
 
-Codex configuration still inherits the selected host's normal configuration sources. This can include `AGENTS.md`, repository and user skills, plugins, rules, and MCP servers not authored in the AML tree. Invocation overrides for developer instructions, safety settings, declared MCP servers, and shell availability take precedence, but AML does not claim that the resulting Codex profile is empty or capability-isolated. Provider-neutral traces identify the adapter by name but do not claim to inventory its ambient profile. A future strict capability mode may use an isolated `CODEX_HOME`; it is not implied by this adapter.
+Local Codex SDK execution inherits the selected host's normal configuration sources. This can include `AGENTS.md`, repository and user skills, plugins, rules, and MCP servers not authored in the AML tree. Invocation overrides for developer instructions, safety settings, declared MCP servers, and shell availability take precedence, but AML does not claim that the resulting Codex profile is empty or capability-isolated. Provider-neutral traces identify the adapter by name but do not claim to inventory its ambient profile.
 
-The adapter does not implement `supportsSandbox()`. Codex's own read-only sandbox is a provider policy, not proof that model-controlled actions use an active AML Sandbox lease.
+With an active compatible Sandbox, Codex bypasses the local SDK process and runs the installed `codex exec --json` CLI through `SandboxRuntime.exec()` at the effective Workspace cwd. AML creates an isolated temporary `CODEX_HOME` outside the Workspace unless factory `env` explicitly supplies an environment-owned home, resumes the emitted thread id for FollowUps, and removes only AML-owned state. The selected Sandbox environment must contain the Codex CLI; structured output also requires Node.js to stage its schema. The remote bridge supports the Sandbox shell boundary, configured MCP servers, FollowUps, and structured output. JavaScript Tools currently reject because AML has not implemented their remote transport.
+
+The active AML Sandbox is the outer execution boundary. The Codex CLI therefore receives `--ignore-rules`, and its inner sandbox mode matches the effective AML access mode rather than replacing the provider's isolation. Codex credentials, base URL, model, reasoning settings, environment, and native recursive configuration remain factory inputs and are translated to the equivalent CLI boundary.
 
 #### Pi
 
@@ -1930,7 +1944,7 @@ The adapter disables Pi extensions, Skills, prompt templates, context-file disco
 
 Pi 0.82.1 does not expose an AML-compatible MCP attachment boundary or a first-class per-turn JSON Schema output request. This adapter therefore rejects every MCP grant before session creation. Structured Agents append the portable JSON Schema as a final-output instruction, parse the returned text as JSON, and rely on AML's retained Standard Schema contract for authoritative validation. This is weaker model guidance than OpenCode or Codex native structured output and is reported as a provider capability difference rather than hidden.
 
-The adapter does not implement `supportsSandbox()`. Selecting a working directory changes Pi Tool path resolution but does not prove that model-controlled actions use an active AML Sandbox lease.
+With an active compatible Sandbox, Pi remains embedded in the AML process but rebuilds its native `bash` Tool over `SandboxRuntime.exec()`. The model request may remain remote while every declared shell command executes at the effective Sandbox cwd. Other Pi filesystem host Tools reject inside a Sandbox until the common runtime grows a proven contract for them; JavaScript Tools remain trusted AML-host functions and are not made sandbox-confined by JSX placement.
 
 ## 17. Futurology
 

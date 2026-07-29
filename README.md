@@ -160,7 +160,17 @@ The public SDK includes the runtime, built-in integrations, and testing utilitie
 | Workspace | [Local adapter](./providers/workspaces/local)    | `localWorkspace()`     | Uses an existing local directory as a durable Workspace with cross-process writer locking.                                                        |
 | Testing   | [Testing entry](./sdk/src/testing.ts)            | `@aml-jsx/sdk/testing` | Supplies deterministic Agent, Sandbox, and Workspace providers plus reusable conformance suites.                                                  |
 
-`<System>`, `<Skill>`, `<FollowUp>`, `<Loop>`, Context, and tree evaluation are runtime-owned and work independently of the selected Agent provider. JavaScript Tool and MCP execution ultimately depend on the Agent provider. OpenCode and Codex implement both bridges; Pi implements host and JavaScript Tools, rejects MCP grants, and can route its native bash Tool through the common Sandbox runtime.
+The complete built-in compatibility matrix is exercised by the credentialed smoke runner:
+
+| Sandbox \ Agent | Codex | OpenCode | Pi  |
+| --------------- | ----- | -------- | --- |
+| Local           | Yes   | Yes      | Yes |
+| Docker          | Yes   | Yes      | Yes |
+| Daytona         | Yes   | Yes      | Yes |
+
+These proofs use read-write Workspaces because Local and Daytona reject access modes they cannot enforce. Codex and OpenCode run their installed CLIs beside the materialized Workspace through the common `SandboxRuntime`; the selected host, image, or snapshot must already contain that executable. Pi remains embedded in AML and routes its declared `bash` Tool through the same runtime. Sandbox providers do not install Agents implicitly.
+
+`<System>`, `<Skill>`, `<FollowUp>`, `<Loop>`, Context, and tree evaluation are runtime-owned and work independently of the selected Agent provider. JavaScript Tool and MCP execution ultimately depend on the Agent provider and environment. Outside a Sandbox, OpenCode and Codex implement both bridges; Pi implements host and JavaScript Tools and rejects MCP grants. Inside a Sandbox, each adapter rejects capabilities whose transport it cannot enforce instead of falling back to the AML host.
 
 Provider factories retain their vendor configuration shapes: `opencodeAgent({ config })` accepts OpenCode's SDK config, while `piAgent({ providers })` accepts Pi's provider map. Both still support their vendor's ambient credential discovery, but neither requires a local profile when configuration is supplied explicitly.
 
