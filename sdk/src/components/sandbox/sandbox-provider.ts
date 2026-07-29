@@ -1,4 +1,5 @@
 import type { WorkspaceMaterializationReference } from "../workspace/workspace-provider.js"
+import type { SandboxRuntime } from "./sandbox-runtime.js"
 
 /**
  * Portable filesystem authority exposed by a Sandbox scope.
@@ -26,6 +27,7 @@ export interface SandboxAcquireRequest {
 export interface SandboxLease<Handle = unknown> {
   readonly handle: Handle
   readonly id: string
+  readonly runtime: SandboxRuntime
 
   /**
    * Releases every resource owned by this lease.
@@ -51,6 +53,7 @@ export interface SandboxProvider<Handle = unknown> {
 export interface SandboxLeaseReference<Handle = unknown> {
   readonly handle: Handle
   readonly id: string
+  readonly runtime: Readonly<SandboxRuntime>
 }
 
 /**

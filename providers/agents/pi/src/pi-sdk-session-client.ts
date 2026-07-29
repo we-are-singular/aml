@@ -15,6 +15,7 @@ import type {
   PiSessionClientFactory,
   PiSessionCreateInput,
 } from "./pi-session-client.js"
+import { createPiSandboxTools } from "./pi-sandbox-bash.js"
 
 const JSON_OUTPUT_INSTRUCTION =
   "Return only a JSON value matching this JSON Schema. Do not wrap it in Markdown or add explanatory text:"
@@ -60,7 +61,10 @@ export class PiSdkSessionClientFactory implements PiSessionClientFactory {
 
     const hostTools = input.tools.filter((tool): tool is string => typeof tool === "string")
     const javaScriptTools = input.tools.filter((tool): tool is PiJavaScriptTool => typeof tool !== "string")
-    const customTools = javaScriptTools.map(tool => PiSdkSessionClientFactory.#customTool(tool, input, signal))
+    const customTools = [
+      ...javaScriptTools.map(tool => PiSdkSessionClientFactory.#customTool(tool, input, signal)),
+      ...(input.sandbox === undefined ? [] : createPiSandboxTools(hostTools, input.sandbox)),
+    ]
     const { session } = await createAgentSession({
       cwd: input.cwd,
       customTools,

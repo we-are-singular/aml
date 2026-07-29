@@ -1,6 +1,6 @@
 import { resolve } from "node:path"
 
-import { Agent, dockerSandbox, Sandbox, supportsDockerSandbox } from "@aml-jsx/sdk"
+import { Agent, dockerSandbox, Sandbox, supportsSandboxRuntime } from "@aml-jsx/sdk"
 import { DeterministicAgentProvider } from "@aml-jsx/sdk/testing"
 
 /**
@@ -13,29 +13,21 @@ const ExampleSandbox = dockerSandbox({
 })
 
 /**
- * Inspects the provider-specific Docker lease without exposing it to AML.
+ * Inspects Docker through the same runtime available to any Agent adapter.
  */
 const ExampleProvider = new DeterministicAgentProvider({
   name: "docker-inspection-example",
-  supportsSandbox: supportsDockerSandbox,
+  supportsSandbox: supportsSandboxRuntime,
   async respond(_request, context) {
     const sandbox = context.sandbox
 
-    if (sandbox === undefined || !supportsDockerSandbox(sandbox)) {
+    if (sandbox === undefined || !supportsSandboxRuntime(sandbox)) {
       throw new Error("Docker example requires its Sandbox lease")
     }
 
-    const result = await sandbox.lease.handle.exec(
-      [
-        "sh",
-        "-c",
-        [
-          'printf "cwd=%s\\n" "$PWD"',
-          'printf "uid=%s\\n" "$(id -u)"',
-          "awk '/CapEff/ { printf \"capabilities=%s\\n\", $2 }' /proc/self/status",
-          'test ! -e /sys/class/net/eth0 && echo "network=none"',
-        ].join("\n"),
-      ],
+    const result = await sandbox.lease.runtime.exec(
+      "sh",
+      ["-lc", 'printf "cwd=%s\\n" "$PWD"; printf "runtime=common\\n"'],
       {
         cwd: sandbox.cwd,
         signal: context.signal,
@@ -51,7 +43,7 @@ const ExampleProvider = new DeterministicAgentProvider({
 })
 
 /**
- * Demonstrates an Agent executing inside a confined Docker Sandbox.
+ * Demonstrates an Agent adapter executing through an image-first Docker Sandbox.
  */
 export default function DockerExample() {
   return (

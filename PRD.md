@@ -177,6 +177,8 @@ The status table is the canonical implementation tracker. A slice moves to `Done
 | Slice 14 | Codex Agent package                            | Done              |
 | Slice 15 | Observability consumers                        | Done              |
 | Slice 16 | Context                                        | Evaluating        |
+| Slice 17 | Pi Agent package                               | Done              |
+| Slice 18 | Daytona Sandbox package                        | Done              |
 
 Allowed statuses are `Pending`, `In progress`, `Blocked`, and `Done`. A blocked slice includes its blocker directly in the status cell.
 
@@ -284,9 +286,9 @@ apps and examples
                                @aml-jsx/sdk
 ```
 
-`@aml-jsx/sdk` defines provider-neutral contracts and never imports a concrete provider or vendor SDK. Each provider package depends on `@aml-jsx/sdk` and its own vendor dependencies. Provider packages do not depend on sibling providers unless a future integration has a real cross-provider contract.
+`@aml-jsx/sdk` defines provider-neutral contracts. Concrete provider sources remain isolated in private workspaces, while the current single-package distribution bundles their factories into the SDK root and declares required vendor SDKs as runtime dependencies. Provider workspaces do not depend on sibling providers.
 
-Importing `@aml-jsx/sdk` must not install, initialize, import, or require OpenCode, Codex, Claude, Docker, Daytona, Cloudflare, S3, or another optional integration.
+Importing `@aml-jsx/sdk` may load vendor modules but must not construct credentialed clients, inspect local profiles, contact remote services, or require a Docker daemon. A concrete provider performs environment discovery and side effects only when its factory is acquired or an Agent run begins.
 
 ### SDK source layout
 
@@ -666,7 +668,7 @@ Status: Done on 2026-07-27. The final Slice 4 deliberately supports only local f
 
 Proof: a deterministic provider proves acquisition, restrictive nesting, failure cleanup, and one-release semantics.
 
-Status: Done on 2026-07-27. The SDK now exposes a provider-neutral Sandbox contract, `defineSandboxProvider()`, restrictive same-lease nesting, Agent-local working directories, an explicit Agent-provider compatibility handshake, deterministic fixtures, and a conformance lifecycle. AML passes only frozen provider identity and opaque lease identity/handle to descendants while privately retaining acquisition and exactly-once release authority. Acquisition receives the evaluation `AbortSignal`; cooperative cancellation preserves the caller's exact reason, late leases are released, and cancellation racing a release failure preserves both causes. Singular review found lifecycle authority leaking through the public session, normalized parent traversal, mutable provider identity rereads, unattributed hostile lease accessors, and missing cancellation at the acquisition boundary. The corrected implementation covers those cases plus success, descendant failure, malformed leases, nested restrictions, and cleanup ordering in twenty-one focused Sandbox tests. Eighty-five SDK tests, twenty-one deterministic OpenCode tests, workspace type checking, SDK and OpenCode package checks, the dist-backed Sandbox example, and diff validation pass. Final correctness, maintainability, and skeptical review lanes reported no actionable findings.
+Status: Done on 2026-07-27 and extended on 2026-07-29. The SDK exposes `defineSandboxProvider()`, restrictive same-lease nesting, Agent-local working directories, an explicit compatibility handshake, deterministic fixtures, and conformance lifecycle. Leases now also carry one intentionally narrow provider-neutral runtime: logical access/root/cwd metadata plus bounded literal `exec()`. Lifecycle authority remains private to AML. Files, images, snapshots, ports, and background processes are not portable runtime requirements.
 
 #### Slice 6 — Docker Sandbox package
 
@@ -675,9 +677,9 @@ Status: Done on 2026-07-27. The SDK now exposes a provider-neutral Sandbox contr
 - keep Docker dependencies and options inside the package
 - pass SDK conformance and explicit real-daemon integration tests
 
-Proof: the Docker package proves read-only and read-write confinement, cleanup, and packaged installation without adding Docker dependencies to `@aml-jsx/sdk`.
+Proof: Local and Docker implement the same runtime, and one unchanged credentialed Pi workflow reads and writes exact Workspace files through both.
 
-Status: Done on 2026-07-27. `@aml-jsx/sandbox-docker` now uses Dockerode for Engine transport, lifecycle, exec demultiplexing, BuildKit-aware progress, and image builds while keeping AML-specific policy translation in the adapter. The configured factory accepts a same-filesystem local-socket client, one image or Dockerfile, an approved workspace, numeric non-root identity, resource limits, and bounded command output. Each outer Sandbox receives one container with a real-path-confined bind mount, an exact-root workspace-namespace identity check, disabled networking, zero capabilities, `no-new-privileges`, a read-only root filesystem, bounded tmpfs, and failure-safe removal. The selected host root must be writable during acquisition so AML can remove the transient identity before descendants run; container `"read-only"` access remains enforced by the bind mount. Agent adapters must pass the effective `SandboxSession.cwd` into every argument-array exec call, so Agent-local working directories cannot silently fall back to the outer lease cwd. Singular review found abort/create cleanup races, unsafe remote-daemon and mount-namespace semantics, ambiguous transport failures, root-capable user overrides, conflicting cwd sources, and an overgrown provider module; the corrected implementation waits for definitive creation before cancellation cleanup, reconciles ambiguous create failures by unique name without declaring uncertain absence safe, verifies the daemon sees a random identity beneath the exact selected source, rejects network clients and root identities, removes the stale handle cwd, and separates configuration, command output, and build-progress ownership. Thirteen deterministic tests, five real-daemon tests, eighty-five SDK tests, twenty-one OpenCode tests, workspace type checking and builds, all three dist/package checks, the built-package Docker example, and diff validation pass. Final correctness, maintainability, and skeptical review lanes reported no actionable findings.
+Status: Redesigned on 2026-07-29. The earlier Dockerode adapter and its Dockerfile builder, generic hardening surface, filesystem emulation spike, and provider-specific Agent handle were intentionally removed. `dockerSandbox()` now accepts a named image, optional trusted `setup`, bounded output, and optional standalone Workspace path. It starts and removes one container through the local Docker CLI, bind-mounts the selected Workspace root, and maps the common runtime to literal `docker exec` calls. Image contents, Agent installation, versioning, networking, identity, and production isolation policy belong to the environment author. `localSandbox()` provides the same runtime through trusted host child processes and explicitly makes no isolation claim. Focused SDK, Local, Docker, and real-daemon tests pass, and the opt-in credentialed Pi smoke passes through both providers.
 
 #### Slice 7 — `<Workspace>` contract
 
@@ -834,7 +836,19 @@ The public factory boundary now preserves vendor-native configuration rather tha
 
 The fresh-user benchmark required no global Pi install or Pi configuration. Installing the SDK package was sufficient. An existing `OPENCODE_API_KEY` authenticated Pi's built-in `opencode-go` provider. The first MiniMax-M3 Tool test fabricated a result rather than calling the granted Tool; the same adapter passed with GLM-5.1 after registering Pi's explicit custom-Tool prompt snippet. Three credentialed GLM-5.1 integrations for FollowUps, a JavaScript Tool, and structured JSON output pass alongside deterministic adapter tests and package conformance. The published Pi package also installs a shrinkwrapped `brace-expansion@5.0.7` through `minimatch`; npm reports its unbounded-expansion denial-of-service advisory and does not honor a consumer override inside that shrinkwrapped subtree, so this remains explicit upstream dependency debt.
 
-Claude, Daytona, Cloudflare, S3, the CLI, and the website receive separate slices only when their requirements are approved. Their target directories document intended ownership, not committed implementation.
+#### Slice 18 — Daytona Sandbox package
+
+- create the private Daytona provider workspace and export `daytonaSandbox()` from `@aml-jsx/sdk`
+- preserve Daytona-native client configuration and image-or-snapshot creation parameters
+- transfer one active Workspace before execution and reconcile writable changes before release
+- map the narrow runtime to bounded Daytona command execution without exposing a generic filesystem API
+- pass focused lifecycle tests and one credentialed real-Agent smoke
+
+Proof: the unchanged Pi file workflow runs through Daytona with explicit API-key configuration, reads the uploaded Workspace, writes an exact result remotely, and a second fresh Daytona Sandbox reads the reconciled result.
+
+Status: Done on 2026-07-29. The adapter lazily constructs Daytona's SDK client, creates one disposable image or snapshot, archives the selected local Workspace root into the remote user's writable `workspace` directory, runs optional trusted `setup`, and maps literal command arguments, logical cwd, environment, timeout, cancellation, and bounded output through the narrow runtime. Writable release mirrors the complete remote tree back, including deletions, before deleting the Sandbox. Read-only execution is rejected because archive transfer cannot enforce a read-only guest tree. Focused tests prove native create parameters, hydration, command mapping, reconciliation, deletion, and configuration validation. A credentialed Daytona smoke using the same real Pi/OpenCode Go workflow as Local and Docker passed against the live service, then a second fresh Daytona Sandbox and Pi session read the reconciled file.
+
+Claude, Cloudflare, S3, the CLI, and the website receive separate slices only when their requirements are approved. Their target directories document intended ownership, not committed implementation.
 
 ## Definition of done
 
@@ -857,7 +871,7 @@ Before marking a slice `Done`:
 
 ## Immediate implementation boundary
 
-Slices 0 through 17 and the approved Phase 1 plan are complete. No next implementation slice is currently approved. A new primitive, provider, CLI, website, Sandbox or Workspace expansion, OpenTelemetry exporter, or mutable-state design must begin as an explicit SPEC and PRD change rather than leaking into the completed runtime.
+Slices 0 through 18 are complete. The narrow common Sandbox runtime now has Local, image-only Docker, and Daytona proofs. The next approved investigation is the Agent-process bridge for Codex and OpenCode; Modal and Cloudflare remain portability checks until their implementation work is approved. S3-compatible, Git, and Durable Object Workspaces remain later work.
 
 ## Explicitly deferred
 
@@ -886,7 +900,7 @@ These remain product questions until resolved into `SPEC.md`:
 - Which trace events are stable public API?
 - What is the first useful artifact contract for large data?
 - Where should retries and schema repair live?
-- Which Sandbox providers are worth supporting after Docker?
+- What additional runtime capability is first proven necessary by Codex, OpenCode, or Daytona?
 - Which Workspace backend proves the abstraction beyond local disk?
 - What should an Agent provider expose about inherited host configuration?
 - Should a strict capability mode reject provider-inherited MCP servers that cannot be disabled?

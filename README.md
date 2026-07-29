@@ -149,18 +149,22 @@ workflows with `@aml-jsx/sdk`.
 
 The public SDK includes the runtime, built-in integrations, and testing utilities under one package.
 
-| Role      | Source                                          | Public export          | Notes                                                                                                                                                   |
-| --------- | ----------------------------------------------- | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Agent     | [OpenCode adapter](./providers/agents/opencode) | `opencodeAgent()`      | Runs OpenCode sessions with model overrides, JavaScript Tools, MCP grants, FollowUps, cancellation, and structured output.                              |
-| Agent     | [Codex adapter](./providers/agents/codex)       | `codexAgent()`         | Runs Codex SDK threads with model overrides, read-only host Tools, JavaScript Tools, MCP grants, FollowUps, and structured output.                      |
-| Agent     | [Pi adapter](./providers/agents/pi)             | `piAgent()`            | Embeds Pi SDK sessions with provider/model selection, host and JavaScript Tools, FollowUps, cancellation, and schema-validated JSON output.             |
-| Sandbox   | [Docker adapter](./providers/sandboxes/docker)  | `dockerSandbox()`      | Provides confined Docker container leases to compatible Agent providers with explicit filesystem, network, identity, capability, and resource policies. |
-| Workspace | [Local adapter](./providers/workspaces/local)   | `localWorkspace()`     | Uses an existing local directory as a durable Workspace with cross-process writer locking.                                                              |
-| Testing   | [Testing entry](./sdk/src/testing.ts)           | `@aml-jsx/sdk/testing` | Supplies deterministic Agent, Sandbox, and Workspace providers plus reusable conformance suites.                                                        |
+| Role      | Source                                           | Public export          | Notes                                                                                                                                             |
+| --------- | ------------------------------------------------ | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Agent     | [OpenCode adapter](./providers/agents/opencode)  | `opencodeAgent()`      | Runs OpenCode sessions with model overrides, JavaScript Tools, MCP grants, FollowUps, cancellation, and structured output.                        |
+| Agent     | [Codex adapter](./providers/agents/codex)        | `codexAgent()`         | Runs Codex SDK threads with model overrides, read-only host Tools, JavaScript Tools, MCP grants, FollowUps, and structured output.                |
+| Agent     | [Pi adapter](./providers/agents/pi)              | `piAgent()`            | Embeds Pi SDK sessions with provider/model selection, host and JavaScript Tools, FollowUps, cancellation, and schema-validated JSON output.       |
+| Sandbox   | [Local adapter](./providers/sandboxes/local)     | `localSandbox()`       | Runs the common Sandbox runtime as trusted host processes for development; it is explicitly non-isolating.                                        |
+| Sandbox   | [Docker adapter](./providers/sandboxes/docker)   | `dockerSandbox()`      | Starts a user-selected image, mounts the Workspace, and exposes the common bounded command runtime without building or provisioning the image.    |
+| Sandbox   | [Daytona adapter](./providers/sandboxes/daytona) | `daytonaSandbox()`     | Creates a Daytona image or snapshot, transfers the Workspace, runs bounded commands, reconciles writable changes, and deletes the remote Sandbox. |
+| Workspace | [Local adapter](./providers/workspaces/local)    | `localWorkspace()`     | Uses an existing local directory as a durable Workspace with cross-process writer locking.                                                        |
+| Testing   | [Testing entry](./sdk/src/testing.ts)            | `@aml-jsx/sdk/testing` | Supplies deterministic Agent, Sandbox, and Workspace providers plus reusable conformance suites.                                                  |
 
-`<System>`, `<Skill>`, `<FollowUp>`, `<Loop>`, Context, and tree evaluation are runtime-owned and work independently of the selected Agent provider. JavaScript Tool and MCP execution ultimately depend on the Agent provider. OpenCode and Codex implement both bridges; Pi currently implements host and JavaScript Tools and rejects MCP grants.
+`<System>`, `<Skill>`, `<FollowUp>`, `<Loop>`, Context, and tree evaluation are runtime-owned and work independently of the selected Agent provider. JavaScript Tool and MCP execution ultimately depend on the Agent provider. OpenCode and Codex implement both bridges; Pi implements host and JavaScript Tools, rejects MCP grants, and can route its native bash Tool through the common Sandbox runtime.
 
 Provider factories retain their vendor configuration shapes: `opencodeAgent({ config })` accepts OpenCode's SDK config, while `piAgent({ providers })` accepts Pi's provider map. Both still support their vendor's ambient credential discovery, but neither requires a local profile when configuration is supplied explicitly.
+
+Sandbox factories follow the same rule. `daytonaSandbox({ config, create })` accepts Daytona's SDK configuration and native image or snapshot creation parameters. Docker accepts only an existing image name; AML does not build images or silently install Agents. Each Sandbox may run an explicit trusted `setup` command after its Workspace is visible.
 
 ## Examples
 
@@ -232,6 +236,10 @@ Common commands:
 | `AML_REVIEW_PROVIDER=codex npm run example -- review`    | Run the review workflow through Codex.                          |
 | `npm run example -- pi`                                  | Run embedded Pi through `OPENCODE_API_KEY`.                     |
 | `npm run example -- docker`                              | Run the real Docker Sandbox example.                            |
+| `npm run smoke -- --agent pi --sandbox daytona`          | Run one Agent × Sandbox smoke matrix cell with live traces.     |
+| `npm run smoke -- --agent codex`                         | Run one Agent against every registered Sandbox.                 |
+| `npm run smoke -- --sandbox docker`                      | Run every registered Agent against one Sandbox.                 |
+| `npm run smoke -- --list`                                | List the complete or filtered matrix without executing it.      |
 
 Package-specific integration suites are available through their workspace scripts:
 
@@ -241,6 +249,8 @@ npm run test:integration --workspace=@aml-jsx/agent-codex
 npm run test:integration --workspace=@aml-jsx/agent-pi
 npm run test:integration --workspace=@aml-jsx/sandbox-docker
 ```
+
+Smoke files use a dedicated Vitest configuration and stay outside default unit tests. Omitting both smoke filters runs every registered Agent against every registered Sandbox. npm requires the `--` separator before smoke-runner options.
 
 Commits are checked with lint-staged and commitlint. Pushes run the same formatting, linting, test, and build
 contract enforced by GitHub Actions.

@@ -1,4 +1,5 @@
 import type { SandboxLeaseReference, SandboxProvider } from "./sandbox-provider.js"
+import { validateSandboxRuntime } from "./validate-sandbox-runtime.js"
 
 /**
  * Captured provider members used without rereading mutable public properties.
@@ -105,13 +106,16 @@ export function validateSandboxLease(
   const candidate = capture.value as {
     readonly handle?: unknown
     readonly id?: unknown
+    readonly runtime?: unknown
   }
   let handle: unknown
   let id: unknown
+  let runtime: unknown
 
   try {
     id = candidate.id
     handle = candidate.handle
+    runtime = candidate.runtime
   } catch (cause) {
     throw new TypeError(`Sandbox provider "${providerName}" returned a lease with unreadable identity data`, { cause })
   }
@@ -125,6 +129,7 @@ export function validateSandboxLease(
   const lease: SandboxLeaseReference = Object.freeze({
     handle,
     id,
+    runtime: validateSandboxRuntime(runtime, providerName),
   })
 
   return Object.freeze({

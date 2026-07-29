@@ -50,7 +50,9 @@ interface BuiltSdk {
   readonly Tool: unknown
   readonly Workspace: unknown
   readonly codexAgent: unknown
+  readonly daytonaSandbox: unknown
   readonly dockerSandbox: unknown
+  readonly localSandbox: unknown
   readonly localWorkspace: unknown
   readonly opencodeAgent: unknown
   readonly piAgent: unknown
@@ -167,6 +169,7 @@ const {
   Agent: publicAgent,
   AmlRuntime,
   codexAgent,
+  daytonaSandbox,
   defineMcpServer,
   defineWorkspaceProvider,
   dockerSandbox,
@@ -174,6 +177,7 @@ const {
   Fragment: publicFragment,
   FollowUp: publicFollowUp,
   localWorkspace,
+  localSandbox,
   Loop: publicLoop,
   opencodeAgent,
   piAgent,
@@ -194,7 +198,9 @@ if (
   typeof codexAgent !== "function" ||
   typeof opencodeAgent !== "function" ||
   typeof piAgent !== "function" ||
+  typeof daytonaSandbox !== "function" ||
   typeof dockerSandbox !== "function" ||
+  typeof localSandbox !== "function" ||
   typeof localWorkspace !== "function"
 ) {
   throw new Error("SDK root does not expose its configured provider factories")
@@ -415,12 +421,12 @@ try {
   }
 
   for (const dependency of [
+    "@daytona/sdk",
     "@earendil-works/pi-coding-agent",
     "@modelcontextprotocol/sdk",
     "@openai/codex-sdk",
     "@opencode-ai/sdk",
     "@standard-schema/spec",
-    "dockerode",
     "execa",
     "proper-lockfile",
     "typebox",

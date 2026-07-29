@@ -9,9 +9,19 @@
       "@aml-jsx/agent-opencode": ["../providers/agents/opencode/src/index.ts"],
       "@aml-jsx/agent-pi": ["../providers/agents/pi/src/index.ts"],
       "@aml-jsx/sandbox-docker": ["../providers/sandboxes/docker/src/index.ts"],
+      "@aml-jsx/sandbox-daytona": ["../providers/sandboxes/daytona/src/index.ts"],
+      "@aml-jsx/sandbox-local": ["../providers/sandboxes/local/src/index.ts"],
       "@aml-jsx/sdk": ["./src/core.ts"],
       "@aml-jsx/workspace-local": ["../providers/workspaces/local/src/index.ts"]
     }
   },
-  "include": ["scripts/**/*.ts", "src/**/*.ts", "src/**/*.tsx", "tests/**/*.ts", "tests/**/*.tsx", "vite.config.ts"]
+  "include": [
+    "scripts/**/*.ts",
+    "src/**/*.ts",
+    "src/**/*.tsx",
+    "tests/**/*.ts",
+    "tests/**/*.tsx",
+    "vite.config.ts",
+    "vitest.smoke.config.ts"
+  ]
 }

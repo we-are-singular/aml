@@ -8,8 +8,18 @@ import {
   Sandbox,
   type SandboxLease,
   type SandboxProvider,
+  type SandboxRuntime,
 } from "../src/index.js"
 import { DeterministicAgentProvider, DeterministicSandboxProvider, sandboxProviderConformance } from "../src/testing.js"
+
+const fixtureRuntime: Readonly<SandboxRuntime> = Object.freeze({
+  access: "read-only",
+  cwd: ".",
+  async exec() {
+    return { exitCode: 0, stderr: "", stdout: "" }
+  },
+  root: ".",
+})
 
 describe("<Sandbox>", () => {
   it("acquires before descendants and releases after the complete subtree", async () => {
@@ -378,6 +388,7 @@ describe("<Sandbox>", () => {
       handle: {},
       id: "late-lease",
       release,
+      runtime: fixtureRuntime,
     })
 
     await expect(pending).rejects.toBe(reason)
@@ -451,6 +462,7 @@ describe("<Sandbox>", () => {
           handle: {},
           id: " ",
           release,
+          runtime: fixtureRuntime,
         } as SandboxLease
       },
     }
@@ -469,6 +481,7 @@ describe("<Sandbox>", () => {
         handle: {},
         id: "lease",
         release,
+        runtime: fixtureRuntime,
       }
 
       Object.defineProperty(lease, field, {
@@ -502,6 +515,7 @@ describe("<Sandbox>", () => {
     const lease = {
       handle: {},
       id: "lease",
+      runtime: fixtureRuntime,
     }
 
     Object.defineProperty(lease, "release", {
@@ -540,6 +554,7 @@ describe("<Sandbox>", () => {
           handle: {},
           id: "lease",
           async release() {},
+          runtime: fixtureRuntime,
         }
       },
     }
@@ -565,6 +580,7 @@ describe("Sandbox provider authorship", () => {
           handle: { literal: true as const },
           id: "lease",
           async release() {},
+          runtime: fixtureRuntime,
         }
       },
     })

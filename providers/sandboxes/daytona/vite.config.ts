@@ -2,5 +2,5 @@ import { createViteLibraryConfig } from "../../../config/create-vite-library-con
 
 export default createViteLibraryConfig({
   directory: import.meta.dirname,
-  external: [],
+  external: [/^@daytona\/sdk(?:\/.*)?$/],
 })

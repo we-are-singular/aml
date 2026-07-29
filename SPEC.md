@@ -1111,7 +1111,7 @@ The state Tool expires when its Agent finishes. Providers must complete or cance
 A Sandbox supplies descendants with:
 
 - an execution-environment identity and lifecycle
-- one filesystem root they cannot escape
+- one logical filesystem root and the provider's stated enforcement level
 - a default working directory inside that root
 - `"read-only"` or `"read-write"` access
 - provider-owned command and filesystem capabilities
@@ -1144,7 +1144,7 @@ Every descendant Agent inherits the nearest Sandbox. An Agent may narrow its wor
 </Sandbox>
 ```
 
-Normalized roots and working directories must remain inside the effective parent root. AML rejects empty paths, absolute POSIX or Windows paths, backslashes, and lexical parent traversal. The Sandbox provider must enforce the declared root against real filesystem paths and symlinks; lexical normalization alone is not a security boundary.
+Normalized roots and working directories must remain inside the effective parent root. AML rejects empty paths, absolute POSIX or Windows paths, backslashes, and lexical parent traversal. An isolating Sandbox provider must enforce the declared root against real filesystem paths and symlinks; lexical normalization alone is not a security boundary. A provider that intentionally executes on the host must state that it is non-isolating and must not be presented as protection for untrusted commands.
 
 ### 13.1 Nested Sandboxes
 
@@ -1201,6 +1201,7 @@ interface SandboxAcquireRequest {
 interface SandboxLease<Handle = unknown> {
   handle: Handle
   id: string
+  runtime: SandboxRuntime
   release(): Promise<void>
 }
 
@@ -1210,12 +1211,33 @@ interface SandboxSession<Handle = unknown> {
   lease: {
     handle: Handle
     id: string
+    runtime: SandboxRuntime
   }
   nested: boolean
   provider: {
     name: string
   }
   root: string
+}
+
+interface SandboxRuntime {
+  access: "read-only" | "read-write"
+  cwd: string
+  root: string
+  exec(
+    command: string,
+    args?: readonly string[],
+    options?: {
+      cwd?: string
+      env?: Readonly<Record<string, string>>
+      signal?: AbortSignal
+      timeoutMs?: number
+    }
+  ): Promise<{
+    exitCode: number
+    stdout: string
+    stderr: string
+  }>
 }
 
 interface WorkspaceMaterializationReference<Handle = unknown> {
@@ -1241,9 +1263,13 @@ AML:
 
 Nested Sandboxes emit their own spans but do not acquire or release another lease. If subtree evaluation and release both fail, AML rejects with an `AggregateError` that preserves both errors.
 
-`SandboxLease.handle` is deliberately opaque. Agent adapters and Sandbox-specific capabilities agree on its concrete type outside the AML language. AML does not invent a universal process, filesystem, or command API.
+`SandboxLease.handle` remains opaque provider data for Workspace attachment and provider-specific optimization. Portable Agent adapters use the lease's narrow `SandboxRuntime` to execute one literal command with an effective logical working directory. AML deliberately does not standardize files, images, snapshots, ports, background processes, or the union of provider SDK features.
 
-Descendants receive only the immutable lease identity and handle shown by `SandboxSession`; they never receive `release()` or the provider's `acquire()` method. AML retains both lifecycle capabilities privately because it alone owns acquisition and exactly-once release. The captured provider name is descriptive identity, not an authority-bearing provider object.
+Descendants receive only the immutable lease identity, handle, and runtime shown by `SandboxSession`; they never receive `release()` or the provider's `acquire()` method. AML retains both lifecycle capabilities privately because it alone owns acquisition and exactly-once release. The captured provider name is descriptive identity, not an authority-bearing provider object.
+
+The runtime's `root` and `cwd` use AML's logical Workspace namespace. A provider maps an `exec()` working directory to its host, container, or remote filesystem. `exec()` preserves argument boundaries and returns non-zero process exit codes as results. Transport failure, cancellation, timeout, and inability to start the command reject. Providers must bound captured output.
+
+The first runtime version supports Agent-local cwd narrowing. It cannot manufacture a narrower root or read-only downgrade after the outer lease is acquired. An Agent adapter must reject an effective nested view unless the runtime actually enforces the effective `root` and `access`.
 
 The acquisition signal belongs to the complete evaluation domain. A cooperative provider stops pending setup and rejects with `signal.reason` when it is aborted. If a provider ignores cancellation and eventually returns a valid lease, AML captures the lease and releases it before rejecting the evaluation with the caller's cancellation reason.
 
@@ -1251,14 +1277,14 @@ When an outer Sandbox is inside a Workspace, `workspace` carries the active immu
 
 ### 13.4 Docker provider requirements
 
-A Node-specific Docker provider uses the configured factory form:
+A Node-specific Docker provider uses an existing named image:
 
 ```tsx
 import { dockerSandbox } from "@aml-jsx/sdk"
 
 const docker = dockerSandbox({
-  buildContext: "./docker",
-  dockerfile: "./docker/Dockerfile",
+  image: "company/aml-agents:2026-07",
+  setup: "agent --version",
   workspace: approvedHostDirectory,
 })
 
@@ -1269,33 +1295,77 @@ await runtime.evaluate(
 )
 ```
 
-The factory requires exactly one of `image` or `dockerfile`. Its optional `workspace` is the approved host-directory fallback for a standalone Sandbox. An active `<Workspace>` materialization supersedes that fallback; acquisition rejects if neither exists. `buildContext`, `cpus`, `maxOutputBytes`, `memoryBytes`, `pidsLimit`, `tmpfsBytes`, `user`, and an injected Dockerode client are provider configuration, not AML props. `user` is a numeric non-zero UID with an optional numeric non-zero GID. The injected client must use a local socket, and the Docker daemon must resolve paths in the same filesystem namespace as the AML process. A local socket alone does not prove that condition, so every acquisition creates, mounts, reads, and removes a random identity beneath the exact selected root before exposing the lease. The selected host root must therefore be writable by the AML process during acquisition even when the container receives `"read-only"` access; no probe remains when descendant AML begins. Remote Docker providers require an explicit Workspace transfer or volume contract and are outside this provider.
+The factory requires one normalized `image` name. Its optional `workspace` is the host-directory fallback for a standalone Sandbox. An active `<Workspace>` materialization supersedes that fallback; acquisition rejects if neither exists. `setup` is an optional trusted shell program and `maxOutputBytes` bounds command output. AML does not accept Dockerfiles, build contexts, Docker SDK clients, Agent packages, or installation policy.
 
-The configured image must contain POSIX `sh` and `sleep`; the provider replaces its entrypoint with a shell keepalive process for the lease lifetime. Dockerfile builds run with networking disabled. The provider uses Dockerode for Docker Engine transport, container lifecycle, exec streams, BuildKit-aware progress, and image builds; AML-specific code owns only policy translation, real-path confinement, cancellation compensation, output limits, and lease cleanup.
+The selected image owns its operating system, language runtimes, Agent SDKs and CLIs, development tools, user identity, and versions. It must contain POSIX `sh` and `sleep` for this first adapter. AML may document or publish useful images separately, but `dockerSandbox()` never builds one.
 
-At acquisition the provider:
+The provider uses the local Docker CLI to:
 
-1. resolves the configured workspace and requested root through the host filesystem
-2. rejects roots or working directories whose real paths escape through a symlink
-3. mounts only the selected root at `/workspace`
-4. proves the daemon sees the same workspace through an ephemeral read-only identity mount
-5. makes the workspace bind mount read-only when AML access is `"read-only"`
-6. disables networking
-7. drops all Linux capabilities and enables `no-new-privileges`
-8. runs as a non-root UID
-9. makes the container root filesystem read-only with a bounded `/tmp`
-10. applies CPU, memory, and PID limits
-11. removes the container when the Sandbox lease releases
+1. resolve the selected Workspace and requested root through the host filesystem
+2. mount only that root at `/workspace`, read-only when requested
+3. start the named image as one disposable container
+4. run optional `setup` after the Workspace is visible and before descendants execute
+5. translate runtime `exec()` calls into literal `docker exec` arguments and the effective guest cwd
+6. force-remove the container on release
 
-Container creation is not transport-aborted because an aborted HTTP request cannot prove the Engine abandoned the operation. Cancellation waits for creation to settle and then removes the returned container. If creation fails through an ambiguous transport error, the provider performs documented bounded reconciliation against its preallocated unique name. Finding the resource causes removal. Repeated absence does not prove cleanup, so exhausting reconciliation raises an aggregate cleanup error instead of reporting successful compensation.
+`setup` runs through `sh -lc` because it is explicit trusted application configuration. It runs on every acquisition, is not cached, and a non-zero exit rejects acquisition after cleanup. Repeated deployments should prefer an image or provider snapshot containing their dependencies.
 
-The lease handle exposes argument-array `exec()` without a host shell. Every call requires the effective `SandboxSession.cwd`; this prevents an Agent-local `cwd` from silently falling back to the outer lease directory. A compatible Agent adapter can use the handle while keeping model-controlled commands inside the container.
+The provider does not disable networking or impose generic CPU, memory, PID, root-filesystem, Linux capability, or user policy. Those choices belong to the selected image or a future explicitly configured Docker surface. Therefore this lightweight same-host Docker provider is a development and composition boundary, not a hostile multi-tenant security guarantee. It shares the host kernel and trusts the local Docker daemon.
 
-One container cannot enforce a narrower nested filesystem root or downgrade an existing read-write bind mount to read-only merely by changing `cwd`. `supportsDockerSandbox(session)` therefore rejects effective sessions whose root or access differs from the acquired lease. Another adapter may enforce narrowing through constrained tools, an inner process sandbox, or a distinct explicit fork operation; it must not claim enforcement based on working directory alone.
+One bind mount cannot enforce a narrower nested root or downgrade an existing read-write mount merely by changing cwd. Portable compatibility therefore rejects sessions whose effective root or access differs from the acquired runtime. Real-daemon tests must prove Workspace mount behavior, command execution, persistence, setup, and cleanup.
 
-Docker is a useful same-host process/filesystem boundary, not a hostile multi-tenant security guarantee. It shares the host kernel and trusts the local Docker daemon. The provider never mounts the Docker socket.
+### 13.5 Local provider requirements
 
-Docker provider conformance tests must cover read-only and read-write bind behavior, non-root execution, zero effective capabilities, disabled networking, hidden host-sibling paths, read-only container root, persisted read-write changes, and container removal. Real-daemon tests must remain an explicit integration-test target.
+`localSandbox()` implements the same runtime with ordinary host child processes:
+
+```tsx
+const local = localSandbox({
+  setup: "agent --version",
+  workspace: approvedHostDirectory,
+})
+```
+
+An active Workspace supersedes the optional standalone `workspace`. The provider resolves the selected root and each starting cwd through real paths, then executes literal commands with bounded output. Its optional trusted `setup` follows the same every-acquisition and fail-before-descendants semantics as Docker.
+
+Local execution is explicitly non-isolating. A child process can access anything allowed to the AML host identity, including paths outside the logical Workspace. The provider rejects runtime execution under `"read-only"` because it cannot enforce that policy for arbitrary host processes. Applications use it only for trusted local development and common-API testing; Docker or a remote provider is required for untrusted model-controlled commands.
+
+### 13.6 Daytona provider requirements
+
+`daytonaSandbox()` keeps Daytona's provider configuration native:
+
+```tsx
+const daytona = daytonaSandbox({
+  config: {
+    apiKey: process.env.DAYTONA_API_KEY,
+    target: "us",
+  },
+  create: {
+    snapshot: "aml-agents",
+  },
+  createOptions: {
+    timeout: 90,
+  },
+  setup: "agent --version",
+})
+```
+
+`config` is Daytona's `DaytonaConfig`. `create` is Daytona's image-or-snapshot creation parameter type, and `createOptions` preserves its creation timeout and image-build log callback. Applications may inject an already configured Daytona client instead of `config`, but not both. AML does not translate these values into generic Sandbox configuration.
+
+For each acquisition the provider:
+
+1. resolves the active Workspace and selected root locally
+2. creates a disposable Daytona Sandbox
+3. uploads a complete archive and extracts it into `workspace` under Daytona's writable default working directory
+4. runs optional trusted `setup`
+5. maps literal runtime commands to Daytona process execution with the effective relative guest cwd
+6. on read-write release, downloads a complete archive and mirrors additions, modifications, and deletions into the local materialization
+7. deletes the Daytona Sandbox even when setup, execution, or reconciliation fails
+
+The selected Daytona image or snapshot must contain the shell utilities and `tar` used for transfer plus any Agent dependencies. AML never builds the image or installs the Agent implicitly. The AML host must also provide `tar` for this first full-tree synchronization implementation.
+
+Daytona's command API accepts a shell command string rather than literal argv, so the adapter quotes each command and argument before execution. Daytona returns one combined command output string; the provider maps it to `stdout` and returns an empty `stderr`. Cancellation destroys the disposable Sandbox because Daytona does not expose per-command cancellation through this API.
+
+The transfer implementation cannot enforce a read-only guest tree. Like Local, Daytona therefore rejects runtime execution under `"read-only"` instead of claiming confinement it does not provide. Read-write reconciliation occurs before the outer Workspace saves its materialization. A failed reconciliation is reported and remote cleanup is still attempted.
 
 ## 14. `<Workspace>`
 
@@ -1496,7 +1566,7 @@ The runtime always passes an `AgentExecutionContext`.
 
 When a Sandbox is active, the runtime calls `supportsSandbox(session)` on the provider selected for that Agent. The method must return exactly `true` before the Agent runs. A missing method, `false`, or another value rejects evaluation and the Sandbox lease is still released. This explicit handshake prevents a provider from silently ignoring an execution boundary.
 
-An Agent adapter must not claim compatibility with a Sandbox provider until its model-controlled filesystem, commands, and host tools are attached to the opaque lease.
+An Agent adapter must not claim compatibility with a Sandbox provider until its model-controlled filesystem, commands, and host tools are attached to the lease runtime or run inside the selected Sandbox environment.
 
 ### 15.3 Provider construction and options
 
@@ -1504,7 +1574,7 @@ Public provider integrations must use configured factory functions:
 
 ```tsx
 const sandbox = dockerSandbox({
-  dockerfile: "./Dockerfile",
+  image: "company/aml-agents:2026-07",
   workspace: repositoryRoot,
 })
 
@@ -1522,7 +1592,7 @@ This combines an injected Strategy with an Adapter-specific factory:
 - `acquire()` owns asynchronous infrastructure creation
 - JSX receives the configured provider through dependency injection
 
-Portable AML props remain on the primitive. For Sandbox those are `root`, `cwd`, and `access`; for Workspace they are durable identity and the authored subtree. Backend addresses, credentials, Dockerfiles, images, buckets, resource limits, and clients belong to provider factories.
+Portable AML props remain on the primitive. For Sandbox those are `root`, `cwd`, and `access`; for Workspace they are durable identity and the authored subtree. Backend addresses, credentials, images, snapshots, buckets, provider-native resources, and clients belong to provider factories.
 
 AML does not forward arbitrary JSX props to providers, accept an untyped `providerOptions` bag, or resolve string names such as `provider="docker"`. Those shapes weaken type inference, hide dependencies behind a registry, and couple the language to every adapter's option surface.
 

@@ -1,4 +1,5 @@
 import type { SandboxAcquireRequest, SandboxLease, SandboxProvider } from "../components/sandbox/sandbox-provider.js"
+import type { SandboxExecResult, SandboxRuntime } from "../components/sandbox/sandbox-runtime.js"
 
 /**
  * Default opaque handle exposed by the deterministic Sandbox fixture.
@@ -14,6 +15,11 @@ export interface DeterministicSandboxHandle {
  */
 export interface DeterministicSandboxProviderOptions<Handle> {
   readonly createHandle?: (request: SandboxAcquireRequest, acquisition: number) => Handle | PromiseLike<Handle>
+  readonly exec?: (
+    command: string,
+    args: readonly string[],
+    request: SandboxAcquireRequest
+  ) => SandboxExecResult | PromiseLike<SandboxExecResult>
   readonly name?: string
   readonly release?: (lease: Readonly<{ handle: Handle; id: string }>, acquisition: number) => void | PromiseLike<void>
 }
@@ -24,6 +30,7 @@ export interface DeterministicSandboxProviderOptions<Handle> {
 export class DeterministicSandboxProvider<Handle = DeterministicSandboxHandle> implements SandboxProvider<Handle> {
   readonly #acquisitions: SandboxAcquireRequest[] = []
   readonly #createHandle: (request: SandboxAcquireRequest, acquisition: number) => Handle | PromiseLike<Handle>
+  readonly #exec: NonNullable<DeterministicSandboxProviderOptions<Handle>["exec"]>
   readonly #release: (lease: Readonly<{ handle: Handle; id: string }>, acquisition: number) => void | PromiseLike<void>
   readonly #releases: string[] = []
   readonly name: string
@@ -51,6 +58,13 @@ export class DeterministicSandboxProvider<Handle = DeterministicSandboxHandle> i
           kind: "deterministic-sandbox",
           request,
         }) as Handle)
+    this.#exec =
+      options.exec ??
+      ((command: string, args: readonly string[]) => ({
+        exitCode: 0,
+        stderr: "",
+        stdout: [command, ...args].join(" "),
+      }))
     this.#release = options.release ?? (() => {})
   }
 
@@ -76,10 +90,17 @@ export class DeterministicSandboxProvider<Handle = DeterministicSandboxHandle> i
     this.#acquisitions.push(request)
     const handle = await this.#createHandle(request, acquisition)
     const id = `${this.name}-${acquisition + 1}`
+    const runtime: SandboxRuntime = Object.freeze({
+      access: request.access,
+      cwd: request.cwd,
+      exec: async (command: string, args: readonly string[] = []) => await this.#exec(command, args, request),
+      root: request.root,
+    })
 
     return Object.freeze({
       handle,
       id,
+      runtime,
       release: async () => {
         this.#releases.push(id)
         await this.#release(Object.freeze({ handle, id }), acquisition)

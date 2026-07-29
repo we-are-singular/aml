@@ -92,6 +92,20 @@ const Docker = dockerSandbox({ image: "node:26-alpine" })
 
 An outer Sandbox acquires a lease. A nested Sandbox narrows the active lease; it does not acquire a second environment. Make access, root, network, and provider compatibility explicit.
 
+Sandbox images and snapshots own their installed Agents and tools. AML does not build images or silently install dependencies. For experiments, provider factories may expose an explicit `setup` command that runs after the Workspace is visible and before the Agent starts.
+
+Remote providers keep their vendor configuration shapes:
+
+```ts
+const Daytona = daytonaSandbox({
+  config: { apiKey: process.env.DAYTONA_API_KEY },
+  create: { snapshot: "aml-agents" },
+  setup: "agent --version",
+})
+```
+
+Daytona transfers the selected Workspace into the remote environment and reconciles the complete writable tree before release. Its first implementation requires `tar` in both the AML host and selected Daytona image or snapshot.
+
 ## Workspaces
 
 Use `<Workspace>` when files must persist across disposable Sandbox leases:

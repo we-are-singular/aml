@@ -1,4 +1,4 @@
-import type { AgentRequest } from "@aml-jsx/sdk"
+import type { AgentRequest, SandboxRuntime, SandboxSession } from "@aml-jsx/sdk"
 import { agentProviderConformance, createAgentExecutionContext } from "@aml-jsx/sdk/testing"
 import { describe, expect, it, vi } from "vitest"
 
@@ -139,6 +139,50 @@ describe("piAgent", () => {
         name: "lookup",
       }),
     ])
+  })
+
+  it("passes a provider-neutral Sandbox runtime into Pi session creation", async () => {
+    const clientFactory = new RecordingSessionFactory()
+    const provider = piAgent({ clientFactory })
+    const runtime: SandboxRuntime = Object.freeze({
+      access: "read-write",
+      cwd: "repository",
+      async exec() {
+        return { exitCode: 0, stderr: "", stdout: "" }
+      },
+      root: "repository",
+    })
+    const sandbox: SandboxSession = Object.freeze({
+      access: "read-write",
+      cwd: "repository/src",
+      lease: Object.freeze({
+        handle: {},
+        id: "sandbox",
+        runtime,
+      }),
+      nested: false,
+      provider: { name: "any-sandbox" },
+      root: "repository",
+    })
+
+    expect(provider.supportsSandbox?.(sandbox)).toBe(true)
+    await provider.run(
+      createRequest({
+        tools: [{ kind: "host", name: "bash" }],
+      }),
+      createAgentExecutionContext({ sandbox })
+    )
+
+    expect(clientFactory.inputs[0]?.sandbox).toEqual({
+      cwd: "repository/src",
+      runtime,
+    })
+    expect(
+      provider.supportsSandbox?.({
+        ...sandbox,
+        root: "other",
+      })
+    ).toBe(false)
   })
 
   it("parses structured JSON for AML validation", async () => {

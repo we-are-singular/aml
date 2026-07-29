@@ -54,6 +54,12 @@ export {
   type SandboxProviderReference,
   type SandboxSession,
 } from "./components/sandbox/sandbox-provider.js"
+export {
+  type SandboxExecOptions,
+  type SandboxExecResult,
+  type SandboxRuntime,
+  supportsSandboxRuntime,
+} from "./components/sandbox/sandbox-runtime.js"
 export { Sandbox, type SandboxProps } from "./components/sandbox/sandbox.js"
 
 // Durable materialization scope and provider-neutral lifecycle contracts.

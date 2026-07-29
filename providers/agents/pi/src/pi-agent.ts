@@ -4,6 +4,8 @@ import {
   type AgentProvider,
   type AgentRequest,
   type AgentResponse,
+  type SandboxSession,
+  supportsSandboxRuntime,
 } from "@aml-jsx/sdk"
 import type { ProviderConfig } from "@earendil-works/pi-coding-agent"
 
@@ -63,6 +65,13 @@ class PiAgentImplementation implements PiAgentProvider {
   }
 
   /**
+   * Accepts provider-neutral runtimes that enforce the effective Sandbox.
+   */
+  supportsSandbox(sandbox: SandboxSession): boolean {
+    return supportsSandboxRuntime(sandbox)
+  }
+
+  /**
    * Runs every authored turn through one fresh in-memory Pi session.
    */
   async run(request: AgentRequest, context: AgentExecutionContext): Promise<AgentResponse> {
@@ -89,10 +98,24 @@ class PiAgentImplementation implements PiAgentProvider {
         name: tool.name,
       }
     })
+    const sandbox = context.sandbox
+
+    if (sandbox !== undefined && !supportsSandboxRuntime(sandbox)) {
+      throw new Error("Pi Agent received an incompatible Sandbox runtime")
+    }
+
     const input: PiSessionCreateInput = Object.freeze({
       cwd: this.#workingDirectory ?? process.cwd(),
       ...(model === undefined ? {} : { model }),
       ...(this.#providers === undefined ? {} : { providers: this.#providers }),
+      ...(sandbox === undefined
+        ? {}
+        : {
+            sandbox: Object.freeze({
+              cwd: sandbox.cwd,
+              runtime: sandbox.lease.runtime,
+            }),
+          }),
       system: request.system,
       ...(this.#thinkingLevel === undefined ? {} : { thinkingLevel: this.#thinkingLevel }),
       tools: Object.freeze(tools),

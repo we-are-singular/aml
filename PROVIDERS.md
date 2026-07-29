@@ -6,10 +6,10 @@ Provider implementations live under private `providers/<kind>/<name>` workspaces
 
 ## Recommended order
 
-1. Pi Agent, to prove a third embedded coding harness with a different session and tool model.
-2. Vercel AI SDK, to prove that AML Agents do not require a coding CLI or built-in filesystem.
-3. One Sandbox SDK bridge, using Daytona or E2B, to determine whether AML can reuse its normalized sandbox API instead of implementing every vendor client.
-4. An S3-compatible Workspace, to prove remote durable materialization independently of a Sandbox vendor.
+1. A remote Codex harness on Daytona, to prove an Agent process running beside its Workspace.
+2. An OpenCode server on Daytona, to discover the smallest required long-running-process and port surface.
+3. An S3-compatible Workspace, to prove remote durable materialization independently of a Sandbox vendor.
+4. Vercel AI SDK, to prove that AML Agents do not require a coding CLI or built-in filesystem.
 5. TanStack AI, to compare two provider-agnostic model SDKs against the same AML Agent contract.
 6. One native volume Workspace paired with its Sandbox provider, to design the cross-provider mount contract deliberately.
 
@@ -29,12 +29,12 @@ Model SDKs are valid AML Agent providers. Their lack of file tools is not a cont
 | -------- | ----------------- | -------------- | ------------------- |
 | OpenCode | `opencodeAgent()` | Coding harness | Yes                 |
 | Codex    | `codexAgent()`    | Coding harness | Yes                 |
+| Pi       | `piAgent()`       | Coding harness | Yes                 |
 
 ### Priority candidates
 
 | Priority | Provider                                                                      | Proposed package             | Kind           | Why it is useful                                                                                                                                                                                                                                           |
 | -------- | ----------------------------------------------------------------------------- | ---------------------------- | -------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| P0       | [Pi coding agent](https://github.com/badlogic/pi-mono)                        | `@aml-jsx/agent-pi`          | Coding harness | Pi exposes embeddable sessions, a multi-provider model registry, built-in coding tools, custom tools, events, and in-memory session support. It is the cleanest next harness comparison.                                                                   |
 | P0       | [Vercel AI SDK](https://ai-sdk.dev/)                                          | `@aml-jsx/agent-vercel-ai`   | Model SDK      | AI SDK 6 has a provider-agnostic model interface, agent/tool loops, custom tools, message input, stop conditions, and structured output. It would prove that AML can provide orchestration and filesystem capabilities around a lightweight model runtime. |
 | P1       | [TanStack AI](https://tanstack.com/ai)                                        | `@aml-jsx/agent-tanstack-ai` | Model SDK      | TanStack AI provides provider adapters, typed tools, structured output, middleware, and composable loop strategies. Its adapter shape is a useful comparison against Vercel AI SDK.                                                                        |
 | P1       | [Claude Agent SDK](https://github.com/anthropics/claude-agent-sdk-typescript) | `@aml-jsx/agent-claude`      | Coding harness | Exposes Claude Code capabilities programmatically, including filesystem and shell tools, custom tools, permissions, sessions, and hooks.                                                                                                                   |
@@ -53,27 +53,33 @@ Direct OpenAI, Anthropic, Google, Ollama, and OpenRouter model clients are lower
 
 ### Implemented
 
-| Provider | Public export     | Notes                                                                                                  |
-| -------- | ----------------- | ------------------------------------------------------------------------------------------------------ |
-| Docker   | `dockerSandbox()` | Local Docker isolation with explicit filesystem, network, identity, capability, and resource policies. |
+| Provider | Public export      | Notes                                                                                               |
+| -------- | ------------------ | --------------------------------------------------------------------------------------------------- |
+| Local    | `localSandbox()`   | Trusted host-process execution for development and common-runtime tests; not an isolation boundary. |
+| Docker   | `dockerSandbox()`  | Starts a named image, mounts the Workspace, runs bounded commands, and never builds the image.      |
+| Daytona  | `daytonaSandbox()` | Transfers and reconciles a Workspace around one disposable Daytona image or snapshot.               |
 
-### Reuse before rebuilding
+### Provider direction
 
-[Sandbox SDK](https://sandbox-sdk.sh/) already normalizes files, processes, ports, snapshots, capabilities, lifecycle errors, and typed access to the underlying vendor client across Local, Blaxel, Cloudflare, CodeSandbox, Daytona, E2B, Modal, and Vercel.
+Sandbox factories retain provider-native environment configuration. Applications select an image, snapshot, or provider environment containing the Agent and supporting tools. AML owns only acquisition, Workspace attachment, optional explicit setup, command execution, and release.
 
-Before writing another large vendor adapter directly, build one AML provider as a thin bridge over `@sandbox-sdk/core` and one of its provider packages. The spike should answer:
+The common runtime deliberately begins with logical root/cwd/access metadata and bounded literal `exec()`. Provider-native files, ports, snapshots, and background processes remain outside the baseline until an Agent proof requires one.
 
-- Whether Sandbox SDK's lifecycle maps cleanly to `SandboxProvider.acquire()` and AML's runtime finish events.
-- Whether AML can preserve provider-specific factory options and a typed native-client escape hatch.
-- Whether its capability declarations are sufficient for AML Agent providers to discover files, processes, ports, and snapshots.
-- Whether AML still needs individual packages such as `@aml-jsx/sandbox-daytona`, or one generic `@aml-jsx/sandbox-sdk` package that accepts a configured Sandbox SDK adapter.
-- Whether the dependency and error normalization are materially simpler than maintaining direct vendor clients.
+An optional `setup` string is trusted application configuration executed inside the acquired environment before Agents run:
+
+```ts
+dockerSandbox({
+  image: "node:26-alpine",
+  setup: "npm install -g <agent-package>",
+})
+```
+
+Repeated use should prefer a prebuilt image or snapshot. AML does not silently install Agents.
 
 ### Priority candidates
 
 | Priority | Provider                                                             | Proposed package               | Why it is useful                                                                                                                                                                                      |
 | -------- | -------------------------------------------------------------------- | ------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| P0       | [Daytona](https://www.daytona.io/docs/en/typescript-sdk/)            | `@aml-jsx/sandbox-daytona`     | Mature TypeScript SDK, images and snapshots, network controls, filesystem/process APIs, and persistent volumes. Good first remote development sandbox.                                                |
 | P0       | [E2B](https://www.e2b.dev/docs)                                      | `@aml-jsx/sandbox-e2b`         | Focused agent sandbox API with fast Linux VMs, templates, commands, files, ports, and snapshots. Good minimal remote comparison.                                                                      |
 | P1       | [Cloudflare Sandbox SDK](https://developers.cloudflare.com/sandbox/) | `@aml-jsx/sandbox-cloudflare`  | Strong Worker-native execution boundary with Containers, files, commands, background processes, and service exposure. It also tests a non-Node host runtime and binding-based dependency injection.   |
 | P1       | [Vercel Sandbox](https://vercel.com/docs/sandbox)                    | `@aml-jsx/sandbox-vercel`      | Firecracker microVMs, files, commands, ports, snapshots, and native Vercel authentication. Useful alongside the Vercel AI SDK Agent provider without coupling the two packages.                       |

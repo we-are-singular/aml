@@ -66,16 +66,16 @@
     "prepublishOnly": "npm run build && npm run package:check",
     "release": "release-it",
     "test": "vitest run",
+    "smoke": "vite-node tests/smoke/run-smoke.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@daytona/sdk": "0.201.0",
     "@earendil-works/pi-coding-agent": "0.82.1",
     "@modelcontextprotocol/sdk": "^1.29.0",
     "@openai/codex-sdk": "0.145.0",
     "@opencode-ai/sdk": "1.18.5",
     "@standard-schema/spec": "^1.1.0",
-    "@types/dockerode": "^4.0.1",
-    "dockerode": "^5.0.1",
     "execa": "^10.0.0",
     "hookable": "^6.1.1",
     "p-limit": "^7.3.1",

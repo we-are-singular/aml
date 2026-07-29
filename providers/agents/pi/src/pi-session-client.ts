@@ -1,4 +1,4 @@
-import type { AgentToolExecutionContext } from "@aml-jsx/sdk"
+import type { AgentToolExecutionContext, SandboxRuntime } from "@aml-jsx/sdk"
 import type { ProviderConfig } from "@earendil-works/pi-coding-agent"
 
 /**
@@ -23,6 +23,10 @@ export interface PiSessionCreateInput {
   readonly cwd: string
   readonly model?: string
   readonly providers?: Readonly<Record<string, ProviderConfig>>
+  readonly sandbox?: Readonly<{
+    readonly cwd: string
+    readonly runtime: Readonly<SandboxRuntime>
+  }>
   readonly system: string
   readonly thinkingLevel?: PiThinkingLevel
   readonly tools: readonly (PiJavaScriptTool | string)[]

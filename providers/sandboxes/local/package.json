@@ -1,5 +1,5 @@
 {
-  "name": "@aml-jsx/sandbox-docker",
+  "name": "@aml-jsx/sandbox-local",
   "version": "0.0.0",
   "private": true,
   "files": [
@@ -15,9 +15,7 @@
   },
   "scripts": {
     "build": "vite build && tsc --project tsconfig.build.json",
-    "package:check": "node scripts/check-package.ts",
     "test": "vitest run",
-    "test:integration": "AML_DOCKER_TEST=1 vitest run tests/docker-sandbox.integration.test.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
