@@ -58,7 +58,13 @@ const SANDBOXES: readonly SandboxOption[] = [
     id: "daytona",
     label: "Daytona",
     fn: "daytonaSandbox",
-    construction: `daytonaSandbox({ create: { image: "node:26" }, workspace: "./project" })`,
+    construction: `daytonaSandbox({ image: "node:26", workspace: "./project" })`,
+  },
+  {
+    id: "modal",
+    label: "Modal",
+    fn: "modalSandbox",
+    construction: `modalSandbox({ create: { cpu: 2  }, image: "node:26" })`,
   },
 ]
 

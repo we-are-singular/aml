@@ -179,6 +179,7 @@ The status table is the canonical implementation tracker. A slice moves to `Done
 | Slice 16 | Context                                        | Evaluating        |
 | Slice 17 | Pi Agent package                               | Done              |
 | Slice 18 | Daytona Sandbox package                        | Done              |
+| Slice 19 | Modal Sandbox package                          | Done              |
 
 Allowed statuses are `Pending`, `In progress`, `Blocked`, and `Done`. A blocked slice includes its blocker directly in the status cell.
 
@@ -232,6 +233,7 @@ Phase 1 starts as an npm 11 workspace managed by Turborepo:
 │   │   ├── local/
 │   │   ├── docker/
 │   │   ├── daytona/
+│   │   ├── modal/
 │   │   └── cloudflare/
 │   └── workspaces/
 │       ├── local/
@@ -848,14 +850,26 @@ The fresh-user benchmark required no global Pi install or Pi configuration. Inst
 #### Slice 18 — Daytona Sandbox package
 
 - create the private Daytona provider workspace and export `daytonaSandbox()` from `@aml-jsx/sdk`
-- preserve Daytona-native client configuration and image-or-snapshot creation parameters
+- preserve Daytona-native client configuration and creation parameters while selecting `image` or `snapshot` at the factory root
 - transfer one active Workspace before execution and reconcile writable changes before release
 - map the narrow runtime to bounded Daytona command execution without exposing a generic filesystem API
 - pass focused lifecycle tests and one credentialed real-Agent smoke
 
 Proof: the unchanged Pi file workflow runs through Daytona with explicit API-key configuration, reads the uploaded Workspace, writes an exact result remotely, and a second fresh Daytona Sandbox reads the reconciled result.
 
-Status: Done on 2026-07-29. The adapter lazily constructs Daytona's SDK client, creates one disposable image or snapshot, archives the selected local Workspace root into the remote user's writable `workspace` directory, runs optional trusted `setup`, and maps literal command arguments, logical cwd, environment, timeout, cancellation, and bounded output through the narrow runtime. Writable release mirrors the complete remote tree back, including deletions, before deleting the Sandbox. Read-only execution is rejected because archive transfer cannot enforce a read-only guest tree. Focused tests prove native create parameters, hydration, command mapping, reconciliation, deletion, and configuration validation. A credentialed Daytona smoke using the same real Pi/OpenCode Go workflow as Local and Docker passed against the live service, then a second fresh Daytona Sandbox and Pi session read the reconciled file.
+Status: Done on 2026-07-29. The adapter lazily constructs Daytona's SDK client, selects one disposable image or snapshot at the factory root, and retains the remaining native creation parameters under `create`. It archives the selected local Workspace root into the remote user's writable `workspace` directory, runs optional trusted `setup`, and maps literal command arguments, logical cwd, environment, timeout, cancellation, and bounded output through the narrow runtime. Writable release mirrors the complete remote tree back, including deletions, before deleting the Sandbox. Read-only execution is rejected because archive transfer cannot enforce a read-only guest tree. Focused tests prove native create parameters, hydration, command mapping, reconciliation, deletion, and configuration validation. A credentialed Daytona smoke using the same real Pi/OpenCode Go workflow as Local and Docker passed against the live service, then a second fresh Daytona Sandbox and Pi session read the reconciled file.
+
+#### Slice 19 — Modal Sandbox package
+
+- create the private Modal provider workspace and export `modalSandbox()` from `@aml-jsx/sdk`
+- preserve Modal-native client and Sandbox creation options with an explicit registry image
+- transfer one active Workspace before execution and reconcile writable changes before release
+- map the narrow runtime to bounded Modal command execution without exposing provider-native filesystem or tunnel APIs
+- pass focused lifecycle tests and one credentialed live Workspace proof
+
+Proof: a real Modal Sandbox reads an uploaded host file, executes an exact command, writes a result remotely, reconciles that result to the host Workspace, and terminates.
+
+Status: Done on 2026-07-29. The adapter lazily constructs Modal's JavaScript client, resolves or creates one named App, starts a disposable registry image, archives the selected Workspace root into `/workspace`, and runs optional trusted `setup`. Literal command arguments, logical cwd, environment, timeouts, cancellation, and one shared stdout/stderr byte budget map through the common runtime. Modal always exposes a writable stdin stream, so the adapter sends EOF immediately to preserve AML's non-interactive `SandboxRuntime.exec()` contract and prevent coding CLIs from waiting on an unreachable writer. Writable release mirrors the complete remote tree back before terminating the Sandbox; read-only execution is rejected because archive transfer cannot enforce a read-only guest tree. Focused tests cover native creation options, hydration, command mapping, stdin closure, reconciliation, termination, option validation, and provider conformance. A credentialed live Alpine proof passed with the repository's `MODAL_API_KEY` and `MODAL_API_SECRET` mapped explicitly to Modal's token ID and secret. The live Agent matrix also passed for Codex, OpenCode, and Pi; Codex and OpenCode smoke environments request 2 GiB because installing either CLI exceeded Modal's default memory allocation.
 
 Claude, Cloudflare, S3, the CLI, and the website receive separate slices only when their requirements are approved. Their target directories document intended ownership, not committed implementation.
 
@@ -880,7 +894,7 @@ Before marking a slice `Done`:
 
 ## Immediate implementation boundary
 
-Slices 0 through 18 are complete. The narrow common Sandbox runtime now has Local, image-only Docker, and Daytona proofs. The next approved investigation is the Agent-process bridge for Codex and OpenCode; Modal and Cloudflare remain portability checks until their implementation work is approved. S3-compatible, Git, and Durable Object Workspaces remain later work.
+Slices 0 through 19 are complete. The narrow common Sandbox runtime now has Local, image-only Docker, Daytona, and Modal proofs. Cloudflare remains a portability check until its implementation work is approved. S3-compatible, Git, and Durable Object Workspaces remain later work.
 
 ## Explicitly deferred
 

@@ -35,7 +35,7 @@ This creates two linear integration surfaces:
 - each Agent adapter learns how to start its Agent through the AML runtime
 - each Sandbox provider implements the small AML runtime and Workspace lifecycle
 
-Provider factories remain provider-specific. Applications construct `dockerSandbox(...)`, `daytonaSandbox(...)`, or `modalSandbox(...)` with the configuration concepts supported by that provider. AML should not expose a generic `sandboxSdk({ adapter })` factory or force provider configuration into one lowest-common-denominator object.
+Provider factories remain provider-specific. Applications construct `dockerSandbox(...)`, `daytonaSandbox(...)`, or `modalSandbox(...)` with the configuration concepts supported by that provider. Environment identity uses a consistent root option where the providers overlap: `image` for Docker, Daytona, and Modal, or Daytona's alternative `snapshot`. AML should not expose a generic `sandboxSdk({ adapter })` factory or force the remaining provider configuration into one lowest-common-denominator object.
 
 ## Responsibility contract
 
@@ -426,7 +426,7 @@ Passing Proof 2 establishes the important composition claim: one Agent adapter c
 - [x] Local and Docker setup hooks run explicitly before descendant Agents.
 - [x] Unit tests, Local tests, Docker tests, and a live Docker integration pass.
 - [x] A credentialed real Pi model read and wrote exact Workspace files through both Local and Docker using the unchanged Agent workflow.
-- [x] `daytonaSandbox()` is the first remote provider and keeps Daytona-native client and creation configuration.
+- [x] `daytonaSandbox()` is the first remote provider and keeps Daytona-native client and creation configuration behind normalized root `image` or `snapshot` selection.
 - [x] Its full-transfer lifecycle mirrors additions, changes, and deletions before cleanup; the selected host and Daytona environment must contain `tar`.
 - [x] A credentialed real Pi model read and wrote exact Workspace files through Daytona using the unchanged Local/Docker workflow.
 - [x] The live result was reconciled back to the local Workspace before the Daytona Sandbox was deleted.

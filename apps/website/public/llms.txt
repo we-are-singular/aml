@@ -123,13 +123,14 @@ The public SDK currently exports the runtime, built-in providers, and their type
 - `piAgent({ model: "provider/model", providers })`: embedded Pi SDK sessions with native Pi provider configuration, host and JavaScript Tools, FollowUps, cancellation, and schema-validated JSON output. Pi currently rejects AML MCP grants.
 - `localSandbox({})`: trusted host-process implementation of the common bounded Sandbox runtime. It is explicitly non-isolating.
 - `dockerSandbox({ image })`: disposable named-image execution with a mounted Workspace and bounded commands. AML does not build or provision the image.
-- `daytonaSandbox({ config, create })`: disposable Daytona image or snapshot execution with Workspace transfer, bounded commands, reconciliation, and cleanup.
+- `daytonaSandbox({ config, create, image })`: disposable Daytona image or snapshot execution with Workspace transfer, bounded commands, reconciliation, and cleanup. Select `image` or `snapshot` at the factory root; `create` retains the remaining native creation options.
+- `modalSandbox({ config, create, image })`: disposable Modal registry-image execution with Workspace transfer, bounded commands, reconciliation, and cleanup.
 - `localWorkspace({ directory })`: durable local-directory materialization with cross-process writer locking.
 - `@aml-jsx/sdk/testing`: deterministic Agent, Sandbox, and Workspace providers plus provider conformance suites.
 
-OpenCode, Codex, and Pi all implement the common Sandbox compatibility handshake. The credentialed smoke matrix runs each Agent through Local, Docker, and Daytona with the same model-driven file proof. Codex and OpenCode require their installed CLI in the selected environment; Pi routes its native bash Tool through the runtime. Capability support still differs by Agent, and unsupported remote transports reject instead of falling back to the AML host.
+OpenCode, Codex, and Pi all implement the common Sandbox compatibility handshake. The credentialed smoke matrix runs each Agent through Local, Docker, Daytona, and Modal with the same model-driven file proof. Codex and OpenCode require their installed CLI in the selected environment; Pi routes its native bash Tool through the runtime. Capability support still differs by Agent, and unsupported remote transports reject instead of falling back to the AML host.
 
-OpenCode, Codex, Pi, Local Sandbox, Docker, Daytona, and local disk are implemented. Other agent harnesses, sandbox platforms, and storage providers shown on the website are roadmap candidates, not current package exports.
+OpenCode, Codex, Pi, Local Sandbox, Docker, Daytona, Modal, and local disk are implemented. Other agent harnesses, sandbox platforms, and storage providers shown on the website are roadmap candidates, not current package exports.
 
 ## Capabilities
 

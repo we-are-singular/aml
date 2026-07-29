@@ -164,6 +164,7 @@ The public SDK includes the runtime, built-in integrations, and testing utilitie
 | Sandbox   | [Local adapter](./providers/sandboxes/local)     | `localSandbox()`       | Runs the common Sandbox runtime as trusted host processes for development; it is explicitly non-isolating.                                        |
 | Sandbox   | [Docker adapter](./providers/sandboxes/docker)   | `dockerSandbox()`      | Starts a user-selected image, mounts the Workspace, and exposes the common bounded command runtime without building or provisioning the image.    |
 | Sandbox   | [Daytona adapter](./providers/sandboxes/daytona) | `daytonaSandbox()`     | Creates a Daytona image or snapshot, transfers the Workspace, runs bounded commands, reconciles writable changes, and deletes the remote Sandbox. |
+| Sandbox   | [Modal adapter](./providers/sandboxes/modal)     | `modalSandbox()`       | Creates a Modal Sandbox from a registry image, transfers the Workspace, runs bounded commands, reconciles writable changes, and terminates it.    |
 | Workspace | [Local adapter](./providers/workspaces/local)    | `localWorkspace()`     | Uses an existing local directory as a durable Workspace with cross-process writer locking.                                                        |
 | Testing   | [Testing entry](./sdk/src/testing.ts)            | `@aml-jsx/sdk/testing` | Supplies deterministic Agent, Sandbox, and Workspace providers plus reusable conformance suites.                                                  |
 
@@ -174,8 +175,9 @@ The complete built-in compatibility matrix is exercised by the credentialed smok
 | Local           | Yes   | Yes      | Yes |
 | Docker          | Yes   | Yes      | Yes |
 | Daytona         | Yes   | Yes      | Yes |
+| Modal           | Yes   | Yes      | Yes |
 
-These proofs use read-write Workspaces because Local and Daytona reject access modes they cannot enforce. Codex and OpenCode run their installed CLIs beside the materialized Workspace through the common `SandboxRuntime`; the selected host, image, or snapshot must already contain that executable. Pi remains embedded in AML and routes its declared `bash` Tool through the same runtime. Sandbox providers do not install Agents implicitly.
+These proofs use read-write Workspaces because Local, Daytona, and Modal reject access modes they cannot enforce. Codex and OpenCode run their installed CLIs beside the materialized Workspace through the common `SandboxRuntime`; the selected host, image, or snapshot must already contain that executable. Pi remains embedded in AML and routes its declared `bash` Tool through the same runtime. Sandbox providers do not install Agents implicitly.
 
 `<System>`, `<Skill>`, `<FollowUp>`, `<Loop>`, Context, and tree evaluation are runtime-owned and work independently of the selected Agent provider. JavaScript Tool and MCP execution ultimately depend on the Agent provider and environment. Outside a Sandbox, OpenCode and Codex implement both bridges; Pi implements host and JavaScript Tools and rejects MCP grants. Inside a Sandbox, each adapter rejects capabilities whose transport it cannot enforce instead of falling back to the AML host.
 
@@ -183,7 +185,7 @@ Provider factories retain their vendor configuration shapes: `opencodeAgent({ co
 
 Every Agent adapter resolves configuration with the same authority order: provider defaults, then user inputs, then AML's imperative runtime policy. The implementation uses `defu` for known plain configuration tables and bespoke final objects for arrays, clients, callbacks, Tools, MCP grants, and other authority-bearing values. This preserves each vendor's native schema while preventing user configuration from weakening an authored Sandbox or capability boundary.
 
-Sandbox factories follow the same rule. `daytonaSandbox({ config, create })` accepts Daytona's SDK configuration and native image or snapshot creation parameters. Docker accepts only an existing image name; AML does not build images or silently install Agents. Each Sandbox may run an explicit trusted `setup` command after its Workspace is visible.
+Sandbox factories follow the same rule. Environment identity sits at the factory root: Docker and Modal accept `image`, while Daytona accepts either `image` or `snapshot`. Daytona's `create` retains its remaining image- or snapshot-specific creation parameters, and Modal's `create` retains its native Sandbox creation options. Docker accepts only an existing image name; AML does not build images or silently install Agents. Each Sandbox may run an explicit trusted `setup` command after its Workspace is visible.
 
 ## Examples
 
@@ -206,6 +208,7 @@ Every example is one self-contained AML component. Run one with `npm run example
 | [`pi`](./examples/src/integrations/pi.tsx)                               | Embeds Pi with an OpenCode Go model and calls a process-local JavaScript Tool.                         |
 | [`review`](./examples/src/integrations/review.tsx)                       | Runs a parallel multi-agent code review through deterministic, OpenCode, or Codex providers.           |
 | [`docker`](./examples/src/integrations/docker.tsx)                       | Inspects a real Docker Sandbox's working directory and confinement settings.                           |
+| [`modal`](./examples/src/integrations/modal.tsx)                         | Inspects a real Modal Sandbox through the common bounded runtime.                                      |
 | [`workspace-local`](./examples/src/integrations/workspace-local.tsx)     | Persists a file across disposable Sandbox runs through the local Workspace provider.                   |
 | [`workspace-routing`](./examples/src/integrations/workspace-routing.tsx) | Uses typed Agent output to select a local Workspace and pass a normalized task to a second Agent.      |
 
@@ -240,25 +243,26 @@ npm install
 
 Common commands:
 
-| Command                                                  | Purpose                                                         |
-| -------------------------------------------------------- | --------------------------------------------------------------- |
-| `npm run format`                                         | Format supported repository files with Oxfmt.                   |
-| `npm run format:check`                                   | Verify formatting without changing files.                       |
-| `npm run lint`                                           | Type-check and lint every workspace.                            |
-| `npm run test`                                           | Run deterministic tests across every workspace.                 |
-| `npm run typecheck`                                      | Type-check the SDK, providers, and examples.                    |
-| `npm run build`                                          | Build every distributable package.                              |
-| `npm run pack:check`                                     | Validate built exports, packed files, and provider conformance. |
-| `npm run example -- basic`                               | Run one example through built package exports.                  |
-| `npm run example -- review`                              | Run the review workflow with its deterministic provider.        |
-| `AML_REVIEW_PROVIDER=opencode npm run example -- review` | Run the review workflow through OpenCode.                       |
-| `AML_REVIEW_PROVIDER=codex npm run example -- review`    | Run the review workflow through Codex.                          |
-| `npm run example -- pi`                                  | Run embedded Pi through `OPENCODE_API_KEY`.                     |
-| `npm run example -- docker`                              | Run the real Docker Sandbox example.                            |
-| `npm run smoke -- --agent pi --sandbox daytona`          | Run one Agent × Sandbox smoke matrix cell with live traces.     |
-| `npm run smoke -- --agent codex`                         | Run one Agent against every registered Sandbox.                 |
-| `npm run smoke -- --sandbox docker`                      | Run every registered Agent against one Sandbox.                 |
-| `npm run smoke -- --list`                                | List the complete or filtered matrix without executing it.      |
+| Command                                                       | Purpose                                                         |
+| ------------------------------------------------------------- | --------------------------------------------------------------- |
+| `npm run format`                                              | Format supported repository files with Oxfmt.                   |
+| `npm run format:check`                                        | Verify formatting without changing files.                       |
+| `npm run lint`                                                | Type-check and lint every workspace.                            |
+| `npm run test`                                                | Run deterministic tests across every workspace.                 |
+| `npm run typecheck`                                           | Type-check the SDK, providers, and examples.                    |
+| `npm run build`                                               | Build every distributable package.                              |
+| `npm run pack:check`                                          | Validate built exports, packed files, and provider conformance. |
+| `npm run example -- basic`                                    | Run one example through built package exports.                  |
+| `npm run example -- review`                                   | Run the review workflow with its deterministic provider.        |
+| `AML_REVIEW_PROVIDER=opencode npm run example -- review`      | Run the review workflow through OpenCode.                       |
+| `AML_REVIEW_PROVIDER=codex npm run example -- review`         | Run the review workflow through Codex.                          |
+| `npm run example -- pi`                                       | Run embedded Pi through `OPENCODE_API_KEY`.                     |
+| `npm run example -- docker`                                   | Run the real Docker Sandbox example.                            |
+| `npm run smoke -- --agent pi --sandbox daytona`               | Run one Agent × Sandbox smoke matrix cell with live traces.     |
+| `npm run smoke -- --agent codex`                              | Run one Agent against every registered Sandbox.                 |
+| `npm run smoke -- --sandbox docker`                           | Run every registered Agent against one Sandbox.                 |
+| `npm run test:integration --workspace=@aml-jsx/sandbox-modal` | Run Modal's credentialed Workspace round-trip proof.            |
+| `npm run smoke -- --list`                                     | List the complete or filtered matrix without executing it.      |
 
 Package-specific integration suites are available through their workspace scripts:
 
@@ -271,7 +275,7 @@ npm run test:integration --workspace=@aml-jsx/sandbox-docker
 
 Smoke files use a dedicated Vitest configuration and stay outside default unit tests. Omitting both smoke filters runs every registered Agent against every registered Sandbox. npm requires the `--` separator before smoke-runner options.
 
-The smoke runner loads the repository's untracked `.env`. Pi and OpenCode use `OPENCODE_API_KEY`, and Daytona uses `DAYTONA_API_KEY`. Codex accepts `OPENAI_API_KEY` or the explicit `AML_CODEX_API_KEY`, `AML_CODEX_BASE_URL`, and `AML_CODEX_MODEL` combination for another Responses-compatible provider. `AML_CODEX_HOME` may instead select an already-authenticated writable Codex home that exists inside the chosen environment; AML does not transfer a host login into remote Sandboxes. These environment names configure only the repository's smoke CLI. Applications configure Agents through `piAgent()`, `codexAgent()`, and `opencodeAgent()` options.
+The smoke runner loads the repository's untracked `.env`. Pi and OpenCode use `OPENCODE_API_KEY`, Daytona uses `DAYTONA_API_KEY`, and Modal uses the repository-local `MODAL_API_KEY` and `MODAL_API_SECRET` names as `tokenId` and `tokenSecret`. Modal's own ambient credential names remain `MODAL_TOKEN_ID` and `MODAL_TOKEN_SECRET`. Codex accepts `OPENAI_API_KEY` or the explicit `AML_CODEX_API_KEY`, `AML_CODEX_BASE_URL`, and `AML_CODEX_MODEL` combination for another Responses-compatible provider. `AML_CODEX_HOME` may instead select an already-authenticated writable Codex home that exists inside the chosen environment; AML does not transfer a host login into remote Sandboxes. These environment names configure only the repository's smoke CLI. Applications configure providers through their native factory options.
 
 Commits are checked with lint-staged and commitlint. Pushes run the same formatting, linting, test, and build
 contract enforced by GitHub Actions.

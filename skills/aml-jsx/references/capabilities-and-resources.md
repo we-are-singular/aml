@@ -99,12 +99,27 @@ Remote providers keep their vendor configuration shapes:
 ```ts
 const Daytona = daytonaSandbox({
   config: { apiKey: process.env.DAYTONA_API_KEY },
-  create: { snapshot: "aml-agents" },
   setup: "agent --version",
+  snapshot: "aml-agents",
 })
 ```
 
 Daytona transfers the selected Workspace into the remote environment and reconciles the complete writable tree before release. Its first implementation requires `tar` in both the AML host and selected Daytona image or snapshot.
+
+Modal keeps the same Workspace contract while preserving its native client and Sandbox creation options:
+
+```ts
+const Modal = modalSandbox({
+  config: {
+    tokenId: process.env.MODAL_TOKEN_ID,
+    tokenSecret: process.env.MODAL_TOKEN_SECRET,
+  },
+  create: { cpu: 2, timeoutMs: 300_000 },
+  image: "node:26",
+})
+```
+
+Modal transfers the selected Workspace into `/workspace`, bounds combined command output, reconciles the complete writable tree, and terminates the Sandbox on release. The selected image and AML host must include `tar`; read-only execution is rejected because archive transfer does not produce a read-only guest mount.
 
 ## Workspaces
 

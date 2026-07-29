@@ -89,11 +89,12 @@ Read [capabilities-and-resources.md](references/capabilities-and-resources.md) b
 The public package currently exports built-in factories from one entry point:
 
 ```tsx
-import { codexAgent, opencodeAgent, piAgent } from "@aml-jsx/sdk"
+import { codexAgent, modalSandbox, opencodeAgent, piAgent } from "@aml-jsx/sdk"
 
 const Codex = codexAgent({})
 const OpenCode = opencodeAgent({})
 const Pi = piAgent({ model: "opencode-go/glm-5.1" })
+const Modal = modalSandbox({ image: "node:26" })
 ```
 
 Keep provider selection outside reusable workflow components when practical. Use `Agent` props such as `model` and `cwd` only for invocation-level overrides; keep provider-owned credentials and defaults in the provider factory.

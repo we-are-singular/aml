@@ -1341,17 +1341,15 @@ const daytona = daytonaSandbox({
     apiKey: process.env.DAYTONA_API_KEY,
     target: "us",
   },
-  create: {
-    snapshot: "aml-agents",
-  },
   createOptions: {
     timeout: 90,
   },
   setup: "agent --version",
+  snapshot: "aml-agents",
 })
 ```
 
-`config` is Daytona's `DaytonaConfig`. `create` is Daytona's image-or-snapshot creation parameter type, and `createOptions` preserves its creation timeout and image-build log callback. Applications may inject an already configured Daytona client instead of `config`, but not both. AML does not translate these values into generic Sandbox configuration.
+`config` is Daytona's `DaytonaConfig`. The mutually exclusive root `image` and `snapshot` options select the environment consistently with other Sandbox factories. `create` retains Daytona's remaining image- or snapshot-specific creation parameters, and `createOptions` preserves its creation timeout and image-build log callback. Applications may inject an already configured Daytona client instead of `config`, but not both. AML reconstructs Daytona's native request at the adapter boundary rather than translating these values into generic Sandbox configuration.
 
 For each acquisition the provider:
 

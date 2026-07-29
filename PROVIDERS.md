@@ -58,6 +58,7 @@ Direct OpenAI, Anthropic, Google, Ollama, and OpenRouter model clients are lower
 | Local    | `localSandbox()`   | Trusted host-process execution for development and common-runtime tests; not an isolation boundary. |
 | Docker   | `dockerSandbox()`  | Starts a named image, mounts the Workspace, runs bounded commands, and never builds the image.      |
 | Daytona  | `daytonaSandbox()` | Transfers and reconciles a Workspace around one disposable Daytona image or snapshot.               |
+| Modal    | `modalSandbox()`   | Transfers and reconciles a Workspace around one disposable Modal registry image.                    |
 
 ### Provider direction
 
@@ -83,7 +84,6 @@ Repeated use should prefer a prebuilt image or snapshot. AML does not silently i
 | P0       | [E2B](https://www.e2b.dev/docs)                                      | `@aml-jsx/sandbox-e2b`         | Focused agent sandbox API with fast Linux VMs, templates, commands, files, ports, and snapshots. Good minimal remote comparison.                                                                      |
 | P1       | [Cloudflare Sandbox SDK](https://developers.cloudflare.com/sandbox/) | `@aml-jsx/sandbox-cloudflare`  | Strong Worker-native execution boundary with Containers, files, commands, background processes, and service exposure. It also tests a non-Node host runtime and binding-based dependency injection.   |
 | P1       | [Vercel Sandbox](https://vercel.com/docs/sandbox)                    | `@aml-jsx/sandbox-vercel`      | Firecracker microVMs, files, commands, ports, snapshots, and native Vercel authentication. Useful alongside the Vercel AI SDK Agent provider without coupling the two packages.                       |
-| P1       | [Modal Sandboxes](https://modal.com/docs/sdk/js/latest/Sandbox)      | `@aml-jsx/sandbox-modal`       | TypeScript SDK, remote files and processes, tunnels, snapshots, network policy, and native distributed volumes.                                                                                       |
 | P2       | [CodeSandbox SDK](https://codesandbox.io/sdk)                        | `@aml-jsx/sandbox-codesandbox` | Development-oriented microVMs with shells, forks, hibernation, snapshots, previews, and Git-backed persistence.                                                                                       |
 | P2       | [Blaxel Sandboxes](https://docs.blaxel.ai/Sandboxes/Overview)        | `@aml-jsx/sandbox-blaxel`      | Fast remote microVMs, files, processes, previews, networking, volumes, and an MCP endpoint designed for coding agents.                                                                                |
 | P3       | Kubernetes                                                           | `@aml-jsx/sandbox-kubernetes`  | Pods, namespaces, network policies, resource quotas, PVCs, and custom images. Valuable for self-hosted deployments but operationally much larger than the managed SDK adapters.                       |
