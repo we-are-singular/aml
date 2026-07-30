@@ -919,7 +919,7 @@
               </div>
             </div>
 
-            <div class="min-w-0">
+            <div class="flex min-w-0 flex-col">
               <div class="border-b border-line bg-surface px-6 py-4">
                 <div>
                   <h3 id="combo-name" class="font-mono text-xl font-semibold" aria-live="polite">
@@ -930,7 +930,7 @@
                   </p>
                 </div>
               </div>
-              <div>
+              <div class="flex flex-1 flex-col">
                 <div class="flex items-center justify-between bg-[#12110d] px-4 py-2">
                   <span class="font-mono text-[11px] text-white/40">main.tsx</span>
                   <button
@@ -942,7 +942,7 @@
                 </div>
                 <pre
                   id="combo-code"
-                  class="provider-code code-block overflow-x-auto border-0 py-3.5 text-[12.5px] leading-[1.7]"
+                  class="provider-code code-block flex-1 overflow-x-auto border-0 py-3.5 text-[12.5px] leading-[1.7]"
                 ><span class="code-line is-active" data-line="1">import { Agent, AmlRuntime, Sandbox, Workspace, localSandbox, localWorkspace, opencodeAgent } from "@aml-jsx/sdk"</span><span class="code-line" data-line="2">&nbsp;</span><span class="code-line is-active" data-line="3">const provider = opencodeAgent({ model: "opencode-go/glm-5.1" })</span><span class="code-line is-active" data-line="4">const sandbox = localSandbox({ workspace: "./project" })</span><span class="code-line is-active" data-line="5">const workspace = localWorkspace({ directory: "./project" })</span><span class="code-line" data-line="6">const runtime = new AmlRuntime()</span><span class="code-line" data-line="7">&nbsp;</span><span class="code-line" data-line="8">await runtime.evaluate(</span><span class="code-line is-active" data-line="9">  &lt;Workspace id="local-project" load provider={workspace}&gt;</span><span class="code-line" data-line="10">    &lt;Sandbox provider={sandbox}&gt;</span><span class="code-line" data-line="11">      &lt;Agent provider={provider}&gt;Summarize this repository.&lt;/Agent&gt;</span><span class="code-line" data-line="12">    &lt;/Sandbox&gt;</span><span class="code-line" data-line="13">  &lt;/Workspace&gt;,</span><span class="code-line" data-line="14">)</span></pre>
               </div>
             </div>
