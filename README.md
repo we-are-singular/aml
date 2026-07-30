@@ -10,7 +10,7 @@ AML lets you describe agents, prompts, capabilities, execution environments, dur
 
 ## Why AML
 
-Agent SDKs are good at running one provider session. Real workflows usually need more: parallel specialists, ordered synthesis, shared context, custom JavaScript tools, model-specific adapters, sandbox boundaries, durable files, follow-up turns, stateful loops, and useful traces.
+Agent SDKs are good at running one provider session. Real workflows usually need more: parallel specialists, ordered synthesis, shared context, custom JavaScript tools, model-specific adapters, sandbox boundaries, durable files, follow-up turns, and useful traces.
 
 Without a shared runtime, those concerns become orchestration code tied to one provider. AML keeps the workflow declarative while leaving each Agent provider responsible for its own model sessions and native capabilities.
 
@@ -126,7 +126,6 @@ workflows with `@aml-jsx/sdk`.
 | `<File>`             | Writes resolved text, including Agent output, beneath the active Workspace before later siblings run.                        |
 | `<Mcp>`              | Grants the owning Agent a provider-native MCP server by name or an explicit server created with `defineMcpServer()`.         |
 | `<FollowUp>`         | Adds a later turn to the same Agent session. FollowUps are flat, ordered, and resolved before the session starts.            |
-| `<Loop>`             | Repeats fresh Agent sessions over immutable, schema-validated state until an iteration stops changing that state.            |
 | `<Sandbox>`          | Acquires an ephemeral execution environment and scopes a narrowed filesystem policy to descendant Agents.                    |
 | `<Script>`           | Executes resolved source or one literal command through the enclosing Sandbox runtime and returns standard output.           |
 | `<Workspace>`        | Materializes durable files that can survive and be shared across disposable Sandbox leases.                                  |
@@ -184,7 +183,7 @@ The complete built-in compatibility matrix is exercised by the credentialed smok
 
 These proofs use read-write Workspaces because Local, Daytona, and Modal reject access modes they cannot enforce. Codex and OpenCode run their installed CLIs beside the materialized Workspace through the common `SandboxRuntime`; the selected host, image, or snapshot must already contain that executable. Pi remains embedded in AML and routes its declared `bash` Tool through the same runtime. Sandbox providers do not install Agents implicitly.
 
-`<System>`, `<Skill>`, `<FollowUp>`, `<Loop>`, Context, and tree evaluation are runtime-owned and work independently of the selected Agent provider. JavaScript Tool and MCP execution ultimately depend on the Agent provider and environment. Outside a Sandbox, OpenCode and Codex implement both bridges; Pi implements host and JavaScript Tools and rejects MCP grants. Inside a Sandbox, each adapter rejects capabilities whose transport it cannot enforce instead of falling back to the AML host.
+`<System>`, `<Skill>`, `<FollowUp>`, Context, and tree evaluation are runtime-owned and work independently of the selected Agent provider. JavaScript Tool and MCP execution ultimately depend on the Agent provider and environment. Outside a Sandbox, OpenCode and Codex implement both bridges; Pi implements host and JavaScript Tools and rejects MCP grants. Inside a Sandbox, each adapter rejects capabilities whose transport it cannot enforce instead of falling back to the AML host.
 
 Provider factories retain their vendor configuration shapes: `opencodeAgent({ config })` accepts OpenCode's SDK config, while `piAgent({ providers })` accepts Pi's provider map. Both still support their vendor's ambient credential discovery, but neither requires a local profile when configuration is supplied explicitly.
 
@@ -230,7 +229,6 @@ active Sandbox and never falls back to a host child process:
   save={{
     include: ["repo/src/**", "repo/tests/**", "report.md"],
     exclude: ["**/node_modules/**"],
-    retention: 3,
   }}
   writeConcurrency="serial"
 >
@@ -242,6 +240,8 @@ active Sandbox and never falls back to a host child process:
     <Script command="git" args={["status", "--short"]} />
 
     <Script shell="node">{`import { writeFileSync } from "node:fs"; writeFileSync("ready.txt", "yes")`}</Script>
+
+    <Agent provider={builder}>Read task.md, implement it, and write report.md.</Agent>
   </Sandbox>
 </Workspace>
 ```
@@ -267,7 +267,6 @@ Every example is one self-contained AML component. Run one with `npm run example
 | [`structured`](./examples/src/core/structured.tsx)                       | Passes schema-validated Agent data into a later text-producing Agent.                                  |
 | [`context`](./examples/src/core/context.tsx)                             | Injects a session repository and captures it inside a JavaScript Tool without adding it to the prompt. |
 | [`follow-up`](./examples/src/core/follow-up.tsx)                         | Authors several turns inside one provider-owned Agent session.                                         |
-| [`loop`](./examples/src/core/loop.tsx)                                   | Advances immutable, validated state between fresh Agent sessions.                                      |
 | [`skill`](./examples/src/capabilities/skill.tsx)                         | Adds reusable inline instructions to an Agent.                                                         |
 | [`mcp`](./examples/src/capabilities/mcp.tsx)                             | Grants one Agent an MCP server while proving sibling capability isolation.                             |
 | [`sandbox`](./examples/src/resources/sandbox.tsx)                        | Narrows nested Sandbox access while sharing one deterministic outer lease.                             |
@@ -329,6 +328,7 @@ Common commands:
 | `npm run smoke -- --agent pi --sandbox daytona`               | Run one Agent × Sandbox smoke matrix cell with live traces.     |
 | `npm run smoke -- --agent codex`                              | Run one Agent against every registered Sandbox.                 |
 | `npm run smoke -- --sandbox docker`                           | Run every registered Agent against one Sandbox.                 |
+| `npx vite-node sdk/tests/smoke/workspace-s3-chain.smoke.tsx`  | Run the Docker → Daytona → S3 Workspace persistence proof.      |
 | `npm run test:integration --workspace=@aml-jsx/sandbox-modal` | Run Modal's credentialed Workspace round-trip proof.            |
 | `npm run smoke -- --list`                                     | List the complete or filtered matrix without executing it.      |
 
