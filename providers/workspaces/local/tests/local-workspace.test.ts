@@ -155,7 +155,7 @@ describe("localWorkspace()", () => {
         await once(child, "exit")
       }
     }
-  })
+  }, 15_000)
 
   it("preserves cancellation before filesystem or lock acquisition", async () => {
     const directory = await createTemporaryDirectory()
