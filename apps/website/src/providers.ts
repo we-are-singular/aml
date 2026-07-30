@@ -93,18 +93,22 @@ const WORKSPACES: readonly WorkspaceOption[] = [
   },
 ]
 
-/** Lines pinned as "the ones that change": imports, constructions, and Workspace policy. */
-const PINNED_LINES: readonly number[] = [1, 3, 4, 5, 9]
+/** Lines pinned as "the ones that change": provider imports, constructions, and Workspace policy. */
+const PINNED_LINES: readonly number[] = [3, 4, 5, 8, 9, 10, 14]
 /** Lines touched when only the Agent selection changes. */
-const AGENT_LINES: readonly number[] = [1, 3]
+const AGENT_LINES: readonly number[] = [3, 8]
 /** Lines touched when only the Sandbox selection changes. */
-const SANDBOX_LINES: readonly number[] = [1, 4]
+const SANDBOX_LINES: readonly number[] = [4, 9]
 /** Lines touched when only the Workspace selection changes. */
-const WORKSPACE_LINES: readonly number[] = [1, 5, 9]
+const WORKSPACE_LINES: readonly number[] = [5, 10, 14]
 
 function compose(agent: AgentOption, sandbox: SandboxOption, workspace: WorkspaceOption): string {
-  const providers = [agent.fn, sandbox.fn, workspace.fn].sort().join(", ")
-  return `import { Agent, AmlRuntime, Sandbox, Workspace, ${providers} } from "@aml-jsx/sdk"
+  return `import {
+  Agent, AmlRuntime, Sandbox, Workspace,
+  ${agent.fn},
+  ${sandbox.fn},
+  ${workspace.fn},
+} from "@aml-jsx/sdk"
 
 const provider = ${agent.construction}
 const sandbox = ${sandbox.construction}
@@ -131,7 +135,7 @@ export async function initProviders(): Promise<void> {
 
   let agentId = "opencode"
   let sandboxId = "local"
-  let workspaceId = "workspace-local"
+  let workspaceId = "workspace-s3"
   // Rapid clicks resolve out of order; only the latest render may paint.
   let renderToken = 0
 
