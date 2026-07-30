@@ -1,7 +1,10 @@
 {
   "extends": "../../../tsconfig.json",
   "compilerOptions": {
-    "noEmit": true
+    "noEmit": true,
+    "paths": {
+      "@aml-jsx/sandbox-local": ["../../sandboxes/local/src/index.ts"]
+    }
   },
   "include": ["scripts/**/*.ts", "src/**/*.ts", "tests/**/*.ts", "vite.config.ts"]
 }
