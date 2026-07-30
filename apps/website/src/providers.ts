@@ -2,7 +2,7 @@ import { highlightLines } from "./highlight"
 
 /**
  * Runtime packages demo: one fixed Agent tree shown against every built-in
- * Agent × Sandbox combination. Picking either adapter re-renders the
+ * Agent × Sandbox × Workspace combination. Picking any adapter re-renders the
  * configured construction while the tree stays provider-agnostic.
  */
 
@@ -18,6 +18,14 @@ interface SandboxOption {
   label: string
   fn: string
   construction: string
+}
+
+interface WorkspaceOption {
+  id: string
+  label: string
+  fn: string
+  construction: string
+  props: string
 }
 
 const AGENTS: readonly AgentOption[] = [
@@ -68,50 +76,75 @@ const SANDBOXES: readonly SandboxOption[] = [
   },
 ]
 
-/** Lines pinned as "the ones that change": import, provider, sandbox. */
-const PINNED_LINES: readonly number[] = [1, 3, 4]
+const WORKSPACES: readonly WorkspaceOption[] = [
+  {
+    id: "workspace-local",
+    label: "Local folder",
+    fn: "localWorkspace",
+    construction: `localWorkspace({ directory: "./project" })`,
+    props: `id="local-project" load`,
+  },
+  {
+    id: "workspace-s3",
+    label: "S3",
+    fn: "s3Workspace",
+    construction: `s3Workspace({ bucket: "agent-workspaces" })`,
+    props: `id="thread-42" load save={{ include: ["**/*.md"] }}`,
+  },
+]
+
+/** Lines pinned as "the ones that change": imports, constructions, and Workspace policy. */
+const PINNED_LINES: readonly number[] = [1, 3, 4, 5, 9]
 /** Lines touched when only the Agent selection changes. */
 const AGENT_LINES: readonly number[] = [1, 3]
 /** Lines touched when only the Sandbox selection changes. */
 const SANDBOX_LINES: readonly number[] = [1, 4]
+/** Lines touched when only the Workspace selection changes. */
+const WORKSPACE_LINES: readonly number[] = [1, 5, 9]
 
-function compose(agent: AgentOption, sandbox: SandboxOption): string {
-  const providers = [agent.fn, sandbox.fn].sort().join(", ")
-  return `import { Agent, AmlRuntime, Sandbox, ${providers} } from "@aml-jsx/sdk"
+function compose(agent: AgentOption, sandbox: SandboxOption, workspace: WorkspaceOption): string {
+  const providers = [agent.fn, sandbox.fn, workspace.fn].sort().join(", ")
+  return `import { Agent, AmlRuntime, Sandbox, Workspace, ${providers} } from "@aml-jsx/sdk"
 
 const provider = ${agent.construction}
 const sandbox = ${sandbox.construction}
+const workspace = ${workspace.construction}
 const runtime = new AmlRuntime()
 
 await runtime.evaluate(
-  <Sandbox provider={sandbox}>
-    <Agent provider={provider}>Summarize this repository.</Agent>
-  </Sandbox>,
+  <Workspace ${workspace.props} provider={workspace}>
+    <Sandbox provider={sandbox}>
+      <Agent provider={provider}>Summarize this repository.</Agent>
+    </Sandbox>
+  </Workspace>,
 )`
 }
 
 export async function initProviders(): Promise<void> {
   const agentGroup = document.querySelector<HTMLElement>("#pick-agent")
   const sandboxGroup = document.querySelector<HTMLElement>("#pick-sandbox")
+  const workspaceGroup = document.querySelector<HTMLElement>("#pick-workspace")
   const name = document.querySelector<HTMLElement>("#combo-name")
   const code = document.querySelector<HTMLElement>("#combo-code")
   const copy = document.querySelector<HTMLButtonElement>("#combo-copy")
-  if (!agentGroup || !sandboxGroup || !name || !code) return
+  if (!agentGroup || !sandboxGroup || !workspaceGroup || !name || !code) return
 
   let agentId = "opencode"
   let sandboxId = "local"
+  let workspaceId = "workspace-local"
   // Rapid clicks resolve out of order; only the latest render may paint.
   let renderToken = 0
 
   const agent = (): AgentOption => AGENTS.find(option => option.id === agentId) ?? AGENTS[0]!
   const sandbox = (): SandboxOption => SANDBOXES.find(option => option.id === sandboxId) ?? SANDBOXES[0]!
+  const workspace = (): WorkspaceOption => WORKSPACES.find(option => option.id === workspaceId) ?? WORKSPACES[0]!
 
   async function render(changed: readonly number[]): Promise<void> {
     const token = ++renderToken
-    const html = await highlightLines(compose(agent(), sandbox()))
+    const html = await highlightLines(compose(agent(), sandbox(), workspace()))
     if (token !== renderToken || !name || !code) return
 
-    name.textContent = `${agent().label} × ${sandbox().label}`
+    name.textContent = `${agent().label} × ${sandbox().label} × ${workspace().label}`
     code.innerHTML = html
 
     for (const line of code.querySelectorAll<HTMLElement>(".code-line")) {
@@ -164,6 +197,16 @@ export async function initProviders(): Promise<void> {
     }
   )
   wireGroup(
+    workspaceGroup,
+    WORKSPACES.map(option => option.id),
+    id => {
+      if (id === workspaceId) return
+      workspaceId = id
+      syncRows(workspaceGroup, id)
+      void render(WORKSPACE_LINES)
+    }
+  )
+  wireGroup(
     sandboxGroup,
     SANDBOXES.map(option => option.id),
     id => {
@@ -177,7 +220,7 @@ export async function initProviders(): Promise<void> {
   // Copies the data model rather than the DOM so no highlight markup leaks in.
   copy?.addEventListener("click", async () => {
     if (!copy) return
-    await navigator.clipboard.writeText(compose(agent(), sandbox()))
+    await navigator.clipboard.writeText(compose(agent(), sandbox(), workspace()))
     copy.textContent = "copied ✓"
     window.setTimeout(() => (copy.textContent = "copy"), 1200)
   })

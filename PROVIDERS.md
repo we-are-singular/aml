@@ -11,7 +11,7 @@ Provider implementations live under private `providers/<kind>/<name>` workspaces
 3. An S3-compatible Workspace, to prove remote durable materialization independently of a Sandbox vendor.
 4. Vercel AI SDK, to prove that AML Agents do not require a coding CLI or built-in filesystem.
 5. TanStack AI, to compare two provider-agnostic model SDKs against the same AML Agent contract.
-6. One native volume Workspace paired with its Sandbox provider, to design the cross-provider mount contract deliberately.
+6. Volume-mounted Workspaces paired with compatible Sandbox providers, to design the cross-provider mount contract deliberately.
 
 ## Agent providers
 
@@ -124,31 +124,25 @@ its own locking and transport guarantees.
 
 ### Priority candidates
 
-| Priority | Provider             | Proposed package                | Kind           | Notes                                                                                                                                                                                                       |
-| -------- | -------------------- | ------------------------------- | -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| P1       | Git                  | `@aml-jsx/workspace-git`        | Source control | Clone a repository and ref into a materialization. Saving must be explicit: return a patch, create a local commit, push a branch, or remain read-only. Automatic pushes must never be the implicit default. |
-| P1       | Google Cloud Storage | `@aml-jsx/workspace-gcs`        | Synchronized   | Covers deployments that cannot or should not use an S3-compatible endpoint.                                                                                                                                 |
-| P1       | Azure Blob Storage   | `@aml-jsx/workspace-azure-blob` | Synchronized   | Azure-native object storage with its own identity and concurrency model.                                                                                                                                    |
-| P2       | SFTP/SSH             | `@aml-jsx/workspace-sftp`       | Synchronized   | Useful for existing servers and appliances where object storage is unavailable. Requires careful atomic-save and conflict semantics.                                                                        |
-| P2       | Network filesystem   | `@aml-jsx/workspace-nfs`        | Mounted        | NFS, EFS, Azure Files, and similar filesystems can expose a shared tree, but mounting depends on Sandbox networking and privileges.                                                                         |
+| Priority | Provider       | Kind         | Notes                                                                                                                                              |
+| -------- | -------------- | ------------ | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| P1       | Volume mounts  | Mounted      | Expose provider-native volume mount options through compatible Sandbox providers instead of inventing a Docker-specific Workspace abstraction.     |
+| P1       | Network mounts | Mounted      | Support shared filesystems such as SMB and NFS when the Sandbox network and privilege model can mount them safely.                                 |
+| P2       | SFTP           | Synchronized | Reuse shared persistence where possible while defining atomic publication and conflict behavior over an existing server.                           |
+| P2       | Google Drive   | Synchronized | Map Drive folders and files into a materialized Workspace while handling its non-filesystem identity, revision, and rename semantics deliberately. |
 
-### Native volume candidates
-
-| Sandbox ecosystem | Proposed package                    | Storage                           |
-| ----------------- | ----------------------------------- | --------------------------------- |
-| Docker            | `@aml-jsx/workspace-docker-volume`  | Named Docker volume               |
-| Daytona           | `@aml-jsx/workspace-daytona-volume` | Daytona shared volume and subpath |
-| Modal             | `@aml-jsx/workspace-modal-volume`   | Modal Volume                      |
-| Blaxel            | `@aml-jsx/workspace-blaxel-volume`  | Blaxel Volume                     |
-| Kubernetes        | `@aml-jsx/workspace-kubernetes-pvc` | PersistentVolumeClaim             |
-
-Native volumes require coordination between the Workspace and Sandbox providers. The Workspace should produce an opaque mount descriptor, and only a compatible Sandbox provider should interpret it. The SDK should reject incompatible combinations before starting Agents. This contract should be designed and added to the SPEC before implementing the first native volume provider.
+Volume mounts require coordination between the Workspace and Sandbox providers. The Workspace should produce an
+opaque mount descriptor, and only a compatible Sandbox provider should interpret it. The SDK should reject
+incompatible combinations before starting Agents. This contract should be designed and added to the SPEC before
+implementing the first volume-mounted Workspace.
 
 ### Block storage
 
 Raw block devices such as EBS, GCE Persistent Disk, and Azure Managed Disk are not good standalone AML Workspace providers. Attaching and mounting them is coupled to the compute provider, region, operating system, filesystem, and exclusive-writer rules. Represent them through a compatible Sandbox-native volume provider rather than pretending they are portable storage.
 
-For shared repository trees, object storage synchronization, provider-native volumes, network filesystems, and Git are better fits. Databases that genuinely require block storage should normally run as external services or inside infrastructure designed for them, not inside a disposable agent Workspace.
+For shared repository trees, object storage synchronization, volume mounts, and network filesystems are better fits.
+Databases that genuinely require block storage should normally run as external services or inside infrastructure
+designed for them, not inside a disposable agent Workspace.
 
 ## Acceptance checklist
 

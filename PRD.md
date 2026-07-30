@@ -421,8 +421,10 @@ Research references:
 - automated package publication
 - Worker-specific SDK entry and generic remote Agent-host integration
 - first-class Git checkout, worktree, commit, push, or pull-request behavior
-- provider-native Workspace mounts and incremental folder synchronization
-- SFTP or rsync Workspace storage adapters
+- Workspace volume mounts coordinated with compatible Sandbox providers
+- network-mounted Workspaces, including SMB and NFS-style filesystems
+- SFTP Workspace storage
+- Google Drive Workspace storage
 - Workspace-owned Skill materialization
 - `<File>` host sources, append/create modes, binary content, and guest-side Sandbox writes
 
@@ -450,7 +452,8 @@ These remain product questions until resolved into `SPEC.md`:
 - trace timeline or Gantt visualization
 - interactive Agent TUI
 - remote Sandbox fleets
-- mounted or incrementally synchronized Workspace storage
+- volume-mounted and network-mounted Workspace storage
+- SFTP and Google Drive Workspace providers
 - first-class Git workflows if sandboxed Script proves insufficient
 - Agent-as-Tool with explicit resource and budget semantics
 

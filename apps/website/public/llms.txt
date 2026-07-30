@@ -95,9 +95,11 @@ async function WeeklyStandup() {
 - `<System>` adds resolved content to the nearest Agent's system prompt.
 - `<Tool>` grants a provider-native Tool name or a JavaScript Tool created with `defineTool()`.
 - `<Skill>` adds reusable inline instructions or instructions loaded from a local file.
+- `<File>` writes resolved text, including Agent output, beneath the active Workspace before later siblings run.
 - `<Mcp>` grants a provider-native MCP name or a server created with `defineMcpServer()`.
 - `<FollowUp>` adds an ordered later turn to the same provider-owned Agent session.
 - `<Sandbox>` acquires ephemeral execution and scopes a narrowed filesystem policy to descendants.
+- `<Script>` executes an argument vector or resolved sh, bash, or node source only through an active Sandbox runtime.
 - `<Workspace>` materializes durable files that can survive across disposable Sandbox leases.
 - `<>...</>` groups AML values without adding prompt text or another runtime boundary.
 
@@ -112,6 +114,7 @@ Scoped Context and `<Loop>` exist as draft surfaces. Do not depend on them for s
 - `defineAgentProvider()`: implements an Agent harness adapter.
 - `defineSandboxProvider()`: implements ephemeral execution.
 - `defineWorkspaceProvider()`: implements durable filesystem materialization.
+- `createPersistentWorkspaceProvider()`: adds archive or folder revisions, selection, retention, and atomic publication to a storage adapter.
 - `runtime.on()` and `runtime.once()`: subscribe to runtime lifecycle and trace events.
 
 ## Providers and integrations
@@ -126,11 +129,13 @@ The public SDK currently exports the runtime, built-in providers, and their type
 - `daytonaSandbox({ config, create, image })`: disposable Daytona image or snapshot execution with Workspace transfer, bounded commands, reconciliation, and cleanup. Select `image` or `snapshot` at the factory root; `create` retains the remaining native creation options.
 - `modalSandbox({ config, create, image })`: disposable Modal registry-image execution with Workspace transfer, bounded commands, reconciliation, and cleanup.
 - `localWorkspace({ directory })`: durable local-directory materialization with cross-process writer locking.
+- `filesystemWorkspace({ directory, format })`: staged archive or folder revisions stored on the local filesystem.
+- `s3Workspace({ bucket, config, format })`: staged archive or folder revisions stored through Amazon S3 or an S3-compatible API such as Cloudflare R2 or MinIO.
 - `@aml-jsx/sdk/testing`: deterministic Agent, Sandbox, and Workspace providers plus provider conformance suites.
 
 OpenCode, Codex, and Pi all implement the common Sandbox compatibility handshake. The credentialed smoke matrix runs each Agent through Local, Docker, Daytona, and Modal with the same model-driven file proof. Codex and OpenCode require their installed CLI in the selected environment; Pi routes its native bash Tool through the runtime. Capability support still differs by Agent, and unsupported remote transports reject instead of falling back to the AML host.
 
-OpenCode, Codex, Pi, Local Sandbox, Docker, Daytona, Modal, and local disk are implemented. Other agent harnesses, sandbox platforms, and storage providers shown on the website are roadmap candidates, not current package exports.
+OpenCode, Codex, Pi, Local Sandbox, Docker, Daytona, Modal, direct local Workspaces, staged filesystem Workspaces, and S3-compatible Workspaces are implemented. Other agent harnesses, sandbox platforms, and non-S3 storage providers shown on the website are roadmap candidates, not current package exports.
 
 ## Capabilities
 
@@ -162,9 +167,13 @@ Tool, MCP, Skill, and FollowUp declarations belong to their nearest Agent. Grant
 A Sandbox is ephemeral execution. A Workspace is durable materialization. Use them together when disposable execution must read or write persistent files:
 
 ```tsx
-<Workspace id="review-42" provider={Project}>
+<Workspace id="review-42" provider={Project} load save={{ include: ["**/*.md"] }}>
+  <File path="task.md">
+    <Agent provider={Planner}>Write a focused implementation task.</Agent>
+  </File>
   <Sandbox provider={Docker} access="read-write">
-    <Agent provider={OpenCode}>Write findings.md.</Agent>
+    <Script command="npm" args={["test"]} />
+    <Agent provider={OpenCode}>Read task.md and write findings.md.</Agent>
   </Sandbox>
   <Sandbox provider={Docker} access="read-only">
     <Agent provider={Codex}>Review findings.md.</Agent>

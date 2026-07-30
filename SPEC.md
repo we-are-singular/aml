@@ -1461,7 +1461,7 @@ Sandbox release and reconciliation. Agents inside one Sandbox still share its li
 parallel. `writeConcurrency="parallel"` permits multiple writable root Sandboxes; this is appropriate for shared
 mounts, while providers that transfer independent snapshots may overwrite reconciled state.
 
-Workspace providers may use disk, Docker volumes, object storage, or another durable backend. When `lock` is enabled,
+Workspace providers may use disk, volume mounts, object storage, or another durable backend. When `lock` is enabled,
 another acquisition of the same durable identity must reject with the provider-neutral `WorkspaceConflictError`
 without returning a lease. Releasing the active lease must make that identity acquirable again. With `lock={false}`,
 revision-backed providers may allow concurrent materializations but must still reject stale conditional publication;
@@ -2190,8 +2190,10 @@ AML does not specify:
 - provider-independent streaming
 - Tool rollback
 - Workspace merge algorithms
-- provider-native Workspace mounts and incremental synchronization
-- SFTP and rsync Workspace adapters
+- Workspace volume mounts coordinated with compatible Sandbox providers
+- network-mounted Workspaces, including SMB and NFS-style filesystems
+- SFTP Workspace storage
+- Google Drive Workspace storage
 - first-class Git checkout, worktree, commit, push, or pull-request behavior
 - Workspace-owned Skill materialization
 - File host sources, append/create modes, binary content, and guest-side writes

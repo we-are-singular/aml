@@ -1396,15 +1396,23 @@ Proof:
 - retention deletes complete folder revisions without touching current state
 - the second adapter contains no selection, retention, index-schema, or archive logic
 
-### Phase 9: Provider-native attached Workspace
+### Phase 9: Additional Workspace transports
 
-Only after measuring the archive transfer path, evaluate a materially different provider using a native volume or
-mount. It must preserve the same authored overlays, access policy, persistence selection, deletion behavior, and
-writer coordination.
+Only after measuring the archive transfer path, evaluate materially different storage paths:
+
+- volume mounts coordinated with the Sandbox provider
+- network mounts such as SMB or NFS
+- SFTP synchronization
+- Google Drive synchronization
+
+Mounted storage must preserve the same authored overlays, access policy, persistence selection, deletion behavior,
+and writer coordination. Synchronized providers should reuse `WorkspacePersistence` when their storage operations can
+honor its publication contract.
 
 Proof:
 
-- the provider avoids unnecessary coordinator round trips
+- mounted providers avoid unnecessary coordinator round trips
+- synchronized providers restore and publish through the shared conformance suite
 - the observable Workspace behavior matches staged local and S3 archive providers
 
 ### Phase 10: Git-aware workflows, only if Script proves insufficient

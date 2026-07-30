@@ -36,6 +36,27 @@ const synthesis = await evaluate(
 return <Agent>Prepare the standup from: {synthesis}</Agent>`,
   },
   {
+    id: "composition",
+    group: "Concepts",
+    name: "Composition",
+    signature: "one result → another primitive",
+    description:
+      "Resolved AML can drive more than prompt text. Here one Agent authors a File, File materializes it in the Workspace, and a later sandboxed Agent reads and executes that handoff.",
+    note: "The same post-order rule powers Agent inside Agent and Agent inside System: the consumer runs only after its child result is complete.",
+    file: "concepts/composition.tsx",
+    code: `<Workspace id="review-42" provider={Project} save>
+  <File path="handoff/plan.md">
+    <Agent provider={Planner}>Write the implementation plan.</Agent>
+  </File>
+
+  <Sandbox access="read-write" provider={Docker}>
+    <Agent provider={Builder}>
+      Read handoff/plan.md, implement it, and write report.md.
+    </Agent>
+  </Sandbox>
+</Workspace>`,
+  },
+  {
     id: "parallel-child-agents",
     group: "Concepts",
     name: "Parallel child Agents",
@@ -69,7 +90,7 @@ return <Agent>Prepare the standup from: {synthesis}</Agent>`,
       "A Sandbox is the disposable place where an Agent executes. A Workspace materializes files before that work begins and saves them after it ends.",
     note: "Use Sandbox for confinement and execution; use Workspace when files must survive beyond one disposable lease.",
     file: "concepts/execution-and-files.tsx",
-    code: `<Workspace provider={Local} name="repository">
+    code: `<Workspace id="repository" provider={Local}>
   <Sandbox provider={Docker} root="workspace">
     <Agent provider={OpenCode}>
       Run the checks and update the report.
@@ -160,6 +181,22 @@ const [codexReview, openCodeReview] = await Promise.all([
 </Agent>`,
   },
   {
+    id: "file",
+    group: "Components",
+    name: "<File>",
+    signature: '<File path="handoff/plan.md">…</File>',
+    description:
+      "Writes resolved child text beneath the active Workspace before later siblings run. A child Agent can generate the contents, and File does not duplicate that text into the surrounding prompt.",
+    note: "File currently writes the host Workspace before Sandbox acquisition; guest-side Sandbox writes remain explicit Agent or Script work.",
+    file: "file.tsx",
+    code: `<Workspace id="review-42" provider={Project} save>
+  <File path="handoff/plan.md">
+    <Agent provider={Planner}>Create the migration plan.</Agent>
+  </File>
+  <Agent provider={Reviewer}>Review handoff/plan.md.</Agent>
+</Workspace>`,
+  },
+  {
     id: "mcp",
     group: "Components",
     name: "<Mcp>",
@@ -207,15 +244,38 @@ const [codexReview, openCodeReview] = await Promise.all([
 </Sandbox>`,
   },
   {
+    id: "script",
+    group: "Components",
+    name: "<Script>",
+    signature: '<Script command="…" /> | <Script shell="sh">',
+    description:
+      "Runs an argument vector or resolved sh, bash, or node source only through the active Sandbox runtime. Successful standard output becomes AML text for later composition.",
+    note: "Script is deliberately dangerous. The Sandbox supplies confinement; AML never falls back to a host child process.",
+    file: "script.tsx",
+    code: `<Sandbox access="read-write" provider={Docker}>
+  <Script command="npm" args={["test"]} timeoutMs={120_000} />
+
+  <Script shell="sh">
+    <Agent provider={Planner}>Write a script that checks report.md.</Agent>
+  </Script>
+</Sandbox>`,
+  },
+  {
     id: "workspace",
     group: "Components",
     name: "<Workspace>",
-    signature: '<Workspace provider={…} name="…">',
+    signature: '<Workspace id="…" load save={…}>',
     description:
-      "Materializes durable files that survive and can be shared across disposable Sandbox leases — caches, build outputs, and handoff artifacts that outlive any single run.",
+      "Loads one durable filesystem snapshot, supplies its cwd to descendant Sandboxes, and optionally saves a selected, .gitignore-aware revision after execution.",
+    note: "Run locking and writable-Sandbox concurrency are separate controls: lock protects the durable identity across processes; writeConcurrency coordinates Sandboxes inside one evaluation.",
     file: "workspace.tsx",
-    code: `<Workspace provider={Local} name="build-cache">
-  <Sandbox provider={Docker} root="repository">
+    code: `<Workspace
+  id="review-42"
+  provider={S3}
+  load
+  save={{ include: ["src/**", "report.md"] }}
+>
+  <Sandbox access="read-write" provider={Docker}>
     <Agent provider={OpenCode}>Run the benchmark suite.</Agent>
   </Sandbox>
 </Workspace>`,
@@ -245,7 +305,11 @@ const [codexReview, openCodeReview] = await Promise.all([
     description:
       "Evaluates a complete AML tree, owns budgets and lifecycle events, and returns the final text output. One runtime can evaluate many trees; each evaluation stays isolated.",
     file: "runtime.ts",
-    code: `const runtime = new AmlRuntime()
+    code: `const runtime = new AmlRuntime({
+  agentProvider: OpenCode,
+  sandboxProvider: Docker,
+  workspaceProvider: Project,
+})
 runtime.on("trace", createConsoleTracer())
 
 const text = await runtime.evaluate(<Review />)`,
@@ -322,9 +386,9 @@ const findings = await evaluate(
     id: "define-resource-providers",
     group: "Runtime APIs",
     name: "defineSandboxProvider() / defineWorkspaceProvider()",
-    signature: "defineSandboxProvider({ name, … })",
+    signature: "defineWorkspaceProvider({ name, acquire })",
     description:
-      "Defines an ephemeral execution provider (containers, microVMs) or a durable filesystem materialization provider (local dirs, object storage). Sandbox leases and Workspace locks are runtime-managed.",
+      "Defines an ephemeral execution provider or a durable materialization provider. AML validates each acquired lease and owns save-before-release lifecycle ordering.",
     file: "define-providers.ts",
     code: `const FlyMachines = defineSandboxProvider({
   name: "fly-machines",
@@ -333,7 +397,42 @@ const findings = await evaluate(
 
 const S3Workspace = defineWorkspaceProvider({
   name: "s3",
-  // materialize durable files with writer locking
+  async acquire(request) {
+    return materializeWorkspace(request)
+  },
+})`,
+  },
+  {
+    id: "persistent-workspace-provider",
+    group: "Runtime APIs",
+    name: "PersistentWorkspace",
+    signature: "createPersistentWorkspaceProvider({ storage, format? })",
+    description:
+      "Builds revision-backed Workspace behavior over a small storage adapter. AML owns archive or folder snapshots, selection, retention, validation, and atomic workspace.json publication.",
+    note: 'format defaults to "archive"; adapters provide scoped read, write, list, delete, and release operations.',
+    file: "persistent-workspace.ts",
+    code: `const Project = createPersistentWorkspaceProvider({
+  format: "archive",
+  storage: new MyWorkspaceStorage(),
+  temporaryDirectory: "/var/tmp",
+})`,
+  },
+  {
+    id: "workspace-factories",
+    group: "Runtime APIs",
+    name: "localWorkspace() / filesystemWorkspace() / s3Workspace()",
+    signature: "s3Workspace({ bucket, config?, format? })",
+    description:
+      "Creates a built-in Workspace provider: direct local files, staged filesystem revisions, or S3-compatible object storage using the same persistence contract.",
+    note: "S3-compatible services must honor the conditional writes used for locking and atomic index publication.",
+    file: "workspace-providers.ts",
+    code: `const Project = s3Workspace({
+  bucket: "agent-workspaces",
+  config: {
+    endpoint: process.env.R2_ENDPOINT,
+    region: "auto",
+  },
+  format: "archive",
 })`,
   },
   {

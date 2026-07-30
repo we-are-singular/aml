@@ -441,7 +441,8 @@
           </h2>
           <p class="reveal mt-5 text-[15px] leading-relaxed text-ink-soft" style="--reveal-delay: 120ms">
             Every built-in Agent runs across every built-in Sandbox. Use OpenCode, Codex, or Pi with trusted local
-            execution, a named Docker image, Daytona, or Modal without rewriting the Agent tree.
+            execution, Docker, Daytona, or Modal, then keep files locally or in S3-compatible object storage without
+            rewriting the Agent tree.
           </p>
         </div>
 
@@ -658,7 +659,7 @@
           <div class="grid gap-4 p-5 sm:p-6 lg:grid-cols-[170px_1fr] lg:items-center">
             <div>
               <p class="font-mono text-[11px] uppercase tracking-wider text-ok">workspaces</p>
-              <p class="mt-1 text-[12.5px] text-muted">durable object storage</p>
+              <p class="mt-1 text-[12.5px] text-muted">local & S3-compatible storage</p>
             </div>
             <div class="flex flex-wrap items-center gap-3">
               <span class="integration-logo" tabindex="0" aria-label="Local disk" data-tooltip="Local disk">
@@ -672,102 +673,107 @@
                   />
                 </svg>
               </span>
-              <span class="integration-roadmap-label">roadmap →</span>
-              <span
-                class="integration-logo is-roadmap"
-                tabindex="0"
-                aria-label="Docker volumes — on the roadmap"
-                data-tooltip="Docker volumes · on the roadmap"
-              >
-                <img src="https://cdn.simpleicons.org/docker" alt="" />
-              </span>
-              <span
-                class="integration-logo is-roadmap"
-                tabindex="0"
-                aria-label="Amazon S3 — on the roadmap"
-                data-tooltip="Amazon S3 · on the roadmap"
-              >
+              <span class="integration-logo" tabindex="0" aria-label="Amazon S3" data-tooltip="Amazon S3">
                 <img src="https://unpkg.com/@lobehub/icons-static-svg@1.94.0/icons/aws-color.svg" alt="" />
               </span>
               <span
-                class="integration-logo is-roadmap"
+                class="integration-logo"
                 tabindex="0"
-                aria-label="Cloudflare R2 — on the roadmap"
-                data-tooltip="Cloudflare R2 · on the roadmap"
+                aria-label="Cloudflare R2 — S3 compatible"
+                data-tooltip="Cloudflare R2 (S3 compatible)"
               >
                 <img src="https://cdn.simpleicons.org/cloudflare" alt="" />
               </span>
               <span
-                class="integration-logo is-roadmap"
+                class="integration-logo"
                 tabindex="0"
-                aria-label="Backblaze B2 — on the roadmap"
-                data-tooltip="Backblaze B2 · on the roadmap"
+                aria-label="Backblaze B2 — S3 compatible"
+                data-tooltip="Backblaze B2 (S3 compatible)"
               >
                 <img src="https://cdn.simpleicons.org/backblaze" alt="" />
               </span>
               <span
-                class="integration-logo is-roadmap"
+                class="integration-logo"
                 tabindex="0"
-                aria-label="MinIO — on the roadmap"
-                data-tooltip="MinIO · on the roadmap"
+                aria-label="MinIO — S3 compatible"
+                data-tooltip="MinIO (S3 compatible)"
               >
                 <img src="https://cdn.simpleicons.org/minio" alt="" />
               </span>
               <span
-                class="integration-logo is-roadmap"
+                class="integration-logo"
                 tabindex="0"
-                aria-label="DigitalOcean Spaces — maybe"
-                data-tooltip="DigitalOcean Spaces · maybe"
+                aria-label="DigitalOcean Spaces — S3 compatible"
+                data-tooltip="DigitalOcean Spaces (S3 compatible)"
               >
                 <img src="https://cdn.simpleicons.org/digitalocean" alt="" />
               </span>
               <span
-                class="integration-logo is-roadmap"
+                class="integration-logo"
                 tabindex="0"
-                aria-label="Google Cloud Storage — on the roadmap"
-                data-tooltip="Google Cloud Storage · on the roadmap"
-              >
-                <img src="https://cdn.simpleicons.org/googlecloud" alt="" />
-              </span>
-              <span
-                class="integration-logo is-roadmap"
-                tabindex="0"
-                aria-label="Azure Blob Storage — on the roadmap"
-                data-tooltip="Azure Blob Storage · on the roadmap"
-              >
-                <img src="https://unpkg.com/@lobehub/icons-static-svg@1.94.0/icons/azure-color.svg" alt="" />
-              </span>
-              <span
-                class="integration-logo is-roadmap"
-                tabindex="0"
-                aria-label="Supabase Storage — maybe"
-                data-tooltip="Supabase Storage · maybe"
-              >
-                <img src="https://cdn.simpleicons.org/supabase" alt="" />
-              </span>
-              <span
-                class="integration-logo is-roadmap"
-                tabindex="0"
-                aria-label="Wasabi Object Storage — maybe"
-                data-tooltip="Wasabi Object Storage · maybe"
+                aria-label="Wasabi Object Storage — S3 compatible"
+                data-tooltip="Wasabi Object Storage (S3 compatible)"
               >
                 <img src="https://cdn.simpleicons.org/wasabi" alt="" />
               </span>
               <span
-                class="integration-logo is-roadmap"
+                class="integration-logo"
                 tabindex="0"
-                aria-label="Vultr Object Storage — maybe"
-                data-tooltip="Vultr Object Storage · maybe"
+                aria-label="Vultr Object Storage — S3 compatible"
+                data-tooltip="Vultr Object Storage (S3 compatible)"
               >
                 <img src="https://cdn.simpleicons.org/vultr" alt="" />
               </span>
               <span
-                class="integration-logo is-roadmap"
+                class="integration-logo"
                 tabindex="0"
-                aria-label="Scaleway Object Storage — maybe"
-                data-tooltip="Scaleway Object Storage · maybe"
+                aria-label="Scaleway Object Storage — S3 compatible"
+                data-tooltip="Scaleway Object Storage (S3 compatible)"
               >
                 <img src="https://cdn.simpleicons.org/scaleway" alt="" />
+              </span>
+              <span class="integration-roadmap-label">roadmap →</span>
+              <span
+                class="integration-logo is-roadmap"
+                tabindex="0"
+                aria-label="Volume mounts — on the roadmap"
+                data-tooltip="Volume mounts · on the roadmap"
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+                  <ellipse cx="12" cy="5.5" rx="7.5" ry="3" />
+                  <path d="M4.5 5.5v6c0 1.7 3.4 3 7.5 3s7.5-1.3 7.5-3v-6m-15 6v6c0 1.7 3.4 3 7.5 3s7.5-1.3 7.5-3v-6" />
+                </svg>
+              </span>
+              <span
+                class="integration-logo is-roadmap"
+                tabindex="0"
+                aria-label="Network mounts — on the roadmap"
+                data-tooltip="Network mounts · on the roadmap"
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+                  <circle cx="5" cy="12" r="2.5" />
+                  <circle cx="19" cy="6" r="2.5" />
+                  <circle cx="19" cy="18" r="2.5" />
+                  <path d="m7.3 11 9.4-4m-9.4 6 9.4 4" />
+                </svg>
+              </span>
+              <span
+                class="integration-logo is-roadmap"
+                tabindex="0"
+                aria-label="SFTP — on the roadmap"
+                data-tooltip="SFTP · on the roadmap"
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+                  <path d="M4 7h10m0 0-3-3m3 3-3 3M20 17H10m0 0 3-3m-3 3 3 3" stroke-linecap="round" />
+                </svg>
+              </span>
+              <span
+                class="integration-logo is-roadmap"
+                tabindex="0"
+                aria-label="Google Drive — on the roadmap"
+                data-tooltip="Google Drive · on the roadmap"
+              >
+                <img src="https://cdn.simpleicons.org/googledrive" alt="" />
               </span>
             </div>
           </div>
@@ -778,7 +784,7 @@
           <p class="font-mono text-[11px] uppercase tracking-wider text-muted">runtime packages</p>
           <p class="font-mono text-[12px] text-muted">all from @aml-jsx/sdk</p>
         </div>
-        <!-- Pick an Agent and a Sandbox; the tree below never changes. Mirrors the reference box chrome. -->
+        <!-- Pick each provider boundary; the authored tree below never changes. Mirrors the reference box chrome. -->
         <div class="reveal mt-5 overflow-hidden rounded-2xl border border-line bg-paper" style="--reveal-delay: 60ms">
           <div class="grid lg:grid-cols-[minmax(0,0.3fr)_minmax(0,0.7fr)]">
             <div class="border-b border-line lg:border-r lg:border-b-0">
@@ -826,7 +832,7 @@
                   </button>
                 </div>
               </div>
-              <div class="px-5 py-4">
+              <div class="border-b border-line px-5 py-4">
                 <p class="font-mono text-[11px] uppercase tracking-wider text-signal">sandbox</p>
                 <div id="pick-sandbox" class="mt-3 space-y-2" role="radiogroup" aria-label="Sandbox adapter">
                   <button type="button" role="radio" aria-checked="true" data-pick="local" class="pick-row is-active">
@@ -873,14 +879,54 @@
                   </button>
                 </div>
               </div>
+              <div class="px-5 py-4">
+                <p class="font-mono text-[11px] uppercase tracking-wider text-ok">workspace</p>
+                <div id="pick-workspace" class="mt-3 space-y-2" role="radiogroup" aria-label="Workspace adapter">
+                  <button
+                    type="button"
+                    role="radio"
+                    aria-checked="true"
+                    data-pick="workspace-local"
+                    class="pick-row is-active"
+                  >
+                    <span class="pick-row-label">
+                      <svg
+                        class="pick-row-icon"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="1.8"
+                        aria-hidden="true"
+                      >
+                        <path d="M3.5 6.5h6l2 2h9v9a2 2 0 0 1-2 2h-15z" stroke-linejoin="round" />
+                      </svg>
+                      Local folder
+                    </span>
+                    <span class="pick-row-fn">localWorkspace</span>
+                  </button>
+                  <button type="button" role="radio" aria-checked="false" data-pick="workspace-s3" class="pick-row">
+                    <span class="pick-row-label">
+                      <img
+                        class="pick-row-icon"
+                        src="https://unpkg.com/@lobehub/icons-static-svg@1.94.0/icons/aws-color.svg"
+                        alt=""
+                      />
+                      S3
+                    </span>
+                    <span class="pick-row-fn">s3Workspace</span>
+                  </button>
+                </div>
+              </div>
             </div>
 
             <div class="min-w-0">
               <div class="border-b border-line bg-surface px-6 py-4">
                 <div>
-                  <h3 id="combo-name" class="font-mono text-xl font-semibold" aria-live="polite">OpenCode × Local</h3>
+                  <h3 id="combo-name" class="font-mono text-xl font-semibold" aria-live="polite">
+                    OpenCode × Local × Local folder
+                  </h3>
                   <p class="mt-0.5 font-mono text-[11px] uppercase tracking-wider text-muted">
-                    any agent on any sandbox
+                    any agent on any sandbox with durable files
                   </p>
                 </div>
               </div>
@@ -897,7 +943,7 @@
                 <pre
                   id="combo-code"
                   class="provider-code code-block overflow-x-auto border-0 py-3.5 text-[12.5px] leading-[1.7]"
-                ><span class="code-line is-active" data-line="1">import { Agent, AmlRuntime, Sandbox, localSandbox, opencodeAgent } from "@aml-jsx/sdk"</span><span class="code-line" data-line="2">&nbsp;</span><span class="code-line is-active" data-line="3">const provider = opencodeAgent({ model: "opencode-go/glm-5.1" })</span><span class="code-line is-active" data-line="4">const sandbox = localSandbox({ workspace: "./project" })</span><span class="code-line" data-line="5">const runtime = new AmlRuntime()</span><span class="code-line" data-line="6">&nbsp;</span><span class="code-line" data-line="7">await runtime.evaluate(</span><span class="code-line" data-line="8">  &lt;Sandbox provider={sandbox}&gt;</span><span class="code-line" data-line="9">    &lt;Agent provider={provider}&gt;Summarize this repository.&lt;/Agent&gt;</span><span class="code-line" data-line="10">  &lt;/Sandbox&gt;,</span><span class="code-line" data-line="11">)</span></pre>
+                ><span class="code-line is-active" data-line="1">import { Agent, AmlRuntime, Sandbox, Workspace, localSandbox, localWorkspace, opencodeAgent } from "@aml-jsx/sdk"</span><span class="code-line" data-line="2">&nbsp;</span><span class="code-line is-active" data-line="3">const provider = opencodeAgent({ model: "opencode-go/glm-5.1" })</span><span class="code-line is-active" data-line="4">const sandbox = localSandbox({ workspace: "./project" })</span><span class="code-line is-active" data-line="5">const workspace = localWorkspace({ directory: "./project" })</span><span class="code-line" data-line="6">const runtime = new AmlRuntime()</span><span class="code-line" data-line="7">&nbsp;</span><span class="code-line" data-line="8">await runtime.evaluate(</span><span class="code-line is-active" data-line="9">  &lt;Workspace id="local-project" load provider={workspace}&gt;</span><span class="code-line" data-line="10">    &lt;Sandbox provider={sandbox}&gt;</span><span class="code-line" data-line="11">      &lt;Agent provider={provider}&gt;Summarize this repository.&lt;/Agent&gt;</span><span class="code-line" data-line="12">    &lt;/Sandbox&gt;</span><span class="code-line" data-line="13">  &lt;/Workspace&gt;,</span><span class="code-line" data-line="14">)</span></pre>
               </div>
             </div>
           </div>
@@ -930,7 +976,7 @@
             Small enough to learn in one sitting
           </h2>
           <p class="reveal mt-5 text-[15px] leading-relaxed text-ink-soft" style="--reveal-delay: 120ms">
-            Nine primitives and a handful of runtime APIs. Everything else is ordinary JavaScript — control flow,
+            Eleven primitives and a focused set of runtime APIs. Everything else is ordinary JavaScript — control flow,
             concurrency, and data flow included.
           </p>
 
