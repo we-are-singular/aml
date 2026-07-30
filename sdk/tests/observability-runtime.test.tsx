@@ -821,7 +821,7 @@ describe("observability", () => {
           events.push(event)
         },
       }).evaluate(
-        <Workspace id="trace" provider={workspace}>
+        <Workspace id="trace" provider={workspace} save>
           <Sandbox provider={sandbox}>
             <Loop
               initial={{ done: false }}
@@ -885,7 +885,7 @@ describe("observability", () => {
       new AmlRuntime({
         trace: event => events.push(event),
       }).evaluate(
-        <Workspace id="failure" provider={workspace}>
+        <Workspace id="failure" provider={workspace} save={{ on: "always" }}>
           <Sandbox provider={sandbox}>
             <Agent provider={provider}>fail</Agent>
           </Sandbox>

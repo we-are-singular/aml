@@ -12,6 +12,10 @@ interface PackResult {
 }
 
 interface BuiltLocalWorkspacePackage {
+  filesystemWorkspace(options: {
+    readonly directory: string
+    readonly temporaryDirectory: string
+  }): Readonly<WorkspaceProvider>
   localWorkspace(options: { readonly directory: string }): Readonly<WorkspaceProvider>
 }
 
@@ -63,6 +67,15 @@ try {
 
   if (provider.name !== "local") {
     throw new Error("Built Local Workspace failed its provider lifecycle contract")
+  }
+
+  const staged = built.filesystemWorkspace({
+    directory,
+    temporaryDirectory: tmpdir(),
+  })
+
+  if (staged.name !== "filesystem") {
+    throw new Error("Built Filesystem Workspace failed its provider identity contract")
   }
 } finally {
   rmSync(directory, { force: true, recursive: true })

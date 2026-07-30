@@ -1,0 +1,30 @@
+{
+  "name": "@aml-jsx/workspace-s3",
+  "version": "0.0.0",
+  "private": true,
+  "files": [
+    "dist"
+  ],
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "vite build && tsc --project tsconfig.build.json",
+    "package:check": "node scripts/check-package.ts",
+    "test": "vitest run",
+    "test:integration": "AML_S3_TEST=1 vitest run tests/s3-workspace.integration.test.tsx",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@aml-jsx/sdk": "*",
+    "@aws-sdk/client-s3": "3.1097.0"
+  },
+  "devDependencies": {
+    "@aml-jsx/sandbox-local": "*"
+  }
+}

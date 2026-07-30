@@ -123,50 +123,55 @@ workflows with `@aml-jsx/sdk`.
 | `<System>`           | Adds resolved content to the owning Agent's system prompt. Multiple System blocks are joined in authored order.              |
 | `<Tool>`             | Grants the owning Agent a provider-native Tool by name or a JavaScript Tool created with `defineTool()`.                     |
 | `<Skill>`            | Adds reusable inline or local-file instructions to the owning Agent.                                                         |
+| `<File>`             | Writes resolved text, including Agent output, beneath the active Workspace before later siblings run.                        |
 | `<Mcp>`              | Grants the owning Agent a provider-native MCP server by name or an explicit server created with `defineMcpServer()`.         |
 | `<FollowUp>`         | Adds a later turn to the same Agent session. FollowUps are flat, ordered, and resolved before the session starts.            |
 | `<Loop>`             | Repeats fresh Agent sessions over immutable, schema-validated state until an iteration stops changing that state.            |
 | `<Sandbox>`          | Acquires an ephemeral execution environment and scopes a narrowed filesystem policy to descendant Agents.                    |
+| `<Script>`           | Executes resolved source or one literal command through the enclosing Sandbox runtime and returns standard output.           |
 | `<Workspace>`        | Materializes durable files that can survive and be shared across disposable Sandbox leases.                                  |
 | `<Context.Provider>` | Provides an immutable application dependency to descendant components without rendering it into Agent prompts.               |
 | `<>...</>`           | Groups AML values without adding prompt text or another runtime boundary.                                                    |
 
 ## Core APIs
 
-| API                                | Purpose                                                                                                          |
-| ---------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
-| `AmlRuntime`                       | Evaluates a complete AML tree, owns budgets and lifecycle events, and returns the final text output.             |
-| `evaluate()`                       | Evaluates AML from inside an active component and returns text or schema-validated structured data.              |
-| `defineTool()`                     | Turns a JavaScript function into a model-callable capability with validated input and optional validated output. |
-| `defineMcpServer()`                | Creates an immutable provider-neutral MCP descriptor for a local stdio process or remote Streamable HTTP server. |
-| `createContext()` / `useContext()` | Defines and reads immutable dependencies scoped through the AML tree.                                            |
-| `defineAgentProvider()`            | Defines an Agent harness adapter implementing AML's provider contract.                                           |
-| `AbstractAgentProvider`            | Optional template for provider sessions, authored turns, cancellation, and invocation cleanup.                   |
-| `AgentProviderSession`             | Narrow invocation session implemented by Agent adapters using the lifecycle template.                            |
-| `createAgentProviderTurns()`       | Validates and captures ordered initial and FollowUp turns for a provider session.                                |
-| `executeAgentProviderSession()`    | Executes a captured session with shared cancellation, result selection, and cleanup semantics.                   |
-| `defineSandboxProvider()`          | Defines an ephemeral execution provider.                                                                         |
-| `AbstractSandboxProvider`          | Optional template for staged Sandbox provisioning, initialization, compensation, and release.                    |
-| `ProvisionedSandbox`               | Acknowledged provider resource used by the Sandbox lifecycle template for compensation and release.              |
-| `SandboxCommand`                   | Captures and validates one portable literal Sandbox command before backend translation.                          |
-| `defineWorkspaceProvider()`        | Defines a durable filesystem materialization provider.                                                           |
-| `runtime.on()` / `runtime.once()`  | Subscribes to evaluation lifecycle and trace events.                                                             |
+| API                                   | Purpose                                                                                                          |
+| ------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| `AmlRuntime`                          | Evaluates a complete AML tree, owns budgets and lifecycle events, and returns the final text output.             |
+| `evaluate()`                          | Evaluates AML from inside an active component and returns text or schema-validated structured data.              |
+| `defineTool()`                        | Turns a JavaScript function into a model-callable capability with validated input and optional validated output. |
+| `defineMcpServer()`                   | Creates an immutable provider-neutral MCP descriptor for a local stdio process or remote Streamable HTTP server. |
+| `createContext()` / `useContext()`    | Defines and reads immutable dependencies scoped through the AML tree.                                            |
+| `defineAgentProvider()`               | Defines an Agent harness adapter implementing AML's provider contract.                                           |
+| `AbstractAgentProvider`               | Optional template for provider sessions, authored turns, cancellation, and invocation cleanup.                   |
+| `AgentProviderSession`                | Narrow invocation session implemented by Agent adapters using the lifecycle template.                            |
+| `createAgentProviderTurns()`          | Validates and captures ordered initial and FollowUp turns for a provider session.                                |
+| `executeAgentProviderSession()`       | Executes a captured session with shared cancellation, result selection, and cleanup semantics.                   |
+| `defineSandboxProvider()`             | Defines an ephemeral execution provider.                                                                         |
+| `AbstractSandboxProvider`             | Optional template for staged Sandbox provisioning, initialization, compensation, and release.                    |
+| `ProvisionedSandbox`                  | Acknowledged provider resource used by the Sandbox lifecycle template for compensation and release.              |
+| `SandboxCommand`                      | Captures and validates one portable literal Sandbox command before backend translation.                          |
+| `defineWorkspaceProvider()`           | Defines a durable filesystem materialization provider.                                                           |
+| `createPersistentWorkspaceProvider()` | Builds revision persistence over a user-defined `WorkspaceStorageAdapter`.                                       |
+| `runtime.on()` / `runtime.once()`     | Subscribes to evaluation lifecycle and trace events.                                                             |
 
 ## Providers
 
 The public SDK includes the runtime, built-in integrations, and testing utilities under one package.
 
-| Role      | Source                                           | Public export          | Notes                                                                                                                                             |
-| --------- | ------------------------------------------------ | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Agent     | [OpenCode adapter](./providers/agents/opencode)  | `opencodeAgent()`      | Runs OpenCode sessions with model overrides, JavaScript Tools, MCP grants, FollowUps, cancellation, and structured output.                        |
-| Agent     | [Codex adapter](./providers/agents/codex)        | `codexAgent()`         | Runs Codex SDK threads with model overrides, read-only host Tools, JavaScript Tools, MCP grants, FollowUps, and structured output.                |
-| Agent     | [Pi adapter](./providers/agents/pi)              | `piAgent()`            | Embeds Pi SDK sessions with provider/model selection, host and JavaScript Tools, FollowUps, cancellation, and schema-validated JSON output.       |
-| Sandbox   | [Local adapter](./providers/sandboxes/local)     | `localSandbox()`       | Runs the common Sandbox runtime as trusted host processes for development; it is explicitly non-isolating.                                        |
-| Sandbox   | [Docker adapter](./providers/sandboxes/docker)   | `dockerSandbox()`      | Starts a user-selected image, mounts the Workspace, and exposes the common bounded command runtime without building or provisioning the image.    |
-| Sandbox   | [Daytona adapter](./providers/sandboxes/daytona) | `daytonaSandbox()`     | Creates a Daytona image or snapshot, transfers the Workspace, runs bounded commands, reconciles writable changes, and deletes the remote Sandbox. |
-| Sandbox   | [Modal adapter](./providers/sandboxes/modal)     | `modalSandbox()`       | Creates a Modal Sandbox from a registry image, transfers the Workspace, runs bounded commands, reconciles writable changes, and terminates it.    |
-| Workspace | [Local adapter](./providers/workspaces/local)    | `localWorkspace()`     | Uses an existing local directory as a durable Workspace with cross-process writer locking.                                                        |
-| Testing   | [Testing entry](./sdk/src/testing.ts)            | `@aml-jsx/sdk/testing` | Supplies deterministic Agent, Sandbox, and Workspace providers plus reusable conformance suites.                                                  |
+| Role      | Source                                           | Public export           | Notes                                                                                                                                             |
+| --------- | ------------------------------------------------ | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Agent     | [OpenCode adapter](./providers/agents/opencode)  | `opencodeAgent()`       | Runs OpenCode sessions with model overrides, JavaScript Tools, MCP grants, FollowUps, cancellation, and structured output.                        |
+| Agent     | [Codex adapter](./providers/agents/codex)        | `codexAgent()`          | Runs Codex SDK threads with model overrides, read-only host Tools, JavaScript Tools, MCP grants, FollowUps, and structured output.                |
+| Agent     | [Pi adapter](./providers/agents/pi)              | `piAgent()`             | Embeds Pi SDK sessions with provider/model selection, host and JavaScript Tools, FollowUps, cancellation, and schema-validated JSON output.       |
+| Sandbox   | [Local adapter](./providers/sandboxes/local)     | `localSandbox()`        | Runs the common Sandbox runtime as trusted host processes for development; it is explicitly non-isolating.                                        |
+| Sandbox   | [Docker adapter](./providers/sandboxes/docker)   | `dockerSandbox()`       | Starts a user-selected image, mounts the Workspace, and exposes the common bounded command runtime without building or provisioning the image.    |
+| Sandbox   | [Daytona adapter](./providers/sandboxes/daytona) | `daytonaSandbox()`      | Creates a Daytona image or snapshot, transfers the Workspace, runs bounded commands, reconciles writable changes, and deletes the remote Sandbox. |
+| Sandbox   | [Modal adapter](./providers/sandboxes/modal)     | `modalSandbox()`        | Creates a Modal Sandbox from a registry image, transfers the Workspace, runs bounded commands, reconciles writable changes, and terminates it.    |
+| Workspace | [Local adapter](./providers/workspaces/local)    | `localWorkspace()`      | Uses an existing local directory as a durable Workspace with cross-process writer locking.                                                        |
+| Workspace | [Local adapter](./providers/workspaces/local)    | `filesystemWorkspace()` | Stages archive or folder revisions from a durable local filesystem store into a safe temporary materialization.                                   |
+| Workspace | [S3 adapter](./providers/workspaces/s3)          | `s3Workspace()`         | Restores and publishes immutable archive or folder revisions through S3-compatible storage, including R2 and MinIO.                               |
+| Testing   | [Testing entry](./sdk/src/testing.ts)            | `@aml-jsx/sdk/testing`  | Supplies deterministic Agent, Sandbox, and Workspace providers plus reusable conformance suites.                                                  |
 
 The complete built-in compatibility matrix is exercised by the credentialed smoke runner:
 
@@ -186,6 +191,69 @@ Provider factories retain their vendor configuration shapes: `opencodeAgent({ co
 Every Agent adapter resolves configuration with the same authority order: provider defaults, then user inputs, then AML's imperative runtime policy. The implementation uses `defu` for known plain configuration tables and bespoke final objects for arrays, clients, callbacks, Tools, MCP grants, and other authority-bearing values. This preserves each vendor's native schema while preventing user configuration from weakening an authored Sandbox or capability boundary.
 
 Sandbox factories follow the same rule. Environment identity sits at the factory root: Docker and Modal accept `image`, while Daytona accepts either `image` or `snapshot`. Daytona's `create` retains its remaining image- or snapshot-specific creation parameters, and Modal's `create` retains its native Sandbox creation options. Docker accepts only an existing image name; AML does not build images or silently install Agents. Each Sandbox may run an explicit trusted `setup` command after its Workspace is visible.
+
+The S3 Workspace factory accepts an injected `S3Client` or its native client configuration. A local MinIO instance uses the same provider with an endpoint and path-style addressing:
+
+```ts
+const workspace = s3Workspace({
+  bucket: "aml-workspaces",
+  config: {
+    credentials: {
+      accessKeyId: "aml-minio",
+      secretAccessKey: "aml-minio-secret",
+    },
+    endpoint: "http://127.0.0.1:19000",
+    forcePathStyle: true,
+    region: "us-east-1",
+  },
+})
+```
+
+Each revision-backed Workspace identity has an atomic `workspace.json` index and immutable revisions. `lock` defaults
+to `true`, so one evaluation owns that identity until save and release; built-in locks use a fixed five-minute
+heartbeat and become recoverable after twenty minutes without renewal. `lock={false}` permits concurrent
+materializations, while conditional index publication prevents a stale save from overwriting committed state.
+`format` is `"archive" | "folder"` and defaults to archive. The shared persistence engine—not the S3 or filesystem
+adapter—owns selection, `.gitignore`, tar handling, folder manifests, retention, and revision publication.
+
+`File` can turn a child Agent result into a durable handoff without duplicating that text into the surrounding
+prompt. `Workspace` supplies the default logical cwd for descendant Sandboxes. `Script` always executes through that
+active Sandbox and never falls back to a host child process:
+
+```tsx
+<Workspace
+  cwd="repo"
+  id="review-42"
+  load={{ revision: "current" }}
+  lock
+  provider={workspace}
+  save={{
+    include: ["repo/src/**", "repo/tests/**", "report.md"],
+    exclude: ["**/node_modules/**"],
+    retention: 3,
+  }}
+  writeConcurrency="serial"
+>
+  <File path="task.md">
+    <Agent provider={planner}>Write a focused implementation task.</Agent>
+  </File>
+
+  <Sandbox access="read-write" provider={sandbox}>
+    <Script command="git" args={["status", "--short"]} />
+
+    <Script shell="node">{`import { writeFileSync } from "node:fs"; writeFileSync("ready.txt", "yes")`}</Script>
+  </Sandbox>
+</Workspace>
+```
+
+`id` defaults to `crypto.randomUUID()`, `cwd` and current-revision loading default to `"."` and enabled respectively,
+locking defaults to enabled, writable Sandbox concurrency defaults to `"serial"`, and saving defaults to disabled.
+Serial mode waits before acquiring another writable root Sandbox, so transferred Sandboxes hydrate only after the
+previous writer reconciles. Read-only Sandboxes and agents sharing one Sandbox can still run concurrently.
+`writeConcurrency="parallel"` is intended for shared mounts; transferred snapshots can overwrite one another.
+`save: true` discovers the tree subject to `.gitignore`, publishes after success, and retains one revision. Explicit
+include patterns override `.gitignore`; excludes always win. `save={{ on: "always" }}` also publishes failed work,
+while cancellation never saves.
 
 ## Examples
 
@@ -232,7 +300,7 @@ Requirements:
 
 - Node.js 26 or newer
 - npm 11 or newer
-- Docker only for Docker integration tests and examples
+- Docker for Docker integration tests, examples, and the local MinIO integration
 - Configured OpenCode, Pi-supported model-provider, or Codex credentials only for live Agent examples
 
 Install dependencies:
@@ -271,6 +339,9 @@ npm run test:integration --workspace=@aml-jsx/agent-opencode
 npm run test:integration --workspace=@aml-jsx/agent-codex
 npm run test:integration --workspace=@aml-jsx/agent-pi
 npm run test:integration --workspace=@aml-jsx/sandbox-docker
+docker compose up -d --wait minio
+npm run test:integration --workspace=@aml-jsx/workspace-s3
+docker compose down
 ```
 
 Smoke files use a dedicated Vitest configuration and stay outside default unit tests. Omitting both smoke filters runs every registered Agent against every registered Sandbox. npm requires the `--` separator before smoke-runner options.

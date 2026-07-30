@@ -1,4 +1,8 @@
-import type { WorkspaceMaterializationReference, WorkspaceProvider } from "./workspace-provider.js"
+import type {
+  WorkspaceMaterializationReference,
+  WorkspaceProvider,
+  WorkspaceSaveRequest,
+} from "./workspace-provider.js"
 
 /**
  * Captured provider members used without rereading mutable public properties.
@@ -14,7 +18,7 @@ export interface ValidatedWorkspaceProvider {
  */
 export interface WorkspaceLeaseCapture {
   readonly release: () => Promise<void>
-  readonly save: () => Promise<void>
+  readonly save: (request?: WorkspaceSaveRequest) => Promise<void>
   readonly value: object
 }
 
@@ -32,7 +36,7 @@ export interface WorkspaceReleaseCapture {
 export interface ValidatedWorkspaceLease {
   readonly materialization: Readonly<WorkspaceMaterializationReference>
   readonly release: () => Promise<void>
-  readonly save: () => Promise<void>
+  readonly save: (request?: WorkspaceSaveRequest) => Promise<void>
 }
 
 /**
@@ -128,8 +132,8 @@ export function captureWorkspaceLease(
 
   return Object.freeze({
     release: releaseCapture.release,
-    async save() {
-      await Reflect.apply(save, releaseCapture.value, [])
+    async save(request?: WorkspaceSaveRequest) {
+      await Reflect.apply(save, releaseCapture.value, request === undefined ? [] : [request])
     },
     value: releaseCapture.value,
   })
@@ -141,7 +145,9 @@ export function captureWorkspaceLease(
 export function validateWorkspaceLease(
   capture: WorkspaceLeaseCapture,
   providerName: string,
-  workspaceId: string
+  workspaceId: string,
+  cwd = ".",
+  writeConcurrency: "parallel" | "serial" = "serial"
 ): Readonly<ValidatedWorkspaceLease> {
   const candidate = capture.value as {
     readonly directory?: unknown
@@ -171,11 +177,13 @@ export function validateWorkspaceLease(
   }
 
   const materialization: WorkspaceMaterializationReference = Object.freeze({
+    cwd,
     directory,
     handle,
     leaseId,
     provider: Object.freeze({ name: providerName }),
     workspaceId,
+    writeConcurrency,
   })
 
   return Object.freeze({

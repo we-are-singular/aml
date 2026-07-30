@@ -203,8 +203,8 @@ async function acquireLease() {
   })
 
   expect(lockState.options).toMatchObject({
-    stale: 30_000,
-    update: 10_000,
+    stale: 20 * 60 * 1_000,
+    update: 5 * 60 * 1_000,
   })
   return lease
 }

@@ -5,6 +5,8 @@ import type { AgentProvider } from "../components/agent/agent-provider.js"
 import { AgentExecutor } from "../components/agent/agent-executor.js"
 import { ModelSchema } from "../components/agent/model-schema.js"
 import type { ValidatedAgentProvider } from "../components/agent/validate-agent-provider.js"
+import { type FileEvaluation, FileEvaluator } from "../components/file/file-evaluator.js"
+import type { FileProps } from "../components/file/file.js"
 import type { FollowUpProps } from "../components/follow-up/follow-up.js"
 import { ContextRegistry } from "../components/context/context-registry.js"
 import { ContextScope } from "../components/context/context-scope.js"
@@ -16,6 +18,8 @@ import type { McpProps } from "../components/mcp/mcp.js"
 import { type SandboxEvaluationScope, SandboxEvaluator } from "../components/sandbox/sandbox-evaluator.js"
 import type { SandboxProvider, SandboxSession } from "../components/sandbox/sandbox-provider.js"
 import type { SandboxProps } from "../components/sandbox/sandbox.js"
+import { type ScriptEvaluation, ScriptEvaluator } from "../components/script/script-evaluator.js"
+import type { ScriptProps } from "../components/script/script.js"
 import { type SkillEvaluation, SkillEvaluator } from "../components/skill/skill-evaluator.js"
 import type { SystemProps } from "../components/system/system.js"
 import { ToolCollection } from "../components/tool/tool-collection.js"
@@ -46,7 +50,7 @@ interface TextTarget {
   readonly kind: "text"
   readonly parentSpanId: string | undefined
   readonly sandbox: Readonly<SandboxSession> | undefined
-  readonly source: "evaluation" | "follow-up" | "skill" | "system"
+  readonly source: "evaluation" | "file" | "follow-up" | "script" | "skill" | "system"
   readonly runtimeTool?: AgentJavaScriptTool
   readonly structured: StructuredEvaluation | undefined
   readonly workspace: Readonly<WorkspaceMaterializationReference> | undefined
@@ -142,10 +146,25 @@ interface CompleteFollowUpFrame {
   readonly target: TextTarget
 }
 
+interface CompleteFileFrame {
+  readonly plan: Readonly<FileEvaluation>
+  readonly kind: "complete-file"
+  readonly span: TraceSpan
+  readonly text: TextTarget
+}
+
 interface CompleteSandboxFrame {
   readonly kind: "complete-sandbox"
   readonly scope: Readonly<SandboxEvaluationScope>
   readonly span: TraceSpan
+}
+
+interface CompleteScriptFrame {
+  readonly kind: "complete-script"
+  readonly plan: Readonly<ScriptEvaluation>
+  readonly span: TraceSpan
+  readonly target: ResolutionTarget
+  readonly text: TextTarget
 }
 
 interface CompleteWorkspaceFrame {
@@ -178,8 +197,10 @@ type EvaluationFrame =
   | ArrayFrame
   | CompleteAgentFrame
   | CompleteComponentFrame
+  | CompleteFileFrame
   | CompleteFollowUpFrame
   | CompleteSandboxFrame
+  | CompleteScriptFrame
   | CompleteSkillFrame
   | CompleteSystemFrame
   | CompleteWorkspaceFrame
@@ -281,6 +302,7 @@ export class AmlRuntime {
   readonly #allowedMcpServers: ReadonlySet<string> | undefined
   readonly #allowedTools: ReadonlySet<string> | undefined
   readonly #events = new AmlEventBus()
+  readonly #fileEvaluator = new FileEvaluator()
   readonly #maxAgentCalls: number
   readonly #maxConcurrentAgents: number
   readonly #maxDepth: number
@@ -289,6 +311,7 @@ export class AmlRuntime {
   readonly #loopAgentSelector: LoopAgentSelector
   readonly #loopEvaluator = new LoopEvaluator()
   readonly #sandboxEvaluator: SandboxEvaluator
+  readonly #scriptEvaluator: ScriptEvaluator
   readonly #skillEvaluator: SkillEvaluator
   readonly #workspaceEvaluator: WorkspaceEvaluator
 
@@ -341,6 +364,7 @@ export class AmlRuntime {
     }
     this.#loopAgentSelector = new LoopAgentSelector(maxDepth)
     this.#sandboxEvaluator = new SandboxEvaluator(options.sandboxProvider)
+    this.#scriptEvaluator = new ScriptEvaluator()
     this.#skillEvaluator = new SkillEvaluator(options.cwd ?? process.cwd())
     this.#workspaceEvaluator = new WorkspaceEvaluator(options.workspaceProvider)
   }
@@ -541,7 +565,7 @@ export class AmlRuntime {
           activeWorkspaceScope = undefined
 
           try {
-            await frame.scope.complete()
+            await frame.scope.complete("success")
           } catch (completionError) {
             context.failTraceSpan(frame.span, completionError)
 
@@ -618,6 +642,20 @@ export class AmlRuntime {
           continue
         }
 
+        if (frame.kind === "complete-file") {
+          try {
+            await this.#fileEvaluator.complete(frame.plan, frame.text.chunks.join(""), context.signal)
+          } catch (error) {
+            removeActiveTraceSpan(activeTraceSpans, frame.span)
+            context.failTraceSpan(frame.span, error)
+            throw error
+          }
+
+          removeActiveTraceSpan(activeTraceSpans, frame.span)
+          context.endTraceSpan(frame.span, "ok", { path: frame.plan.path })
+          continue
+        }
+
         if (frame.kind === "complete-skill") {
           let content: string
 
@@ -632,6 +670,27 @@ export class AmlRuntime {
 
           removeActiveTraceSpan(activeTraceSpans, frame.span)
           context.endTraceSpan(frame.span, "ok", {}, { content })
+          continue
+        }
+
+        if (frame.kind === "complete-script") {
+          let result: Readonly<{ exitCode: number; stderr: string; stdout: string }>
+
+          try {
+            result = await this.#scriptEvaluator.complete(frame.plan, frame.text.chunks.join(""), context.signal)
+            appendText(frame.target, result.stdout)
+          } catch (error) {
+            removeActiveTraceSpan(activeTraceSpans, frame.span)
+            context.failTraceSpan(frame.span, error)
+            throw error
+          }
+
+          removeActiveTraceSpan(activeTraceSpans, frame.span)
+          context.endTraceSpan(frame.span, "ok", {
+            exitCode: result.exitCode,
+            stderrLength: result.stderr.length,
+            stdoutLength: result.stdout.length,
+          })
           continue
         }
 
@@ -990,6 +1049,86 @@ export class AmlRuntime {
             continue
           }
 
+          // <File> consumes resolved child text as a Workspace side effect. The
+          // content does not also leak into its surrounding prompt or result.
+          if (primitiveKind === "file") {
+            const props = current.props as Readonly<FileProps>
+            const plan = this.#fileEvaluator.prepare(props, frame.target.workspace, frame.target.sandbox)
+            const trace = context.createTrace(frame.target.parentSpanId)
+            const span = context.startTraceSpan(trace, "file", "File", { path: plan.path })
+            const fileTarget: TextTarget = {
+              chunks: [],
+              contextScope: frame.target.contextScope,
+              kind: "text",
+              parentSpanId: trace.spanId,
+              sandbox: frame.target.sandbox,
+              source: "file",
+              structured: frame.target.structured,
+              workspace: frame.target.workspace,
+            }
+
+            activeValues.add(current)
+            activeTraceSpans.push(span)
+            frames.push({ kind: "release", value: current })
+            frames.push({
+              kind: "complete-file",
+              plan,
+              span,
+              text: fileTarget,
+            })
+            frames.push({
+              depth: nodeDepth,
+              kind: "resolve",
+              target: fileTarget,
+              value: props.children,
+            })
+            continue
+          }
+
+          // <Script> resolves dynamic child text before executing it through
+          // the active Sandbox runtime. It never falls back to host execution.
+          if (primitiveKind === "script") {
+            const props = current.props as Readonly<ScriptProps>
+            const plan = this.#scriptEvaluator.prepare(props, frame.target.sandbox)
+            const trace = context.createTrace(frame.target.parentSpanId)
+            const span = context.startTraceSpan(trace, "script", "Script", {
+              mode: plan.kind,
+              ...(plan.kind === "command" ? { command: plan.command } : { shell: plan.shell }),
+            })
+            const scriptTarget: TextTarget = {
+              chunks: [],
+              contextScope: frame.target.contextScope,
+              kind: "text",
+              parentSpanId: trace.spanId,
+              sandbox: frame.target.sandbox,
+              source: "script",
+              structured: frame.target.structured,
+              workspace: frame.target.workspace,
+            }
+
+            activeValues.add(current)
+            activeTraceSpans.push(span)
+            frames.push({ kind: "release", value: current })
+            frames.push({
+              kind: "complete-script",
+              plan,
+              span,
+              target: frame.target,
+              text: scriptTarget,
+            })
+
+            if (props.children !== undefined) {
+              frames.push({
+                depth: nodeDepth,
+                kind: "resolve",
+                target: scriptTarget,
+                value: props.children,
+              })
+            }
+
+            continue
+          }
+
           // <Workspace> is the one top-level durable resource boundary. It
           // cannot hide inside prompt assembly or another resource scope.
           if (primitiveKind === "workspace") {
@@ -1284,7 +1423,7 @@ export class AmlRuntime {
         activeWorkspaceScope = undefined
 
         try {
-          await scope.complete()
+          await scope.complete("failure")
         } catch (completionError) {
           releaseErrors.push(completionError)
         }

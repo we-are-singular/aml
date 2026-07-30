@@ -4,8 +4,8 @@ import path from "node:path"
 
 import { afterEach, describe, expect, it } from "vitest"
 
-import type { SandboxAcquireRequest } from "@aml-jsx/sdk"
-import { sandboxProviderConformance } from "@aml-jsx/sdk/testing"
+import { AmlRuntime, Sandbox, Script, type SandboxAcquireRequest, Workspace } from "@aml-jsx/sdk"
+import { DeterministicWorkspaceProvider, sandboxProviderConformance } from "@aml-jsx/sdk/testing"
 
 import { localSandbox } from "../src/index.js"
 
@@ -18,6 +18,28 @@ afterEach(async () => {
 })
 
 describe("localSandbox()", () => {
+  it("runs Script at the enclosing Workspace cwd and preserves its files", async () => {
+    const workspace = await createWorkspace()
+    const workspaceProvider = new DeterministicWorkspaceProvider({ directory: workspace })
+
+    await expect(
+      new AmlRuntime().evaluate(
+        <Workspace cwd="repository" id="script" provider={workspaceProvider} save>
+          <Sandbox access="read-write" provider={localSandbox()}>
+            <Script shell="node">
+              {`import { writeFileSync } from "node:fs"; writeFileSync("script-output.txt", process.cwd())`}
+            </Script>
+          </Sandbox>
+        </Workspace>
+      )
+    ).resolves.toBe("")
+
+    await expect(readFile(path.join(workspace, "repository", "script-output.txt"), "utf8")).resolves.toBe(
+      path.join(workspace, "repository")
+    )
+    expect(workspaceProvider.saves).toEqual(["deterministic-workspace-1"])
+  })
+
   it("executes through the common runtime in the selected logical cwd", async () => {
     const workspace = await createWorkspace()
     const provider = localSandbox({ workspace })

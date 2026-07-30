@@ -15,11 +15,13 @@ export type AmlTraceSpanKind =
   | "evaluation"
   | "component"
   | "agent"
+  | "file"
   | "system"
   | "skill"
   | "tool"
   | "loop"
   | "sandbox"
+  | "script"
   | "workspace"
 
 /**

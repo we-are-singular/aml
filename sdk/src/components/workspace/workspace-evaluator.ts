@@ -1,6 +1,14 @@
+import { randomUUID } from "node:crypto"
+
 import { EvaluationError } from "../../core/evaluation-error.js"
-import type { WorkspaceProps } from "./workspace.js"
-import type { WorkspaceMaterializationReference, WorkspaceProvider } from "./workspace-provider.js"
+import { resolvePortablePath } from "../../core/resolve-portable-path.js"
+import type { WorkspaceLoadOptions, WorkspaceProps, WorkspaceSaveOptions } from "./workspace.js"
+import type {
+  WorkspaceLoadRequest,
+  WorkspaceMaterializationReference,
+  WorkspaceProvider,
+  WorkspaceSaveRequest,
+} from "./workspace-provider.js"
 import {
   captureWorkspaceLease,
   captureWorkspaceRelease,
@@ -17,9 +25,9 @@ export interface WorkspaceEvaluationScope {
   readonly materialization: Readonly<WorkspaceMaterializationReference>
 
   /**
-   * Saves current files and releases the provider lease exactly once.
+   * Applies outcome policy and releases the provider lease exactly once.
    */
-  complete(): Promise<void>
+  complete(outcome: "failure" | "success"): Promise<void>
 }
 
 /**
@@ -43,7 +51,12 @@ export class WorkspaceEvaluator {
     evaluationId: string,
     signal: AbortSignal
   ): Promise<Readonly<WorkspaceEvaluationScope>> {
-    const workspaceId = validateWorkspaceId(props.id)
+    const workspaceId = validateWorkspaceId(props.id ?? randomUUID())
+    const cwd = resolvePortablePath(".", props.cwd ?? ".", "<Workspace> cwd")
+    const load = normalizeWorkspaceLoad(props.load ?? true)
+    const lock = normalizeWorkspaceLock(props.lock ?? true)
+    const save = normalizeWorkspaceSave(props.save ?? false)
+    const writeConcurrency = normalizeWriteConcurrency(props.writeConcurrency ?? "serial")
     const provider = props.provider === undefined ? this.#provider : validateWorkspaceProvider(props.provider)
 
     if (provider === undefined) {
@@ -53,6 +66,9 @@ export class WorkspaceEvaluator {
     const request = Object.freeze({
       evaluationId,
       id: workspaceId,
+      load,
+      lock,
+      save: save !== false,
       signal,
     })
     let value: unknown
@@ -103,15 +119,31 @@ export class WorkspaceEvaluator {
     let lease: Readonly<ValidatedWorkspaceLease>
 
     try {
-      lease = validateWorkspaceLease(capture, provider.name, workspaceId)
+      lease = validateWorkspaceLease(capture, provider.name, workspaceId, cwd, writeConcurrency)
     } catch (leaseError) {
       // No descendant has run, so an invalid materialization is released
       // without persisting provider data AML could not safely inspect.
       return await throwAfterInvalidLease(leaseError, capture.release, provider.name, signal)
     }
 
-    return createWorkspaceScope(lease)
+    return createWorkspaceScope(lease, save, signal)
   }
+}
+
+function normalizeWorkspaceLock(value: unknown): boolean {
+  if (typeof value !== "boolean") {
+    throw new EvaluationError("<Workspace> lock must be a boolean")
+  }
+
+  return value
+}
+
+function normalizeWriteConcurrency(value: unknown): "parallel" | "serial" {
+  if (value !== "parallel" && value !== "serial") {
+    throw new EvaluationError('<Workspace> writeConcurrency must be "parallel" or "serial"')
+  }
+
+  return value
 }
 
 /**
@@ -150,12 +182,16 @@ async function throwAfterInvalidLease(
 /**
  * Creates an idempotent completion barrier around save-then-release.
  */
-function createWorkspaceScope(lease: Readonly<ValidatedWorkspaceLease>): Readonly<WorkspaceEvaluationScope> {
+function createWorkspaceScope(
+  lease: Readonly<ValidatedWorkspaceLease>,
+  save: false | NormalizedWorkspaceSave,
+  signal: AbortSignal
+): Readonly<WorkspaceEvaluationScope> {
   let completion: Promise<void> | undefined
 
   return Object.freeze({
-    complete() {
-      completion ??= saveAndReleaseWorkspace(lease)
+    complete(outcome: "failure" | "success") {
+      completion ??= saveAndReleaseWorkspace(lease, save, outcome, signal)
       return completion
     },
     materialization: lease.materialization,
@@ -165,13 +201,29 @@ function createWorkspaceScope(lease: Readonly<ValidatedWorkspaceLease>): Readonl
 /**
  * Persists before release and preserves both independent provider failures.
  */
-async function saveAndReleaseWorkspace(lease: Readonly<ValidatedWorkspaceLease>): Promise<void> {
+async function saveAndReleaseWorkspace(
+  lease: Readonly<ValidatedWorkspaceLease>,
+  save: false | NormalizedWorkspaceSave,
+  outcome: "failure" | "success",
+  signal: AbortSignal
+): Promise<void> {
   const errors: unknown[] = []
+  const shouldSave = save !== false && !signal.aborted && (save.on === "always" || outcome === "success")
 
-  try {
-    await lease.save()
-  } catch (error) {
-    errors.push(error)
+  if (shouldSave) {
+    try {
+      const request: WorkspaceSaveRequest = Object.freeze({
+        exclude: save.exclude,
+        gitignore: save.gitignore,
+        ...(save.include === undefined ? {} : { include: save.include }),
+        outcome,
+        retention: save.retention,
+        signal,
+      })
+      await lease.save(request)
+    } catch (error) {
+      errors.push(error)
+    }
   }
 
   try {
@@ -187,6 +239,124 @@ async function saveAndReleaseWorkspace(lease: Readonly<ValidatedWorkspaceLease>)
   if (errors.length > 1) {
     throw new AggregateError(errors, "Workspace save and release both failed")
   }
+}
+
+interface NormalizedWorkspaceSave {
+  readonly exclude: readonly string[]
+  readonly gitignore: boolean
+  readonly include?: readonly string[]
+  readonly on: "always" | "success"
+  readonly retention: number
+}
+
+/**
+ * Converts authoring shorthands into one provider-facing load request.
+ */
+function normalizeWorkspaceLoad(value: boolean | WorkspaceLoadOptions): false | Readonly<WorkspaceLoadRequest> {
+  if (value === false) {
+    return false
+  }
+
+  if (value === true) {
+    return Object.freeze({
+      exclude: Object.freeze([]),
+      revision: "current" as const,
+    })
+  }
+
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    throw new EvaluationError("<Workspace> load must be a boolean or options object")
+  }
+
+  const revision = value.revision ?? "current"
+
+  if (typeof revision !== "string" || revision.length === 0 || revision !== revision.trim()) {
+    throw new EvaluationError("<Workspace> load revision must be a non-empty normalized string")
+  }
+
+  const include = normalizeWorkspacePatterns(value.include, "load include")
+  return Object.freeze({
+    exclude: normalizeWorkspacePatterns(value.exclude, "load exclude") ?? Object.freeze([]),
+    ...(include === undefined ? {} : { include }),
+    revision,
+  })
+}
+
+/**
+ * Captures save defaults once before provider acquisition.
+ */
+function normalizeWorkspaceSave(value: boolean | WorkspaceSaveOptions): false | Readonly<NormalizedWorkspaceSave> {
+  if (value === false) {
+    return false
+  }
+
+  if (value !== true && (typeof value !== "object" || value === null || Array.isArray(value))) {
+    throw new EvaluationError("<Workspace> save must be a boolean or options object")
+  }
+
+  const options = value === true ? {} : value
+  const on = options.on ?? "success"
+
+  if (on !== "always" && on !== "success") {
+    throw new EvaluationError('<Workspace> save on must be "always" or "success"')
+  }
+
+  const retention = options.retention ?? 1
+
+  if (!Number.isSafeInteger(retention) || retention <= 0) {
+    throw new EvaluationError("<Workspace> save retention must be a positive safe integer")
+  }
+
+  const gitignore = options.gitignore ?? true
+
+  if (typeof gitignore !== "boolean") {
+    throw new EvaluationError("<Workspace> save gitignore must be a boolean")
+  }
+
+  const include = normalizeWorkspacePatterns(options.include, "save include")
+  return Object.freeze({
+    exclude: normalizeWorkspacePatterns(options.exclude, "save exclude") ?? Object.freeze([]),
+    gitignore,
+    ...(include === undefined ? {} : { include }),
+    on,
+    retention,
+  })
+}
+
+/**
+ * Rejects ambiguous negation and host-style paths at the authored boundary.
+ */
+function normalizeWorkspacePatterns(
+  value: readonly string[] | undefined,
+  label: string
+): readonly string[] | undefined {
+  if (value === undefined) {
+    return undefined
+  }
+
+  if (!Array.isArray(value)) {
+    throw new EvaluationError(`<Workspace> ${label} must be an array`)
+  }
+
+  return Object.freeze(
+    value.map((pattern, index) => {
+      if (
+        typeof pattern !== "string" ||
+        pattern.length === 0 ||
+        pattern !== pattern.trim() ||
+        pattern.startsWith("!") ||
+        pattern.startsWith("/") ||
+        pattern.includes("\\") ||
+        pattern.split("/").includes("..")
+      ) {
+        throw new EvaluationError(
+          `<Workspace> ${label}[${index}] must be a normalized relative forward-slash glob without negation`
+        )
+      }
+
+      return pattern
+    })
+  )
 }
 
 /**

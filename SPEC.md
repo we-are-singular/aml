@@ -81,7 +81,7 @@ AML is developed as an npm workspace monorepo and distributed as one public pack
 @aml-jsx/sdk
 ```
 
-`@aml-jsx/sdk` owns the JSX runtime, evaluator, primitives, public provider interfaces, provider definition helpers, conformance contracts, and the concrete integrations included in the current release. The package root exports the built-in Agent factories `opencodeAgent()`, `codexAgent()`, and `piAgent()`; the Sandbox factories `localSandbox()`, `dockerSandbox()`, and `daytonaSandbox()`; and the durable `localWorkspace()` factory.
+`@aml-jsx/sdk` owns the JSX runtime, evaluator, primitives, public provider interfaces, provider definition helpers, conformance contracts, and the concrete integrations included in the current release. The package root exports the built-in Agent factories `opencodeAgent()`, `codexAgent()`, and `piAgent()`; the Sandbox factories `localSandbox()`, `dockerSandbox()`, and `daytonaSandbox()`; and the durable `localWorkspace()`, `filesystemWorkspace()`, and `s3Workspace()` factories.
 
 The SDK exports both `@aml-jsx/sdk/jsx-runtime` and `@aml-jsx/sdk/jsx-dev-runtime` for TypeScript and Vite's automatic production and development JSX transforms.
 
@@ -214,8 +214,10 @@ AML cannot automatically roll back arbitrary effects already performed by an Age
 | `<Tool>`                           | Grant a host or JavaScript capability                                | Tool descriptor            |
 | `defineTool()`                     | Expose a JavaScript function to an Agent                             | Tool definition            |
 | `<Skill>`                          | Resolve reusable instruction text                                    | Text                       |
+| `<File>`                           | Materialize resolved text inside an active Workspace                 | No text                    |
 | `<Sandbox>`                        | Scope an ephemeral execution lease and restrictive filesystem policy | Descendant execution scope |
 | `defineSandboxProvider()`          | Define an ephemeral execution adapter                                | `SandboxProvider`          |
+| `<Script>`                         | Execute an authored command through an active Sandbox                | Standard output            |
 | `<Workspace>`                      | Load and save one durable working directory                          | Descendant filesystem root |
 | `defineWorkspaceProvider()`        | Define a durable workspace adapter                                   | `WorkspaceProvider`        |
 | `<Mcp>`                            | Grant a provider-native or explicitly configured MCP server          | MCP server descriptor      |
@@ -241,6 +243,7 @@ The normative surface is delivered in phases so the public API grows only after 
 | MVP 4                  | `<Sandbox>`, `defineSandboxProvider()`                         | Add ephemeral execution scope                                                        |
 | MVP 5                  | `<Workspace>`, `defineWorkspaceProvider()`                     | Add durable filesystem scope and complete the MVP                                    |
 | Post-MVP capabilities  | `<Mcp>`, `defineMcpServer()`                                   | Attach MCP servers without making the SDK own an Agent harness                       |
+| Filesystem composition | `<File>`, `<Script>`                                           | Materialize resolved text and run explicit commands within resource scopes           |
 | Post-MVP orchestration | `evaluate()`, structured output, `<FollowUp>`; draft: `<Loop>` | Add richer dataflow and same-session or iterative execution                          |
 | Draft late surface     | `createContext()`, `useContext()`, `<Context.Provider>`        | Add immutable dependency scope only after the execution and resource model is stable |
 
@@ -1243,6 +1246,7 @@ interface SandboxRuntime {
 }
 
 interface WorkspaceMaterializationReference<Handle = unknown> {
+  cwd: string
   directory: string
   handle: Handle
   leaseId: string
@@ -1250,6 +1254,7 @@ interface WorkspaceMaterializationReference<Handle = unknown> {
     name: string
   }
   workspaceId: string
+  writeConcurrency: "serial" | "parallel"
 }
 ```
 
@@ -1367,6 +1372,31 @@ Daytona's command API accepts a shell command string rather than literal argv, s
 
 The transfer implementation cannot enforce a read-only guest tree. Like Local, Daytona therefore rejects runtime execution under `"read-only"` instead of claiming confinement it does not provide. Read-write reconciliation occurs before the outer Workspace saves its materialization. A failed reconciliation is reported and remote cleanup is still attempted.
 
+### 13.7 `<Script>`
+
+`<Script>` executes only through the runtime of an active Sandbox. AML never falls back to a host process:
+
+```tsx
+<Sandbox provider={docker} access="read-write">
+  <Script command="git" args={["clone", repository, "."]} />
+  <Script shell="sh">npm test</Script>
+</Sandbox>
+```
+
+Exactly one execution form is required:
+
+- `command` accepts an optional string `args` array, rejects children, and executes without shell interpolation
+- `shell` is `"sh"`, `"bash"`, or `"node"` and executes its fully resolved child text
+
+`timeoutMs`, when present, is a positive safe integer passed to the Sandbox runtime. Interpreted source must resolve
+to non-empty text. Child Agents may generate that source because Script executes after post-order child resolution.
+Choosing Script accepts execution of the complete resolved text; AML does not distinguish trusted literals from
+model-produced fragments.
+
+Standard output becomes the Script result and can feed later AML. A non-zero exit rejects with its code and trimmed
+standard-error detail. Cancellation, cwd, confinement, and executable availability remain owned by the active
+Sandbox runtime.
+
 ## 14. `<Workspace>`
 
 `<Workspace>` owns one durable directory across ephemeral Sandbox runs:
@@ -1388,21 +1418,29 @@ Workspace is a top-level resource boundary:
 - one Workspace may contain multiple sibling Sandboxes
 - sibling root Sandboxes may use different providers
 
-Workspace owns durable identity, locking, materialization, and transfer. Sandbox owns ephemeral execution and confinement.
+Workspace owns durable identity, evaluation locking, materialization, atomic publication, and transfer. Sandbox owns
+ephemeral execution and confinement.
 
 ### 14.1 Lifecycle
 
+`id` defaults to `crypto.randomUUID()` when omitted. `cwd` defaults to `"."` and is a normalized relative path
+beneath the materialization root. `load` defaults to `true`, which restores the indexed current revision. `lock`
+defaults to `true`, `writeConcurrency` defaults to `"serial"`, and `save` defaults to `false`.
+
 One Workspace evaluation:
 
-1. acquires the Workspace and an exclusive writer lease
-2. materializes its durable directory as the working snapshot
+1. acquires one Workspace materialization and, unless `lock={false}`, its writer lock
+2. materializes the requested durable revision, or an empty tree when `load={false}`
 3. evaluates its subtree
 4. attaches and reconciles descendant Sandboxes
-5. saves the materialized directory after success or failure
+5. applies the save policy when enabled
 6. releases the lease and temporary materialization
 7. returns the child result or rethrows its error
 
-Saving after failure intentionally preserves partial autonomous-agent edits. If saving also fails, AML surfaces the persistence failure without losing the original evaluation failure in traces or error causality.
+`save: true` saves after success, discovers the whole tree subject to `.gitignore`, and retains one current revision.
+`save.on: "always"` opts into saving partial work after descendant failure. Cancellation skips saving. If saving also
+fails, AML surfaces the persistence failure without losing the original evaluation failure in traces or error
+causality.
 
 This is not a crash-safe execution checkpoint. Process or provider failure may lose unsynchronized changes unless the Workspace provider offers continuous or incremental persistence.
 
@@ -1417,9 +1455,19 @@ Sequential Sandboxes operate on one logical working snapshot:
 
 Shared mounts may avoid copying. Remote providers may upload and download the selected directory. Observable file behavior must remain consistent.
 
-Parallel read-only Sandboxes may use one Workspace revision. The initial runtime must reject conflicting writable attachments; it must not wait indefinitely or silently apply last-writer-wins copies. Higher-level scheduling may serialize complete Workspace evaluations before acquisition, but serialization is not part of the Workspace provider contract.
+Parallel read-only Sandboxes may use one Workspace revision. In the default `writeConcurrency="serial"` mode, AML
+waits before acquiring another writable root Sandbox for the same materialization and holds that permit through
+Sandbox release and reconciliation. Agents inside one Sandbox still share its live filesystem and may run in
+parallel. `writeConcurrency="parallel"` permits multiple writable root Sandboxes; this is appropriate for shared
+mounts, while providers that transfer independent snapshots may overwrite reconciled state.
 
-Workspace providers may use disk, Docker volumes, object storage, Durable Objects, or another durable backend. While one lease remains healthy and owns its writer authority, another acquisition of the same durable identity must reject with the provider-neutral `WorkspaceConflictError` without returning a lease. Releasing the active lease must make that identity acquirable again. The error carries the stable code `AML_WORKSPACE_CONFLICT` and the conflicting `workspaceId` so duplicated SDK packages can recognize the contract without relying on `instanceof`.
+Workspace providers may use disk, Docker volumes, object storage, or another durable backend. When `lock` is enabled,
+another acquisition of the same durable identity must reject with the provider-neutral `WorkspaceConflictError`
+without returning a lease. Releasing the active lease must make that identity acquirable again. With `lock={false}`,
+revision-backed providers may allow concurrent materializations but must still reject stale conditional publication;
+direct mutable providers expose ordinary concurrent filesystem behavior. The error carries the stable code
+`AML_WORKSPACE_CONFLICT` and the conflicting `workspaceId` so duplicated SDK packages can recognize the contract
+without relying on `instanceof`.
 
 A provider backed by a renewable distributed or filesystem lease may lose writer authority after a documented stale threshold. Such a provider must detect and report compromise through `save()` or `release()`, document whether overlap can leave partial edits, and must not claim fencing or unconditional exclusion across suspension. Providers with stronger locking may retain the unconditional contract.
 
@@ -1438,6 +1486,24 @@ interface WorkspaceProvider<Handle = unknown> {
 interface WorkspaceAcquireRequest {
   evaluationId: string
   id: string
+  load?: false | WorkspaceLoadRequest
+  lock?: boolean
+  save?: boolean
+  signal: AbortSignal
+}
+
+interface WorkspaceLoadRequest {
+  exclude: readonly string[]
+  include?: readonly string[]
+  revision: "current" | string
+}
+
+interface WorkspaceSaveRequest {
+  exclude: readonly string[]
+  gitignore: boolean
+  include?: readonly string[]
+  outcome: "failure" | "success"
+  retention: number
   signal: AbortSignal
 }
 
@@ -1446,10 +1512,11 @@ interface WorkspaceLease<Handle = unknown> {
   handle: Handle
   id: string
   release(): Promise<void>
-  save(): Promise<void>
+  save(request?: WorkspaceSaveRequest): Promise<void>
 }
 
 interface WorkspaceMaterializationReference<Handle = unknown> {
+  cwd: string
   directory: string
   handle: Handle
   leaseId: string
@@ -1457,10 +1524,20 @@ interface WorkspaceMaterializationReference<Handle = unknown> {
     name: string
   }
   workspaceId: string
+  writeConcurrency: "serial" | "parallel"
 }
 ```
 
-`directory` is the runtime-visible materialization of the durable Workspace. A provider may implement it as a local directory, mounted volume, synchronized remote snapshot, or another filesystem adapter, but descendant Sandboxes must observe the same logical files and ordering guarantees from section 14.2. `save()` persists the current materialization and `release()` relinquishes locks and temporary resources. AML calls both through failure-safe cleanup and preserves multiple failures with causality. `acquire()` must reject a competing writer with `WorkspaceConflictError` while a healthy lease for the same Workspace id retains writer authority; conformance propagates every other provider failure and does not infer locking from timing or provider latency.
+`directory` is the runtime-visible materialization of the durable Workspace. A provider may implement it as a local
+directory, mounted volume, synchronized remote snapshot, or another filesystem adapter, but descendant Sandboxes must
+observe the same logical files and ordering guarantees from section 14.2. `save()` persists the requested selection
+and `release()` relinquishes locks and temporary resources. AML calls enabled saves and release through failure-safe
+cleanup and preserves multiple failures with causality. With locking enabled, `acquire()` must reject a competing
+writer with `WorkspaceConflictError`; conformance propagates every other provider failure.
+
+Include and exclude globs are relative to the materialization root. Explicit include patterns override `.gitignore`;
+explicit excludes always win. Selected symbolic links and unsupported filesystem entries reject. `retention` is a
+positive integer counting the newly published current revision and all retained history.
 
 After acquisition AML captures an immutable `WorkspaceMaterializationReference` for descendant outer Sandboxes. `workspaceId` is the authored durable identity, `leaseId` is the provider's acquired resource identity, and `provider.name` is descriptive identity rather than acquisition authority. Descendants never receive `save()`, `release()`, or the Workspace provider's `acquire()` method.
 
@@ -1484,15 +1561,119 @@ await runtime.evaluate(
 )
 ```
 
-`localWorkspace({ directory, staleMs?, updateMs? })` is a lazy configured factory. Construction validates and resolves the configured path relative to the current process but performs no filesystem I/O. Acquisition resolves symlinks, requires an existing directory, checks cancellation, and obtains a zero-retry cross-process lock on that physical directory. The provider uses `proper-lockfile`; it does not implement its own lock protocol.
+`localWorkspace({ directory })` is a lazy configured factory. Construction validates and resolves the configured
+path relative to the current process but performs no filesystem I/O. Acquisition resolves symlinks, requires an
+existing directory, checks cancellation, and normally obtains a zero-retry cross-process lock on that physical
+directory. `lock={false}` deliberately skips it. The provider uses `proper-lockfile`; it does not implement its own
+lock protocol.
 
 The configured directory is the complete durable Workspace. The authored Workspace `id` remains its logical execution identity but does not select a child path. Two providers aimed at the same physical directory therefore contend even when their authored ids differ. Lock contention rejects with `WorkspaceConflictError` for the requesting id. Other filesystem and lock failures remain provider failures.
 
-The local lock is a renewable filesystem lease rather than an OS-owned advisory lock. `staleMs` defaults to 30 seconds and cannot be less than 2 seconds. `updateMs` defaults to 10 seconds, cannot be less than 1 second, and cannot exceed half of `staleMs`. Both values are capped at Node's maximum timer delay of 2,147,483,647 milliseconds. Another process may recover a lock whose owner cannot refresh it within the stale window. The original provider records that state as compromise and fails completion, but direct edits from an overlap cannot be rolled back. Consumers requiring fencing or unconditional exclusion across process suspension need another Workspace provider.
+The local lock is a renewable filesystem lease rather than an OS-owned advisory lock. Its policy is fixed: refresh
+every five minutes and allow recovery after twenty minutes without renewal. Timing is intentionally not part of the
+provider API. The original provider records lost ownership as compromise and fails completion, but direct edits from
+an overlap cannot be rolled back.
 
 The local materialization is direct: descendants work against the configured directory and writes are durable as ordinary local filesystem mutations occur. `save()` performs no copy or snapshot; it verifies that the renewable lock was not reported compromised. `release()` relinquishes a healthy cross-process lock exactly once and reports an unreported compromise without leaking dependency lifecycle errors. Cancellation before acquisition prevents locking. Cancellation after a late successful lock releases it before propagating the caller's exact reason.
 
 The lock lives beside the resolved physical directory rather than inside its contents, so that physical directory's parent must permit lock creation. The provider makes no sandboxing or filesystem-isolation claim. A descendant Sandbox provider must still enforce its own confinement and must reject the materialization if it cannot attach a same-host local directory.
+
+### 14.5 Shared Workspace persistence
+
+Revision-backed providers use `createPersistentWorkspaceProvider()` with a public `WorkspaceStorageAdapter`.
+WorkspacePersistence owns temporary materialization, Globby selection, revision metadata, retention, archive
+creation and validated extraction, folder manifests, and cleanup. The adapter owns scoped access and these
+provider-native operations:
+
+```ts
+interface WorkspaceStorageAdapter<Handle = unknown> {
+  readonly name: string
+  acquire(request: WorkspaceStorageAcquireRequest): Promise<WorkspaceStorageLease<Handle>>
+}
+
+interface WorkspaceStorageLease<Handle = unknown> {
+  readonly handle: Handle
+  read(path: string): Promise<WorkspaceStorageObject | undefined>
+  write(
+    path: string,
+    body: WorkspaceStorageBody,
+    options?: WorkspaceStorageWriteOptions
+  ): Promise<WorkspaceStorageVersion>
+  list(prefix: string): Promise<readonly WorkspaceStorageEntry[]>
+  delete(paths: readonly string[]): Promise<void>
+  release(): Promise<void>
+}
+```
+
+Storage paths are normalized relative paths within one acquired Workspace identity. Bodies are streaming.
+Conditional writes support create-if-absent and replace-if-version. Versions are opaque adapter tokens.
+
+The persistence format is `"archive" | "folder"` and defaults to `"archive"`. Archive means exactly one AML-created
+`tar.gz` per revision. Folder means one manifest plus provider-native files beneath an isolated revision prefix.
+Format is stored per revision, so changing provider configuration loads the old current revision in its original
+format before saving the next revision in the new format.
+
+Every revision-backed Workspace stores this provider-independent control object:
+
+```ts
+interface WorkspaceIndex {
+  version: 1
+  current: string
+  revisions: readonly {
+    createdAt: string
+    format: "archive" | "folder"
+    id: string
+    path: string
+  }[]
+}
+```
+
+The object is stored as `workspace.json`; revisions live beneath `revisions/`. Saves upload a complete immutable
+artifact before conditionally publishing the next index. Pruning occurs only after publication. Publication failure
+keeps the previous current revision authoritative and attempts to remove the unreferenced upload. Pruning failure may
+leave unreachable storage but must not delete current data.
+
+The persistence layer validates index and manifest versions, paths, entry counts, extracted bytes, archive bytes,
+archive entry types, and selected snapshot limits. Invalid or missing referenced state rejects; it never silently
+starts fresh. A genuinely missing index represents a new Workspace.
+
+### 14.6 Staged filesystem and S3 Workspace providers
+
+`filesystemWorkspace({ directory, format?, temporaryDirectory? })` stores revision artifacts beneath the configured
+durable directory and materializes each run in a unique temporary directory. With locking enabled it holds a fixed
+renewable lock for the evaluation. Unlocked runs still use a short filesystem lock around the conditional
+`workspace.json` replacement. It is the staged alternative to the direct `localWorkspace()` provider.
+
+`s3Workspace({ bucket, client?, config?, prefix?, format?, temporaryDirectory? })` uses the same
+WorkspacePersistence implementation. Its adapter maps opaque versions to ETags, conditional writes to S3
+preconditions, and normally holds a fixed renewable `lock.json` lease until release. The lock refreshes every five
+minutes and is recoverable after twenty minutes without renewal; these timings are not configurable. `lock={false}`
+skips the lease but retains conditional index publication. The provider requires the configured service to honor the
+conditional S3 operations used by locking and publication; the generic “S3-compatible” label alone is not a guarantee.
+
+### 14.7 `<File>`
+
+`<File>` writes its resolved child text beneath the active Workspace materialization:
+
+```tsx
+<Workspace provider={workspaceStore}>
+  <File path="handoff/plan.md">
+    <Agent>Write the implementation plan.</Agent>
+  </File>
+  <Agent>Read handoff/plan.md and execute it.</Agent>
+</Workspace>
+```
+
+`path` is required, relative to the Workspace root, and uses portable forward-slash syntax. Absolute paths, parent
+traversal, the root itself, symbolic-link destinations, and symbolic-link or non-directory parents reject. Missing
+parent directories are created. The completed write atomically replaces a regular destination where the host
+filesystem supports rename semantics.
+
+File requires children, permits empty resolved content, and contributes no text to its surrounding prompt. A nested
+Agent may therefore generate the file without duplicating its output into the parent Agent. File is valid only inside
+a Workspace and, in the initial contract, outside any active Sandbox. Remote Sandbox guests may hold a newer copy
+than the host materialization, so guest-side File writes remain unsupported until Sandbox exposes a portable file
+operation.
 
 ## 15. Provider contract
 
@@ -2009,6 +2190,11 @@ AML does not specify:
 - provider-independent streaming
 - Tool rollback
 - Workspace merge algorithms
+- provider-native Workspace mounts and incremental synchronization
+- SFTP and rsync Workspace adapters
+- first-class Git checkout, worktree, commit, push, or pull-request behavior
+- Workspace-owned Skill materialization
+- File host sources, append/create modes, binary content, and guest-side writes
 - independent nested Sandbox acquisition
 - installation or execution of remote Skill bundles
 

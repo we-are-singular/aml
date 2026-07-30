@@ -1,9 +1,27 @@
+export interface WorkspaceLoadRequest {
+  readonly exclude: readonly string[]
+  readonly include?: readonly string[]
+  readonly revision: "current" | string
+}
+
 /**
  * Provider-owned request for one durable Workspace materialization.
  */
 export interface WorkspaceAcquireRequest {
   readonly evaluationId: string
   readonly id: string
+  readonly load?: false | WorkspaceLoadRequest
+  readonly lock?: boolean
+  readonly save?: boolean
+  readonly signal: AbortSignal
+}
+
+export interface WorkspaceSaveRequest {
+  readonly exclude: readonly string[]
+  readonly gitignore: boolean
+  readonly include?: readonly string[]
+  readonly outcome: "failure" | "success"
+  readonly retention: number
   readonly signal: AbortSignal
 }
 
@@ -23,7 +41,7 @@ export interface WorkspaceLease<Handle = unknown> {
   /**
    * Persists the current materialization to its durable backend.
    */
-  save(): Promise<void>
+  save(request?: WorkspaceSaveRequest): Promise<void>
 }
 
 /**
@@ -58,9 +76,11 @@ export interface WorkspaceProviderReference {
  * Lifecycle methods remain private to AML.
  */
 export interface WorkspaceMaterializationReference<Handle = unknown> {
+  readonly cwd: string
   readonly directory: string
   readonly handle: Handle
   readonly leaseId: string
   readonly provider: WorkspaceProviderReference
   readonly workspaceId: string
+  readonly writeConcurrency: "parallel" | "serial"
 }

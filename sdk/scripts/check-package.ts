@@ -43,17 +43,21 @@ interface BuiltSdk {
   }) => {
     evaluate(value: unknown): Promise<string>
   }
+  readonly File: unknown
   readonly Fragment: unknown
   readonly FollowUp: unknown
   readonly Loop: unknown
   readonly Mcp: unknown
+  readonly Script: unknown
   readonly Tool: unknown
   readonly Workspace: unknown
   readonly codexAgent: unknown
   readonly daytonaSandbox: unknown
   readonly dockerSandbox: unknown
+  readonly filesystemWorkspace: unknown
   readonly localSandbox: unknown
   readonly localWorkspace: unknown
+  readonly s3Workspace: unknown
   readonly modalSandbox: unknown
   readonly opencodeAgent: unknown
   readonly piAgent: unknown
@@ -174,15 +178,19 @@ const {
   defineMcpServer,
   defineWorkspaceProvider,
   dockerSandbox,
+  filesystemWorkspace,
   evaluate: componentEvaluate,
+  File: publicFile,
   Fragment: publicFragment,
   FollowUp: publicFollowUp,
   localWorkspace,
+  s3Workspace,
   localSandbox,
   Loop: publicLoop,
   modalSandbox,
   opencodeAgent,
   piAgent,
+  Script: publicScript,
   Workspace: publicWorkspace,
   WorkspaceConflictError,
 } = (await import(pathToFileURL(resolvedEntries.index).href)) as BuiltSdk
@@ -202,11 +210,15 @@ if (
   typeof piAgent !== "function" ||
   typeof daytonaSandbox !== "function" ||
   typeof dockerSandbox !== "function" ||
+  typeof filesystemWorkspace !== "function" ||
   typeof localSandbox !== "function" ||
   typeof modalSandbox !== "function" ||
-  typeof localWorkspace !== "function"
+  typeof localWorkspace !== "function" ||
+  typeof s3Workspace !== "function" ||
+  typeof publicFile !== "function" ||
+  typeof publicScript !== "function"
 ) {
-  throw new Error("SDK root does not expose its configured provider factories")
+  throw new Error("SDK root does not expose its configured providers and filesystem primitives")
 }
 
 if (publicFragment !== runtimeFragment) {
@@ -386,6 +398,7 @@ const workspaceOutput = await new AmlRuntime({
   runtimeJsx(publicWorkspace, {
     children: "built Workspace",
     id: "package-check",
+    save: true,
   })
 )
 
@@ -424,6 +437,7 @@ try {
   }
 
   for (const dependency of [
+    "@aws-sdk/client-s3",
     "@daytona/sdk",
     "@earendil-works/pi-coding-agent",
     "@modelcontextprotocol/sdk",
@@ -431,8 +445,10 @@ try {
     "@opencode-ai/sdk",
     "@standard-schema/spec",
     "execa",
+    "globby",
     "modal",
     "proper-lockfile",
+    "tar",
     "typebox",
   ]) {
     const fixtureDependency = join(copyFixtureDirectory, "node_modules", dependency)

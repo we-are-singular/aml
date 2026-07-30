@@ -94,6 +94,11 @@ Repeated use should prefer a prebuilt image or snapshot. AML does not silently i
 
 A Workspace is not merely a storage client. It must materialize a filesystem for descendant Sandboxes, preserve changes after Sandbox release, and define concurrency and conflict behavior.
 
+Workspace evaluation locks and writable-Sandbox scheduling are separate. `lock` defaults to enabled and protects one
+durable identity across evaluations. `writeConcurrency` defaults to `"serial"` and queues writable root Sandboxes
+inside that evaluation from acquisition through reconciliation; read-only Sandboxes and Agents sharing one Sandbox
+remain parallel. Explicit `"parallel"` writes are safe for shared mounts but may race for transferred snapshots.
+
 Workspace implementations fall into three categories:
 
 - A synchronized Workspace copies files between durable storage and a materialized working directory.
@@ -102,20 +107,30 @@ Workspace implementations fall into three categories:
 
 ### Implemented
 
-| Provider        | Public export      | Kind                           |
-| --------------- | ------------------ | ------------------------------ |
-| Local directory | `localWorkspace()` | Direct durable materialization |
+| Provider                     | Public export           | Kind                                     |
+| ---------------------------- | ----------------------- | ---------------------------------------- |
+| Local directory              | `localWorkspace()`      | Direct durable materialization           |
+| Local revision store         | `filesystemWorkspace()` | Synchronized archive or folder revisions |
+| S3-compatible object storage | `s3Workspace()`         | Synchronized archive or folder revisions |
+
+`s3Workspace()` is the public adapter for stores that implement the conditional S3 object operations its lock and
+revision protocol requires. It uses a fixed five-minute lock heartbeat and a twenty-minute stale boundary when locking
+is enabled. Endpoint, region, credentials, path-style addressing, and injected clients are configuration; they do not
+justify `minioWorkspace()`, `b2Workspace()`, or similar aliases. “S3-compatible” alone does not prove the required
+conditional operations, so each service must be tested before support is claimed. Add a vendor-specific Workspace only
+when the vendor needs a different transport, authentication boundary, or persistence/concurrency behavior. Such an
+adapter may reuse public `WorkspacePersistence` through a narrow `WorkspaceStorageAdapter`, but it must expose and test
+its own locking and transport guarantees.
 
 ### Priority candidates
 
-| Priority | Provider                     | Proposed package                | Kind           | Notes                                                                                                                                                                                                                                             |
-| -------- | ---------------------------- | ------------------------------- | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| P0       | S3-compatible object storage | `@aml-jsx/workspace-s3`         | Synchronized   | One configurable implementation should cover AWS S3, Cloudflare R2, Backblaze B2, Tigris, MinIO, DigitalOcean Spaces, and other compatible endpoints. Do not create separate R2 or B2 packages unless their semantics require different behavior. |
-| P1       | Git                          | `@aml-jsx/workspace-git`        | Source control | Clone a repository and ref into a materialization. Saving must be explicit: return a patch, create a local commit, push a branch, or remain read-only. Automatic pushes must never be the implicit default.                                       |
-| P1       | Google Cloud Storage         | `@aml-jsx/workspace-gcs`        | Synchronized   | Covers deployments that cannot or should not use an S3-compatible endpoint.                                                                                                                                                                       |
-| P1       | Azure Blob Storage           | `@aml-jsx/workspace-azure-blob` | Synchronized   | Azure-native object storage with its own identity and concurrency model.                                                                                                                                                                          |
-| P2       | SFTP/SSH                     | `@aml-jsx/workspace-sftp`       | Synchronized   | Useful for existing servers and appliances where object storage is unavailable. Requires careful atomic-save and conflict semantics.                                                                                                              |
-| P2       | Network filesystem           | `@aml-jsx/workspace-nfs`        | Mounted        | NFS, EFS, Azure Files, and similar filesystems can expose a shared tree, but mounting depends on Sandbox networking and privileges.                                                                                                               |
+| Priority | Provider             | Proposed package                | Kind           | Notes                                                                                                                                                                                                       |
+| -------- | -------------------- | ------------------------------- | -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| P1       | Git                  | `@aml-jsx/workspace-git`        | Source control | Clone a repository and ref into a materialization. Saving must be explicit: return a patch, create a local commit, push a branch, or remain read-only. Automatic pushes must never be the implicit default. |
+| P1       | Google Cloud Storage | `@aml-jsx/workspace-gcs`        | Synchronized   | Covers deployments that cannot or should not use an S3-compatible endpoint.                                                                                                                                 |
+| P1       | Azure Blob Storage   | `@aml-jsx/workspace-azure-blob` | Synchronized   | Azure-native object storage with its own identity and concurrency model.                                                                                                                                    |
+| P2       | SFTP/SSH             | `@aml-jsx/workspace-sftp`       | Synchronized   | Useful for existing servers and appliances where object storage is unavailable. Requires careful atomic-save and conflict semantics.                                                                        |
+| P2       | Network filesystem   | `@aml-jsx/workspace-nfs`        | Mounted        | NFS, EFS, Azure Files, and similar filesystems can expose a shared tree, but mounting depends on Sandbox networking and privileges.                                                                         |
 
 ### Native volume candidates
 

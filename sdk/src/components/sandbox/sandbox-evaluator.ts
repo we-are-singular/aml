@@ -1,6 +1,5 @@
-import path from "node:path"
-
 import { EvaluationError } from "../../core/evaluation-error.js"
+import { resolvePortablePath } from "../../core/resolve-portable-path.js"
 import type { WorkspaceMaterializationReference } from "../workspace/workspace-provider.js"
 import type { SandboxProps } from "./sandbox.js"
 import type {
@@ -35,6 +34,7 @@ export interface SandboxEvaluationScope {
  */
 export class SandboxEvaluator {
   readonly #provider: Readonly<ValidatedSandboxProvider> | undefined
+  readonly #workspaceWrites = new WeakMap<WorkspaceMaterializationReference, WorkspaceWriteQueue>()
 
   /**
    * Captures the optional runtime-wide provider without acquiring resources.
@@ -72,7 +72,7 @@ export class SandboxEvaluator {
 
     return Object.freeze({
       ...session,
-      cwd: resolveSandboxPath(session.root, cwd, "<Agent> cwd"),
+      cwd: resolvePortablePath(session.root, cwd, "<Agent> cwd"),
     })
   }
 
@@ -92,18 +92,28 @@ export class SandboxEvaluator {
     }
 
     const request = createRootRequest(props, workspace, evaluationId, signal)
+    const releaseWorkspaceWrite = await this.#acquireWorkspaceWrite(request, workspace)
     let value: unknown
 
     try {
       value = await Reflect.apply(provider.acquire, provider.provider, [Object.freeze(request)])
     } catch (cause) {
+      releaseWorkspaceWrite()
       // Cancellation is caller-owned control flow, not an attributed provider
       // failure. Cooperative providers reject pending acquisition with it.
       signal.throwIfAborted()
       throw new EvaluationError(`Sandbox provider "${provider.name}" failed to acquire`, { cause })
     }
 
-    const capture = captureSandboxLease(value, provider.name)
+    let capture: ReturnType<typeof captureSandboxLease>
+
+    try {
+      capture = captureSandboxLease(value, provider.name)
+    } catch (error) {
+      releaseWorkspaceWrite()
+      throw error
+    }
+
     let lease: ReturnType<typeof validateSandboxLease>
 
     try {
@@ -114,12 +124,14 @@ export class SandboxEvaluator {
       try {
         await capture.release()
       } catch (releaseError) {
+        releaseWorkspaceWrite()
         throw new AggregateError(
           [leaseError, releaseError],
           `Sandbox provider "${provider.name}" returned an invalid lease and cleanup failed`
         )
       }
 
+      releaseWorkspaceWrite()
       throw leaseError
     }
 
@@ -142,10 +154,34 @@ export class SandboxEvaluator {
       release() {
         // Cache the complete release operation so every runtime cleanup path
         // converges on one provider call, even when failures race.
-        releasePromise ??= releaseSandboxLease(provider.name, lease.lease.id, lease.release)
+        releasePromise ??= (async () => {
+          try {
+            await releaseSandboxLease(provider.name, lease.lease.id, lease.release)
+          } finally {
+            releaseWorkspaceWrite()
+          }
+        })()
         return releasePromise
       },
     })
+  }
+
+  async #acquireWorkspaceWrite(
+    request: Readonly<SandboxAcquireRequest>,
+    workspace: Readonly<WorkspaceMaterializationReference> | undefined
+  ): Promise<() => void> {
+    if (request.access !== "read-write" || workspace === undefined || workspace.writeConcurrency === "parallel") {
+      return () => {}
+    }
+
+    let queue = this.#workspaceWrites.get(workspace)
+
+    if (queue === undefined) {
+      queue = new WorkspaceWriteQueue()
+      this.#workspaceWrites.set(workspace, queue)
+    }
+
+    return await queue.acquire(request.signal)
   }
 
   /**
@@ -162,10 +198,10 @@ export class SandboxEvaluator {
       throw new EvaluationError("A nested <Sandbox> cannot widen read-only access to read-write")
     }
 
-    const root = props.root === undefined ? parent.root : resolveSandboxPath(parent.root, props.root, "<Sandbox> root")
+    const root = props.root === undefined ? parent.root : resolvePortablePath(parent.root, props.root, "<Sandbox> root")
     const cwd =
       props.cwd !== undefined
-        ? resolveSandboxPath(root, props.cwd, "<Sandbox> cwd")
+        ? resolvePortablePath(root, props.cwd, "<Sandbox> cwd")
         : props.root !== undefined
           ? root
           : parent.cwd
@@ -195,11 +231,17 @@ function createRootRequest(
   evaluationId: string,
   signal: AbortSignal
 ): SandboxAcquireRequest {
-  const root = resolveSandboxPath(".", props.root ?? ".", "<Sandbox> root")
+  const root = resolvePortablePath(".", props.root ?? ".", "<Sandbox> root")
+  const cwd =
+    props.cwd !== undefined
+      ? resolvePortablePath(root, props.cwd, "<Sandbox> cwd")
+      : props.root !== undefined
+        ? root
+        : (workspace?.cwd ?? ".")
 
   return {
     access: validateSandboxAccess(props.access ?? "read-only"),
-    cwd: resolveSandboxPath(root, props.cwd ?? ".", "<Sandbox> cwd"),
+    cwd,
     evaluationId,
     root,
     signal,
@@ -219,41 +261,6 @@ function validateSandboxAccess(value: unknown): SandboxAccess {
 }
 
 /**
- * Resolves one portable relative path while preventing lexical parent escape.
- *
- * Providers remain responsible for real-path and symlink confinement.
- */
-function resolveSandboxPath(base: string, value: unknown, label: string): string {
-  if (typeof value !== "string" || value.trim().length === 0) {
-    throw new EvaluationError(`${label} must be a non-empty string`)
-  }
-
-  if (value.includes("\\") || path.posix.isAbsolute(value) || path.win32.isAbsolute(value)) {
-    throw new EvaluationError(`${label} must be a relative forward-slash path`)
-  }
-
-  // Reject lexical traversal before normalization. Even a segment that later
-  // cancels out creates a provider-dependent and therefore non-portable policy.
-  if (value.split("/").includes("..")) {
-    throw new EvaluationError(`${label} cannot contain parent traversal`)
-  }
-
-  const normalized = path.posix.normalize(value)
-
-  if (normalized === ".." || normalized.startsWith("../")) {
-    throw new EvaluationError(`${label} cannot escape its parent root`)
-  }
-
-  const resolved = path.posix.normalize(path.posix.join(base, normalized))
-
-  if (resolved === ".." || resolved.startsWith("../")) {
-    throw new EvaluationError(`${label} cannot escape its parent root`)
-  }
-
-  return resolved
-}
-
-/**
  * Attributes a provider cleanup failure without hiding its original cause.
  */
 async function releaseSandboxLease(providerName: string, leaseId: string, release: () => Promise<void>): Promise<void> {
@@ -262,4 +269,82 @@ async function releaseSandboxLease(providerName: string, leaseId: string, releas
   } catch (cause) {
     throw new EvaluationError(`Sandbox provider "${providerName}" failed to release lease "${leaseId}"`, { cause })
   }
+}
+
+/**
+ * Serializes writable root Sandboxes that reconcile into one materialization.
+ */
+class WorkspaceWriteQueue {
+  #active = false
+  readonly #waiting: WorkspaceWriteWaiter[] = []
+
+  async acquire(signal: AbortSignal): Promise<() => void> {
+    signal.throwIfAborted()
+
+    if (!this.#active) {
+      this.#active = true
+      return this.#releaseOnce()
+    }
+
+    return await new Promise<() => void>((resolve, reject) => {
+      const waiter: WorkspaceWriteWaiter = {
+        abort: () => {
+          const index = this.#waiting.indexOf(waiter)
+
+          if (index >= 0) {
+            this.#waiting.splice(index, 1)
+          }
+
+          reject(signal.reason)
+        },
+        resolve,
+        signal,
+      }
+
+      this.#waiting.push(waiter)
+      signal.addEventListener("abort", waiter.abort, { once: true })
+
+      if (signal.aborted) {
+        waiter.abort()
+      }
+    })
+  }
+
+  #releaseOnce(): () => void {
+    let released = false
+
+    return () => {
+      if (released) {
+        return
+      }
+
+      released = true
+      this.#advance()
+    }
+  }
+
+  #advance(): void {
+    const next = this.#waiting.shift()
+
+    if (next === undefined) {
+      this.#active = false
+      return
+    }
+
+    next.signal.removeEventListener("abort", next.abort)
+
+    if (next.signal.aborted) {
+      next.abort()
+      this.#advance()
+      return
+    }
+
+    next.resolve(this.#releaseOnce())
+  }
+}
+
+interface WorkspaceWriteWaiter {
+  readonly abort: () => void
+  readonly resolve: (release: () => void) => void
+  readonly signal: AbortSignal
 }

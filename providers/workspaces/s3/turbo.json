@@ -1,0 +1,17 @@
+{
+  "extends": ["//"],
+  "tasks": {
+    "build": {
+      "dependsOn": ["@aml-jsx/sdk#build"],
+      "outputs": ["dist/**"]
+    },
+    "test": {
+      "dependsOn": ["@aml-jsx/sdk#build"],
+      "outputs": []
+    },
+    "typecheck": {
+      "dependsOn": ["@aml-jsx/sdk#build"],
+      "outputs": []
+    }
+  }
+}

@@ -182,6 +182,8 @@ The status table is the canonical implementation tracker. A slice moves to `Done
 | Slice 17 | Pi Agent package                               | Done              |
 | Slice 18 | Daytona Sandbox package                        | Done              |
 | Slice 19 | Modal Sandbox package                          | Done              |
+| Slice 20 | Shared Workspace persistence and S3 provider   | Done              |
+| Slice 21 | `<File>` and sandboxed `<Script>` composition  | Done              |
 
 Allowed statuses are `Pending`, `In progress`, `Evaluating`, `Blocked`, and `Done`. `Evaluating` means a working implementation exists but is not yet accepted as stable public API. A blocked slice includes its blocker directly in the status cell.
 
@@ -241,11 +243,13 @@ AML separates three provider responsibilities:
 
 - Agent providers own model or coding-harness sessions, provider-native capabilities, structured output mapping, and session cleanup.
 - Sandbox providers own disposable execution environments and expose only the bounded runtime capabilities AML requires.
-- Workspace providers own durable materialization, exclusive writable access, persistence, and release.
+- Workspace providers own durable materialization, optional cross-process locking, persistence, and release.
 
 These boundaries compose without pretending that every provider has identical capabilities. Unsupported combinations fail explicitly.
 
-Built-in Agent integrations currently cover OpenCode, Codex, and Pi. Built-in Sandbox integrations cover trusted local execution, Docker, Daytona, and Modal. The initial Workspace integration uses local durable storage.
+Built-in Agent integrations currently cover OpenCode, Codex, and Pi. Built-in Sandbox integrations cover trusted
+local execution, Docker, Daytona, and Modal. Built-in Workspace integrations cover direct local directories, staged
+filesystem persistence, and S3-compatible object storage through the shared archive-or-folder persistence engine.
 
 ### Definition and capability rules
 
@@ -290,7 +294,18 @@ The initial runtime proved asynchronous JSX evaluation, explicit sequential comp
 
 Agent and System established provider-owned sessions with explicit message channels. Tool and Skill added scoped capabilities without global registration. Sandbox added disposable execution ownership, while Workspace added durable materialization that can survive multiple Sandbox runs.
 
-OpenCode provided the first live Agent proof. Docker and local storage provided the first concrete Sandbox and Workspace proofs.
+OpenCode provided the first live Agent proof. Docker and local storage provided the first concrete Sandbox and
+Workspace proofs.
+
+The completed Workspace expansion added logical cwd, opt-in load and save selection, `.gitignore`-aware snapshots,
+retained immutable revisions, archive and folder formats, fixed-policy optional run locks, and serialized writable
+Sandbox reconciliation by default. The same persistence engine now drives staged filesystem and S3-compatible
+providers; a credentialed R2 smoke proves a Docker-to-Daytona file handoff through durable object storage.
+
+`<File>` now turns resolved AML text, including an Agent result, into a Workspace file before later siblings run.
+`<Script>` executes an argument vector or explicit `sh`, `bash`, or `node` source only through an active Sandbox.
+Together they cover authored setup, generated handoff files, Git commands, validation, and later-Agent input without
+adding directory-copy or Git-specific primitives.
 
 ### Post-MVP orchestration — delivered
 
@@ -333,7 +348,10 @@ Before marking a slice `Done`:
 
 ## Immediate implementation boundary
 
-All numbered delivery work is implemented. Slices 13 and 16 remain under product and API evaluation; every other slice is complete. The narrow common Sandbox runtime has local, container, and hosted proofs. Cloudflare remains a portability check until its implementation work is approved. Additional durable Workspace backends remain later work.
+All numbered delivery work is implemented. Slices 13 and 16 remain under product and API evaluation; every other
+slice is complete. The narrow common Sandbox runtime has local, container, and hosted proofs. Workspace persistence
+has staged filesystem and S3-compatible object-store proofs in both archive and folder formats. Cloudflare Workers
+remain a portability check until implementation work is approved.
 
 ## WORKER RUNTIME
 
@@ -402,6 +420,11 @@ Research references:
 - generic plugin infrastructure
 - automated package publication
 - Worker-specific SDK entry and generic remote Agent-host integration
+- first-class Git checkout, worktree, commit, push, or pull-request behavior
+- provider-native Workspace mounts and incremental folder synchronization
+- SFTP or rsync Workspace storage adapters
+- Workspace-owned Skill materialization
+- `<File>` host sources, append/create modes, binary content, and guest-side Sandbox writes
 
 Deferred ideas may enter the roadmap only after their behavior is accepted in `SPEC.md`.
 
@@ -414,7 +437,6 @@ These remain product questions until resolved into `SPEC.md`:
 - What is the first useful artifact contract for large data?
 - Where should retries and schema repair live?
 - What capability beyond bounded Sandbox command execution is first proven necessary by a concrete remote Agent workflow?
-- Which Workspace backend proves the abstraction beyond local disk?
 - What should an Agent provider expose about inherited host configuration?
 - Should a strict capability mode reject provider-inherited MCP servers that cannot be disabled?
 - Should local MCP server execution location be explicit, or remain entirely adapter-owned?
@@ -428,7 +450,8 @@ These remain product questions until resolved into `SPEC.md`:
 - trace timeline or Gantt visualization
 - interactive Agent TUI
 - remote Sandbox fleets
-- object-storage Workspace snapshots
+- mounted or incrementally synchronized Workspace storage
+- first-class Git workflows if sandboxed Script proves insufficient
 - Agent-as-Tool with explicit resource and budget semantics
 
 Items in this section are not commitments and must not shape implementation until promoted into `SPEC.md` and the delivery roadmap in this document.

@@ -15,6 +15,7 @@ export {
   type DeterministicWorkspaceProviderOptions,
 } from "./testing/deterministic-workspace-provider.js"
 export {
-  workspaceProviderConformance,
-  type WorkspaceProviderConformanceOptions,
-} from "./testing/workspace-provider-conformance.js"
+  InMemoryWorkspaceStorageAdapter,
+  type WorkspaceStorageOperation,
+} from "./testing/in-memory-workspace-storage-adapter.js"
+export { workspaceProviderConformance } from "./testing/workspace-provider-conformance.js"

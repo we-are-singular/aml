@@ -162,7 +162,7 @@ describe("component-local evaluate()", () => {
 
     await expect(
       new AmlRuntime().evaluate(
-        <Workspace id="review-42" provider={workspaceProvider}>
+        <Workspace id="review-42" provider={workspaceProvider} save>
           <Workflow />
         </Workspace>
       )

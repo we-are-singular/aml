@@ -18,6 +18,9 @@ import {
   type ParsedLocalWorkspaceOptions,
 } from "./local-workspace-options.js"
 
+const LOCK_STALE_MS = 20 * 60 * 1_000
+const LOCK_UPDATE_MS = 5 * 60 * 1_000
+
 export type { LocalWorkspaceHandle } from "./local-workspace-handle.js"
 export type { LocalWorkspaceOptions } from "./local-workspace-options.js"
 
@@ -48,6 +51,11 @@ class LocalWorkspaceProvider implements WorkspaceProvider<LocalWorkspaceHandle> 
   async acquire(request: WorkspaceAcquireRequest): Promise<WorkspaceLease<LocalWorkspaceHandle>> {
     request.signal.throwIfAborted()
     const directory = await this.#resolveDirectory(request.signal)
+
+    if (request.lock === false) {
+      return createLocalWorkspaceLease(directory)
+    }
+
     const activeLock = new LocalWorkspaceLock(directory)
 
     try {
@@ -59,8 +67,8 @@ class LocalWorkspaceProvider implements WorkspaceProvider<LocalWorkspaceHandle> 
         },
         realpath: false,
         retries: 0,
-        stale: this.#options.staleMs,
-        update: this.#options.updateMs,
+        stale: LOCK_STALE_MS,
+        update: LOCK_UPDATE_MS,
       })
       activeLock.attach(releaseLock)
     } catch (cause) {
@@ -216,7 +224,7 @@ class LocalWorkspaceLock {
  */
 function createLocalWorkspaceLease(
   directory: string,
-  activeLock: LocalWorkspaceLock
+  activeLock?: LocalWorkspaceLock
 ): Readonly<WorkspaceLease<LocalWorkspaceHandle>> {
   const handle: LocalWorkspaceHandle = Object.freeze({
     directory,
@@ -229,12 +237,12 @@ function createLocalWorkspaceLease(
     handle,
     id,
     release() {
-      return activeLock.release()
+      return activeLock?.release() ?? Promise.resolve()
     },
     async save() {
       // The materialization is direct: filesystem writes are already durable,
       // so save is a lock-health barrier rather than a copy operation.
-      activeLock.assertHealthy()
+      activeLock?.assertHealthy()
     },
   })
 }

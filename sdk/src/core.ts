@@ -20,6 +20,7 @@ export type {
   AmlEventSubscriber,
 } from "./core/aml-event-subscriber.js"
 export { FollowUp, type FollowUpProps } from "./components/follow-up/follow-up.js"
+export { File, type FileProps } from "./components/file/file.js"
 export { type DeepReadonly, Loop, type LoopProps, type LoopRenderContext } from "./components/loop/loop.js"
 export { System, type SystemProps } from "./components/system/system.js"
 
@@ -68,18 +69,49 @@ export {
   supportsSandboxRuntime,
 } from "./components/sandbox/sandbox-runtime.js"
 export { Sandbox, type SandboxProps } from "./components/sandbox/sandbox.js"
+export { Script, type ScriptProps, type ScriptShell } from "./components/script/script.js"
 
 // Durable materialization scope and provider-neutral lifecycle contracts.
 export { defineWorkspaceProvider } from "./components/workspace/define-workspace-provider.js"
 export { WorkspaceConflictError } from "./components/workspace/workspace-conflict-error.js"
 export {
   type WorkspaceAcquireRequest,
+  type WorkspaceLoadRequest,
   type WorkspaceLease,
   type WorkspaceMaterializationReference,
   type WorkspaceProvider,
   type WorkspaceProviderReference,
+  type WorkspaceSaveRequest,
 } from "./components/workspace/workspace-provider.js"
-export { Workspace, type WorkspaceProps } from "./components/workspace/workspace.js"
+export {
+  Workspace,
+  type WorkspaceLoadOptions,
+  type WorkspaceProps,
+  type WorkspaceSaveOptions,
+} from "./components/workspace/workspace.js"
+export {
+  createPersistentWorkspaceProvider,
+  type PersistentWorkspaceHandle,
+  WorkspacePersistence,
+  type WorkspacePersistenceOptions,
+} from "./workspace-persistence/workspace-persistence.js"
+export {
+  type WorkspaceIndex,
+  type WorkspacePersistenceFormat,
+  type WorkspaceRevision,
+} from "./workspace-persistence/workspace-index.js"
+export {
+  workspaceStorageSegment,
+  type WorkspaceStorageAcquireRequest,
+  type WorkspaceStorageAdapter,
+  type WorkspaceStorageBody,
+  type WorkspaceStorageEntry,
+  type WorkspaceStorageLease,
+  type WorkspaceStorageObject,
+  type WorkspaceStorageVersion,
+  type WorkspaceStorageWriteCondition,
+  type WorkspaceStorageWriteOptions,
+} from "./workspace-persistence/workspace-storage-adapter.js"
 
 // Scoped provider-native and application-owned capabilities.
 export type {

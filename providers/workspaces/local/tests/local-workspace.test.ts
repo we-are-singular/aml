@@ -51,25 +51,6 @@ describe("localWorkspace()", () => {
 
     expect(directoryReads).toBe(1)
     await expect(capturedProvider.acquire(createRequest("captured"))).rejects.toThrow(capturedDirectory)
-    expect(() =>
-      localWorkspace({
-        directory: capturedDirectory,
-        staleMs: 1_999,
-      })
-    ).toThrow("staleMs")
-    expect(() =>
-      localWorkspace({
-        directory: capturedDirectory,
-        staleMs: 10_000,
-        updateMs: 5_001,
-      })
-    ).toThrow("half of staleMs")
-    expect(() =>
-      localWorkspace({
-        directory: capturedDirectory,
-        staleMs: 2_147_483_648,
-      })
-    ).toThrow("2147483647")
   })
 
   it("materializes the physical directory and persists direct writes", async () => {
@@ -121,6 +102,17 @@ describe("localWorkspace()", () => {
     await first.release()
     const second = await secondProvider.acquire(createRequest("second-logical-id"))
     await second.release()
+  })
+
+  it("allows explicitly unlocked acquisitions of one physical directory", async () => {
+    const directory = await createTemporaryDirectory()
+    const provider = localWorkspace({ directory })
+    const first = await provider.acquire(createRequest("first", undefined, false))
+    const second = await provider.acquire(createRequest("second", undefined, false))
+
+    await first.release()
+    await second.release()
+    await expect(stat(`${directory}.lock`)).rejects.toHaveProperty("code", "ENOENT")
   })
 
   it("enforces contention across processes and canonical paths", async () => {
@@ -197,10 +189,15 @@ async function createTemporaryDirectory(): Promise<string> {
 /**
  * Builds one immutable direct-provider acquisition request.
  */
-function createRequest(id: string, signal = new AbortController().signal): Readonly<WorkspaceAcquireRequest> {
+function createRequest(
+  id: string,
+  signal = new AbortController().signal,
+  lock = true
+): Readonly<WorkspaceAcquireRequest> {
   return Object.freeze({
     evaluationId: `local-workspace-test-${id}`,
     id,
+    lock,
     signal,
   })
 }

@@ -163,11 +163,13 @@ describe("dockerSandbox()", () => {
     const active = await createWorkspace()
     const runner = new FakeRunner()
     const workspace: WorkspaceMaterializationReference = Object.freeze({
+      cwd: ".",
       directory: active,
       handle: {},
       leaseId: "workspace-lease",
       provider: { name: "local" },
       workspaceId: "workspace",
+      writeConcurrency: "serial",
     })
     const lease = await createDockerSandboxProvider({ image: "agent-image", workspace: fallback }, runner).acquire(
       request({ workspace })

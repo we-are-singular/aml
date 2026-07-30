@@ -55,7 +55,7 @@ describe("<Workspace>", () => {
 
     await expect(
       new AmlRuntime().evaluate(
-        <Workspace id="review-42" provider={workspaceProvider}>
+        <Workspace id="review-42" provider={workspaceProvider} save>
           <Sandbox provider={sandboxProvider}>first</Sandbox>
           <Sandbox provider={sandboxProvider}>second</Sandbox>
         </Workspace>
@@ -72,15 +72,38 @@ describe("<Workspace>", () => {
       "workspace:release:deterministic-workspace-1",
     ])
     expect(materialization).toMatchObject({
+      cwd: ".",
       directory: "/deterministic-workspace",
       leaseId: "deterministic-workspace-1",
       provider: { name: "deterministic-workspace" },
       workspaceId: "review-42",
+      writeConcurrency: "serial",
     })
     expect(Object.isFrozen(materialization)).toBe(true)
     expect("save" in (materialization ?? {})).toBe(false)
     expect("release" in (materialization ?? {})).toBe(false)
     expect("acquire" in (materialization?.provider ?? {})).toBe(false)
+  })
+
+  it("provides one logical cwd to descendant Sandboxes", async () => {
+    const workspaceProvider = new DeterministicWorkspaceProvider()
+    const sandboxProvider = new DeterministicSandboxProvider()
+
+    await new AmlRuntime().evaluate(
+      <Workspace cwd="repository/src" id="cwd" provider={workspaceProvider}>
+        <Sandbox provider={sandboxProvider}>inspect</Sandbox>
+      </Workspace>
+    )
+
+    expect(sandboxProvider.acquisitions[0]).toMatchObject({
+      cwd: "repository/src",
+      root: ".",
+      workspace: {
+        cwd: "repository/src",
+        directory: "/deterministic-workspace",
+        workspaceId: "cwd",
+      },
+    })
   })
 
   it("uses the runtime default and allows durable work without a Sandbox", async () => {
@@ -89,12 +112,99 @@ describe("<Workspace>", () => {
     await expect(
       new AmlRuntime({
         workspaceProvider: provider,
-      }).evaluate(<Workspace id="notes">durable text</Workspace>)
+      }).evaluate(
+        <Workspace id="notes" save>
+          durable text
+        </Workspace>
+      )
     ).resolves.toBe("durable text")
 
     expect(provider.acquisitions[0]).toMatchObject({ id: "notes" })
     expect(provider.saves).toEqual(["deterministic-workspace-1"])
     expect(provider.releases).toEqual(["deterministic-workspace-1"])
+  })
+
+  it("defaults to an isolated UUID, current load, and no save", async () => {
+    const provider = new DeterministicWorkspaceProvider()
+
+    await new AmlRuntime().evaluate(<Workspace provider={provider}>isolated</Workspace>)
+
+    expect(provider.acquisitions).toHaveLength(1)
+    expect(provider.acquisitions[0]).toMatchObject({
+      load: {
+        exclude: [],
+        revision: "current",
+      },
+      lock: true,
+      save: false,
+    })
+    expect(provider.acquisitions[0]?.id).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/
+    )
+    expect(provider.saves).toEqual([])
+    expect(provider.releases).toEqual(["deterministic-workspace-1"])
+  })
+
+  it("passes normalized load and save policy to the provider", async () => {
+    const acquire = vi.fn<WorkspaceProvider["acquire"]>()
+    const release = vi.fn(async () => {})
+    const save = vi.fn<WorkspaceLease["save"]>(async () => {})
+    const provider: WorkspaceProvider = {
+      name: "policy-spy",
+      acquire,
+    }
+    acquire.mockResolvedValue({
+      directory: "/policy-workspace",
+      handle: {},
+      id: "policy-lease",
+      release,
+      save,
+    })
+
+    await new AmlRuntime().evaluate(
+      <Workspace
+        id="policy"
+        lock={false}
+        load={{
+          exclude: ["src/generated/**"],
+          include: ["src/**", "README.md"],
+          revision: "revision-2",
+        }}
+        provider={provider}
+        save={{
+          exclude: ["**/*.tmp"],
+          gitignore: false,
+          include: ["src/**", "report.md"],
+          on: "always",
+          retention: 4,
+        }}
+        writeConcurrency="parallel"
+      >
+        policy
+      </Workspace>
+    )
+
+    expect(acquire).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: "policy",
+        lock: false,
+        load: {
+          exclude: ["src/generated/**"],
+          include: ["src/**", "README.md"],
+          revision: "revision-2",
+        },
+        save: true,
+      })
+    )
+    expect(save).toHaveBeenCalledWith({
+      exclude: ["**/*.tmp"],
+      gitignore: false,
+      include: ["src/**", "report.md"],
+      outcome: "success",
+      retention: 4,
+      signal: expect.any(AbortSignal),
+    })
+    expect(release).toHaveBeenCalledOnce()
   })
 
   it("rejects invalid placement and more than one declaration", async () => {
@@ -135,7 +245,7 @@ describe("<Workspace>", () => {
 
     await expect(
       new AmlRuntime().evaluate(
-        <Workspace id="outer" provider={workspaceProvider}>
+        <Workspace id="outer" provider={workspaceProvider} save={{ on: "always" }}>
           <Workspace id="inner" provider={workspaceProvider}>
             invalid
           </Workspace>
@@ -147,10 +257,10 @@ describe("<Workspace>", () => {
 
     await expect(
       new AmlRuntime().evaluate([
-        <Workspace id="first" provider={workspaceProvider}>
+        <Workspace id="first" provider={workspaceProvider} save>
           first
         </Workspace>,
-        <Workspace id="second" provider={workspaceProvider}>
+        <Workspace id="second" provider={workspaceProvider} save>
           second
         </Workspace>,
       ])
@@ -178,6 +288,16 @@ describe("<Workspace>", () => {
       ).rejects.toThrow("<Workspace> id must be a non-empty normalized string")
     }
 
+    for (const cwd of ["", "/absolute", "C:/absolute", "../escape", "packages/../secrets"]) {
+      await expect(
+        new AmlRuntime().evaluate(
+          <Workspace cwd={cwd} id="invalid-cwd" provider={provider}>
+            <Child />
+          </Workspace>
+        )
+      ).rejects.toBeInstanceOf(EvaluationError)
+    }
+
     await expect(
       new AmlRuntime().evaluate(
         <Workspace id="missing">
@@ -185,6 +305,27 @@ describe("<Workspace>", () => {
         </Workspace>
       )
     ).rejects.toThrow("<Workspace> requires a provider or AmlRuntime workspaceProvider")
+
+    for (const props of [
+      { load: { include: ["!secret"] } },
+      { load: { exclude: ["../secret"] } },
+      { save: { include: ["/absolute"] } },
+      { save: { exclude: ["windows\\path"] } },
+      { save: { retention: 0 } },
+      { save: { gitignore: "yes" } },
+      { save: { on: "sometimes" } },
+      { lock: "yes" },
+      { writeConcurrency: "sometimes" },
+    ]) {
+      await expect(
+        new AmlRuntime().evaluate(
+          <Workspace id="invalid-policy" provider={provider} {...(props as unknown as Record<string, unknown>)}>
+            <Child />
+          </Workspace>
+        )
+      ).rejects.toBeInstanceOf(EvaluationError)
+    }
+
     expect(child).not.toHaveBeenCalled()
     expect(provider.acquisitions).toHaveLength(0)
   })
@@ -208,12 +349,30 @@ describe("<Workspace>", () => {
 
     await expect(
       new AmlRuntime().evaluate(
-        <Workspace id="failure" provider={provider}>
+        <Workspace id="failure" provider={provider} save={{ on: "always" }}>
           <Fail />
         </Workspace>
       )
     ).rejects.toBe(failure)
     expect(events).toEqual(["child", "save", "release"])
+  })
+
+  it("does not save failed work under the default success policy", async () => {
+    const provider = new DeterministicWorkspaceProvider()
+
+    function Fail(): never {
+      throw new Error("failed before save")
+    }
+
+    await expect(
+      new AmlRuntime().evaluate(
+        <Workspace id="failure-default" provider={provider} save>
+          <Fail />
+        </Workspace>
+      )
+    ).rejects.toThrow("failed before save")
+    expect(provider.saves).toEqual([])
+    expect(provider.releases).toEqual(["deterministic-workspace-1"])
   })
 
   it("releases after save failure and preserves both completion failures", async () => {
@@ -230,7 +389,7 @@ describe("<Workspace>", () => {
 
     const error = await new AmlRuntime()
       .evaluate(
-        <Workspace id="completion" provider={provider}>
+        <Workspace id="completion" provider={provider} save>
           resolved
         </Workspace>
       )
@@ -267,7 +426,7 @@ describe("<Workspace>", () => {
 
     const error = await new AmlRuntime()
       .evaluate(
-        <Workspace id="causality" provider={workspaceProvider}>
+        <Workspace id="causality" provider={workspaceProvider} save={{ on: "always" }}>
           <Sandbox provider={sandboxProvider}>
             <Fail />
           </Sandbox>
@@ -283,7 +442,7 @@ describe("<Workspace>", () => {
     expect((topErrors[2] as AggregateError).errors).toEqual([saveFailure, releaseFailure])
   })
 
-  it("saves and releases once when descendant work is cancelled", async () => {
+  it("releases without saving when descendant work is cancelled", async () => {
     const controller = new AbortController()
     const reason = new Error("cancel Workspace work")
     const provider = new DeterministicWorkspaceProvider()
@@ -301,7 +460,7 @@ describe("<Workspace>", () => {
         { signal: controller.signal }
       )
     ).rejects.toBe(reason)
-    expect(provider.saves).toEqual(["deterministic-workspace-1"])
+    expect(provider.saves).toEqual([])
     expect(provider.releases).toEqual(["deterministic-workspace-1"])
   })
 
@@ -322,7 +481,7 @@ describe("<Workspace>", () => {
       },
     })
     const pending = new AmlRuntime().evaluate(
-      <Workspace id="save-cancellation" provider={provider}>
+      <Workspace id="save-cancellation" provider={provider} save>
         resolved
       </Workspace>,
       { signal: controller.signal }
@@ -664,13 +823,12 @@ describe("<Workspace>", () => {
     await recovered.release()
   })
 
-  it("rejects delayed providers that allow concurrent writers", async () => {
+  it("rejects providers without an acquisition lock", async () => {
     const releases: string[] = []
     let acquisition = 0
     const provider: WorkspaceProvider = {
       name: "permissive-workspace",
       async acquire() {
-        // Ordinary provider latency must not be mistaken for writer locking.
         await new Promise<void>(resolve => {
           setTimeout(resolve, 5)
         })
@@ -689,9 +847,7 @@ describe("<Workspace>", () => {
       },
     }
 
-    await expect(workspaceProviderConformance(provider)).rejects.toThrow(
-      'Workspace provider "permissive-workspace" allowed concurrent writers'
-    )
+    await expect(workspaceProviderConformance(provider)).rejects.toThrow("allowed concurrent writers")
     expect(releases).toEqual(["permissive-2", "permissive-1"])
   })
 
@@ -796,80 +952,9 @@ describe("<Workspace>", () => {
     expect(error).toBeInstanceOf(AggregateError)
     expect((error as AggregateError).errors[0]).toHaveProperty(
       "message",
-      expect.stringContaining("allowed concurrent writers")
+      expect.stringContaining("unreadable materialization")
     )
     expect((error as AggregateError).errors[1]).toBe(cleanupFailure)
-  })
-
-  it("bounds serializing and non-settling conflict probes", async () => {
-    const serializedReleases: string[] = []
-    let releaseFirst: (() => void) | undefined
-    let serializedAcquisition = 0
-    const serialized: WorkspaceProvider = {
-      name: "serialized-workspace",
-      async acquire() {
-        serializedAcquisition += 1
-        const current = serializedAcquisition
-
-        if (current === 2) {
-          await new Promise<void>(resolve => {
-            releaseFirst = resolve
-          })
-        }
-
-        return {
-          directory: "/serialized-workspace",
-          handle: {},
-          id: `serialized-${current}`,
-          async release() {
-            serializedReleases.push(`serialized-${current}`)
-
-            if (current === 1) {
-              releaseFirst?.()
-            }
-          },
-          async save() {},
-        }
-      },
-    }
-
-    await expect(
-      workspaceProviderConformance(serialized, {
-        conflictTimeoutMs: 10,
-      })
-    ).rejects.toThrow("did not reject a competing writer")
-    expect(serializedReleases).toEqual(["serialized-1", "serialized-2"])
-
-    let neverAcquisition = 0
-    const neverReleases: string[] = []
-    const neverSettles: WorkspaceProvider = {
-      name: "never-settling-workspace",
-      async acquire() {
-        neverAcquisition += 1
-        const current = neverAcquisition
-
-        if (current === 2) {
-          return await new Promise<WorkspaceLease>(() => {})
-        }
-
-        return {
-          directory: "/never-settling-workspace",
-          handle: {},
-          id: `never-${current}`,
-          async release() {
-            neverReleases.push(`never-${current}`)
-          },
-          async save() {},
-        }
-      },
-    }
-
-    await expect(
-      workspaceProviderConformance(neverSettles, {
-        conflictTimeoutMs: 10,
-      })
-    ).rejects.toThrow("did not reject a competing writer")
-    expect(neverReleases).toEqual(["never-1"])
   })
 
   it("does not swallow undefined persistence rejection in conformance", async () => {
