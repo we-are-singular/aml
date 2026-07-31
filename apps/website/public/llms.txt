@@ -15,6 +15,8 @@ Most AI SDKs are designed around chat: send a message, call a model, and stream 
 
 AML brings those concerns into one executable async JSX tree. Developers use ordinary TypeScript, functions, promises, conditions, and schemas instead of learning a separate orchestration DSL. Editors already understand JSX, TypeScript already checks it, and coding agents already know how to write it.
 
+When an `<Agent />` node resolves, the AML Runtime preloads its `<Workspace />` into the selected `<Sandbox />` and prompts the Agent SDK through the Agent Client Protocol (ACP). The Workspace keeps files durable between runs; the Sandbox owns code execution, filesystem access, and permissions.
+
 AML workflows are:
 
 - Composable: package agents, prompts, capabilities, and control flow as async JSX components.
@@ -119,23 +121,99 @@ Scoped Context and `<Loop>` exist as draft surfaces. Do not depend on them for s
 
 ## Providers and integrations
 
-The public SDK currently exports the runtime, built-in providers, and their types from `@aml-jsx/sdk`:
+The public SDK exports all implemented providers and their types from `@aml-jsx/sdk`. Agent, Sandbox, and Workspace providers are independent choices: the AML tree does not change when one provider is replaced with another compatible provider.
 
-- `opencodeAgent({ config })`: OpenCode sessions with native OpenCode configuration, model overrides, JavaScript Tools, MCP grants, FollowUps, cancellation, and structured output.
-- `codexAgent({})`: Codex SDK threads with model overrides, read-only host Tools, JavaScript Tools, MCP grants, FollowUps, and structured output.
-- `piAgent({ model: "provider/model", providers })`: embedded Pi SDK sessions with native Pi provider configuration, host and JavaScript Tools, FollowUps, cancellation, and schema-validated JSON output. Pi currently rejects AML MCP grants.
-- `localSandbox({})`: trusted host-process implementation of the common bounded Sandbox runtime. It is explicitly non-isolating.
-- `dockerSandbox({ image })`: disposable named-image execution with a mounted Workspace and bounded commands. AML does not build or provision the image.
-- `daytonaSandbox({ config, create, image })`: disposable Daytona image or snapshot execution with Workspace transfer, bounded commands, reconciliation, and cleanup. Select `image` or `snapshot` at the factory root; `create` retains the remaining native creation options.
-- `modalSandbox({ config, create, image })`: disposable Modal registry-image execution with Workspace transfer, bounded commands, reconciliation, and cleanup.
-- `localWorkspace({ directory })`: durable local-directory materialization with cross-process writer locking.
-- `filesystemWorkspace({ directory, format })`: staged archive or folder revisions stored on the local filesystem.
-- `s3Workspace({ bucket, config, format })`: staged archive or folder revisions stored through Amazon S3 or an S3-compatible API such as Cloudflare R2 or MinIO.
-- `@aml-jsx/sdk/testing`: deterministic Agent, Sandbox, and Workspace providers plus provider conformance suites.
+### Implemented Agent providers
 
-OpenCode, Codex, and Pi all implement the common Sandbox compatibility handshake. The credentialed smoke matrix runs each Agent through Local, Docker, Daytona, and Modal with the same model-driven file proof. Codex and OpenCode require their installed CLI in the selected environment; Pi routes its native bash Tool through the runtime. Capability support still differs by Agent, and unsupported remote transports reject instead of falling back to the AML host.
+- OpenCode: `opencodeAgent({ config })` creates an OpenCode ACP profile with native configuration, model and system mapping, JavaScript Tools, MCP grants, FollowUps, cancellation, and structured output.
+- Codex: `codexAgent({ model, reasoningEffort })` uses the maintained Codex ACP adapter and supports JavaScript Tools, MCP grants, FollowUps, cancellation, and structured output.
+- Pi: `piAgent({ model, thinkingLevel })` uses the maintained Pi ACP adapter and supports JavaScript Tools, MCP grants, FollowUps, cancellation, and structured output.
 
-OpenCode, Codex, Pi, Local Sandbox, Docker, Daytona, Modal, direct local Workspaces, staged filesystem Workspaces, and S3-compatible Workspaces are implemented. Other agent harnesses, sandbox platforms, and non-S3 storage providers shown on the website are roadmap candidates, not current package exports.
+All three are thin launch profiles over the same AML-owned ACP session engine. A profile selects its executable, environment, credentials, and provider-specific mappings; it does not implement a separate session lifecycle.
+
+### Implemented Sandbox providers
+
+- Local: `localSandbox({})` runs trusted host processes for development and testing. It is not an isolation boundary.
+- Docker: `dockerSandbox({ image, setup })` starts a disposable named image, mounts the Workspace, and cleans up the container. AML does not build the image.
+- Daytona: `daytonaSandbox({ config, create, image })` or its `snapshot` alternative creates a disposable remote Sandbox, transfers the Workspace, reconciles changes, and deletes the Sandbox.
+- Modal: `modalSandbox({ config, create, image })` creates a disposable Sandbox from a named registry image, transfers the Workspace, reconciles changes, and terminates it.
+
+Every implemented Agent is smoke-tested through every implemented Sandbox: OpenCode, Codex, and Pi × Local, Docker, Daytona, and Modal.
+
+### Implemented Workspace providers
+
+- Direct local directory: `localWorkspace({ directory })` uses an existing durable directory with cross-process writer locking.
+- Local revision storage: `filesystemWorkspace({ directory, format })` stores immutable archive or folder revisions on the local filesystem.
+- S3-compatible object storage: `s3Workspace({ bucket, config, format })` stores immutable revisions through Amazon S3 or a compatible endpoint.
+
+The S3-compatible surface can target Amazon S3, Cloudflare R2, Backblaze B2, MinIO, DigitalOcean Spaces, Wasabi, Vultr Object Storage, and Scaleway Object Storage when the service supports the conditional object operations required by AML's locking and publication protocol. Endpoint compatibility should be tested before production use.
+
+The testing entry point, `@aml-jsx/sdk/testing`, provides deterministic Agent, Sandbox, and Workspace providers plus reusable provider conformance suites.
+
+## How ACP execution works
+
+The Agent Client Protocol (ACP) is the standard JSON-RPC session boundary between the AML Runtime and every built-in coding Agent. AML currently carries ACP over the Agent process's standard input and output. ACP lets AML use one lifecycle for OpenCode, Codex, and Pi without replacing their models, credentials, native tools, skills, or internal agent loops.
+
+One built-in Agent invocation proceeds as follows:
+
+1. The AML Runtime resolves the JSX tree, materializes the Workspace, and acquires the selected Sandbox.
+2. The Sandbox attaches or transfers the Workspace to the Agent's working directory and runs any explicit trusted `setup` command.
+3. The Agent profile selects its installed ACP executable and maps provider-specific options such as model, system instructions, credentials, and permissions.
+4. The shared engine launches that process with `SandboxRuntime.spawn()`. Without an active Sandbox it uses the trusted local launcher; with a Sandbox it never falls back to the AML host.
+5. AML and the Agent communicate over ACP through the process's standard input and output: initialize capabilities, create a session, attach MCP servers, send the initial prompt and ordered FollowUps, and consume streamed updates.
+6. Native filesystem, editing, search, shell, and network operations remain inside the Agent process. AML-owned JavaScript Tools and structured output use invocation-scoped MCP bridges back to the AML host.
+7. On every exit path, AML closes its bridges, terminates invocation-owned processes, asks the Sandbox to reconcile changed files, and releases every resource. Revision-backed Workspaces save after success by default; `save.on="always"` also saves after descendant failure, while cancellation skips saving.
+
+ACP is not the security boundary. The selected Sandbox confines model-controlled native operations. ACP also does not install Agents: the trusted host, Docker image, Daytona image or snapshot, or Modal image must already contain the compatible ACP Agent executable and supporting runtime. An explicit Sandbox `setup` command is available for experiments, but repeatable use should prefer a prebuilt image or snapshot.
+
+Credentials belong to the Agent that needs them. Keep them in the selected environment or pass deliberate provider `env` or secret configuration. AML redacts configured secrets from traces and never persists them as Workspace files.
+
+### Complete ACP, Sandbox, and Workspace example
+
+The same tree works with any supported Agent and Sandbox combination. Only the provider factories and their native configuration change:
+
+```tsx
+import {
+  Agent,
+  AmlRuntime,
+  codexAgent,
+  dockerSandbox,
+  localWorkspace,
+  Sandbox,
+  Workspace,
+} from "@aml-jsx/sdk"
+
+const CodingAgent = codexAgent({})
+
+// This image is application-owned and must already contain codex-acp and Codex.
+const Execution = dockerSandbox({
+  image: "your-image-with-codex-acp",
+})
+
+const Project = localWorkspace({
+  directory: process.cwd(),
+})
+
+const runtime = new AmlRuntime()
+
+const result = await runtime.evaluate(
+  <Workspace id="project" provider={Project}>
+    <Sandbox access="read-write" provider={Execution}>
+      <Agent provider={CodingAgent}>
+        Inspect the repository, run the relevant tests, and implement the requested change.
+      </Agent>
+    </Sandbox>
+  </Workspace>,
+)
+
+console.log(result)
+```
+
+Replace `codexAgent()` with `opencodeAgent()` or `piAgent()`, or replace `dockerSandbox()` with Local, Daytona, or Modal configuration. The `<Workspace>`, `<Sandbox>`, and `<Agent>` composition remains the same. The environment must contain the executable required by the selected Agent.
+
+### Roadmap providers
+
+Roadmap and research candidates are not current package exports. Agent candidates include GitHub Copilot, Hermes, Amp, Claude Code, Cursor, Gemini CLI, Cline, Goose, OpenHands, and Devin. Sandbox candidates include E2B, AgentOS, Cloudflare Sandbox SDK, Vercel Sandbox, CodeSandbox, Blaxel, Firecracker, Fly Machines/Fly.io, Northflank, Railway, GitHub Codespaces, and AWS Fargate. Workspace candidates include provider-native volume mounts, network mounts such as SMB and NFS, SFTP, and Google Drive. A future built-in coding Agent must use the shared ACP lifecycle, and a future Sandbox must support the same provider-neutral process and Workspace contracts.
 
 ## Capabilities
 

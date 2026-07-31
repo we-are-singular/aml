@@ -342,6 +342,139 @@ body {
   animation: none;
 }
 
+/* ---------- ACP architecture study ---------- */
+
+.acp-section {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  background: #f8f8f5;
+}
+
+.acp-section::before {
+  position: absolute;
+  z-index: 0;
+  inset: -8%;
+  background:
+    radial-gradient(ellipse at 18% 38%, color-mix(in srgb, var(--color-agent) 14%, transparent), transparent 31%),
+    radial-gradient(ellipse at 69% 42%, color-mix(in srgb, var(--color-resolve) 12%, transparent), transparent 32%),
+    radial-gradient(ellipse at 78% 78%, color-mix(in srgb, var(--color-ok) 10%, transparent), transparent 29%),
+    radial-gradient(ellipse at 96% 28%, color-mix(in srgb, var(--color-signal) 8%, transparent), transparent 24%);
+  content: "";
+  pointer-events: none;
+  filter: blur(8px);
+}
+
+.acp-section-content {
+  position: relative;
+  z-index: 1;
+}
+
+.acp-map-shell {
+  background: color-mix(in srgb, var(--color-surface) 82%, transparent);
+  box-shadow: 0 18px 55px rgb(26 25 20 / 3.5%);
+  backdrop-filter: blur(5px);
+}
+
+.acp-map-edge {
+  fill: none;
+  stroke: var(--color-line-strong);
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.acp-map-edge[data-tone="agent"] {
+  stroke: var(--color-agent);
+}
+
+.acp-map-edge[data-tone="resolve"] {
+  stroke: var(--color-resolve);
+}
+
+.acp-map-edge[data-tone="ok"] {
+  stroke: var(--color-ok);
+  stroke-dasharray: 5 4;
+}
+
+.acp-map-detail,
+.acp-map-pill-text,
+.acp-map-title {
+  font-family: "IBM Plex Mono", monospace;
+}
+
+.acp-map-node-box {
+  fill: var(--color-paper);
+  stroke: var(--color-line-strong);
+  stroke-width: 1;
+}
+
+.acp-map-node[data-tone="resolve"] .acp-map-node-box {
+  fill: var(--color-resolve-soft);
+  stroke: var(--color-resolve);
+}
+
+.acp-map-node[data-tone="agent"] .acp-map-node-box {
+  fill: var(--color-agent-soft);
+  stroke: var(--color-agent);
+}
+
+.acp-map-node[data-tone="ok"] .acp-map-node-box {
+  fill: var(--color-ok-soft);
+  stroke: var(--color-ok);
+}
+
+.acp-map-node[data-tone="signal"] .acp-map-node-box {
+  fill: var(--color-signal-soft);
+  stroke: var(--color-signal);
+}
+
+.acp-map-title {
+  fill: var(--color-ink);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+
+.acp-map-node[data-tone="agent"] .acp-map-title {
+  fill: var(--color-agent);
+}
+
+.acp-map-node[data-tone="ok"] .acp-map-title {
+  fill: var(--color-ok);
+}
+
+.acp-map-node[data-tone="resolve"] .acp-map-title {
+  fill: var(--color-resolve);
+}
+
+.acp-map-node[data-tone="signal"] .acp-map-title {
+  fill: var(--color-signal);
+}
+
+.acp-map-detail {
+  fill: var(--color-muted);
+  font-size: 9.5px;
+}
+
+.acp-map-pill {
+  fill: var(--color-ink);
+}
+
+.acp-map-pill[data-tone="ok"] {
+  fill: var(--color-ok);
+}
+
+.acp-map-pill[data-tone="agent"] {
+  fill: var(--color-agent);
+}
+
+.acp-map-pill-text {
+  fill: var(--color-paper);
+  font-size: 9px;
+  font-weight: 600;
+}
+
 @keyframes edge-flow {
   to {
     stroke-dashoffset: -9;

@@ -432,6 +432,56 @@
         </div>
       </section>
 
+      <!-- ============================== ACP runtime SVG study ============================== -->
+      <section id="acp" class="acp-section scroll-mt-20 border-b border-line">
+        <div class="acp-section-content mx-auto max-w-6xl px-5 py-24 sm:py-32">
+          <p class="reveal font-mono text-[12px] uppercase tracking-[0.2em] text-resolve">under the hood</p>
+          <div class="mt-3">
+            <h2 class="reveal text-3xl font-bold tracking-tight sm:text-5xl" style="--reveal-delay: 60ms">
+              Simple by design. Flexible by default.
+            </h2>
+            <p class="reveal mt-5 text-[15px] leading-relaxed text-ink-soft" style="--reveal-delay: 120ms">
+              When an
+              <code class="rounded-md border border-line bg-paper px-1.5 py-0.5 font-mono text-[13px] text-ink"
+                ><span class="text-agent">&lt;Agent/&gt;</span></code
+              >
+              node resolves, the <span class="text-resolve">AML Runtime</span> preloads a
+              <code class="rounded-md border border-line bg-paper px-1.5 py-0.5 font-mono text-[13px] text-ink"
+                ><span class="text-ok">&lt;Workspace/&gt;</span></code
+              >
+              into a safe
+              <code class="rounded-md border border-line bg-paper px-1.5 py-0.5 font-mono text-[13px] text-ink"
+                ><span class="text-signal">&lt;Sandbox/&gt;</span></code
+              >
+              and prompts the <span class="text-agent">agent sdk</span> through
+              <a
+                href="https://agentclientprotocol.com"
+                target="_blank"
+                rel="noreferrer"
+                class="font-medium text-ink underline decoration-resolve decoration-2 underline-offset-4 transition-colors hover:text-resolve"
+                ><span class="text-resolve">Agent Client Protocol</span></a
+              >. The Agent reads files, edits code, and runs commands inside the Sandbox. When the work is done, AML
+              collects the result and saves the Workspace changes. Because every built-in Agent uses the same ACP
+              connection, you can switch Agents or Sandboxes without rewriting the tree.
+            </p>
+          </div>
+
+          <div
+            class="acp-map-shell reveal mt-14 overflow-hidden rounded-2xl border border-line p-3 sm:p-6"
+            style="--reveal-delay: 180ms"
+          >
+            <svg id="acp-runtime-map" class="block w-full" aria-hidden="true" preserveAspectRatio="xMidYMid meet"></svg>
+            <ol class="sr-only">
+              <li>Your app sends the authored JSX tree to the AML Runtime.</li>
+              <li>The AML Runtime selects an Agent provider and acquires a Workspace provider.</li>
+              <li>The Agent provider maps its executable into the shared ACP engine.</li>
+              <li>The ACP engine starts the Agent process through the Sandbox adapter.</li>
+              <li>The Workspace provider attaches files to the Sandbox and reconciles them afterward.</li>
+            </ol>
+          </div>
+        </div>
+      </section>
+
       <!-- ============================== providers / integrations ============================== -->
       <section id="providers" class="mx-auto max-w-6xl scroll-mt-20 px-5 py-24 sm:py-32">
         <p class="reveal font-mono text-[12px] uppercase tracking-[0.2em] text-resolve">integrations</p>

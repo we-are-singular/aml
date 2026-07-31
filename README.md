@@ -14,6 +14,8 @@ Agent SDKs are good at running one provider session. Real workflows usually need
 
 Without a shared runtime, those concerns become orchestration code tied to one provider. AML keeps the workflow declarative and uses the Agent Client Protocol (ACP) as the canonical session boundary for built-in coding agents.
 
+When an `<Agent />` node resolves, the AML Runtime preloads its `<Workspace />` into the selected `<Sandbox />` and prompts the Agent SDK through ACP. The Workspace keeps files durable between runs; the Sandbox owns code execution, filesystem access, and permissions.
+
 ```text
 AML tree
   ├─ resolve components and context
@@ -170,7 +172,7 @@ The public SDK includes the runtime, built-in integrations, and testing utilitie
 | Workspace | [S3 adapter](./providers/workspaces/s3)          | `s3Workspace()`         | Restores and publishes immutable archive or folder revisions through S3-compatible storage, including R2 and MinIO.                               |
 | Testing   | [Testing entry](./sdk/src/testing.ts)            | `@aml-jsx/sdk/testing`  | Supplies deterministic Agent, Sandbox, and Workspace providers plus reusable conformance suites.                                                  |
 
-The ACP migration is accepted only when the credentialed smoke runner proves the complete target matrix:
+The credentialed smoke runner exercises the complete built-in Agent × Sandbox matrix:
 
 | Sandbox \ Agent | Codex | OpenCode | Pi  |
 | --------------- | ----- | -------- | --- |
@@ -185,9 +187,7 @@ Every cell launches its Agent through the same shared ACP engine and `SandboxRun
 
 Provider factories retain typed vendor configuration and process environment inputs. Credentials normally remain in the selected host or Sandbox environment; an application may also pass explicit invocation environment variables without changing the AML tree.
 
-Every Agent adapter resolves configuration with the same authority order: provider defaults, then user inputs, then AML's imperative runtime policy. The implementation uses `defu` for known plain configuration tables and bespoke final objects for arrays, clients, callbacks, Tools, MCP grants, and other authority-bearing values. This preserves each vendor's native schema while preventing user configuration from weakening an authored Sandbox or capability boundary.
-
-Sandbox factories follow the same rule. Environment identity sits at the factory root: Docker and Modal accept `image`, while Daytona accepts either `image` or `snapshot`. Daytona's `create` retains its remaining image- or snapshot-specific creation parameters, and Modal's `create` retains its native Sandbox creation options. Docker accepts only an existing image name; AML does not build images or silently install Agents. Each Sandbox may run an explicit trusted `setup` command after its Workspace is visible.
+Sandbox factories keep environment identity at the factory root: Docker and Modal accept `image`, while Daytona accepts either `image` or `snapshot`. Daytona's `create` retains its remaining image- or snapshot-specific creation parameters, and Modal's `create` retains its native Sandbox creation options. Docker accepts only an existing image name; AML does not build images or silently install Agents. Each Sandbox may run an explicit trusted `setup` command after its Workspace is visible.
 
 The S3 Workspace factory accepts an injected `S3Client` or its native client configuration. A local MinIO instance uses the same provider with an endpoint and path-style addressing:
 

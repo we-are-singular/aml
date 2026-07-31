@@ -171,7 +171,7 @@ standard input and output through the current process launcher:
 2. The shared engine spawns the selected profile's ACP Agent at the guest working directory.
 3. AML initializes ACP and creates one session with the invocation's MCP servers.
 4. AML sends the initial prompt and FollowUps while consuming streamed updates.
-5. AML requests cancellation when needed, closes input, and terminates the process tree.
+5. AML requests cancellation when supported and terminates the invocation-owned process tree during cleanup.
 6. Sandbox release reconciles the Workspace and reclaims any remaining lease-owned processes.
 
 Credentials follow the ACP Agent that needs them. They are injected deliberately through provider-native secrets or

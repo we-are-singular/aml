@@ -1,5 +1,6 @@
 import "./style.css"
 
+import { initAcpDiagram } from "./acp-diagram"
 import { initAmbient } from "./ambient"
 import { initCopy } from "./copy"
 import { initGettingStarted } from "./getting-started"
@@ -10,6 +11,7 @@ import { initReference } from "./reference"
 import { initReveal } from "./reveal"
 
 initReveal()
+initAcpDiagram()
 initAmbient()
 initHeroTree()
 void initHow()
