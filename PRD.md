@@ -1,10 +1,6 @@
-# Agent Markup Language product requirements and delivery plan
+# Agent Markup Language product requirements
 
-Status: Phase 1 delivered; ACP foundation implemented and validated across the supported Agent/Sandbox matrix; `<Loop>` and `<Context>` remain under evaluation
-
-This is the living product definition, architecture plan, implementation roadmap, and progress tracker for AML. It is not a normative runtime contract. Settled behavior belongs in `SPEC.md`; this document records why AML exists, how it is organized, what is being built next, and which slices have been proven.
-
-The Phase 0 proof of concept is archived as reference material, not a build target or an architectural constraint.
+This document records AML's product intent, architecture, and maturity boundaries. It is not a normative runtime contract; settled behavior belongs in `SPEC.md`.
 
 ## Product statement
 
@@ -90,43 +86,6 @@ Sandbox and Workspace scopes acquire, expose, save, and release resources throug
 
 Agent calls, concurrency, depth, state transitions, and resource lifecycles must be inspectable and bounded. Observability must not silently change workflow behavior.
 
-## Phase 1 outcome
-
-Phase 1 produced and published a provider-agnostic SDK with one public package, private provider workspaces, deterministic conformance suites, built-package examples, a credentialed Agent/Sandbox smoke matrix, and a supporting website. The CLI remains intentionally deferred.
-
-Phase 1 proved:
-
-1. Async JSX components evaluate once and compose bottom-up.
-2. Nested Agents preserve explicit prompt and system-message dataflow.
-3. JavaScript functions become scoped model-callable Tools.
-4. Skills contribute reusable instructions with explicit provenance.
-5. Sandbox providers own confinement and cleanup.
-6. Workspace providers preserve one working tree across Sandbox runs.
-7. MCP servers become explicit Agent-scoped grants owned operationally by Agent providers.
-8. Independent Agents can be evaluated concurrently.
-9. Structured Agent results pass through typed schemas.
-10. FollowUps reuse one provider session.
-11. Experimental Loop state can commit transactionally between fresh Agent iterations.
-12. The same workflow can use deterministic, OpenCode, and Codex providers.
-13. Traces explain execution without exposing sensitive content by default.
-14. Experimental Context can provide immutable session dependencies to descendants without blocking the MVP.
-
-The delivered component order through MVP was Agent with System, Tool, Skill, Sandbox, then Workspace. System shipped as part of the Agent message-channel boundary rather than adding a sixth independent execution boundary. MCP and richer orchestration followed after those five boundaries were proven. Loop and Context have working implementations, but remain experimental while their public value and API shape are evaluated.
-
-## Demonstration outcome
-
-The shared multi-agent code-review example now provides the Phase 1 demonstration:
-
-- gather repository scope and governing instructions
-- run independent focused reviewers
-- pass structured findings to a capability-restricted auditor
-- synthesize a final review
-- show Agent, Tool, resource, timing, and usage traces
-- run deterministically in tests and live through explicitly selected providers
-- switch between deterministic, OpenCode, and Codex provider construction without rewriting the workflow
-
-The example remains a proof of AML's general orchestration surface, not a reason to add review-specific concepts to the language.
-
 ## Success signals
 
 - a TypeScript developer can understand workflow order from the authored tree
@@ -139,9 +98,7 @@ The example remains a proof of AML's general orchestration surface, not a reason
 - a second non-review application does not require new core abstractions
 - the fresh implementation remains materially smaller than the POC
 
-## Original Phase 1 non-goals
-
-These items were not acceptance criteria for the original implementation phase. Shipping the website and manually publishing prerelease packages did not promote the remaining items into the language roadmap.
+## Non-goals
 
 - standalone XML or an `.aml` language
 - executing model-produced AML
@@ -154,39 +111,6 @@ These items were not acceptance criteria for the original implementation phase. 
 - a universal provider capability abstraction
 - a polished CLI or TUI
 - automated package publication or a stable-API promise
-
-## Delivery progress
-
-The status table is the canonical implementation tracker. A slice moves to `Done` only after its implementation, behavioral proof, package validation, and relevant documentation are complete.
-
-| Work     | Scope                                          | Status            |
-| -------- | ---------------------------------------------- | ----------------- |
-| Phase 0  | Proof of concept                               | Done and archived |
-| Slice 0  | Monorepo and evaluation foundation             | Done              |
-| Slice 1  | `<Agent>`, `<System>`, and provider authorship | Done              |
-| Slice 2  | OpenCode Agent package                         | Done              |
-| Slice 3  | `<Tool>` and `defineTool()`                    | Done              |
-| Slice 4  | `<Skill>`                                      | Done              |
-| Slice 5  | `<Sandbox>` contract                           | Done              |
-| Slice 6  | Docker Sandbox package                         | Done              |
-| Slice 7  | `<Workspace>` contract                         | Done              |
-| Slice 8  | Local Workspace package and MVP completion     | Done              |
-| Slice 9  | `<Mcp>` and `defineMcpServer()`                | Done              |
-| Slice 10 | `evaluate()` and structured results            | Done              |
-| Slice 11 | Bounded Agent concurrency                      | Done              |
-| Slice 12 | `<FollowUp>`                                   | Done              |
-| Slice 13 | `<Loop>`                                       | Evaluating        |
-| Slice 14 | Codex Agent package                            | Done              |
-| Slice 15 | Observability consumers                        | Done              |
-| Slice 16 | Context                                        | Evaluating        |
-| Slice 17 | Pi Agent package                               | Done              |
-| Slice 18 | Daytona Sandbox package                        | Done              |
-| Slice 19 | Modal Sandbox package                          | Done              |
-| Slice 20 | Shared Workspace persistence and S3 provider   | Done              |
-| Slice 21 | `<File>` and sandboxed `<Script>` composition  | Done              |
-| Slice 22 | Canonical ACP coding-agent foundation          | Done              |
-
-Allowed statuses are `Pending`, `In progress`, `Evaluating`, `Blocked`, and `Done`. `Evaluating` means a working implementation exists but is not yet accepted as stable public API. A blocked slice includes its blocker directly in the status cell.
 
 ## Implementation principles
 
@@ -289,101 +213,6 @@ Dependencies must have one clear owner and replace meaningful code AML would oth
 - Ordinary asynchronous evaluation continues to use platform primitives rather than a task-graph engine, service locator, or plugin container.
 
 The future CLI remains an application over the same public SDK and evaluator. It must not introduce a second language, file format, or execution model.
-
-## Delivery record
-
-The numbered slices record the order in which AML reduced architectural risk. The progress table is the canonical status; this section retains only the product-level result of each phase.
-
-### Evaluation foundation — delivered
-
-The initial runtime proved asynchronous JSX evaluation, explicit sequential composition, transparent components and fragments, deterministic normalization, bounded execution, cancellation, and attributable failures. It also established the single-package distribution and built-package proof used by later work.
-
-### MVP execution boundaries — delivered
-
-Agent and System established provider-owned sessions with explicit message channels. Tool and Skill added scoped capabilities without global registration. Sandbox added disposable execution ownership, while Workspace added durable materialization that can survive multiple Sandbox runs.
-
-OpenCode provided the first live Agent proof. Docker and local storage provided the first concrete Sandbox and
-Workspace proofs.
-
-The completed Workspace expansion added logical cwd, opt-in load and save selection, `.gitignore`-aware snapshots,
-retained immutable revisions, archive and folder formats, fixed-policy optional run locks, and serialized writable
-Sandbox reconciliation by default. The same persistence engine now drives staged filesystem and S3-compatible
-providers; a credentialed R2 smoke proves a Docker-to-Daytona file handoff through durable object storage.
-
-`<File>` now turns resolved AML text, including an Agent result, into a Workspace file before later siblings run.
-`<Script>` executes an argument vector or explicit `sh`, `bash`, or `node` source only through an active Sandbox.
-Together they cover authored setup, generated handoff files, Git commands, validation, and later-Agent input without
-adding directory-copy or Git-specific primitives.
-
-### Post-MVP orchestration — delivered
-
-MCP grants, component-local evaluation, structured results, bounded Agent concurrency, and FollowUps are implemented and accepted. Codex added a second substantially different Agent harness and exposed the cost of maintaining separate vendor lifecycles. Runtime tracing and cleanup hooks made execution observable without changing workflow behavior.
-
-### Experimental orchestration — evaluating
-
-`<Loop>` has a working implementation for schema-validated state transitions across fresh Agent sessions. It remains experimental while AML evaluates whether the primitive is clearer and safer than ordinary TypeScript control flow, and whether its state and capability semantics are stable enough for public commitment.
-
-`<Context>` has a working implementation for immutable lexical dependencies. It remains experimental while AML evaluates whether the convenience justifies a runtime primitive and whether its interaction with asynchronous evaluation is intuitive enough for public commitment.
-
-Neither primitive should be described as stable public API until its status moves to `Done`.
-
-### Provider expansion — delivered
-
-Pi added a third coding-agent harness with a different capability profile from OpenCode and Codex. Daytona and Modal proved that the narrow Sandbox contract can map to hosted disposable environments. Local execution remains available for trusted development, and Docker remains the local image-based boundary.
-
-These integrations intentionally preserve provider differences. AML guarantees only the common contract each adapter can honestly implement and rejects unsupported capability combinations.
-
-### ACP foundation — implemented and validated
-
-The production refactor replaced the independent Codex SDK/CLI, OpenCode server/CLI, and embedded Pi lifecycles with
-one ACP session engine and three thin profiles. The canonical `codexAgent()`, `opencodeAgent()`, and `piAgent()`
-factories now share process management, permission handling, JavaScript Tool bridging, structured submission,
-cancellation, and cleanup.
-
-Focused tests and live smokes prove Codex, OpenCode, and Pi on Local, Daytona, and Modal. Those nine cells each execute
-native shell work, call a host JavaScript Tool, submit schema-validated structured output, and persist a Workspace
-change. The full Cartesian matrix has been exercised through Local, Docker, Daytona, and Modal.
-
-The implemented foundation includes:
-
-- Codex, OpenCode, and Pi use ACP for trusted local and sandboxed execution
-- JavaScript Tools use one shared invocation-scoped MCP bridge
-- structured output uses one shared invocation-scoped MCP submission Tool
-- native permission mapping and Sandbox security semantics match `SPEC.md`
-- one Cartesian Codex, OpenCode, and Pi × Local, Docker, Daytona, and Modal smoke definition
-- the public factories keep the normal `codexAgent()`, `opencodeAgent()`, and `piAgent()` names
-- the experimental `codexAcpAgent()` factory and all legacy SDK, CLI, embedded, and server lifecycles are deleted
-
-### Website and release — delivered
-
-The website, provider examples, package documentation, and manual release flow were delivered outside the numbered runtime slices. Automated publication and a polished CLI remain deferred.
-
-## Definition of done
-
-Before marking a slice `Done`:
-
-- `SPEC.md` describes the complete required behavior
-- public API exists only for behavior exercised by the slice
-- happy paths and invalid boundaries have behavior tests
-- one deterministic example is readable without runtime internals
-- errors identify the responsible primitive or provider
-- type checking, build, tests, and diff validation pass
-- every dependency has one named owner and replaces concrete maintained code
-- no unrelated primitive is partially implemented
-- no placeholder abstraction or empty package exists only for future work
-- provider packages pass their SDK conformance suite
-- examples consume the built public package
-- the resulting public API is reviewed before the next slice starts
-
-## Immediate implementation boundary
-
-Slice 22 is complete. New Agent functionality belongs in the
-shared ACP engine or a thin profile; the deleted legacy adapters are not parallel product paths. AgentOS is a later
-provider slice and must not add a second Agent lifecycle.
-
-Slices 13 and 16 remain under product and API evaluation. Workspace persistence retains its staged filesystem and
-S3-compatible object-store proofs. Cloudflare Workers remain a portability check rather than an active runtime
-target.
 
 ## WORKER RUNTIME
 

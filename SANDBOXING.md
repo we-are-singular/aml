@@ -232,7 +232,7 @@ The common runtime exposes the smallest process boundary required to start an Ag
 
 Commands do not implicitly pass through a shell. The explicit `setup` convenience is the only common string interpreted through a provider-selected shell.
 
-`spawn()` is the long-running counterpart to `exec()`. It returns a portable process id, an optional provider OS pid, queued byte streams, writable input, repeatable completion, and idempotent input-close and process-tree termination. Output capture starts before the handle is returned. `closeInput()` always closes AML's writable side, but remote providers may only offer a closest half-close signal rather than a literal pipe EOF; process termination remains a separate `kill()`. Process ownership is scoped to one Sandbox lease, and releasing that lease reclaims its remaining processes or disposable environment.
+`spawn()` is the long-running counterpart to `exec()`. It returns a portable process identity, standard Web streams for input and queued output, repeatable completion, and idempotent process-tree termination. Output capture starts before the handle is returned. Closing the writable stream requests stdin EOF when the provider supports it; providers without a remote half-close still close AML's writable side. Process ownership is scoped to one Sandbox lease, and releasing that lease reclaims its remaining processes or disposable environment.
 
 Do not add features until an Agent requirement demands them:
 

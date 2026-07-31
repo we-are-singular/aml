@@ -1267,11 +1267,9 @@ interface SandboxRuntime {
     }
   ): Promise<{
     id: string
-    pid?: number
+    stdin: WritableStream<Uint8Array>
     stdout: ReadableStream<Uint8Array>
     stderr: ReadableStream<Uint8Array>
-    write(data: Uint8Array): Promise<void>
-    closeInput(): Promise<void>
     wait(): Promise<{ exitCode: number }>
     kill(): Promise<void>
   }>
@@ -1308,7 +1306,7 @@ Descendants receive only the immutable lease identity, handle, and runtime shown
 
 The runtime's `root` and `cwd` use AML's logical Workspace namespace. A provider maps an `exec()` or `spawn()` working directory to its host, container, or remote filesystem. Both methods preserve argument boundaries. `exec()` returns non-zero process exit codes as results; transport failure, cancellation, timeout, and inability to start the command reject. Providers must bound captured `exec()` output.
 
-`spawn()` returns a provider-neutral process handle. `id` is always present; `pid` is optional because remote backends may expose only a command, exec, or session id. Standard output and error are byte streams whose providers begin buffering before the handle becomes visible. `wait()` captures one immutable exit result. `wait()`, `kill()`, and `closeInput()` are repeatable, and termination targets the spawned process tree rather than only a shell wrapper. `closeInput()` closes AML's writable side and requests the backend's closest stdin half-close; callers must not depend on remote providers exposing a literal pipe EOF. Process tracking is scoped to one lease so releasing one evaluation lane cannot terminate another lane's work. `exec()` implementations built over `spawn()` consume both streams and wait for process completion concurrently so final output cannot race process exit.
+`spawn()` returns a provider-neutral process handle. `id` is the portable identity because remote backends may expose only a command, exec, or session id rather than an operating-system PID. Input, standard output, and standard error use standard Web streams. Providers begin buffering output before the handle becomes visible. Closing `stdin` requests a pipe EOF when the backend supports one and always prevents later writes through that stream; callers must not depend on remote providers exposing a literal half-close. `wait()` captures one immutable exit result, and both `wait()` and `kill()` are repeatable. Termination targets the spawned process tree rather than only a shell wrapper. Process tracking is scoped to one lease so releasing one evaluation lane cannot terminate another lane's work. `exec()` implementations built over `spawn()` consume both output streams and wait for process completion concurrently so final output cannot race process exit.
 
 The first runtime version supports Agent-local cwd narrowing. It cannot manufacture a narrower root or read-only downgrade after the outer lease is acquired. An Agent adapter must reject an effective nested view unless the runtime actually enforces the effective `root` and `access`.
 
@@ -1404,7 +1402,7 @@ The selected Daytona image or snapshot must contain the shell utilities and `tar
 
 Daytona's command API accepts a shell command string rather than literal argv, so the adapter quotes each command and argument before execution. Daytona returns one combined command output string; the provider maps it to `stdout` and returns an empty `stderr`. Cancellation destroys the disposable Sandbox because Daytona does not expose per-command cancellation through this API.
 
-Daytona sessions stream logs and accept text input, but the SDK does not expose a literal stdin half-close. The process handle therefore treats `closeInput()` as a local write barrier and sends EOT as Daytona's closest input-close signal. ACP cleanup does not rely on that signal to terminate work; `kill()` deletes the invocation-owned session and normalizes Daytona's resulting missing-session race into the cached killed exit result.
+Daytona sessions stream logs and accept text input, but the SDK does not expose a literal stdin half-close. Closing the process handle's `stdin` therefore closes AML's writable stream without inventing an EOT convention. ACP cleanup does not rely on input closure to terminate work; `kill()` deletes the invocation-owned session and normalizes Daytona's resulting missing-session race into the cached killed exit result.
 
 The transfer implementation cannot enforce a read-only guest tree. Like Local, Daytona therefore rejects runtime execution under `"read-only"` instead of claiming confinement it does not provide. Read-write reconciliation occurs before the outer Workspace saves its materialization. A failed reconciliation is reported and remote cleanup is still attempted.
 
