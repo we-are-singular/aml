@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<svg viewBox="225 -1 82 82" version="1.1" xmlns="http://www.w3.org/2000/svg"
+    xmlns:xlink="http://www.w3.org/1999/xlink" xml:space="preserve"
+    xmlns:serif="http://www.serif.com/"
+    style="fill-rule: evenodd; clip-rule: evenodd; height: 100%; width: auto; display: block;">
+    <g transform="matrix(1,0,0,1,-412,-12)">
+        <g id="agentos-logo" transform="matrix(0.654703,0,0,0.543011,-41.2516,-710.788)">
+        
+            <g clip-path="url(#_clip1)">
+                <g id="frame-layer" transform="matrix(0.682299,0,0,0.822642,1038.89,1333.32)">
+                    <path d="M164.529,52.792L164.529,120.844C164.529,145.347 144.635,165.241 120.132,165.241L52.08,165.241C27.577,165.241 7.683,145.347 7.683,120.844L7.683,52.792C7.683,28.289 27.577,8.395 52.08,8.395L120.132,8.395C144.635,8.395 164.529,28.289 164.529,52.792Z" style="fill:none;stroke:black;stroke-width:15.18px;"></path>
+                </g> 
+                <g id="os-layer" transform="matrix(0.942408,0,0,1.13625,379.074,1127.7)" style="transition: opacity 0.15s ease-out; opacity: 1;">
+                    <g transform="matrix(50.1389,0,0,50.1389,799.86,261.867)">
+                    </g>
+                    <text x="727.418px" y="261.867px" style="font-family:'Helvetica-Bold', 'Helvetica';font-weight:700;font-size:50.139px;">OS</text>
+                </g>
+            </g>
+        </g>
+    </g>
+</svg>
