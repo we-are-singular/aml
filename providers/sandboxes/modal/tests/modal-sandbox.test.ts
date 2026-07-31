@@ -81,8 +81,9 @@ describe("modalSandbox()", () => {
     const spawned = await lease.runtime.spawn("node", ["server.mjs"], {
       cwd: "repository/src",
     })
-    await spawned.write(new TextEncoder().encode("input"))
-    await spawned.closeInput()
+    const writer = spawned.stdin.getWriter()
+    await writer.write(new TextEncoder().encode("input"))
+    await writer.close()
     await expect(spawned.wait()).resolves.toEqual({ exitCode: 0 })
     expect(fake.commands.at(-1)).toMatchObject({
       command: ["sh", "-c", expect.stringContaining('exec "$@"'), "aml-spawn", "node", "server.mjs"],

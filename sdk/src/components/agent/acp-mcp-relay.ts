@@ -19,6 +19,7 @@ export class AcpMcpRelay {
   readonly #requests = new AbortController()
   readonly #runtime: Readonly<SandboxRuntime>
   readonly #stderr: Promise<string>
+  readonly #writer: WritableStreamDefaultWriter<Uint8Array>
   #closePromise: Promise<void> | undefined
   #writeBarrier = Promise.resolve()
 
@@ -36,6 +37,7 @@ export class AcpMcpRelay {
     this.#pump = pump
     this.#runtime = runtime
     this.#stderr = stderr
+    this.#writer = process.stdin.getWriter()
   }
 
   /**
@@ -123,6 +125,8 @@ export class AcpMcpRelay {
       await Promise.all([this.#pump, this.#stderr])
     } catch (error) {
       errors.push(error)
+    } finally {
+      this.#writer.releaseLock()
     }
 
     try {
@@ -157,73 +161,35 @@ export class AcpMcpRelay {
       throw new Error("Sandbox MCP relay request has invalid fields")
     }
 
-    let responseStarted = false
-
     try {
       const response = await fetch(new URL(requestPath, this.#bridge.url), {
         ...(method === "GET" || method === "HEAD" ? {} : { body }),
         headers: requestHeaders(headers as Record<string, string>),
         method,
-        signal:
-          method === "GET"
-            ? this.#requests.signal
-            : AbortSignal.any([this.#requests.signal, AbortSignal.timeout(120_000)]),
+        signal: AbortSignal.any([this.#requests.signal, AbortSignal.timeout(120_000)]),
       })
-      // MCP POST responses are finite. Keep them atomic across providers whose
-      // remote stdin API transports complete strings rather than raw sockets.
-      if (method !== "GET") {
-        await this.#write({
-          body: Buffer.from(await response.arrayBuffer()).toString("base64"),
-          headers: responseHeaders(response.headers),
-          id,
-          kind: "response",
-          status: response.status,
-        })
-        return
-      }
-
       await this.#write({
+        body: Buffer.from(await response.arrayBuffer()).toString("base64"),
         headers: responseHeaders(response.headers),
         id,
-        kind: "response-start",
+        kind: "response",
         status: response.status,
       })
-      responseStarted = true
-
-      if (response.body !== null) {
-        for await (const chunk of response.body) {
-          await this.#write({
-            body: Buffer.from(chunk).toString("base64"),
-            id,
-            kind: "response-chunk",
-          })
-        }
-      }
-
-      await this.#write({ id, kind: "response-end" })
     } catch (error) {
       const message = error instanceof Error ? error.message : "MCP relay request failed"
-
-      if (!responseStarted) {
-        await this.#write({
-          body: Buffer.from(message).toString("base64"),
-          headers: {},
-          id,
-          kind: "response",
-          status: 502,
-        })
-      } else {
-        // Once an SSE response has started, an upstream disconnect is an EOF
-        // to the guest client. Destroying its socket leaves some MCP clients
-        // waiting on a stream error after their request already completed.
-        await this.#write({ id, kind: "response-end" })
-      }
+      await this.#write({
+        body: Buffer.from(message).toString("base64"),
+        headers: {},
+        id,
+        kind: "response",
+        status: 502,
+      })
     }
   }
 
   async #write(value: unknown): Promise<void> {
     const bytes = new TextEncoder().encode(`${JSON.stringify(value)}\n`)
-    const write = this.#writeBarrier.then(async () => await this.#process.write(bytes))
+    const write = this.#writeBarrier.then(async () => await this.#writer.write(bytes))
     this.#writeBarrier = write.catch(() => undefined)
     await write
   }
@@ -258,7 +224,7 @@ function requestHeaders(headers: Readonly<Record<string, string>>): Record<strin
   return Object.fromEntries(Object.entries(headers).filter(([name]) => !HOP_BY_HOP_HEADERS.has(name.toLowerCase())))
 }
 
-/** Lets the guest HTTP server select framing for streamed host responses. */
+/** Lets the guest HTTP server select framing for the atomic host response. */
 function responseHeaders(headers: Headers): Record<string, string> {
   return Object.fromEntries([...headers].filter(([name]) => !HOP_BY_HOP_HEADERS.has(name.toLowerCase())))
 }

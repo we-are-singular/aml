@@ -300,15 +300,14 @@ class FakeRunner {
   ): Promise<Readonly<SandboxProcess>> {
     this.spawnCalls.push({ args: [...args], command })
     return {
-      async closeInput() {},
       id: "fake-process",
       async kill() {},
+      stdin: new WritableStream(),
       stderr: emptyStream(),
       stdout: emptyStream(),
       async wait() {
         return { exitCode: 0 }
       },
-      async write() {},
     }
   }
 }

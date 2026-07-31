@@ -349,14 +349,13 @@ function createRuntime(
 class DaytonaSandboxProcess implements SandboxProcess {
   readonly #commandId: string
   readonly #completion: Promise<Readonly<SandboxProcessExit>>
-  #closePromise: Promise<void> | undefined
   #finished = false
-  #inputClosed = false
   #killPromise: Promise<void> | undefined
   #killed = false
   readonly #sandbox: DaytonaSdkSandbox
   readonly #sessionId: string
   readonly id: string
+  readonly stdin: WritableStream<Uint8Array>
   readonly stderr: ReadableStream<Uint8Array>
   readonly stdout: ReadableStream<Uint8Array>
 
@@ -372,6 +371,20 @@ class DaytonaSandboxProcess implements SandboxProcess {
     this.#sessionId = sessionId
     this.#commandId = commandId
     this.id = `daytona:${sessionId}:${commandId}`
+    this.stdin = new WritableStream({
+      abort: async () => await this.kill(),
+      // Daytona accepts text input but does not expose a true stdin half-close.
+      // Closing the Web stream still prevents every later AML write.
+      close: () => undefined,
+      write: async data => {
+        if (this.#finished) throw new Error("Daytona Sandbox process input is closed")
+        await this.#sandbox.process.sendSessionCommandInput(
+          this.#sessionId,
+          this.#commandId,
+          new TextDecoder().decode(data)
+        )
+      },
+    })
 
     let stdoutController!: ReadableStreamDefaultController<Uint8Array>
     let stderrController!: ReadableStreamDefaultController<Uint8Array>
@@ -468,19 +481,6 @@ class DaytonaSandboxProcess implements SandboxProcess {
     }
   }
 
-  async closeInput(): Promise<void> {
-    if (this.#finished || this.#inputClosed) return
-    this.#inputClosed = true
-    // Daytona exposes text input but no true stdin half-close. EOT is the
-    // closest process signal, while AML rejects every later local write.
-    this.#closePromise ??= this.#sandbox.process
-      .sendSessionCommandInput(this.#sessionId, this.#commandId, "\u0004")
-      .catch(error => {
-        if (!this.#finished) throw error
-      })
-    await this.#closePromise
-  }
-
   async kill(): Promise<void> {
     if (this.#finished) return
     // Each AML spawn owns one Daytona session, so deleting it cannot terminate
@@ -494,15 +494,6 @@ class DaytonaSandboxProcess implements SandboxProcess {
 
   async wait(): Promise<Readonly<SandboxProcessExit>> {
     return await this.#completion
-  }
-
-  async write(data: Uint8Array): Promise<void> {
-    if (this.#finished || this.#inputClosed) throw new Error("Daytona Sandbox process input is closed")
-    await this.#sandbox.process.sendSessionCommandInput(
-      this.#sessionId,
-      this.#commandId,
-      new TextDecoder().decode(data)
-    )
   }
 }
 

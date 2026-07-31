@@ -1,11 +1,8 @@
 import {
-  AcpAgentProvider,
-  defineAgentProvider,
+  defineAcpAgentProvider,
   type AcpAgentLaunch,
   type AcpAgentLaunchContext,
   type AcpAgentProfile,
-  type AcpSessionConfiguration,
-  type AcpSessionFactory,
   type AgentProvider,
 } from "@aml-jsx/sdk"
 
@@ -29,7 +26,6 @@ export interface PiAgentOptions {
   readonly mcpAdapterPath?: string
   readonly model?: string
   readonly piCommand?: string
-  readonly sessionFactory?: AcpSessionFactory
   readonly thinkingLevel?: PiThinkingLevel
   readonly workingDirectory?: string
 }
@@ -45,7 +41,6 @@ interface CapturedPiAgentOptions {
   readonly mcpAdapterPath?: string
   readonly model?: string
   readonly piCommand: string
-  readonly sessionFactory?: AcpSessionFactory
   readonly thinkingLevel?: PiThinkingLevel
   readonly workingDirectory?: string
 }
@@ -58,16 +53,12 @@ class PiAcpProfile implements AcpAgentProfile<"pi"> {
     this.#options = options
   }
 
-  get sessionFactory(): AcpSessionFactory | undefined {
-    return this.#options.sessionFactory
-  }
-
   get workingDirectory(): string | undefined {
     return this.#options.workingDirectory
   }
 
   createLaunch(context: Readonly<AcpAgentLaunchContext>): Readonly<AcpAgentLaunch> {
-    const configuration: AcpSessionConfiguration[] = []
+    const configuration: NonNullable<AcpAgentLaunch["configuration"]>[number][] = []
     const model = context.request.model ?? this.#options.model
     const usesMcp = context.mcpServers.length > 0
 
@@ -167,7 +158,7 @@ class PiAcpProfile implements AcpAgentProfile<"pi"> {
  */
 export function piAgent(options: PiAgentOptions = {}): Readonly<PiAgentProvider> {
   const profile = new PiAcpProfile(captureOptions(options))
-  return defineAgentProvider(new AcpAgentProvider(profile))
+  return defineAcpAgentProvider(profile)
 }
 
 function captureOptions(options: PiAgentOptions): Readonly<CapturedPiAgentOptions> {
@@ -203,7 +194,6 @@ function captureOptions(options: PiAgentOptions): Readonly<CapturedPiAgentOption
     ...(mcpAdapterPath === undefined ? {} : { mcpAdapterPath }),
     ...(model === undefined ? {} : { model }),
     piCommand,
-    ...(options.sessionFactory === undefined ? {} : { sessionFactory: options.sessionFactory }),
     ...(thinkingLevel === undefined ? {} : { thinkingLevel }),
     ...(workingDirectory === undefined ? {} : { workingDirectory }),
   })

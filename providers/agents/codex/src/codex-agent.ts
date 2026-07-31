@@ -1,10 +1,8 @@
 import {
-  AcpAgentProvider,
-  defineAgentProvider,
+  defineAcpAgentProvider,
   type AcpAgentLaunch,
   type AcpAgentLaunchContext,
   type AcpAgentProfile,
-  type AcpSessionFactory,
   type AgentProvider,
 } from "@aml-jsx/sdk"
 
@@ -17,13 +15,19 @@ export type CodexConfigValue =
   | readonly CodexConfigValue[]
   | Readonly<{ readonly [key: string]: CodexConfigValue }>
 
+export type CodexReasoningEffort = "minimal" | "low" | "medium" | "high" | "xhigh"
+
+const REASONING_EFFORTS = new Set<CodexReasoningEffort>(["minimal", "low", "medium", "high", "xhigh"])
+
 export interface CodexAgentOptions {
   readonly apiKey?: string
   readonly args?: readonly string[]
   readonly command?: string
+  readonly codexPathOverride?: string
   readonly config?: Readonly<Record<string, CodexConfigValue>>
   readonly env?: Readonly<Record<string, string>>
-  readonly sessionFactory?: AcpSessionFactory
+  readonly model?: string
+  readonly reasoningEffort?: CodexReasoningEffort
   readonly workingDirectory?: string
 }
 
@@ -35,9 +39,11 @@ interface CapturedCodexAgentOptions {
   readonly apiKey?: string
   readonly args: readonly string[]
   readonly command: string
+  readonly codexPathOverride?: string
   readonly config: Readonly<Record<string, CodexConfigValue>>
   readonly env: Readonly<Record<string, string>>
-  readonly sessionFactory?: AcpSessionFactory
+  readonly model?: string
+  readonly reasoningEffort?: CodexReasoningEffort
   readonly workingDirectory?: string
 }
 
@@ -49,18 +55,16 @@ class CodexProfile implements AcpAgentProfile<"codex"> {
     this.#options = options
   }
 
-  get sessionFactory(): AcpSessionFactory | undefined {
-    return this.#options.sessionFactory
-  }
-
   get workingDirectory(): string | undefined {
     return this.#options.workingDirectory
   }
 
   createLaunch(context: Readonly<AcpAgentLaunchContext>): Readonly<AcpAgentLaunch> {
+    const model = context.request.model ?? this.#options.model
     const config = {
       ...this.#options.config,
-      ...(context.request.model === undefined ? {} : { model: context.request.model }),
+      ...(this.#options.reasoningEffort === undefined ? {} : { model_reasoning_effort: this.#options.reasoningEffort }),
+      ...(model === undefined ? {} : { model }),
       ...(context.request.system.length === 0 ? {} : { developer_instructions: context.request.system }),
     }
     const hasApiKey =
@@ -78,7 +82,7 @@ class CodexProfile implements AcpAgentProfile<"codex"> {
         ...this.#options.env,
         APP_SERVER_LOGS: `${context.stateDirectory}/logs`,
         CODEX_CONFIG: stringifyConfig(config),
-        CODEX_PATH: "codex",
+        CODEX_PATH: this.#options.codexPathOverride ?? "codex",
         CODEX_SQLITE_HOME: context.stateDirectory,
         INITIAL_AGENT_MODE: mode,
         NO_BROWSER: "1",
@@ -99,7 +103,7 @@ class CodexProfile implements AcpAgentProfile<"codex"> {
  */
 export function codexAgent(options: CodexAgentOptions = {}): Readonly<CodexAgentProvider> {
   const profile = new CodexProfile(captureOptions(options))
-  return defineAgentProvider(new AcpAgentProvider(profile))
+  return defineAcpAgentProvider(profile)
 }
 
 function captureOptions(value: CodexAgentOptions): Readonly<CapturedCodexAgentOptions> {
@@ -111,6 +115,9 @@ function captureOptions(value: CodexAgentOptions): Readonly<CapturedCodexAgentOp
   const args = value.args ?? []
   const env = value.env ?? {}
   const config = value.config ?? {}
+  const codexPathOverride = optionalNormalizedString(value.codexPathOverride, "Codex codexPathOverride")
+  const model = optionalNormalizedString(value.model, "Codex model")
+  const reasoningEffort = value.reasoningEffort
 
   if (!Array.isArray(args) || args.some(argument => typeof argument !== "string" || argument.includes("\0"))) {
     throw new TypeError("Codex args must be strings without null bytes")
@@ -127,17 +134,27 @@ function captureOptions(value: CodexAgentOptions): Readonly<CapturedCodexAgentOp
   // Validate serialization before Sandbox acquisition performs external work.
   stringifyConfig(config)
 
+  if (reasoningEffort !== undefined && !REASONING_EFFORTS.has(reasoningEffort)) {
+    throw new TypeError("Codex reasoningEffort is unsupported")
+  }
+
   return Object.freeze({
     ...(value.apiKey === undefined ? {} : { apiKey: normalizedString(value.apiKey, "Codex apiKey") }),
     args: Object.freeze([...args]),
     command,
+    ...(codexPathOverride === undefined ? {} : { codexPathOverride }),
     config: Object.freeze({ ...config }),
     env: Object.freeze({ ...env }),
-    ...(value.sessionFactory === undefined ? {} : { sessionFactory: value.sessionFactory }),
+    ...(model === undefined ? {} : { model }),
+    ...(reasoningEffort === undefined ? {} : { reasoningEffort }),
     ...(value.workingDirectory === undefined
       ? {}
       : { workingDirectory: normalizedString(value.workingDirectory, "Codex workingDirectory") }),
   })
+}
+
+function optionalNormalizedString(value: string | undefined, label: string): string | undefined {
+  return value === undefined ? undefined : normalizedString(value, label)
 }
 
 function stringifyConfig(value: Readonly<Record<string, CodexConfigValue>>): string {

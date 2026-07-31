@@ -62,10 +62,6 @@ export interface AcpStructuredOutputController {
   structuredResult(): unknown
 }
 
-export interface AcpSessionFactory {
-  open(input: Readonly<AcpSessionOpenInput>): Promise<AgentProviderSession>
-}
-
 /**
  * Agent-profile hook for removing protocol-visible adapter prelude text.
  */
@@ -74,84 +70,73 @@ export type AcpSessionTextTransform = (text: string, session: ActiveSession) => 
 /**
  * Opens and drives one ACP session over a provider-neutral process handle.
  *
- * Agent profiles configure and launch the process. This class owns only the
+ * Agent profiles configure and launch the process. This function owns only the
  * shared ACP initialization, prompting, cancellation, streaming, and cleanup.
  */
-export class AcpSdkSessionFactory implements AcpSessionFactory {
-  async open(input: Readonly<AcpSessionOpenInput>): Promise<AgentProviderSession> {
-    input.signal.throwIfAborted()
-    const stderr = drainStderr(input.process.stderr)
-    const app = client({ name: "aml" }).onRequest(
-      methods.client.session.requestPermission,
-      ({ params }): RequestPermissionResponse => {
-        const policy = input.permissionPolicy ?? "reject_once"
-        const selected =
-          params.options.find(option => option.kind === policy) ??
-          params.options.find(option => option.kind === permissionFallback(policy))
+export async function openAcpSession(input: Readonly<AcpSessionOpenInput>): Promise<AgentProviderSession> {
+  input.signal.throwIfAborted()
+  const stderr = drainStderr(input.process.stderr)
+  const app = client({ name: "aml" }).onRequest(
+    methods.client.session.requestPermission,
+    ({ params }): RequestPermissionResponse => {
+      const policy = input.permissionPolicy ?? "reject_once"
+      const selected =
+        params.options.find(option => option.kind === policy) ??
+        params.options.find(option => option.kind === permissionFallback(policy))
 
-        return selected === undefined
-          ? { outcome: { outcome: "cancelled" } }
-          : { outcome: { optionId: selected.optionId, outcome: "selected" } }
-      }
-    )
-    const connection = app.connect(
-      ndJsonStream(
-        new WritableStream<Uint8Array>({
-          abort: async () => await input.process.kill(),
-          close: async () => await input.process.closeInput(),
-          write: async chunk => await input.process.write(chunk),
-        }),
-        input.process.stdout
-      )
-    )
+      return selected === undefined
+        ? { outcome: { outcome: "cancelled" } }
+        : { outcome: { optionId: selected.optionId, outcome: "selected" } }
+    }
+  )
+  const connection = app.connect(ndJsonStream(input.process.stdin, input.process.stdout))
 
-    try {
-      const initialized = await connection.agent.request(
-        methods.agent.initialize,
-        {
-          clientCapabilities: {},
-          clientInfo: {
-            name: "aml",
-            title: "Agent Markup Language",
-            version: "0.0.0",
-          },
-          protocolVersion: PROTOCOL_VERSION,
+  try {
+    const initialized = await connection.agent.request(
+      methods.agent.initialize,
+      {
+        clientCapabilities: {},
+        clientInfo: {
+          name: "aml",
+          title: "Agent Markup Language",
+          version: "0.0.0",
         },
+        protocolVersion: PROTOCOL_VERSION,
+      },
+      { cancellationSignal: input.signal }
+    )
+    validateMcpCapabilities(initialized.agentCapabilities?.mcpCapabilities, input.mcpServers ?? [])
+
+    if (input.authenticationMethodId !== undefined) {
+      await connection.agent.request(
+        methods.agent.authenticate,
+        { methodId: input.authenticationMethodId },
         { cancellationSignal: input.signal }
       )
-      validateMcpCapabilities(initialized.agentCapabilities?.mcpCapabilities, input.mcpServers ?? [])
-
-      if (input.authenticationMethodId !== undefined) {
-        await connection.agent.request(
-          methods.agent.authenticate,
-          { methodId: input.authenticationMethodId },
-          { cancellationSignal: input.signal }
-        )
-      }
-
-      const session = await connection.agent
-        .buildSession({
-          cwd: input.cwd,
-          mcpServers: [...(input.mcpServers ?? [])],
-        })
-        .start({ cancellationSignal: input.signal })
-      await configureSession(connection, session, input.configuration ?? [], input.signal)
-      return new AcpProviderSession(
-        connection,
-        session,
-        input.process,
-        stderr,
-        input.initialPromptPrefix,
-        input.structuredOutput,
-        input.structuredOutputInstruction,
-        input.transformText
-      )
-    } catch (error) {
-      connection.close(error)
-      await input.process.kill().catch(() => undefined)
-      await stderr.catch(() => undefined)
-      throw error
     }
+
+    const session = await connection.agent
+      .buildSession({
+        cwd: input.cwd,
+        mcpServers: [...(input.mcpServers ?? [])],
+      })
+      .start({ cancellationSignal: input.signal })
+    await configureSession(connection, session, input.configuration ?? [], input.signal)
+    return new AcpProviderSession(
+      connection,
+      session,
+      input.process,
+      stderr,
+      input.initialPromptPrefix,
+      input.structuredOutput,
+      input.structuredOutputInstruction,
+      input.transformText
+    )
+  } catch (error) {
+    connection.close(error)
+    await input.process.kill().catch(() => undefined)
+    await stderr.catch(() => undefined)
+    throw error
   }
 }
 
@@ -237,12 +222,6 @@ class AcpProviderSession implements AgentProviderSession {
     this.#session.dispose()
     this.#connection.close()
     const errors: unknown[] = []
-
-    try {
-      await this.#process.closeInput()
-    } catch (error) {
-      errors.push(error)
-    }
 
     try {
       await this.#process.kill()

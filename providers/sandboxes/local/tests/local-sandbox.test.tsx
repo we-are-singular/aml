@@ -113,9 +113,7 @@ describe("localSandbox()", () => {
     await expect(readText(spawned.stdout)).resolves.toBe("early")
     await expect(readText(spawned.stderr)).resolves.toBe("warning")
     expect(secondExit).toBe(firstExit)
-    await expect(
-      Promise.all([spawned.closeInput(), spawned.closeInput(), spawned.kill(), spawned.kill()])
-    ).resolves.toBeDefined()
+    await expect(Promise.all([spawned.kill(), spawned.kill()])).resolves.toBeDefined()
     await lease.release()
   })
 
@@ -127,8 +125,9 @@ describe("localSandbox()", () => {
       "process.stdin.pipe(process.stdout);process.stdin.once('end',()=>process.stderr.write('closed'))",
     ])
 
-    await spawned.write(new TextEncoder().encode("hello"))
-    await spawned.closeInput()
+    const writer = spawned.stdin.getWriter()
+    await writer.write(new TextEncoder().encode("hello"))
+    await writer.close()
     const [stdout, stderr, exit] = await Promise.all([
       readText(spawned.stdout),
       readText(spawned.stderr),

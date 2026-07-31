@@ -53,22 +53,6 @@ readline.createInterface({ input: process.stdin }).on("line", line => {
     response.writeHead(message.status, message.headers).end(Buffer.from(message.body, "base64"))
     return
   }
-
-  if (message.kind === "response-start") {
-    response.writeHead(message.status, message.headers)
-    return
-  }
-
-  if (message.kind === "response-chunk") {
-    response.write(Buffer.from(message.body, "base64"))
-    return
-  }
-
-  if (message.kind === "response-end") {
-    pending.delete(message.id)
-    response.end()
-    return
-  }
 })
 
 server.listen(0, "127.0.0.1", () => {

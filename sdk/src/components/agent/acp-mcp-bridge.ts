@@ -32,7 +32,6 @@ export class AcpMcpBridge implements AcpStructuredOutputController {
   readonly #http: HttpServer
   readonly #name = `aml_${randomUUID().replaceAll("-", "")}`
   readonly #output: AgentOutputRequest | undefined
-  readonly #sessions = new Map<string, Readonly<{ server: McpServer; transport: StreamableHTTPServerTransport }>>()
   readonly #tools: ReadonlyMap<string, AgentJavaScriptTool>
   #acceptStructuredOutput = false
   #closePromise: Promise<void> | undefined
@@ -155,36 +154,17 @@ export class AcpMcpBridge implements AcpStructuredOutputController {
   }
 
   async #close(): Promise<void> {
-    const errors: unknown[] = []
-
-    for (const session of [...this.#sessions.values()]) {
-      try {
-        await session.server.close()
-      } catch (error) {
-        errors.push(error)
-      }
-    }
-    this.#sessions.clear()
-
     this.#http.closeAllConnections()
-
-    try {
-      await new Promise<void>((resolve, reject) => {
-        this.#http.close(error => {
-          if (error !== undefined && (error as NodeJS.ErrnoException).code !== "ERR_SERVER_NOT_RUNNING") {
-            reject(error)
-            return
-          }
-
+    await new Promise<void>((resolve, reject) => {
+      this.#http.close(error => {
+        if (error === undefined || (error as NodeJS.ErrnoException).code === "ERR_SERVER_NOT_RUNNING") {
           resolve()
-        })
-      })
-    } catch (error) {
-      errors.push(error)
-    }
+          return
+        }
 
-    if (errors.length === 1) throw errors[0]
-    if (errors.length > 1) throw new AggregateError(errors, "AML ACP MCP bridge cleanup failed")
+        reject(error)
+      })
+    })
   }
 
   async #handleRequest(
@@ -196,50 +176,29 @@ export class AcpMcpBridge implements AcpStructuredOutputController {
       return
     }
 
-    const rawSessionId = request.headers["mcp-session-id"]
-    const sessionId = Array.isArray(rawSessionId) ? undefined : rawSessionId
+    if (request.method !== "POST") {
+      response.writeHead(405, { Allow: "POST" }).end()
+      return
+    }
+
+    const server = this.#createMcpServer()
+    const transport = new StreamableHTTPServerTransport({
+      enableJsonResponse: true,
+    })
 
     try {
-      if (sessionId !== undefined) {
-        const session = this.#sessions.get(sessionId)
-        if (session === undefined) {
-          response.writeHead(400).end("Invalid MCP session")
-          return
-        }
-
-        await session.transport.handleRequest(request, response)
-        return
-      }
-
-      if (request.method !== "POST") {
-        response.writeHead(400).end("Missing MCP session")
-        return
-      }
-
-      const server = this.#createMcpServer()
-      const transport = new StreamableHTTPServerTransport({
-        onsessioninitialized: (initializedSessionId: string) => {
-          this.#sessions.set(initializedSessionId, { server, transport })
-        },
-        sessionIdGenerator: randomUUID,
-      } as never)
-      transport.onclose = () => {
-        if (transport.sessionId !== undefined) {
-          this.#sessions.delete(transport.sessionId)
-        }
-      }
+      // The SDK documents omitted sessionIdGenerator as stateless mode. Its
+      // duplicated Transport declarations disagree under exact optional types.
       await server.connect(transport as never)
       await transport.handleRequest(request, response)
-
-      if (transport.sessionId === undefined) {
-        await server.close()
-      }
     } catch {
       if (!response.headersSent) {
         response.writeHead(500).end()
       } else {
         response.destroy()
       }
+    } finally {
+      await server.close().catch(() => undefined)
     }
   }
 

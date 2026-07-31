@@ -1,9 +1,10 @@
 import { spawn } from "node:child_process"
-import type { Readable } from "node:stream"
+import { Readable, Writable } from "node:stream"
 
 import type { SandboxProcess, SandboxProcessExit } from "../sandbox/sandbox-runtime.js"
 
 export interface LocalProcessOptions {
+  readonly beforeKill?: () => Promise<void>
   readonly cwd: string
   readonly env?: Readonly<Record<string, string>>
   readonly signal: AbortSignal
@@ -34,15 +35,15 @@ export async function spawnLocalProcess(
 }
 
 class LocalProcess implements SandboxProcess {
+  readonly #beforeKill: (() => Promise<void>) | undefined
   readonly #child: ReturnType<typeof spawn>
   readonly #completion: Promise<Readonly<SandboxProcessExit>>
   readonly #signal: AbortSignal
   readonly #timeout: ReturnType<typeof setTimeout> | undefined
-  #closePromise: Promise<void> | undefined
   #finished = false
   #killPromise: Promise<void> | undefined
   readonly id: string
-  readonly pid: number
+  readonly stdin: WritableStream<Uint8Array>
   readonly stderr: ReadableStream<Uint8Array>
   readonly stdout: ReadableStream<Uint8Array>
 
@@ -53,11 +54,12 @@ class LocalProcess implements SandboxProcess {
     }
 
     this.#child = child
+    this.#beforeKill = options.beforeKill
     this.#signal = options.signal
     this.id = `local-process:${child.pid}`
-    this.pid = child.pid
-    this.stdout = nodeReadableStream(child.stdout)
-    this.stderr = nodeReadableStream(child.stderr)
+    this.stdin = Writable.toWeb(child.stdin) as WritableStream<Uint8Array>
+    this.stdout = Readable.toWeb(child.stdout) as ReadableStream<Uint8Array>
+    this.stderr = Readable.toWeb(child.stderr) as ReadableStream<Uint8Array>
     this.#completion = new Promise((resolve, reject) => {
       child.once("error", reject)
       child.once("close", (code, signal) => {
@@ -90,46 +92,36 @@ class LocalProcess implements SandboxProcess {
     }
   }
 
-  async closeInput(): Promise<void> {
-    if (this.#finished) return
-
-    this.#closePromise ??= new Promise<void>(resolve => {
-      this.#child.stdin?.end(resolve)
-    })
-    await this.#closePromise
-  }
-
   async kill(): Promise<void> {
     if (this.#finished) return
 
-    this.#killPromise ??= Promise.resolve().then(() => {
+    this.#killPromise ??= Promise.resolve().then(async () => {
+      const errors: unknown[] = []
+
+      try {
+        await this.#beforeKill?.()
+      } catch (error) {
+        errors.push(error)
+      }
+
       try {
         if (process.platform === "win32") {
           this.#child.kill("SIGKILL")
         } else {
-          process.kill(-this.pid, "SIGKILL")
+          process.kill(-this.#child.pid!, "SIGKILL")
         }
       } catch (error) {
-        if ((error as NodeJS.ErrnoException).code !== "ESRCH") throw error
+        if ((error as NodeJS.ErrnoException).code !== "ESRCH") errors.push(error)
       }
+
+      if (errors.length === 1) throw errors[0]
+      if (errors.length > 1) throw new AggregateError(errors, "Process cleanup failed")
     })
     await this.#killPromise
   }
 
   async wait(): Promise<Readonly<SandboxProcessExit>> {
     return await this.#completion
-  }
-
-  async write(data: Uint8Array): Promise<void> {
-    if (this.#finished || this.#child.stdin === null || this.#child.stdin.destroyed) {
-      throw new Error("Local process input is closed")
-    }
-
-    await new Promise<void>((resolve, reject) => {
-      this.#child.stdin?.write(data, (error: Error | null | undefined) =>
-        error === null || error === undefined ? resolve() : reject(error)
-      )
-    })
   }
 
   readonly #onAbort = (): void => {
@@ -139,29 +131,4 @@ class LocalProcess implements SandboxProcess {
   #removeAbortListener(): void {
     this.#signal.removeEventListener("abort", this.#onAbort)
   }
-}
-
-function nodeReadableStream(stream: Readable): ReadableStream<Uint8Array> {
-  let controller: ReadableStreamDefaultController<Uint8Array>
-  const readable = new ReadableStream<Uint8Array>({
-    start(value) {
-      controller = value
-    },
-    cancel() {
-      stream.destroy()
-    },
-    pull() {
-      stream.resume()
-    },
-  })
-
-  // Attach before returning the process handle so early output is queued even
-  // when the consumer starts reading after process exit.
-  stream.on("data", chunk => {
-    controller.enqueue(new Uint8Array(Buffer.from(chunk)))
-    if ((controller.desiredSize ?? 0) <= 0) stream.pause()
-  })
-  stream.once("end", () => controller.close())
-  stream.once("error", error => controller.error(error))
-  return readable
 }

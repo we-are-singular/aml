@@ -37,8 +37,9 @@ describe.skipIf(!dockerEnabled)("Docker Sandbox integration", () => {
         "-c",
         "IFS= read -r value; printf '%s' \"$value\"; printf warning >&2",
       ])
-      await spawned.write(new TextEncoder().encode("streamed\n"))
-      await spawned.closeInput()
+      const writer = spawned.stdin.getWriter()
+      await writer.write(new TextEncoder().encode("streamed\n"))
+      await writer.close()
       const [stdout, stderr, exit] = await Promise.all([
         readStream(spawned.stdout),
         readStream(spawned.stderr),

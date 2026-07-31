@@ -15,6 +15,7 @@
   },
   "scripts": {
     "build": "vite build && tsc --project tsconfig.build.json",
+    "package:check": "node ../../../scripts/check-agent-provider-package.ts codex codexAgent",
     "test": "vitest run",
     "test:integration": "vitest run tests/codex-agent.integration.test.tsx",
     "typecheck": "tsc --noEmit"

@@ -328,29 +328,26 @@ describe("validated Sandbox runtime", () => {
     await expect(runtime.exec("true")).rejects.toThrow('Sandbox provider "fixture" returned an invalid command result')
   })
 
-  it("captures process identity and makes lifecycle operations idempotent", async () => {
-    let closes = 0
+  it("captures standard process streams and makes kill and wait idempotent", async () => {
     let kills = 0
     let waits = 0
     let written: Uint8Array | undefined
     const exit = { exitCode: 0 }
     const process = {
-      async closeInput() {
-        closes += 1
-      },
       id: "process-1",
       async kill() {
         kills += 1
       },
-      pid: 42,
+      stdin: new WritableStream<Uint8Array>({
+        write(data) {
+          written = new Uint8Array(data)
+        },
+      }),
       stderr: new ReadableStream<Uint8Array>({ start: controller => controller.close() }),
       stdout: new ReadableStream<Uint8Array>({ start: controller => controller.close() }),
       async wait() {
         waits += 1
         return exit
-      },
-      async write(data: Uint8Array) {
-        written = data
       },
     }
     const runtime = validateSandboxRuntime(
@@ -369,14 +366,16 @@ describe("validated Sandbox runtime", () => {
     )
     const captured = await runtime.spawn("server")
     const input = new Uint8Array([1, 2, 3])
+    const writer = captured.stdin.getWriter()
 
-    await Promise.all([captured.closeInput(), captured.closeInput(), captured.kill(), captured.kill()])
+    await writer.write(input)
+    await writer.close()
+    await Promise.all([captured.kill(), captured.kill()])
     const [firstExit, secondExit] = await Promise.all([captured.wait(), captured.wait()])
-    await captured.write(input)
     input[0] = 9
     exit.exitCode = 7
 
-    expect({ closes, kills, waits }).toEqual({ closes: 1, kills: 1, waits: 1 })
+    expect({ kills, waits }).toEqual({ kills: 1, waits: 1 })
     expect(firstExit).toBe(secondExit)
     expect(firstExit).toEqual({ exitCode: 0 })
     expect(Object.isFrozen(firstExit)).toBe(true)
@@ -386,14 +385,13 @@ describe("validated Sandbox runtime", () => {
 
 function completedTestProcess() {
   return Object.freeze({
-    async closeInput() {},
     id: "fixture-process",
     async kill() {},
+    stdin: new WritableStream(),
     stderr: new ReadableStream<Uint8Array>({ start: controller => controller.close() }),
     stdout: new ReadableStream<Uint8Array>({ start: controller => controller.close() }),
     async wait() {
       return Object.freeze({ exitCode: 0 })
     },
-    async write() {},
   })
 }

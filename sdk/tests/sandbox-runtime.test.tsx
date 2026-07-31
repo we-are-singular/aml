@@ -21,15 +21,14 @@ const fixtureRuntime: Readonly<SandboxRuntime> = Object.freeze({
   root: ".",
   async spawn() {
     return {
-      async closeInput() {},
       id: "fixture-process",
       async kill() {},
+      stdin: new WritableStream(),
       stderr: new ReadableStream<Uint8Array>({ start: controller => controller.close() }),
       stdout: new ReadableStream<Uint8Array>({ start: controller => controller.close() }),
       async wait() {
         return { exitCode: 0 }
       },
-      async write() {},
     }
   },
 })

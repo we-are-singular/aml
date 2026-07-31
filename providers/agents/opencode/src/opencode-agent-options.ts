@@ -1,4 +1,3 @@
-import type { AcpSessionFactory } from "@aml-jsx/sdk"
 import type { Config } from "@opencode-ai/sdk/v2"
 
 /**
@@ -11,7 +10,6 @@ export interface OpenCodeAgentOptions {
   readonly directory?: string
   readonly env?: Readonly<Record<string, string>>
   readonly model?: string
-  readonly sessionFactory?: AcpSessionFactory
 }
 
 /**
@@ -24,7 +22,6 @@ export interface CapturedOpenCodeAgentOptions {
   readonly directory?: string
   readonly env: Readonly<Record<string, string>>
   readonly model?: string
-  readonly sessionFactory?: AcpSessionFactory
 }
 
 /**
@@ -71,7 +68,6 @@ export function captureOpenCodeAgentOptions(options: OpenCodeAgentOptions): Read
     ...(directory === undefined ? {} : { directory }),
     env: Object.freeze({ ...env }),
     ...(model === undefined ? {} : { model }),
-    ...(options.sessionFactory === undefined ? {} : { sessionFactory: options.sessionFactory }),
   })
 }
 

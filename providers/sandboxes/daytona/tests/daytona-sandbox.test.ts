@@ -74,8 +74,9 @@ describe("daytonaSandbox()", () => {
       cwd: "repository/src",
       env: { API_KEY: "configured" },
     })
-    await spawned.write(new TextEncoder().encode("input"))
-    await spawned.closeInput()
+    const writer = spawned.stdin.getWriter()
+    await writer.write(new TextEncoder().encode("input"))
+    await writer.close()
     const [stdout, stderr, exit] = await Promise.all([
       readStream(spawned.stdout),
       readStream(spawned.stderr),
@@ -92,7 +93,7 @@ describe("daytonaSandbox()", () => {
       runAsync: true,
       suppressInputEcho: true,
     })
-    expect(fake.sessionInputs).toEqual(["input", "\u0004"])
+    expect(fake.sessionInputs).toEqual(["input"])
 
     await lease.release()
     await expect(readFile(path.join(repository, "output.txt"), "utf8")).resolves.toBe("downloaded")
@@ -106,8 +107,9 @@ describe("daytonaSandbox()", () => {
     const releaseLogs = fake.pauseSessionLogs()
     const lease = await daytonaSandbox({ client: fake.client, workspace }).acquire(request({ cwd: ".", root: "." }))
     const process = await lease.runtime.spawn("node", ["server.mjs"])
+    const writer = process.stdin.getWriter()
 
-    await Promise.all([process.kill(), process.kill(), process.closeInput(), process.closeInput()])
+    await Promise.all([process.kill(), process.kill(), writer.close()])
     releaseLogs()
 
     const [first, second, stdout, stderr] = await Promise.all([
@@ -118,7 +120,7 @@ describe("daytonaSandbox()", () => {
     ])
     expect(first).toBe(second)
     expect({ exit: first, stderr, stdout }).toEqual({ exit: { exitCode: 137 }, stderr: "", stdout: "" })
-    await expect(process.write(new TextEncoder().encode("late"))).rejects.toThrow("input is closed")
+    await expect(writer.write(new TextEncoder().encode("late"))).rejects.toThrow()
 
     await lease.release()
   })

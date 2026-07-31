@@ -95,55 +95,6 @@ describe("AcpMcpBridge", () => {
     }
   })
 
-  it("streams long-lived HTTP responses through the Sandbox relay", async () => {
-    let releaseResponse!: () => void
-    const finishResponse = new Promise<void>(resolve => (releaseResponse = resolve))
-    const host = createServer(async (_request, response) => {
-      response.writeHead(200, { "content-type": "text/event-stream" })
-      response.write("event: first\ndata: ready\n\n")
-      await finishResponse
-      response.end("event: second\ndata: done\n\n")
-    })
-    await new Promise<void>((resolve, reject) => {
-      host.once("error", reject)
-      host.listen(0, "127.0.0.1", resolve)
-    })
-    const address = host.address()
-    if (address === null || typeof address === "string") throw new Error("Fixture HTTP server has no TCP address")
-
-    const context = createAgentExecutionContext()
-    const started = await AcpMcpRelay.start(
-      localSandboxRuntime(),
-      process.cwd(),
-      { headers: {}, name: "stream-fixture", url: `http://127.0.0.1:${address.port}/mcp` },
-      context.signal
-    )
-
-    try {
-      const response = await fetch(started.connection.url)
-      const reader = response.body?.getReader()
-      if (reader === undefined) throw new Error("Relay fixture response has no body")
-
-      const first = await reader.read()
-      expect(new TextDecoder().decode(first.value)).toContain("event: first")
-      releaseResponse()
-
-      let remainder = ""
-      for (;;) {
-        const chunk = await reader.read()
-        if (chunk.done) break
-        remainder += new TextDecoder().decode(chunk.value)
-      }
-      expect(remainder).toContain("event: second")
-    } finally {
-      releaseResponse()
-      await started.relay.close()
-      await new Promise<void>((resolve, reject) =>
-        host.close(error => (error === undefined ? resolve() : reject(error)))
-      )
-    }
-  })
-
   it("accepts a fresh client after an MCP capability probe disconnects", async () => {
     const tool = defineTool({
       description: "Return the reconnect fixture",
@@ -207,4 +158,3 @@ async function connectMcp(connection: {
   await client.connect(transport as never)
   return client
 }
-import { createServer } from "node:http"

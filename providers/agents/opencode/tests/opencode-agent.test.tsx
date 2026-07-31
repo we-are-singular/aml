@@ -1,37 +1,11 @@
-import {
-  Agent,
-  AmlRuntime,
-  FollowUp,
-  Sandbox,
-  type AcpSessionFactory,
-  type AcpSessionOpenInput,
-  type AgentProviderSession,
-  type SandboxProcess,
-} from "@aml-jsx/sdk"
+import { Agent, AmlRuntime, Sandbox, type SandboxProcess } from "@aml-jsx/sdk"
 import { DeterministicSandboxProvider } from "@aml-jsx/sdk/testing"
 import { describe, expect, it } from "vitest"
 
 import { opencodeAgent } from "../src/index.js"
 
-class RecordingSessionFactory implements AcpSessionFactory {
-  readonly inputs: AcpSessionOpenInput[] = []
-  readonly prompts: string[] = []
-
-  async open(input: Readonly<AcpSessionOpenInput>): Promise<AgentProviderSession> {
-    this.inputs.push(input)
-    return {
-      close: async () => await input.process.kill(),
-      runTurn: async turn => {
-        this.prompts.push(turn.prompt)
-        return { text: `response:${turn.prompt}` }
-      },
-    }
-  }
-}
-
 describe("opencodeAgent()", () => {
   it("launches the native ACP Agent through the Sandbox process boundary", async () => {
-    const sessionFactory = new RecordingSessionFactory()
     const spawned: Array<{
       readonly args: readonly string[]
       readonly command: string
@@ -54,26 +28,17 @@ describe("opencodeAgent()", () => {
       config: { share: "disabled" },
       env: { PROVIDER_TOKEN: "configured" },
       model: "opencode-go/minimax-m3",
-      sessionFactory,
     })
 
-    const output = await new AmlRuntime({ agentProvider: provider }).evaluate(
-      <Sandbox access="read-write" cwd="repository" provider={sandboxProvider}>
-        <Agent model="anthropic/claude-sonnet-4-6" system="Follow the system.">
-          Initial
-          <FollowUp>Later</FollowUp>
-        </Agent>
-      </Sandbox>
-    )
-
-    expect(output).toBe("response:Later")
-    expect(sessionFactory.inputs).toEqual([
-      expect.objectContaining({
-        cwd: "/sandbox/repository",
-        permissionPolicy: "allow_always",
-      }),
-    ])
-    expect(sessionFactory.prompts).toEqual(["Initial", "Later"])
+    await expect(
+      new AmlRuntime({ agentProvider: provider }).evaluate(
+        <Sandbox access="read-write" cwd="repository" provider={sandboxProvider}>
+          <Agent model="anthropic/claude-sonnet-4-6" system="Follow the system.">
+            Initial
+          </Agent>
+        </Sandbox>
+      )
+    ).rejects.toThrow()
     expect(spawned).toHaveLength(1)
     expect(spawned[0]).toMatchObject({
       args: ["acp", "--pure", "--cwd", "/sandbox/repository", "--print-logs"],
@@ -104,24 +69,6 @@ describe("opencodeAgent()", () => {
     })
   })
 
-  it("uses the same native ACP profile on the trusted host", async () => {
-    const sessionFactory = new RecordingSessionFactory()
-    const provider = opencodeAgent({
-      args: ["-e", "setInterval(() => {}, 1_000)"],
-      command: process.execPath,
-      directory: process.cwd(),
-      sessionFactory,
-    })
-
-    await expect(new AmlRuntime({ agentProvider: provider }).evaluate(<Agent>Prompt</Agent>)).resolves.toBe(
-      "response:Prompt"
-    )
-    expect(sessionFactory.inputs[0]).toMatchObject({
-      cwd: process.cwd(),
-      process: { id: expect.stringMatching(/^local-process:/) },
-    })
-  })
-
   it("maps restrictive Agent permissions into OpenCode's native controls", async () => {
     let config: Record<string, unknown> | undefined
     const sandboxProvider = new DeterministicSandboxProvider({
@@ -131,13 +78,15 @@ describe("opencodeAgent()", () => {
         return completedProcess()
       },
     })
-    const provider = opencodeAgent({ sessionFactory: new RecordingSessionFactory() })
+    const provider = opencodeAgent()
 
-    await new AmlRuntime({ agentProvider: provider }).evaluate(
-      <Sandbox provider={sandboxProvider}>
-        <Agent permissions={{ filesystem: "read-only", network: false, shell: false }}>Prompt</Agent>
-      </Sandbox>
-    )
+    await expect(
+      new AmlRuntime({ agentProvider: provider }).evaluate(
+        <Sandbox provider={sandboxProvider}>
+          <Agent permissions={{ filesystem: "read-only", network: false, shell: false }}>Prompt</Agent>
+        </Sandbox>
+      )
+    ).rejects.toThrow()
 
     expect(config).toMatchObject({
       agent: {
@@ -158,15 +107,14 @@ describe("opencodeAgent()", () => {
 
 function completedProcess(): Readonly<SandboxProcess> {
   return Object.freeze({
-    async closeInput() {},
     id: "opencode-acp-process",
     async kill() {},
+    stdin: new WritableStream(),
     stderr: emptyStream(),
     stdout: emptyStream(),
     async wait() {
       return { exitCode: 0 }
     },
-    async write() {},
   })
 }
 

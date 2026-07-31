@@ -32,21 +32,14 @@ export interface SandboxProcessExit {
 /**
  * Provider-neutral handle for one long-lived Sandbox process.
  *
- * `id` is the portable identity. `pid` is present only when the provider can
- * expose a meaningful operating-system process id.
+ * Standard Web streams carry process input and output without imposing a
+ * provider-specific PID or stdin API on callers.
  */
 export interface SandboxProcess {
   readonly id: string
-  readonly pid?: number
+  readonly stdin: WritableStream<Uint8Array>
   readonly stderr: ReadableStream<Uint8Array>
   readonly stdout: ReadableStream<Uint8Array>
-
-  /**
-   * Closes AML's writable side and requests the backend's stdin half-close.
-   * Remote providers may expose only a closest signal rather than pipe EOF.
-   * Repeated calls and calls after exit are no-ops.
-   */
-  closeInput(): Promise<void>
 
   /**
    * Terminates the process and its descendants. Repeated calls are safe.
@@ -57,11 +50,6 @@ export interface SandboxProcess {
    * Waits for completion and returns the same captured result on every call.
    */
   wait(): Promise<Readonly<SandboxProcessExit>>
-
-  /**
-   * Writes bytes to standard input while the process is running.
-   */
-  write(data: Uint8Array): Promise<void>
 }
 
 /**

@@ -131,16 +131,13 @@ export class DeterministicSandboxProvider<Handle = DeterministicSandboxHandle> i
 
 function completedProcess(id: string, stdout: string): Readonly<SandboxProcess> {
   return Object.freeze({
-    async closeInput() {},
     id,
     async kill() {},
+    stdin: new WritableStream(),
     stderr: byteStream(""),
     stdout: byteStream(stdout),
     async wait() {
       return Object.freeze({ exitCode: 0 })
-    },
-    async write() {
-      throw new Error("Deterministic Sandbox process input is closed")
     },
   })
 }

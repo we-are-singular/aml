@@ -9,19 +9,19 @@ import type { AgentMcpServer } from "../mcp/aml-mcp-server.js"
 import type { SandboxProcess } from "../sandbox/sandbox-runtime.js"
 import { supportsSandboxRuntime } from "../sandbox/sandbox-runtime.js"
 import type { AgentExecutionContext } from "./agent-execution-context.js"
+import type { AgentProvider } from "./agent-provider.js"
 import type { AgentProviderSession, AgentProviderTurn } from "./agent-provider-session.js"
 import type { AgentRequest } from "./agent-request.js"
 import type { AgentResponse } from "./agent-response.js"
 import { AbstractAgentProvider } from "./abstract-agent-provider.js"
+import { defineAgentProvider } from "./define-agent-provider.js"
 import { AcpMcpBridge } from "./acp-mcp-bridge.js"
 import { AcpMcpRelay } from "./acp-mcp-relay.js"
 import { materializeSandboxFiles } from "./sandbox-file-materializer.js"
 import {
-  AcpSdkSessionFactory,
+  openAcpSession,
   type AcpPermissionPolicy,
   type AcpSessionConfiguration,
-  type AcpSessionFactory,
-  type AcpSessionOpenInput,
   type AcpSessionTextTransform,
 } from "./acp-agent-session.js"
 import { spawnLocalProcess } from "./spawn-local-process.js"
@@ -67,7 +67,6 @@ export interface AcpAgentLaunch {
  */
 export interface AcpAgentProfile<Name extends string> {
   readonly name: Name
-  readonly sessionFactory: AcpSessionFactory | undefined
   readonly workingDirectory: string | undefined
 
   createLaunch(context: Readonly<AcpAgentLaunchContext>): Readonly<AcpAgentLaunch>
@@ -77,14 +76,12 @@ export interface AcpAgentProfile<Name extends string> {
 /**
  * Shared built-in coding-Agent provider implemented through one ACP lifecycle.
  */
-export class AcpAgentProvider<Name extends string> extends AbstractAgentProvider<Name> {
+class AcpAgentProvider<Name extends string> extends AbstractAgentProvider<Name> {
   readonly #profile: Readonly<AcpAgentProfile<Name>>
-  readonly #sessionFactory: AcpSessionFactory
 
   constructor(profile: Readonly<AcpAgentProfile<Name>>) {
     super(profile.name)
     this.#profile = profile
-    this.#sessionFactory = profile.sessionFactory ?? new AcpSdkSessionFactory()
   }
 
   override supportsSandbox(sandbox: NonNullable<AgentExecutionContext["sandbox"]>): boolean {
@@ -118,7 +115,7 @@ export class AcpAgentProvider<Name extends string> extends AbstractAgentProvider
       }
 
       execution = await prepareExecution(this.#profile, request, mcpServers, context)
-      const session = await openAcpSession(this.#sessionFactory, {
+      const session = await openAcpSession({
         ...(execution.launch.authenticationMethodId === undefined
           ? {}
           : { authenticationMethodId: execution.launch.authenticationMethodId }),
@@ -144,6 +141,15 @@ export class AcpAgentProvider<Name extends string> extends AbstractAgentProvider
       throw error
     }
   }
+}
+
+/**
+ * Defines an Agent provider backed by AML's shared ACP lifecycle.
+ */
+export function defineAcpAgentProvider<Name extends string>(
+  profile: Readonly<AcpAgentProfile<Name>>
+): Readonly<AgentProvider & { readonly name: Name }> {
+  return defineAgentProvider(new AcpAgentProvider(profile))
 }
 
 interface AcpExecution {
@@ -254,23 +260,6 @@ function launchFileDestination(stateDirectory: string, relativePath: string): st
   }
 
   return destination
-}
-
-async function openAcpSession(
-  factory: AcpSessionFactory,
-  input: Readonly<AcpSessionOpenInput>
-): Promise<AgentProviderSession> {
-  const open = factory.open
-  if (typeof open !== "function") {
-    throw new TypeError("ACP sessionFactory must provide open()")
-  }
-
-  const session = await Reflect.apply(open, factory, [input])
-  if (typeof session !== "object" || session === null) {
-    throw new TypeError("ACP sessionFactory must return an AgentProviderSession")
-  }
-
-  return session
 }
 
 function mapMcpServers<Name extends string>(

@@ -148,7 +148,12 @@ function createRuntime(
       const captured = SandboxCommand.from(request, command, args, options)
       const cwd = await resolveDirectory(workspace, captured.cwd, root, "command cwd")
       const process = await startProcess(captured, cwd, processes)
-      await process.closeInput()
+      const writer = process.stdin.getWriter()
+      try {
+        await writer.close()
+      } finally {
+        writer.releaseLock()
+      }
       return await collectProcess(process, maxOutputBytes)
     },
     root: request.root,

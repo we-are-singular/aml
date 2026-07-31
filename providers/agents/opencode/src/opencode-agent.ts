@@ -1,10 +1,8 @@
 import {
-  AcpAgentProvider,
-  defineAgentProvider,
+  defineAcpAgentProvider,
   type AcpAgentLaunch,
   type AcpAgentLaunchContext,
   type AcpAgentProfile,
-  type AcpSessionFactory,
   type AgentProvider,
 } from "@aml-jsx/sdk"
 import type { Config } from "@opencode-ai/sdk/v2"
@@ -25,10 +23,6 @@ class OpenCodeAcpProfile implements AcpAgentProfile<"opencode"> {
 
   constructor(options: Readonly<CapturedOpenCodeAgentOptions>) {
     this.#options = options
-  }
-
-  get sessionFactory(): AcpSessionFactory | undefined {
-    return this.#options.sessionFactory
   }
 
   get workingDirectory(): string | undefined {
@@ -99,7 +93,7 @@ class OpenCodeAcpProfile implements AcpAgentProfile<"opencode"> {
  */
 export function opencodeAgent(options: OpenCodeAgentOptions = {}): Readonly<OpenCodeAgentProvider> {
   const profile = new OpenCodeAcpProfile(captureOpenCodeAgentOptions(options))
-  return defineAgentProvider(new AcpAgentProvider(profile))
+  return defineAcpAgentProvider(profile)
 }
 
 function configTable(value: unknown): Readonly<Record<string, unknown>> {

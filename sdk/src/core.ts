@@ -8,21 +8,12 @@ export {
 export type { AgentExecutionContext } from "./components/agent/agent-execution-context.js"
 export { AbstractAgentProvider } from "./components/agent/abstract-agent-provider.js"
 export {
-  AcpAgentProvider,
+  defineAcpAgentProvider,
   type AcpAgentLaunch,
   type AcpAgentLaunchContext,
   type AcpAgentLaunchFile,
   type AcpAgentProfile,
 } from "./components/agent/acp-agent-provider.js"
-export {
-  AcpSdkSessionFactory,
-  type AcpPermissionPolicy,
-  type AcpSessionConfiguration,
-  type AcpSessionFactory,
-  type AcpSessionOpenInput,
-  type AcpSessionTextTransform,
-  type AcpStructuredOutputController,
-} from "./components/agent/acp-agent-session.js"
 export type { AmlModelSchema } from "./components/agent/aml-model-schema.js"
 export type { AgentOutputRequest } from "./components/agent/agent-output-request.js"
 export type { AgentProvider } from "./components/agent/agent-provider.js"

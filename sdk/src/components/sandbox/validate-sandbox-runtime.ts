@@ -80,23 +80,19 @@ function validateSandboxProcess(value: unknown, providerName: string): Readonly<
   }
 
   let id: unknown
-  let pid: unknown
+  let stdin: unknown
   let stderr: unknown
   let stdout: unknown
-  let closeInput: unknown
   let kill: unknown
   let wait: unknown
-  let write: unknown
 
   try {
     id = Reflect.get(value, "id")
-    pid = Reflect.get(value, "pid")
+    stdin = Reflect.get(value, "stdin")
     stderr = Reflect.get(value, "stderr")
     stdout = Reflect.get(value, "stdout")
-    closeInput = Reflect.get(value, "closeInput")
     kill = Reflect.get(value, "kill")
     wait = Reflect.get(value, "wait")
-    write = Reflect.get(value, "write")
   } catch (cause) {
     throw new TypeError(`Sandbox provider "${providerName}" returned an unreadable process`, { cause })
   }
@@ -105,39 +101,28 @@ function validateSandboxProcess(value: unknown, providerName: string): Readonly<
     typeof id !== "string" ||
     id.length === 0 ||
     id !== id.trim() ||
-    (pid !== undefined && (!Number.isSafeInteger(pid) || (pid as number) <= 0)) ||
+    !(stdin instanceof WritableStream) ||
     !(stderr instanceof ReadableStream) ||
     !(stdout instanceof ReadableStream) ||
-    typeof closeInput !== "function" ||
     typeof kill !== "function" ||
-    typeof wait !== "function" ||
-    typeof write !== "function"
+    typeof wait !== "function"
   ) {
     throw new TypeError(`Sandbox provider "${providerName}" returned an invalid process`)
   }
 
-  let closePromise: Promise<void> | undefined
   let killPromise: Promise<void> | undefined
   let waitPromise: Promise<Readonly<SandboxProcessExit>> | undefined
 
   return Object.freeze({
-    closeInput: () => (closePromise ??= Promise.resolve().then(() => Reflect.apply(closeInput, value, []))),
     id,
     kill: () => (killPromise ??= Promise.resolve().then(() => Reflect.apply(kill, value, []))),
-    ...(pid === undefined ? {} : { pid: pid as number }),
+    stdin,
     stderr,
     stdout,
     wait: () =>
       (waitPromise ??= Promise.resolve()
         .then(() => Reflect.apply(wait, value, []))
         .then(result => validateSandboxProcessExit(result, providerName))),
-    write: async (data: Uint8Array) => {
-      if (!(data instanceof Uint8Array)) {
-        throw new TypeError("Sandbox process input must be a Uint8Array")
-      }
-
-      await Reflect.apply(write, value, [new Uint8Array(data)])
-    },
   })
 }
 

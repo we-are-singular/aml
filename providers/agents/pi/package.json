@@ -15,6 +15,7 @@
   },
   "scripts": {
     "build": "vite build && tsc --project tsconfig.build.json",
+    "package:check": "node ../../../scripts/check-agent-provider-package.ts pi piAgent",
     "test": "vitest run",
     "test:integration": "vitest run tests/pi-agent.integration.test.tsx",
     "typecheck": "tsc --noEmit"

@@ -312,7 +312,6 @@ function createRuntime(
 
 class ModalSandboxProcess implements SandboxProcess {
   readonly #completion: Promise<Readonly<SandboxProcessExit>>
-  #closePromise: Promise<void> | undefined
   #finished = false
   #killPromise: Promise<void> | undefined
   readonly #marker: string
@@ -320,6 +319,7 @@ class ModalSandboxProcess implements SandboxProcess {
   readonly #sandbox: ModalSdkSandbox
   readonly #terminateLease: () => Promise<void>
   readonly id: string
+  readonly stdin: WritableStream<Uint8Array>
   readonly stderr: ReadableStream<Uint8Array>
   readonly stdout: ReadableStream<Uint8Array>
 
@@ -335,6 +335,16 @@ class ModalSandboxProcess implements SandboxProcess {
     this.#marker = marker
     this.#terminateLease = terminateLease
     this.id = `modal:${randomUUID()}`
+    this.stdin = new WritableStream({
+      abort: async () => await this.kill(),
+      close: async () => {
+        if (!this.#finished) await this.#process.closeStdin()
+      },
+      write: async data => {
+        if (this.#finished) throw new Error("Modal Sandbox process input is closed")
+        await this.#process.stdin.writeBytes(new Uint8Array(data))
+      },
+    })
     // Capture both remote streams immediately. Modal's streams preserve data
     // until read, including output produced before this handle is returned.
     this.stdout = process.stdout
@@ -348,14 +358,6 @@ class ModalSandboxProcess implements SandboxProcess {
     void this.#completion.catch(() => undefined)
     signal.addEventListener("abort", () => void this.kill(), { once: true })
     if (signal.aborted) void this.kill()
-  }
-
-  async closeInput(): Promise<void> {
-    if (this.#finished) return
-    this.#closePromise ??= this.#process.closeStdin().catch(error => {
-      if (!this.#finished) throw error
-    })
-    await this.#closePromise
   }
 
   async kill(): Promise<void> {
@@ -385,11 +387,6 @@ class ModalSandboxProcess implements SandboxProcess {
 
   async wait(): Promise<Readonly<SandboxProcessExit>> {
     return await this.#completion
-  }
-
-  async write(data: Uint8Array): Promise<void> {
-    if (this.#finished) throw new Error("Modal Sandbox process input is closed")
-    await this.#process.stdin.writeBytes(new Uint8Array(data))
   }
 }
 
