@@ -12,23 +12,20 @@ const OpenCode = opencodeAgent({
 })
 
 const Codex = codexAgent({
-  reasoningEffort: "high",
   workingDirectory: process.cwd(),
 })
 
 const Pi = piAgent({
+  env: { OPENCODE_API_KEY: process.env.OPENCODE_API_KEY ?? "" },
   model: "opencode-go/glm-5.1",
-  providers: {
-    "opencode-go": { apiKey: process.env.OPENCODE_API_KEY },
-  },
 })
 ```
 
 Only set options needed by the application. Let each provider use its normal credential discovery unless the surrounding project deliberately injects credentials.
 
-`opencodeAgent({ config })` accepts OpenCode's SDK config. `piAgent({ providers })` accepts a map of Pi's exported `ProviderConfig`; entries may define keys, endpoints, headers, models, or callback-backed providers. Preserve these vendor-native shapes instead of inventing a portable provider config. Pi runs through AML's installed `@earendil-works/pi-coding-agent` dependency and needs no global executable or existing Pi profile.
+Codex, OpenCode, and Pi are thin profiles over one ACP session engine. Preserve provider-native configuration where a profile exposes it instead of inventing a portable credential object. The selected host, image, snapshot, or Sandbox package set must contain the compatible ACP Agent executable.
 
-Pi supports host and JavaScript Tools, FollowUps, cancellation, and schema-guided structured JSON. It currently rejects AML MCP grants because Pi does not expose a compatible attachment boundary.
+The shared engine owns FollowUps, JavaScript Tool and structured-output MCP bridges, cancellation, streaming, and cleanup. Profiles map Agent filesystem, shell, and network permission requests to their native controls. Inside a Sandbox, the Sandbox—not ACP permissions—is the security boundary for model-controlled operations.
 
 Keep reusable workflows provider-agnostic:
 
@@ -40,7 +37,7 @@ function Analyze({ provider }: { provider: AgentProvider }) {
 }
 ```
 
-Provider-specific model names, native Tool names, MCP configuration, and Sandbox compatibility are not portable. Isolate those decisions at the application boundary.
+Provider-specific model names, exact permission enforcement, MCP configuration, and Sandbox compatibility are not portable. Isolate those decisions at the application boundary.
 
 ## Runtime defaults and limits
 

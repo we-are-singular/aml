@@ -1,6 +1,6 @@
 # Agent Markup Language product requirements and delivery plan
 
-Status: Phase 1 delivered; `<Loop>` and `<Context>` remain under evaluation
+Status: Phase 1 delivered; ACP foundation implemented and validated across the supported Agent/Sandbox matrix; `<Loop>` and `<Context>` remain under evaluation
 
 This is the living product definition, architecture plan, implementation roadmap, and progress tracker for AML. It is not a normative runtime contract. Settled behavior belongs in `SPEC.md`; this document records why AML exists, how it is organized, what is being built next, and which slices have been proven.
 
@@ -8,7 +8,7 @@ The Phase 0 proof of concept is archived as reference material, not a build targ
 
 ## Product statement
 
-Agent Markup Language is a TypeScript and JSX orchestration SDK for composing agents, message channels, tools, context, and execution resources while allowing each Agent to keep its native provider harness.
+Agent Markup Language is a TypeScript and JSX orchestration SDK for composing agents, message channels, tools, context, and execution resources. Built-in coding agents keep their native harnesses behind the Agent Client Protocol (ACP), giving AML one portable session boundary across local and sandboxed execution.
 
 AML should make multi-agent control flow readable without:
 
@@ -64,7 +64,7 @@ Developers author the executable tree. Model output is data and is never implici
 
 ### Provider-agnostic orchestration
 
-AML coordinates provider-owned Agent harnesses. It does not replace their models, credentials, tools, sessions, sandboxes, skills, or internal loops.
+AML coordinates coding-agent harnesses through ACP. It does not replace their models, credentials, native tools, skills, or internal loops. AML owns the shared ACP client lifecycle and provider-neutral semantics; thin Agent profiles own only executable selection and mappings ACP does not standardize.
 
 ### Extensible provider ecosystem
 
@@ -76,7 +76,7 @@ Use ordinary TypeScript for composition, branching, dependencies, and explicit p
 
 ### Capability visibility
 
-An Agent receives only its declared AML capabilities. Provider-native capabilities and inherited environment behavior must remain visible rather than being presented as portable guarantees.
+JavaScript Tools and MCP servers are invocation-scoped grants. Native filesystem, shell, and network access is requested through optimistic `<Agent permissions>` defaults rather than repetitive Tool declarations. The active Sandbox, not ACP permission prompts, is the security boundary for model-controlled operations.
 
 ### Typed boundaries
 
@@ -184,6 +184,7 @@ The status table is the canonical implementation tracker. A slice moves to `Done
 | Slice 19 | Modal Sandbox package                          | Done              |
 | Slice 20 | Shared Workspace persistence and S3 provider   | Done              |
 | Slice 21 | `<File>` and sandboxed `<Script>` composition  | Done              |
+| Slice 22 | Canonical ACP coding-agent foundation          | Done              |
 
 Allowed statuses are `Pending`, `In progress`, `Evaluating`, `Blocked`, and `Done`. `Evaluating` means a working implementation exists but is not yet accepted as stable public API. A blocked slice includes its blocker directly in the status cell.
 
@@ -241,15 +242,21 @@ Stable public API contains behavior accepted in `SPEC.md` and proven through pro
 
 AML separates three provider responsibilities:
 
-- Agent providers own model or coding-harness sessions, provider-native capabilities, structured output mapping, and session cleanup.
-- Sandbox providers own disposable execution environments and expose only the bounded runtime capabilities AML requires.
+- The shared ACP engine owns built-in coding-agent sessions, authored turns, MCP bridges, streaming, cancellation, and cleanup.
+- Agent profiles own ACP executable selection, model and system mapping, native permission mapping, credentials, and provider-specific configuration.
+- Sandbox providers own disposable execution environments and expose bounded command execution plus safe long-lived process spawning.
 - Workspace providers own durable materialization, optional cross-process locking, persistence, and release.
 
 These boundaries compose without pretending that every provider has identical capabilities. Unsupported combinations fail explicitly.
 
-Built-in Agent integrations currently cover OpenCode, Codex, and Pi. Built-in Sandbox integrations cover trusted
-local execution, Docker, Daytona, and Modal. Built-in Workspace integrations cover direct local directories, staged
-filesystem persistence, and S3-compatible object storage through the shared archive-or-folder persistence engine.
+Built-in Agent profiles cover OpenCode, Codex, and Pi. They must all use the same ACP engine on the trusted local
+host and in every supported Sandbox. Built-in Sandbox integrations cover trusted local execution, Docker, Daytona,
+and Modal. Built-in Workspace integrations cover
+direct local directories, staged filesystem persistence, and S3-compatible object storage through the shared
+archive-or-folder persistence engine.
+
+`AgentProvider` remains a public structural extension point. Deterministic tests and application-specific providers
+may implement it directly, but a provider that claims built-in coding-agent or Sandbox portability must use ACP.
 
 ### Definition and capability rules
 
@@ -275,7 +282,8 @@ Examples consume the built public package rather than repository internals. Prov
 Dependencies must have one clear owner and replace meaningful code AML would otherwise maintain.
 
 - The SDK owns provider-neutral runtime, schema, cancellation, scheduling, and tracing dependencies.
-- A provider owns the vendor SDKs and process or network libraries required by that integration.
+- The shared ACP engine owns the ACP client SDK, process/session lifecycle, MCP bridges, and protocol translation.
+- An Agent profile owns only its ACP adapter dependency and provider-specific configuration.
 - Provider-specific dependencies must not leak their types or lifecycle into the AML contracts.
 - Real credentials, daemons, containers, and network calls remain explicit integration concerns.
 - Ordinary asynchronous evaluation continues to use platform primitives rather than a task-graph engine, service locator, or plugin container.
@@ -309,7 +317,7 @@ adding directory-copy or Git-specific primitives.
 
 ### Post-MVP orchestration — delivered
 
-MCP grants, component-local evaluation, structured results, bounded Agent concurrency, and FollowUps are implemented and accepted. Codex added a second substantially different Agent harness. Runtime tracing and cleanup hooks made execution observable without changing workflow behavior.
+MCP grants, component-local evaluation, structured results, bounded Agent concurrency, and FollowUps are implemented and accepted. Codex added a second substantially different Agent harness and exposed the cost of maintaining separate vendor lifecycles. Runtime tracing and cleanup hooks made execution observable without changing workflow behavior.
 
 ### Experimental orchestration — evaluating
 
@@ -321,9 +329,30 @@ Neither primitive should be described as stable public API until its status move
 
 ### Provider expansion — delivered
 
-Pi added an embedded Agent harness with a different capability profile from OpenCode and Codex. Daytona and Modal proved that the narrow Sandbox contract can map to hosted disposable environments. Local execution remains available for trusted development, and Docker remains the local image-based boundary.
+Pi added a third coding-agent harness with a different capability profile from OpenCode and Codex. Daytona and Modal proved that the narrow Sandbox contract can map to hosted disposable environments. Local execution remains available for trusted development, and Docker remains the local image-based boundary.
 
 These integrations intentionally preserve provider differences. AML guarantees only the common contract each adapter can honestly implement and rejects unsupported capability combinations.
+
+### ACP foundation — implemented and validated
+
+The production refactor replaced the independent Codex SDK/CLI, OpenCode server/CLI, and embedded Pi lifecycles with
+one ACP session engine and three thin profiles. The canonical `codexAgent()`, `opencodeAgent()`, and `piAgent()`
+factories now share process management, permission handling, JavaScript Tool bridging, structured submission,
+cancellation, and cleanup.
+
+Focused tests and live smokes prove Codex, OpenCode, and Pi on Local, Daytona, and Modal. Those nine cells each execute
+native shell work, call a host JavaScript Tool, submit schema-validated structured output, and persist a Workspace
+change. The full Cartesian matrix has been exercised through Local, Docker, Daytona, and Modal.
+
+The implemented foundation includes:
+
+- Codex, OpenCode, and Pi use ACP for trusted local and sandboxed execution
+- JavaScript Tools use one shared invocation-scoped MCP bridge
+- structured output uses one shared invocation-scoped MCP submission Tool
+- native permission mapping and Sandbox security semantics match `SPEC.md`
+- one Cartesian Codex, OpenCode, and Pi × Local, Docker, Daytona, and Modal smoke definition
+- the public factories keep the normal `codexAgent()`, `opencodeAgent()`, and `piAgent()` names
+- the experimental `codexAcpAgent()` factory and all legacy SDK, CLI, embedded, and server lifecycles are deleted
 
 ### Website and release — delivered
 
@@ -348,10 +377,13 @@ Before marking a slice `Done`:
 
 ## Immediate implementation boundary
 
-All numbered delivery work is implemented. Slices 13 and 16 remain under product and API evaluation; every other
-slice is complete. The narrow common Sandbox runtime has local, container, and hosted proofs. Workspace persistence
-has staged filesystem and S3-compatible object-store proofs in both archive and folder formats. Cloudflare Workers
-remain a portability check until implementation work is approved.
+Slice 22 is complete. New Agent functionality belongs in the
+shared ACP engine or a thin profile; the deleted legacy adapters are not parallel product paths. AgentOS is a later
+provider slice and must not add a second Agent lifecycle.
+
+Slices 13 and 16 remain under product and API evaluation. Workspace persistence retains its staged filesystem and
+S3-compatible object-store proofs. Cloudflare Workers remain a portability check rather than an active runtime
+target.
 
 ## WORKER RUNTIME
 
@@ -373,36 +405,46 @@ A Worker build would require an automated compatibility proof and bundle inspect
 
 ### Agent execution inside Sandboxes
 
-AML already bridges an active Sandbox into compatible Agent providers through a bounded command-execution contract. Existing integrations prove three useful patterns:
+AML launches every built-in coding Agent through the same ACP process/session boundary. `SandboxRuntime.spawn()`
+supplies provider-neutral byte streams, input, exit, cancellation, and process-tree cleanup while ACP supplies
+initialization, session creation, streaming updates, prompts, and cancellation.
 
-- run an installed coding-agent CLI inside the Sandbox
-- use a provider's non-server command mode for one complete turn
-- keep the Agent loop outside the Sandbox while redirecting its shell capability into the Sandbox
+The Agent process runs inside the selected Sandbox beside the materialized Workspace. On the trusted local host, the
+same engine uses a local process launcher. AML does not keep the Agent loop on the host while redirecting selected
+shell commands into a Sandbox, because that creates different semantics for every Agent and leaves native filesystem
+behavior outside the claimed execution boundary.
 
-This is enough for bounded execution, but it is not a rich remote-agent protocol. Streaming, approvals, interruption, reconnection, durable sessions, and background-process ownership would require a different boundary. The common Sandbox contract should not absorb those capabilities before a real workflow proves they are necessary.
+The environment author supplies compatible ACP executables in the selected host, image, snapshot, or Sandbox
+package set. AML does not install Agents implicitly.
 
-### Generic Sandbox Agent option
+### ACP boundary
 
-A generic Sandbox Agent could run an Agent-host daemon inside any reachable Linux environment, including local processes, Docker, Cloudflare Sandbox, Modal, or Daytona. Rivet Sandbox Agent is one candidate because it presents a common network protocol over multiple coding harnesses.
+ACP is the canonical in-process-to-Agent protocol, not an optional generic daemon experiment. AML uses its standard
+stdio transport over the process handle supplied by each Sandbox provider. A future network transport may extend
+where that process runs, but must not create another Agent lifecycle.
 
-In that architecture, AML continues to own workflow evaluation, prompts, FollowUps, typed output, limits, tracing, and resource scopes. The in-sandbox daemon owns processes, stdio, Agent-specific protocols, sessions, permissions, and streaming.
-
-The AML side should depend on an ordinary request/response transport supplied by platform composition. That keeps Cloudflare bindings out of the generic Agent implementation and allows a local AML client to reach a Cloudflare-hosted Sandbox through an authenticated service endpoint.
+AML continues to own workflow evaluation, authored prompts and FollowUps, typed output validation, limits, tracing,
+and resource scopes. ACP owns the interoperable session exchange. The Agent owns its internal model/tool loop. The
+Sandbox owns confinement and process cleanup.
 
 ### Decision
 
-Do not implement the Worker SDK entry, generic Sandbox Agent, Cloudflare Sandbox provider, or remote Agent transport yet. Together they introduce a new runtime build, daemon lifecycle, custom images, streaming transport, platform connectivity, and capability mappings without a demonstrated product need.
+Adopt ACP as the only canonical built-in coding-agent lifecycle. Keep `AgentProvider` above ACP as AML's public
+orchestration port, keep `SandboxRuntime.spawn()` below ACP as the process transport, and implement provider
+differences as profiles. Do not add a second generic remote-Agent daemon, vendor SDK lifecycle, one-shot CLI path, or
+embedded Agent loop.
 
-Revisit this path when an application must run AML inside an isolate, a Node backend is operationally unacceptable, or bounded command execution fails because the workflow requires streaming, reconnection, approvals, or durable remote sessions.
-
-The first approved work should be a disposable compatibility spike that proves one real Agent turn, streaming, cancellation, cleanup, and Workspace handoff before any new contract is promoted into `SPEC.md`.
+The Worker-safe SDK entry and Cloudflare Sandbox provider remain deferred. If approved later, they must host or reach
+the same ACP session engine rather than introduce a platform-specific Agent protocol.
 
 Research references:
 
+- [Agent Client Protocol architecture](https://agentclientprotocol.com/get-started/architecture)
+- [Agent Client Protocol session setup](https://agentclientprotocol.com/protocol/v1/session-setup)
 - [Cloudflare Sandbox SDK](https://developers.cloudflare.com/sandbox/)
 - [Cloudflare Containers](https://github.com/cloudflare/containers)
 - [OpenAI Codex App Server architecture](https://openai.com/index/unlocking-the-codex-harness/)
-- [Rivet Sandbox Agent](https://github.com/rivet-dev/sandbox-agent)
+- [AgentOS](https://agentos-sdk.dev/docs/)
 
 ## Explicitly deferred
 
@@ -419,7 +461,7 @@ Research references:
 - CLI and TUI
 - generic plugin infrastructure
 - automated package publication
-- Worker-specific SDK entry and generic remote Agent-host integration
+- Worker-specific SDK entry and network ACP transport
 - first-class Git checkout, worktree, commit, push, or pull-request behavior
 - Workspace volume mounts coordinated with compatible Sandbox providers
 - network-mounted Workspaces, including SMB and NFS-style filesystems
@@ -438,7 +480,6 @@ These remain product questions until resolved into `SPEC.md`:
 - Which trace events are stable public API?
 - What is the first useful artifact contract for large data?
 - Where should retries and schema repair live?
-- What capability beyond bounded Sandbox command execution is first proven necessary by a concrete remote Agent workflow?
 - What should an Agent provider expose about inherited host configuration?
 - Should a strict capability mode reject provider-inherited MCP servers that cannot be disabled?
 - Should local MCP server execution location be explicit, or remain entirely adapter-owned?

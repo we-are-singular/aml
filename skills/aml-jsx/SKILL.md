@@ -75,7 +75,7 @@ Read [authoring-workflows.md](references/authoring-workflows.md) for nesting, pa
 Prefer AML's public definitions over provider-specific glue:
 
 - Define JavaScript tools with `defineTool()` and grant them with `<Tool use={tool} />`.
-- Grant provider-native tools with `<Tool name="..." />`.
+- Configure native filesystem, shell, and network access with `<Agent permissions={...}>`; omitted permissions default optimistically on.
 - Define stdio or Streamable HTTP MCP servers with `defineMcpServer()` and grant them with `<Mcp use={server} />`.
 - Add reusable instructions with inline `<Skill>` content or `<Skill src="..." />`.
 - Place Agents inside `<Sandbox>` and `<Workspace>` only when the workflow needs those boundaries.
@@ -99,7 +99,7 @@ const Modal = modalSandbox({ image: "node:26" })
 
 Keep provider selection outside reusable workflow components when practical. Use `Agent` props such as `model` and `cwd` only for invocation-level overrides; keep provider-owned credentials and defaults in the provider factory.
 
-OpenCode's `config` and Pi's `providers` options deliberately retain their vendor SDK shapes. Do not translate them into a generic AML credential object. Pi is embedded as a package dependency and does not require a global Pi installation; it can use explicit provider configuration or Pi's ambient credential discovery.
+Codex, OpenCode, and Pi are thin profiles over AML's shared ACP session engine. Keep provider configuration on the selected factory and preserve vendor-native concepts where the profile exposes them. The selected local or Sandbox environment must contain the compatible ACP Agent executable; AML does not install one implicitly.
 
 Read [providers-and-testing.md](references/providers-and-testing.md) for runtime defaults, tracing, deterministic tests, and provider conformance.
 

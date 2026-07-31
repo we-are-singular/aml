@@ -12,7 +12,7 @@ AML lets you describe agents, prompts, capabilities, execution environments, dur
 
 Agent SDKs are good at running one provider session. Real workflows usually need more: parallel specialists, ordered synthesis, shared context, custom JavaScript tools, model-specific adapters, sandbox boundaries, durable files, follow-up turns, and useful traces.
 
-Without a shared runtime, those concerns become orchestration code tied to one provider. AML keeps the workflow declarative while leaving each Agent provider responsible for its own model sessions and native capabilities.
+Without a shared runtime, those concerns become orchestration code tied to one provider. AML keeps the workflow declarative and uses the Agent Client Protocol (ACP) as the canonical session boundary for built-in coding agents.
 
 ```text
 AML tree
@@ -93,14 +93,12 @@ The workflow stays the same when the provider changes. Replace `OpenCode` with a
 import { piAgent } from "@aml-jsx/sdk"
 
 const Pi = piAgent({
+  env: { OPENCODE_API_KEY: process.env.OPENCODE_API_KEY ?? "" },
   model: "opencode-go/glm-5.1",
-  providers: {
-    "opencode-go": { apiKey: process.env.OPENCODE_API_KEY },
-  },
 })
 ```
 
-Pi is embedded through `@earendil-works/pi-coding-agent`; it does not require a global Pi installation or local Pi configuration. Its `providers` option uses Pi's native provider shape, while omitted configuration falls back to Pi's normal credential discovery.
+Codex, OpenCode, and Pi use compatible ACP Agent executables. Their normal public factories are thin profiles over one shared session engine, so changing the provider does not select a different local-versus-Sandbox lifecycle. The selected host, image, snapshot, or package set must contain the compatible executable; AML does not install Agents implicitly.
 
 ## Coding agents
 
@@ -117,20 +115,20 @@ workflows with `@aml-jsx/sdk`.
 
 ## Primitives
 
-| Primitive            | Purpose                                                                                                                      |
-| -------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| `<Agent>`            | Runs one provider-owned Agent session after its prompt, System content, capabilities, and child Agent results have resolved. |
-| `<System>`           | Adds resolved content to the owning Agent's system prompt. Multiple System blocks are joined in authored order.              |
-| `<Tool>`             | Grants the owning Agent a provider-native Tool by name or a JavaScript Tool created with `defineTool()`.                     |
-| `<Skill>`            | Adds reusable inline or local-file instructions to the owning Agent.                                                         |
-| `<File>`             | Writes resolved text, including Agent output, beneath the active Workspace before later siblings run.                        |
-| `<Mcp>`              | Grants the owning Agent a provider-native MCP server by name or an explicit server created with `defineMcpServer()`.         |
-| `<FollowUp>`         | Adds a later turn to the same Agent session. FollowUps are flat, ordered, and resolved before the session starts.            |
-| `<Sandbox>`          | Acquires an ephemeral execution environment and scopes a narrowed filesystem policy to descendant Agents.                    |
-| `<Script>`           | Executes resolved source or one literal command through the enclosing Sandbox runtime and returns standard output.           |
-| `<Workspace>`        | Materializes durable files that can survive and be shared across disposable Sandbox leases.                                  |
-| `<Context.Provider>` | Provides an immutable application dependency to descendant components without rendering it into Agent prompts.               |
-| `<>...</>`           | Groups AML values without adding prompt text or another runtime boundary.                                                    |
+| Primitive            | Purpose                                                                                                              |
+| -------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| `<Agent>`            | Runs one Agent session after its prompt, System content, capabilities, and child Agent results have resolved.        |
+| `<System>`           | Adds resolved content to the owning Agent's system prompt. Multiple System blocks are joined in authored order.      |
+| `<Tool>`             | Grants the owning Agent a JavaScript Tool created with `defineTool()`.                                               |
+| `<Skill>`            | Adds reusable inline or local-file instructions to the owning Agent.                                                 |
+| `<File>`             | Writes resolved text, including Agent output, beneath the active Workspace before later siblings run.                |
+| `<Mcp>`              | Grants the owning Agent a provider-native MCP server by name or an explicit server created with `defineMcpServer()`. |
+| `<FollowUp>`         | Adds a later turn to the same Agent session. FollowUps are flat, ordered, and resolved before the session starts.    |
+| `<Sandbox>`          | Acquires an ephemeral execution environment and scopes a narrowed filesystem policy to descendant Agents.            |
+| `<Script>`           | Executes resolved source or one literal command through the enclosing Sandbox runtime and returns standard output.   |
+| `<Workspace>`        | Materializes durable files that can survive and be shared across disposable Sandbox leases.                          |
+| `<Context.Provider>` | Provides an immutable application dependency to descendant components without rendering it into Agent prompts.       |
+| `<>...</>`           | Groups AML values without adding prompt text or another runtime boundary.                                            |
 
 ## Core APIs
 
@@ -142,8 +140,8 @@ workflows with `@aml-jsx/sdk`.
 | `defineMcpServer()`                   | Creates an immutable provider-neutral MCP descriptor for a local stdio process or remote Streamable HTTP server. |
 | `createContext()` / `useContext()`    | Defines and reads immutable dependencies scoped through the AML tree.                                            |
 | `defineAgentProvider()`               | Defines an Agent harness adapter implementing AML's provider contract.                                           |
-| `AbstractAgentProvider`               | Optional template for provider sessions, authored turns, cancellation, and invocation cleanup.                   |
-| `AgentProviderSession`                | Narrow invocation session implemented by Agent adapters using the lifecycle template.                            |
+| `AbstractAgentProvider`               | Optional lifecycle template for custom structural providers outside the built-in ACP path.                       |
+| `AgentProviderSession`                | Narrow invocation session available to custom providers using that lifecycle template.                           |
 | `createAgentProviderTurns()`          | Validates and captures ordered initial and FollowUp turns for a provider session.                                |
 | `executeAgentProviderSession()`       | Executes a captured session with shared cancellation, result selection, and cleanup semantics.                   |
 | `defineSandboxProvider()`             | Defines an ephemeral execution provider.                                                                         |
@@ -160,9 +158,9 @@ The public SDK includes the runtime, built-in integrations, and testing utilitie
 
 | Role      | Source                                           | Public export           | Notes                                                                                                                                             |
 | --------- | ------------------------------------------------ | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Agent     | [OpenCode adapter](./providers/agents/opencode)  | `opencodeAgent()`       | Runs OpenCode sessions with model overrides, JavaScript Tools, MCP grants, FollowUps, cancellation, and structured output.                        |
-| Agent     | [Codex adapter](./providers/agents/codex)        | `codexAgent()`          | Runs Codex SDK threads with model overrides, read-only host Tools, JavaScript Tools, MCP grants, FollowUps, and structured output.                |
-| Agent     | [Pi adapter](./providers/agents/pi)              | `piAgent()`             | Embeds Pi SDK sessions with provider/model selection, host and JavaScript Tools, FollowUps, cancellation, and schema-validated JSON output.       |
+| Agent     | [OpenCode adapter](./providers/agents/opencode)  | `opencodeAgent()`       | OpenCode ACP profile with model/system mapping and native capability metadata.                                                                    |
+| Agent     | [Codex adapter](./providers/agents/codex)        | `codexAgent()`          | Codex ACP profile using the maintained Codex ACP adapter.                                                                                         |
+| Agent     | [Pi adapter](./providers/agents/pi)              | `piAgent()`             | Pi ACP profile using the maintained Pi ACP adapter.                                                                                               |
 | Sandbox   | [Local adapter](./providers/sandboxes/local)     | `localSandbox()`        | Runs the common Sandbox runtime as trusted host processes for development; it is explicitly non-isolating.                                        |
 | Sandbox   | [Docker adapter](./providers/sandboxes/docker)   | `dockerSandbox()`       | Starts a user-selected image, mounts the Workspace, and exposes the common bounded command runtime without building or provisioning the image.    |
 | Sandbox   | [Daytona adapter](./providers/sandboxes/daytona) | `daytonaSandbox()`      | Creates a Daytona image or snapshot, transfers the Workspace, runs bounded commands, reconciles writable changes, and deletes the remote Sandbox. |
@@ -172,7 +170,7 @@ The public SDK includes the runtime, built-in integrations, and testing utilitie
 | Workspace | [S3 adapter](./providers/workspaces/s3)          | `s3Workspace()`         | Restores and publishes immutable archive or folder revisions through S3-compatible storage, including R2 and MinIO.                               |
 | Testing   | [Testing entry](./sdk/src/testing.ts)            | `@aml-jsx/sdk/testing`  | Supplies deterministic Agent, Sandbox, and Workspace providers plus reusable conformance suites.                                                  |
 
-The complete built-in compatibility matrix is exercised by the credentialed smoke runner:
+The ACP migration is accepted only when the credentialed smoke runner proves the complete target matrix:
 
 | Sandbox \ Agent | Codex | OpenCode | Pi  |
 | --------------- | ----- | -------- | --- |
@@ -181,11 +179,11 @@ The complete built-in compatibility matrix is exercised by the credentialed smok
 | Daytona         | Yes   | Yes      | Yes |
 | Modal           | Yes   | Yes      | Yes |
 
-These proofs use read-write Workspaces because Local, Daytona, and Modal reject access modes they cannot enforce. Codex and OpenCode run their installed CLIs beside the materialized Workspace through the common `SandboxRuntime`; the selected host, image, or snapshot must already contain that executable. Pi remains embedded in AML and routes its declared `bash` Tool through the same runtime. Sandbox providers do not install Agents implicitly.
+Every cell launches its Agent through the same shared ACP engine and `SandboxRuntime.spawn()`. These proofs use read-write Workspaces where a provider cannot enforce read-only access. The selected host, image, or snapshot must contain the required executable. Sandbox providers do not install Agents implicitly.
 
-`<System>`, `<Skill>`, `<FollowUp>`, Context, and tree evaluation are runtime-owned and work independently of the selected Agent provider. JavaScript Tool and MCP execution ultimately depend on the Agent provider and environment. Outside a Sandbox, OpenCode and Codex implement both bridges; Pi implements host and JavaScript Tools and rejects MCP grants. Inside a Sandbox, each adapter rejects capabilities whose transport it cannot enforce instead of falling back to the AML host.
+`<System>`, `<Skill>`, `<FollowUp>`, Context, and tree evaluation are runtime-owned. JavaScript Tools use one AML-owned invocation MCP bridge, and structured output uses one AML-owned final-turn submission Tool. Agent permissions default to read-write filesystem, shell, and network access; the active Sandbox remains the security boundary for model-controlled operations.
 
-Provider factories retain their vendor configuration shapes: `opencodeAgent({ config })` accepts OpenCode's SDK config, while `piAgent({ providers })` accepts Pi's provider map. Both still support their vendor's ambient credential discovery, but neither requires a local profile when configuration is supplied explicitly.
+Provider factories retain typed vendor configuration and process environment inputs. Credentials normally remain in the selected host or Sandbox environment; an application may also pass explicit invocation environment variables without changing the AML tree.
 
 Every Agent adapter resolves configuration with the same authority order: provider defaults, then user inputs, then AML's imperative runtime policy. The implementation uses `defu` for known plain configuration tables and bespoke final objects for arrays, clients, callbacks, Tools, MCP grants, and other authority-bearing values. This preserves each vendor's native schema while preventing user configuration from weakening an authored Sandbox or capability boundary.
 
@@ -266,7 +264,7 @@ Every example is one self-contained AML component. Run one with `npm run example
 | [`concurrency`](./examples/src/core/concurrency.tsx)                     | Runs two specialists concurrently and preserves authored result order for synthesis.                   |
 | [`structured`](./examples/src/core/structured.tsx)                       | Passes schema-validated Agent data into a later text-producing Agent.                                  |
 | [`context`](./examples/src/core/context.tsx)                             | Injects a session repository and captures it inside a JavaScript Tool without adding it to the prompt. |
-| [`follow-up`](./examples/src/core/follow-up.tsx)                         | Authors several turns inside one provider-owned Agent session.                                         |
+| [`follow-up`](./examples/src/core/follow-up.tsx)                         | Authors several turns inside one Agent session.                                                        |
 | [`skill`](./examples/src/capabilities/skill.tsx)                         | Adds reusable inline instructions to an Agent.                                                         |
 | [`mcp`](./examples/src/capabilities/mcp.tsx)                             | Grants one Agent an MCP server while proving sibling capability isolation.                             |
 | [`sandbox`](./examples/src/resources/sandbox.tsx)                        | Narrows nested Sandbox access while sharing one deterministic outer lease.                             |
@@ -323,7 +321,7 @@ Common commands:
 | `npm run example -- review`                                   | Run the review workflow with its deterministic provider.        |
 | `AML_REVIEW_PROVIDER=opencode npm run example -- review`      | Run the review workflow through OpenCode.                       |
 | `AML_REVIEW_PROVIDER=codex npm run example -- review`         | Run the review workflow through Codex.                          |
-| `npm run example -- pi`                                       | Run embedded Pi through `OPENCODE_API_KEY`.                     |
+| `npm run example -- pi`                                       | Run Pi through its ACP adapter and configured credentials.      |
 | `npm run example -- docker`                                   | Run the real Docker Sandbox example.                            |
 | `npm run smoke -- --agent pi --sandbox daytona`               | Run one Agent × Sandbox smoke matrix cell with live traces.     |
 | `npm run smoke -- --agent codex`                              | Run one Agent against every registered Sandbox.                 |
@@ -346,7 +344,7 @@ docker compose down
 
 Smoke files use a dedicated Vitest configuration and stay outside default unit tests. Omitting both smoke filters runs every registered Agent against every registered Sandbox. npm requires the `--` separator before smoke-runner options.
 
-The smoke runner loads the repository's untracked `.env`. Pi and OpenCode use `OPENCODE_API_KEY`, Daytona uses `DAYTONA_API_KEY`, and Modal uses the repository-local `MODAL_API_KEY` and `MODAL_API_SECRET` names as `tokenId` and `tokenSecret`. Modal's own ambient credential names remain `MODAL_TOKEN_ID` and `MODAL_TOKEN_SECRET`. Codex accepts `OPENAI_API_KEY` or the explicit `AML_CODEX_API_KEY`, `AML_CODEX_BASE_URL`, and `AML_CODEX_MODEL` combination for another Responses-compatible provider. `AML_CODEX_HOME` may instead select an already-authenticated writable Codex home that exists inside the chosen environment; AML does not transfer a host login into remote Sandboxes. These environment names configure only the repository's smoke CLI. Applications configure providers through their native factory options.
+The smoke runner loads the repository's untracked `.env`. All three Agent rows use `OPENAI_API_KEY` or `AML_CODEX_API_KEY`; `AML_CODEX_MODEL`, `AML_OPENCODE_MODEL`, and `AML_PI_MODEL` may override their models. Daytona uses `DAYTONA_API_KEY`. Modal uses the repository-local `MODAL_API_KEY` and `MODAL_API_SECRET` names as `tokenId` and `tokenSecret`; Modal's own ambient credential names remain `MODAL_TOKEN_ID` and `MODAL_TOKEN_SECRET`. These environment names configure only the repository's smoke CLI. Applications configure providers through their native factory options.
 
 Commits are checked with lint-staged and commitlint. Pushes run the same formatting, linting, test, and build
 contract enforced by GitHub Actions.

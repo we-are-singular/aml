@@ -15,7 +15,7 @@ AML is a TypeScript-embedded DSL and asynchronous runtime for coordinating agent
 AML is:
 
 - an SDK used from ordinary TypeScript
-- an orchestration layer over provider-owned agent harnesses
+- an orchestration layer over coding-agent harnesses through the Agent Client Protocol (ACP)
 - provider-agnostic at the authored workflow boundary
 - post-order: dependencies resolve before their consumers
 - explicit about capabilities and model execution
@@ -59,17 +59,22 @@ Ordinary TypeScript owns finite control flow, branching, composition, and depend
 
 ### 1.2 Provider-agnostic orchestration
 
-An AML tree may coordinate Agents backed by different harnesses. Each harness keeps its native:
+An AML tree may coordinate Agents backed by different harnesses. ACP is the canonical protocol between AML and every built-in coding-agent harness. AML owns one shared ACP client and session lifecycle; each built-in Agent provider is a thin profile that selects an ACP executable and maps the portable AML request to that Agent's supported ACP configuration.
+
+The same boundary applies whether the Agent process runs on the trusted local host or inside an active Sandbox. Local execution uses a local process launcher; sandboxed execution uses `SandboxRuntime.spawn()`. Local execution is not a second SDK or CLI lifecycle.
+
+Each harness keeps its native:
 
 - model and credentials
 - conversation implementation
 - internal model/tool loop
-- host tools
+- native coding capabilities
 - token and usage accounting
-- sandbox integration
 - provider-specific events
 
-AML standardizes how authored data flows into those boundaries and how their final results flow back into the tree. It does not pretend the providers have identical capabilities.
+AML standardizes session creation, authored turns, MCP attachment, streaming, cancellation, and cleanup through ACP. It does not pretend the providers have identical controls: model selection, system instructions, native permission policy, and other settings remain profile mappings where ACP has no portable field.
+
+`AgentProvider` remains a structural public extension point above ACP. Deterministic test providers and application-specific providers may implement that contract directly. A provider that claims to be a built-in coding-agent integration or claims portable execution inside AML Sandboxes must use the canonical ACP session boundary.
 
 The runtime may supply a default Agent provider, and each Agent may override it with another configured provider instance. `model` is the portable per-Agent provider override. Provider-specific settings remain on the provider's configured factory unless AML later defines a real cross-provider contract for them.
 
@@ -106,7 +111,7 @@ Not every resolved child becomes prompt text:
 
 - text becomes message content
 - `<System>` becomes an Agent system-prompt fragment
-- `<Tool>` becomes an Agent capability
+- `<Tool>` becomes an Agent-scoped JavaScript capability
 - `<Mcp>` becomes an Agent-scoped MCP server grant
 - `<FollowUp>` becomes a staged later message
 - `<Context.Provider>` changes descendant evaluation context
@@ -211,7 +216,7 @@ AML cannot automatically roll back arbitrary effects already performed by an Age
 | `<Agent>`                          | Execute one Agent boundary                                           | Final text                 |
 | `<System>`                         | Contribute resolved text to an Agent's system prompt                 | System descriptor          |
 | `defineAgentProvider()`            | Define an Agent harness adapter                                      | `AgentProvider`            |
-| `<Tool>`                           | Grant a host or JavaScript capability                                | Tool descriptor            |
+| `<Tool>`                           | Grant a JavaScript capability                                        | Tool descriptor            |
 | `defineTool()`                     | Expose a JavaScript function to an Agent                             | Tool definition            |
 | `<Skill>`                          | Resolve reusable instruction text                                    | Text                       |
 | `<File>`                           | Materialize resolved text inside an active Workspace                 | No text                    |
@@ -238,7 +243,7 @@ The normative surface is delivered in phases so the public API grows only after 
 | ---------------------- | -------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
 | Foundation             | JSX values, Fragments, async components, `AmlRuntime`          | Prove single-invocation asynchronous evaluation                                      |
 | MVP 1                  | `<Agent>`, `<System>`, `defineAgentProvider()`                 | Establish the provider-neutral execution and message-channel boundary                |
-| MVP 2                  | `<Tool>`, `defineTool()`                                       | Add scoped host and JavaScript capabilities                                          |
+| MVP 2                  | `<Tool>`, `defineTool()`                                       | Add scoped JavaScript capabilities                                                   |
 | MVP 3                  | `<Skill>`                                                      | Add reusable instruction resolution                                                  |
 | MVP 4                  | `<Sandbox>`, `defineSandboxProvider()`                         | Add ephemeral execution scope                                                        |
 | MVP 5                  | `<Workspace>`, `defineWorkspaceProvider()`                     | Add durable filesystem scope and complete the MVP                                    |
@@ -324,7 +329,7 @@ An `<Agent>` is one Agent-session boundary. It may contain one initial input and
 ```tsx
 <Agent model="opencode-go/minimax-m3" provider={openCode} system="You are a support operations lead.">
   <System>Prefer concrete operational evidence.</System>
-  <Tool name="support.search" />
+  <Tool use={searchSupport} />
   Investigate customer 42.
 </Agent>
 ```
@@ -335,6 +340,11 @@ Props:
 interface AgentProps {
   children?: AmlRenderable
   model?: string
+  permissions?: {
+    filesystem?: "read-only" | "read-write"
+    network?: boolean
+    shell?: boolean
+  }
   provider?: AgentProvider
   system?: string
 }
@@ -346,6 +356,22 @@ interface AgentProps {
 
 `system` is the concise fixed-text system prompt. `<System>` is the composable form for resolved asynchronous content. Provider-specific settings that have no portable AML semantics belong to configured provider instances, not arbitrary Agent props or an untyped `providerOptions` bag.
 
+`permissions` describes the native coding environment requested from the Agent harness. Omitted fields default optimistically to `{ filesystem: "read-write", network: true, shell: true }`: a coding Agent can inspect and edit its Workspace, execute commands, and use the network without repetitive `<Tool>` declarations. A profile maps these portable requests to its native controls and reports any control it cannot express exactly.
+
+Agent permissions are not a security boundary. An enclosing read-only Sandbox narrows the effective Agent filesystem permission to `"read-only"`; other Sandbox network and process policy remains authoritative regardless of the Agent request. A profile must never claim that an Agent-level setting widens the active Sandbox policy.
+
+For built-in coding agents, the selected provider executes this plan through one ACP session:
+
+1. launch the provider profile's ACP Agent through the active Sandbox process launcher or the trusted local launcher
+2. initialize ACP and negotiate capabilities
+3. create one session at the effective Workspace working directory with every explicit MCP server and AML-owned bridge, while applying profile policy for named native servers
+4. apply profile-owned mappings for the selected model, system instructions, and native capability policy
+5. send the initial prompt and each FollowUp sequentially through that session
+6. cancel through ACP when supported, then terminate the invocation-owned process tree during cleanup
+7. close all invocation-owned MCP bridges and process streams before `AgentProvider.run()` settles
+
+ACP session identifiers and protocol events remain provider implementation details. AML exposes only its provider-neutral result, trace, and lifecycle contracts.
+
 ### 5.1 Agent plan
 
 AML completely resolves Agent children before opening the provider session. The conceptual result is an Agent plan:
@@ -356,6 +382,7 @@ interface AgentPlan {
   followUps: readonly string[]
   mcpServers: readonly AgentMcpServer[]
   model?: string
+  permissions: AgentPermissions
   system: string
   systemFragments: readonly string[]
   tools: readonly AgentTool[]
@@ -613,20 +640,17 @@ Rules:
 
 ## 8. Tools
 
-Tools are capabilities, not render-time calls.
+Tools are application-defined JavaScript capabilities, not render-time calls and not aliases for an Agent's native Unix tools.
 
 `<Tool>` is a capitalized exported component. AML does not define lowercase HTML-like intrinsic elements.
 
 ```ts
-type ToolProps = { name: string; use?: never } | { name?: never; use: AmlTool }
+interface ToolProps {
+  use: AmlTool
+}
 
 type AmlJsonValue =
   null | boolean | number | string | readonly AmlJsonValue[] | { readonly [key: string]: AmlJsonValue }
-
-interface AgentHostTool {
-  kind: "host"
-  name: string
-}
 
 interface AgentJavaScriptTool {
   description: string
@@ -636,7 +660,7 @@ interface AgentJavaScriptTool {
   name: string
 }
 
-type AgentTool = AgentHostTool | AgentJavaScriptTool
+type AgentTool = AgentJavaScriptTool
 
 interface AgentToolExecutionContext {
   signal: AbortSignal
@@ -648,21 +672,9 @@ interface AmlTool extends AgentJavaScriptTool {
 }
 ```
 
-Tool names and JavaScript Tool descriptions must be non-empty strings equal to their trimmed forms. AML never silently normalizes either value. A provider whose native tool protocol requires an object-root input schema must reject an incompatible Tool before opening the Agent session.
+Tool names and descriptions must be non-empty strings equal to their trimmed forms. AML never silently normalizes either value. A provider whose native tool protocol requires an object-root input schema must reject an incompatible Tool before opening the Agent session.
 
-### 8.1 Host tools
-
-```tsx
-<Agent>
-  <Tool name="read" />
-  <Tool name="grep" />
-  Inspect the authentication flow.
-</Agent>
-```
-
-A named Tool refers to a capability owned by the selected provider or agent host. The adapter must reject names it cannot safely map.
-
-### 8.2 JavaScript tools
+### 8.1 JavaScript tools
 
 `defineTool()` exposes an in-process JavaScript function:
 
@@ -717,16 +729,18 @@ function SupportAgent() {
 }
 ```
 
-### 8.3 Capability scope
+Built-in coding-agent providers expose JavaScript Tools through one AML-owned, invocation-scoped MCP server supplied during ACP session creation. The bridge authenticates calls, applies the transport normalization above, executes the exact registered `defineTool()` capability in the AML host, and closes after the complete Agent session. Agent profiles must not maintain separate vendor-specific JavaScript Tool transports.
 
-Every Agent declares its own Tools. Tools are not inherited from parent Agents. This makes each Agent a capability boundary.
+### 8.2 Capability scope
 
-`AmlRuntimeOptions.allowedTools` may further restrict both host and JavaScript Tool names:
+Every Agent declares its own Tools. Tools are not inherited from parent Agents. JavaScript Tools are an exact invocation capability set. Native filesystem, shell, and network behavior comes from the Agent's permission request and the enclosing Sandbox, not from `<Tool>`.
+
+`AmlRuntimeOptions.allowedTools` may further restrict JavaScript Tool names:
 
 ```tsx
 const runtime = new AmlRuntime({
   agentProvider: provider,
-  allowedTools: ["read", "lookup_customer"],
+  allowedTools: ["lookup_customer"],
 })
 ```
 
@@ -734,7 +748,7 @@ An undeclared name fails before the Agent executes. When the allowlist is omitte
 
 A Tool outside an Agent is invalid. Duplicate names in one Agent are invalid. Trusted JavaScript tools execute in the AML host process; `<Sandbox>` does not automatically confine arbitrary host functions.
 
-### 8.4 Transport input normalization
+### 8.3 Transport input normalization
 
 The declared input schema remains authoritative. Before schema validation, AML snapshots every non-omitted provider value once into stable JSON and uses that same snapshot whether content tracing is disabled or enabled. This prevents stateful accessors or proxies from presenting different data to tracing and validation. Invalid transport JSON throws `ToolInputError`; omitted input remains `undefined` for the schema algorithm below.
 
@@ -812,7 +826,9 @@ interface AmlMcpServer {
 type AgentMcpServer = { kind: "named"; name: string } | { definition: AmlMcpServer; kind: "configured" }
 ```
 
-`defineMcpServer()` is synchronous and performs no I/O. It requires a non-empty normalized server name, requires a non-empty normalized `stdio` command or an HTTP(S) Streamable HTTP URL, validates every transport field, snapshots arrays and string records, normalizes a URL input to its string form, and freezes the complete descriptor. `<Mcp use>` accepts only the exact identity returned by `defineMcpServer()`, including across physical SDK copies; clones and structurally similar objects are not definitions. The Agent provider remains the MCP client: it maps the descriptor to its native configuration, launches or connects to the server, performs MCP initialization, exposes supported server capabilities to the Agent session, and owns shutdown.
+`defineMcpServer()` is synchronous and performs no I/O. It requires a non-empty normalized server name, requires a non-empty normalized `stdio` command or an HTTP(S) Streamable HTTP URL, validates every transport field, snapshots arrays and string records, normalizes a URL input to its string form, and freezes the complete descriptor. `<Mcp use>` accepts only the exact identity returned by `defineMcpServer()`, including across physical SDK copies; clones and structurally similar objects are not definitions.
+
+For a built-in coding agent, AML passes every explicit MCP descriptor through ACP `session/new`. Every ACP Agent must support stdio MCP servers; a provider profile must reject a configured transport the Agent does not advertise, including Streamable HTTP when unsupported. A named server remains provider-native configuration: the profile must enable or verify that exact name or fail closed. The ACP Agent becomes the MCP client and owns protocol initialization and native capability exposure. AML owns any process or bridge it created and waits for that resource to close during invocation cleanup.
 
 The transport names follow the MCP specification. With `stdio`, the client launches and terminates the server process. With Streamable HTTP, the client connects to one independent HTTP endpoint. Provider-specific and custom transports are outside the portable descriptor; a provider-native named server may still use them.
 
@@ -837,7 +853,7 @@ MCP servers may expose tools, resources, prompts, and other protocol capabilitie
 
 Declared MCP servers are the portable AML grant set. If a provider harness also inherits MCP servers from host configuration and cannot disable them, the adapter must report those inherited capabilities and must not claim a clean capability profile.
 
-When a provider expresses capability grants through wildcard patterns, its adapter must prove that each generated pattern covers only the declared server. It must reject declared and inherited server names whose provider-normalized namespaces overlap in either direction. Provider-native Tool names containing wildcard syntax are also invalid as exact `<Tool name>` grants, and an exact host Tool ID must not overlap an inherited MCP namespace that can produce the same final ID. An authored exact grant must never broaden the deny-all capability profile or select a capability from another source.
+When a provider expresses MCP grants through wildcard patterns, its adapter must prove that each generated pattern covers only the declared server. It must reject declared and inherited server names whose provider-normalized namespaces overlap in either direction. An authored grant must never broaden the explicit MCP capability set or select a capability from another source.
 
 ### 9.2 Sandbox boundary
 
@@ -853,12 +869,7 @@ A `stdio` MCP server may run in the provider environment or inside the active Sa
 
 ```tsx
 async function Workflow() {
-  const research = await evaluate(
-    <Agent>
-      <Tool name="read" />
-      Research the customer.
-    </Agent>
-  )
+  const research = await evaluate(<Agent>Research the customer.</Agent>)
 
   return <Agent>Make a decision using: {research}</Agent>
 }
@@ -880,6 +891,8 @@ With a schema, the supplied AML must resolve to exactly one Agent, optionally th
 `<Loop>` is invalid anywhere inside a schema-bearing `evaluate()` subtree, including the selected Agent's prompt, System, Skill, and FollowUp channels. A Loop may open multiple fresh Agent sessions and therefore cannot satisfy the structured call's exactly-one-Agent execution contract.
 
 With FollowUps, the schema applies only to the final turn.
+
+Built-in coding-agent providers implement this contract through one AML-owned, invocation-scoped MCP submission Tool supplied during ACP session creation. AML exposes that Tool only for a structured invocation, instructs the Agent profile to submit exactly one final value on the last authored turn, captures the submitted JSON value, and validates it through the original Standard Schema after the provider returns. ACP does not currently define a portable JSON Schema output field, so profiles must not implement separate vendor-native structured-output lifecycles. Missing, duplicate, premature, or invalid submissions reject the Agent.
 
 ### 10.1 Invocation scope
 
@@ -1176,11 +1189,11 @@ Independent child environments, copy-on-write forks, and provider changes are di
 
 ### 13.2 Provider enforcement
 
-The selected Agent adapter must explicitly support the effective Sandbox session. If it cannot attach its model-controlled actions to that environment, evaluation fails. AML must never silently fall back to unrestricted host execution.
+The selected built-in Agent profile must be launchable through the effective Sandbox runtime. AML starts its ACP Agent with `SandboxRuntime.spawn()` at the effective Workspace cwd. If the environment does not contain a compatible ACP executable or cannot provide the negotiated session capabilities, evaluation fails. AML must never move the Agent process to the host or fall back to a provider-specific CLI or SDK lifecycle.
 
-The model may be remote while its filesystem and Tool execution occur in the current Sandbox. Model location and execution-environment location are separate concerns.
+The model API may remain remote while the coding-agent process, native filesystem operations, and command execution occur in the current Sandbox. Model location and execution-environment location are separate concerns.
 
-The built-in Codex, OpenCode, and Pi adapters implement `supportsSandbox()` against the same `SandboxRuntime` contract. Compatibility means the runtime enforces the effective root and access view; it does not imply that every provider-native Tool or transport is available inside every Sandbox. Unsupported capabilities must reject before the Agent starts rather than fall back to the AML host.
+The built-in Codex, OpenCode, and Pi profiles implement `supportsSandbox()` against the same process contract. Compatibility means the Sandbox can spawn that profile's ACP executable and enforce the effective root and access view; it does not imply that every provider-native operation or optional ACP capability is available. Unsupported capabilities must reject before the first prompt rather than fall back to the AML host.
 
 Trusted `defineTool()` functions run in the AML process unless they explicitly use Sandbox-scoped capabilities. JSX placement alone cannot confine arbitrary JavaScript.
 
@@ -1243,6 +1256,25 @@ interface SandboxRuntime {
     stdout: string
     stderr: string
   }>
+  spawn(
+    command: string,
+    args?: readonly string[],
+    options?: {
+      cwd?: string
+      env?: Readonly<Record<string, string>>
+      signal?: AbortSignal
+      timeoutMs?: number
+    }
+  ): Promise<{
+    id: string
+    pid?: number
+    stdout: ReadableStream<Uint8Array>
+    stderr: ReadableStream<Uint8Array>
+    write(data: Uint8Array): Promise<void>
+    closeInput(): Promise<void>
+    wait(): Promise<{ exitCode: number }>
+    kill(): Promise<void>
+  }>
 }
 
 interface WorkspaceMaterializationReference<Handle = unknown> {
@@ -1270,11 +1302,13 @@ AML:
 
 Nested Sandboxes emit their own spans but do not acquire or release another lease. If subtree evaluation and release both fail, AML rejects with an `AggregateError` that preserves both errors.
 
-`SandboxLease.handle` remains opaque provider data for Workspace attachment and provider-specific optimization. Portable Agent adapters use the lease's narrow `SandboxRuntime` to execute one literal command with an effective logical working directory. AML deliberately does not standardize files, images, snapshots, ports, background processes, or the union of provider SDK features.
+`SandboxLease.handle` remains opaque provider data for Workspace attachment and provider-specific optimization. Built-in Agent profiles use the lease's narrow `SandboxRuntime.spawn()` to launch one long-lived ACP process with an effective logical working directory. `<Script>`, trusted setup, and provider implementation details may use `exec()` for bounded literal commands. Agent turns must not use `exec()` as a second protocol. AML deliberately does not standardize files, images, snapshots, ports, or the union of provider SDK features.
 
 Descendants receive only the immutable lease identity, handle, and runtime shown by `SandboxSession`; they never receive `release()` or the provider's `acquire()` method. AML retains both lifecycle capabilities privately because it alone owns acquisition and exactly-once release. The captured provider name is descriptive identity, not an authority-bearing provider object.
 
-The runtime's `root` and `cwd` use AML's logical Workspace namespace. A provider maps an `exec()` working directory to its host, container, or remote filesystem. `exec()` preserves argument boundaries and returns non-zero process exit codes as results. Transport failure, cancellation, timeout, and inability to start the command reject. Providers must bound captured output.
+The runtime's `root` and `cwd` use AML's logical Workspace namespace. A provider maps an `exec()` or `spawn()` working directory to its host, container, or remote filesystem. Both methods preserve argument boundaries. `exec()` returns non-zero process exit codes as results; transport failure, cancellation, timeout, and inability to start the command reject. Providers must bound captured `exec()` output.
+
+`spawn()` returns a provider-neutral process handle. `id` is always present; `pid` is optional because remote backends may expose only a command, exec, or session id. Standard output and error are byte streams whose providers begin buffering before the handle becomes visible. `wait()` captures one immutable exit result. `wait()`, `kill()`, and `closeInput()` are repeatable, and termination targets the spawned process tree rather than only a shell wrapper. `closeInput()` closes AML's writable side and requests the backend's closest stdin half-close; callers must not depend on remote providers exposing a literal pipe EOF. Process tracking is scoped to one lease so releasing one evaluation lane cannot terminate another lane's work. `exec()` implementations built over `spawn()` consume both streams and wait for process completion concurrently so final output cannot race process exit.
 
 The first runtime version supports Agent-local cwd narrowing. It cannot manufacture a narrower root or read-only downgrade after the outer lease is acquired. An Agent adapter must reject an effective nested view unless the runtime actually enforces the effective `root` and `access`.
 
@@ -1369,6 +1403,8 @@ For each acquisition the provider:
 The selected Daytona image or snapshot must contain the shell utilities and `tar` used for transfer plus any Agent dependencies. AML never builds the image or installs the Agent implicitly. The AML host must also provide `tar` for this first full-tree synchronization implementation.
 
 Daytona's command API accepts a shell command string rather than literal argv, so the adapter quotes each command and argument before execution. Daytona returns one combined command output string; the provider maps it to `stdout` and returns an empty `stderr`. Cancellation destroys the disposable Sandbox because Daytona does not expose per-command cancellation through this API.
+
+Daytona sessions stream logs and accept text input, but the SDK does not expose a literal stdin half-close. The process handle therefore treats `closeInput()` as a local write barrier and sends EOT as Daytona's closest input-close signal. ACP cleanup does not rely on that signal to terminate work; `kill()` deletes the invocation-owned session and normalizes Daytona's resulting missing-session race into the cached killed exit result.
 
 The transfer implementation cannot enforce a read-only guest tree. Like Local, Daytona therefore rejects runtime execution under `"read-only"` instead of claiming confinement it does not provide. Read-write reconciliation occurs before the outer Workspace saves its materialization. A failed reconciliation is reported and remote cleanup is still attempted.
 
@@ -1698,6 +1734,7 @@ interface AgentRequest {
   followUps?: readonly string[]
   mcpServers: readonly AgentMcpServer[]
   model?: string
+  permissions: AgentPermissions
   output?: {
     jsonSchema: Readonly<Record<string, AmlJsonValue>>
     type: "json"
@@ -1725,7 +1762,7 @@ interface AgentExecutionContext {
 
 The runtime owns one event bus. Every provider receives a subscriber-only view scoped to the current evaluation through `AgentExecutionContext.events`. Providers may register evaluation-local listeners but cannot emit runtime events. A provider that allocates evaluation-owned resources registers a `once("finish", listener)` callback when it creates them. The runtime awaits finish listeners after every Agent and resource scope has settled and before `evaluate()` completes. A finish-listener failure rejects an otherwise successful evaluation, and failure during both execution and finish handling is preserved as an `AggregateError`. AML authors never call provider cleanup from components or example functions.
 
-Host Tools contain a name. JavaScript Tools contain a name, description, model-facing input schema, and async execution function. MCP servers contain either a provider-native name or one explicit standard transport descriptor.
+JavaScript Tools contain a name, description, model-facing input schema, and async execution function. MCP servers contain either a provider-native name or one explicit standard transport descriptor.
 
 An omitted or empty `followUps` array represents a single-input Agent. When FollowUps are present, the adapter:
 
@@ -1737,6 +1774,18 @@ An omitted or empty `followUps` array represents a single-input Agent. When Foll
 6. returns only the final response
 7. disposes invocation-scoped Tool registrations and MCP connections after the session settles; if the provider cannot remove dynamic registrations, its adapter must use a disposable provider host or reject that capability rather than accumulate registrations in shared provider state
 
+For built-in coding-agent providers, this lifecycle is implemented once by the shared ACP session engine. A profile supplies:
+
+- the command, arguments, and explicit environment needed to launch its ACP Agent
+- capability negotiation requirements
+- model and system-instruction mappings not standardized by ACP
+- native permission mappings and their enforcement limits
+- provider-specific configuration that remains behind the profile boundary
+
+The engine owns process launch, stream pumping, ACP initialization, `session/new`, sequential `session/prompt` calls, updates, cancellation, final response collection, and cleanup. Profiles must not fork that lifecycle or bypass it with a vendor SDK, one-shot CLI command, embedded Agent loop, or provider-specific server.
+
+Without an active Sandbox, the engine uses AML's trusted local process launcher. With an active Sandbox, it uses only that lease's `SandboxRuntime.spawn()`. The selected environment must already contain the profile's compatible ACP executable; providers do not install software implicitly.
+
 Any failed turn rejects `run()`.
 
 The exact internal adapter class structure is not normative. The observable session, ordering, capability, failure, and output semantics are.
@@ -1747,7 +1796,7 @@ The runtime always passes an `AgentExecutionContext`.
 
 When a Sandbox is active, the runtime calls `supportsSandbox(session)` on the provider selected for that Agent. The method must return exactly `true` before the Agent runs. A missing method, `false`, or another value rejects evaluation and the Sandbox lease is still released. This explicit handshake prevents a provider from silently ignoring an execution boundary.
 
-An Agent adapter must not claim compatibility with a Sandbox provider until its model-controlled filesystem, commands, and host tools are attached to the lease runtime or run inside the selected Sandbox environment.
+A built-in Agent profile must not claim compatibility with a Sandbox provider until its ACP process runs through that lease's `SandboxRuntime.spawn()` at the effective Workspace cwd. Native Agent operations remain subject to the actual Sandbox enforcement boundary. A custom structural provider must document and prove an equivalent attachment; it cannot claim compatibility merely because one of its Tools delegates shell commands into the lease.
 
 ### 15.3 Provider construction and options
 
@@ -1783,7 +1832,7 @@ An Agent selects a configured provider through its `provider` prop or the runtim
 
 ```tsx
 const fast = claudeAgent({ model: "anthropic/claude-haiku-4-5" });
-const deep = codexAgent({ reasoningEffort: "high" });
+const deep = codexAgent({ workingDirectory: process.cwd() });
 
 <Agent provider={fast}>Classify the request.</Agent>
 <Agent provider={deep} model="gpt-5.3-codex">
@@ -1835,9 +1884,9 @@ The provider package's configured factory owns vendor-specific options and retur
 
 The SDK provider interfaces remain public and structurally implementable. Direct implementations are allowed, but they must satisfy the same contract and conformance suite. The provider definition helpers are the canonical path because they preserve inference and make runtime validation consistent; official packages must use them.
 
-The SDK also exports optional `AbstractAgentProvider` and `AbstractSandboxProvider` authoring templates. They do not replace the structural interfaces and AML never uses `instanceof` to recognize a provider. `AbstractAgentProvider` owns the stable one-session turn template: ordered initial and FollowUp inputs, final-turn-only output requests, cancellation, final-response selection, and invocation cleanup. Its subclass creates an `AgentProviderSession` that maps `runTurn()`, optional `abort()`, and required `close()` to the vendor runtime. `createAgentProviderTurns()` and `executeAgentProviderSession()` are the independently exported form of that same reviewed algorithm for provider packages that expose a lower-level session test seam; they are not a second lifecycle. `AbstractSandboxProvider` owns staged provisioning, post-provision initialization, failure compensation, immutable lease creation, and one shared release barrier around an acknowledged `ProvisionedSandbox`, while subclasses retain environment creation, runtime translation, reconciliation, and destruction.
+The SDK also exports optional `AbstractAgentProvider` and `AbstractSandboxProvider` authoring templates. They do not replace the structural interfaces and AML never uses `instanceof` to recognize a provider. `AbstractAgentProvider` owns the stable provider-neutral turn template for custom structural providers. Built-in coding agents use the shared ACP engine directly and do not subclass it to create vendor-specific session lifecycles. `AbstractSandboxProvider` owns staged provisioning, post-provision initialization, failure compensation, immutable lease creation, and one shared release barrier around an acknowledged `ProvisionedSandbox`, while subclasses retain environment creation, runtime translation, reconciliation, and destruction.
 
-Every concrete Agent adapter must explicitly implement its Sandbox compatibility claim; the Agent base fails closed by default. Every Sandbox command adapter may use `SandboxCommand` to capture the common command, argument, cwd, environment, signal, and timeout contract before translating it to a backend. AML validates and freezes every `SandboxRuntime.exec()` result before exposing it to an Agent.
+Every concrete Agent adapter must explicitly implement its Sandbox compatibility claim; the Agent base fails closed by default. Every Sandbox command adapter may use `SandboxCommand` to capture the common command, argument, cwd, environment, signal, and timeout contract before translating it to a backend. AML validates and freezes every `SandboxRuntime.exec()` result and `SandboxRuntime.spawn()` process handle before exposing it to an Agent.
 
 These bases are implementation aids rather than additional observable provider authority. A structural implementation passed through `define*Provider()` remains equally valid, and conformance plus runtime validation—not inheritance—enforces the contract.
 
@@ -1851,7 +1900,7 @@ AML does not expose a generic `defineProvider()`. Agent, Sandbox, and Workspace 
 const runtime = new AmlRuntime({
   agentProvider: provider,
   allowedMcpServers: ["github", "project"],
-  allowedTools: ["read", "lookup_customer"],
+  allowedTools: ["lookup_customer"],
   cwd: import.meta.dirname,
   maxAgentCalls: 32,
   maxConcurrentAgents: 4,
@@ -1982,7 +2031,7 @@ interface TraceSink {
 }
 ```
 
-The event stream covers evaluation and component execution, Agent sessions and authored turns, System and Skill resolution, JavaScript Tool calls, committed Loop transitions, and Sandbox and Workspace scope lifecycles. Tool and MCP descriptor events describe capability grants; they do not claim that a provider completed a remote attachment lifecycle AML cannot observe. `capability.tool` identifies the Tool `name` and whether its `kind` is `host` or `javascript`. `capability.mcp` identifies the server `name` and whether its `kind` is `named`, `stdio`, or `streamable-http`; it never includes transport configuration.
+The event stream covers evaluation and component execution, Agent sessions and authored turns, System and Skill resolution, JavaScript Tool calls, committed Loop transitions, and Sandbox and Workspace scope lifecycles. Tool and MCP descriptor events describe capability grants; they do not claim that a provider completed a remote attachment lifecycle AML cannot observe. `capability.tool` identifies the JavaScript Tool `name`. `capability.mcp` identifies the server `name` and whether its `kind` is `named`, `stdio`, or `streamable-http`; it never includes transport configuration.
 
 Every event includes `runId`, `spanId`, a monotonically increasing evaluation-local `sequence`, and a Unix-millisecond `timestamp`. Nested events include `parentSpanId`. `span.end` reuses its `span.start` identity and reports non-negative elapsed milliseconds. An evaluation span is the root ancestor of every other span, including component-local `evaluate()` calls and concurrently scheduled Agents. Each lexical execution boundary is the direct parent of the subtree it evaluates: a component returning an Agent owns that Agent span, and Workspace, Sandbox, Loop, System, and Skill descendants remain beneath their corresponding spans.
 
@@ -1998,7 +2047,17 @@ Prompts, System and Skill contents, Tool input/output, MCP configuration, filesy
 
 ### 16.3 Agent adapter requirements
 
-Every built-in Agent adapter resolves configuration in the same authority order:
+Every built-in coding-agent adapter is a profile over the shared ACP session engine. Codex uses the maintained Codex ACP adapter, OpenCode uses its native ACP Agent, and Pi uses the maintained Pi ACP adapter. Public factories retain the ordinary product names:
+
+```ts
+function codexAgent(options?: CodexAgentOptions): AgentProvider
+function opencodeAgent(options?: OpenCodeAgentOptions): AgentProvider
+function piAgent(options?: PiAgentOptions): AgentProvider
+```
+
+Factories are synchronous and perform no filesystem, process, credential, or network work. Invocation launches the selected ACP Agent in the active execution environment. The factory options configure the profile; they must not expose an alternative session client or lifecycle implementation.
+
+Every profile resolves configuration in the same authority order:
 
 1. provider defaults
 2. explicit factory options and portable per-Agent overrides
@@ -2006,130 +2065,31 @@ Every built-in Agent adapter resolves configuration in the same authority order:
 
 The final AML layer must replace authority-bearing arrays, callbacks, clients, Tool grants, MCP grants, and capability policy rather than recursively combining them with user input. Vendor-native configuration remains native everywhere that AML has not defined a portable contract.
 
-#### OpenCode
+Every profile must:
 
-The package exports:
+- declare the compatible ACP executable and negotiated capabilities
+- create one fresh ACP session per Agent and reuse it for FollowUps
+- use the effective Workspace cwd for ACP `session/new`
+- map the complete AML system channel and optional model without changing their meaning
+- pass all explicit MCP servers and AML-owned Tool/output bridges at session creation, and resolve named native servers through explicit profile policy
+- map portable Agent permissions where the harness exposes matching controls and report enforcement limits
+- preserve `context.signal.reason`, request ACP cancellation when available, and always terminate invocation-owned resources
+- keep credentials, configuration, protocol messages, session identifiers, and provider-native events behind the adapter boundary
+- support both the trusted local process launcher and every advertised `SandboxRuntime.spawn()` implementation through the same engine
 
-```ts
-interface OpenCodeAgentOptions {
-  config?: OpenCodeConfig
-  directory?: string
-  model?: string
-  server?: {
-    hostname?: string
-    port?: number
-    timeout?: number
-  }
-  sessionClient?: OpenCodeSessionClient
-}
+Codex, OpenCode, and Pi may expose different profile options and native capabilities, but they must not own separate prompting, streaming, Tool bridging, structured-output, FollowUp, or cleanup algorithms. A provider-specific deviation requires a change to this specification and the shared engine, not a parallel lifecycle.
 
-interface OpenCodeAgentProvider extends AgentProvider {
-  close(): Promise<void>
-}
+### 16.4 Built-in ACP profile mappings
 
-function opencodeAgent(options?: OpenCodeAgentOptions): OpenCodeAgentProvider
-```
+All three built-in coding Agents use the lifecycle above. Their remaining differences are launch and configuration mappings:
 
-`config` has OpenCode's native SDK `Config` shape and is passed unchanged in meaning to every package-owned server. AML snapshots it but does not translate it into a provider-neutral credential schema, so applications may configure provider keys, base URLs, headers, and models without a local OpenCode profile.
+- Codex launches `codex-acp`. It maps read-only versus read-write filesystem access to the adapter's Agent mode. The adapter does not expose exact shell or network switches, so an enclosing Sandbox remains responsible for those restrictions.
+- OpenCode launches `opencode acp --pure`. It maps filesystem writes, shell, and its native web tools to the portable Agent permission request through an invocation-private OpenCode configuration.
+- Pi launches `pi-acp`. Its normal built-in tools provide the optimistic defaults. When permissions are narrowed, AML supplies Pi's native `--tools` allowlist; `pi-mcp-adapter` is also required when the invocation uses JavaScript Tools, explicit MCP servers, or structured output.
 
-`opencodeAgent()` is synchronous and performs no I/O. When `sessionClient` is supplied, the package uses that injected provider-owned port and does not start or stop an OpenCode server; that port owns complete Tool and MCP attachment and cleanup. `sessionClient` and `server` are mutually exclusive. Without `sessionClient`, the first ordinary Agent call in an evaluation lazily starts one package-owned local OpenCode server shared only by that evaluation. When it creates that evaluation state, the adapter registers one `events.once("finish", ...)` listener. The listener waits for active calls, stops the host, and leaves the provider reusable so concurrent and later AML evaluations receive independent lifecycle state. An Agent with a JavaScript Tool or MCP grant uses a disposable package-owned OpenCode server because OpenCode can disconnect but cannot remove a dynamically added MCP configuration from a long-lived server and MCP connections are host-scoped rather than session-scoped. Every disposable server requests port `0` so it cannot collide with the evaluation host or another concurrent capability invocation; an explicit `server.port` configures only the ordinary evaluation host. Other server settings still apply. The disposable server is closed after the complete Agent session and capability cleanup settle, so registrations and connections cannot accumulate or leak into sibling Agents. Named grants connect an exact server already present in the disposable host's provider configuration. Explicit grants are added dynamically. OpenCode's per-prompt Tool map disables `"*"` and enables only declared host Tools, JavaScript Tools, and each declared MCP server's normalized `<server>_*` namespace. A structured request additionally grants exactly OpenCode's provider-owned `StructuredOutput` Tool because that is how the harness implements JSON Schema output; text requests never receive it, and a structured Agent cannot also declare a host Tool with that reserved provider-equivalent name. Capability isolation mirrors OpenCode's permission equivalence by normalizing backslashes to slashes and comparing case-insensitively on Windows. Because this adapter must mirror OpenCode server internals to secure those grants, it preflights `/global/health` and accepts only reviewed server versions `1.18.4` and `1.18.5` for any capability-bearing Agent. Its generated OpenCode SDK dependency is pinned separately at `1.18.5` for API compatibility. An upgrade must revalidate punctuation normalization, platform equivalence, namespace overlap, and both client and server versions before expanding either compatibility boundary. `close()` remains an idempotent permanent shutdown escape hatch for direct provider use outside normal AML evaluation; components and examples do not call it. Credentials remain in the OpenCode environment and configuration; AML does not read or copy them.
+Profiles may expose command, arguments, environment, model, credentials, and vendor-native configuration at their factories. They may not expose an injected alternate session lifecycle. The selected host or Sandbox must already contain compatible executables; AML does not install them during Agent execution.
 
-`directory` selects the OpenCode working directory. `model` is the configured default and is overridden by `<Agent model>`. Explicit model identifiers use `provider/model` form and are validated before the session is created.
-
-With an active compatible Sandbox, OpenCode bypasses the local SDK server path and runs the installed `opencode run --format json` CLI through `SandboxRuntime.exec()` at the effective Workspace cwd. The adapter supplies captured OpenCode configuration through `OPENCODE_CONFIG_CONTENT`, creates isolated database and XDG state outside the Workspace, and reuses the emitted session id for FollowUps. The selected Sandbox environment must contain the OpenCode CLI. Provider-native host Tools and configured MCP servers remain available when explicitly granted; JavaScript Tools and structured output currently reject because AML has not implemented their remote transports.
-
-The OpenCode adapter:
-
-- creates one fresh OpenCode session per Agent
-- deletes the invocation session after success, failure, or cancellation whenever session creation returned its identifier
-- forwards the evaluation `AbortSignal` to session creation and prompting and requests session abort when it fires
-- disables all tools before enabling declared Tools
-- maps named Tools to host capabilities
-- exposes JavaScript Tools through one invocation-scoped localhost MCP bridge
-- gives every package-created OpenCode host a process-private in-memory database by passing OpenCode's documented `OPENCODE_DB=:memory:` override directly to the child environment, without mutating AML's process environment, so concurrent hosts do not contend on ambient session state
-- attaches declared provider-native and explicit MCP servers for the complete OpenCode session
-- supports native structured output where available
-- uses a JSON-only prompt fallback for `opencode-go`
-- filters private reasoning from AML traces
-
-In the text-only delivery slice, all tools are disabled and no capability is enabled. The returned AML text concatenates only visible OpenCode text parts in response order; synthetic, ignored, tool, reasoning, and lifecycle parts do not contribute.
-
-OpenCode assigns session identifiers server-side. If session creation commits remotely but the request is cancelled before its response returns, the adapter has no identifier with which to abort or delete that unacknowledged session. This is an OpenCode API boundary rather than a recoverable local cleanup path.
-
-OpenCode owns its internal tool loop.
-
-#### Codex
-
-```ts
-type CodexReasoningEffort = "minimal" | "low" | "medium" | "high" | "xhigh"
-
-interface CodexAgentOptions {
-  apiKey?: string
-  baseUrl?: string
-  clientFactory?: CodexClientFactory
-  codexPathOverride?: string
-  config?: CodexConfig
-  env?: Readonly<Record<string, string>>
-  model?: string
-  reasoningEffort?: CodexReasoningEffort
-  skipGitRepoCheck?: boolean
-  workingDirectory?: string
-}
-
-function codexAgent(options?: CodexAgentOptions): AgentProvider
-```
-
-`codexAgent()` is synchronous and performs no filesystem, process, or network work. It snapshots provider-specific configuration and creates a Codex SDK client only inside `run()`. `clientFactory` is the narrow provider-owned dependency-injection port used by deterministic tests and alternative Codex SDK hosts; it receives the complete invocation configuration because system text, Tool bridges, and explicit MCP grants vary per Agent. Provider configuration and structured-output schemas deeper than 128 nested containers reject at their owning adapter boundary instead of risking JavaScript call-stack overflow or failing later in the Codex CLI.
-
-The Codex adapter:
-
-- creates one fresh Codex thread per Agent
-- calls the same thread once for the initial prompt and once per FollowUp, in authored order
-- maps the complete AML system channel to Codex `developer_instructions` and, when capabilities need it, appends provider-owned discovery guidance that names the exact authored JavaScript Tools and MCP servers
-- applies the configured model unless `<Agent model>` overrides it
-- defaults every thread to read-only sandboxing, approval `never`, disabled network access, disabled web search, and disabled Codex subagents
-- rejects unsupported host Tool names before starting a thread
-- treats the logical `read`, `grep`, and `glob` grants as aliases for one provider-native read-only shell boundary; any one of those names enables that complete boundary, while their absence disables Codex shell execution
-- exposes JavaScript Tools through one authenticated invocation-scoped Streamable HTTP MCP bridge
-- keeps that bridge alive for the complete thread and accepts a distinct MCP client session from each CLI process used for FollowUps
-- attaches declared provider-native and explicit MCP servers for the complete Codex thread
-- marks authored MCP grants required and uses Codex approval mode `approve` so an explicitly granted capability neither disappears silently nor conflicts with the thread-wide approval policy `never`
-- applies Codex JSON Schema output only to the final authored turn; it recursively closes object schemas with `additionalProperties: false` and rejects optional object properties that Codex strict output cannot represent without changing their application semantics
-- parses the final structured response as JSON and leaves schema validation to the SDK Agent boundary
-- keeps Codex thread items and usage behind the adapter boundary; provider-neutral publication belongs to the observability contract
-- closes the invocation Tool bridge after success, failure, or cancellation and preserves both execution and cleanup failures
-
-Configured stdio and Streamable HTTP MCP descriptors map directly to Codex `mcp_servers` configuration. Named grants enable an existing Codex MCP server by exact name. Factory-supplied `config.mcp_servers` entries can be retained directly, but their absence does not prove that a name is missing from ambient repository or user configuration. The adapter therefore sends an enabled, required exact-name overlay and delegates late-bound resolution or fail-closed rejection to the real Codex CLI. Injected `CodexClientFactory` implementations must preserve that contract. Codex-compatible MCP names use letters, digits, `_`, and `-`; the adapter rejects names that cannot be represented safely through the SDK's dotted configuration override interface. Duplicate names reject before any bridge or thread starts.
-
-Local Codex SDK execution inherits the selected host's normal configuration sources. This can include `AGENTS.md`, repository and user skills, plugins, rules, and MCP servers not authored in the AML tree. Invocation overrides for developer instructions, safety settings, declared MCP servers, and shell availability take precedence, but AML does not claim that the resulting Codex profile is empty or capability-isolated. Provider-neutral traces identify the adapter by name but do not claim to inventory its ambient profile.
-
-With an active compatible Sandbox, Codex bypasses the local SDK process and runs the installed `codex exec --json` CLI through `SandboxRuntime.exec()` at the effective Workspace cwd. AML creates an isolated temporary `CODEX_HOME` outside the Workspace unless factory `env` explicitly supplies an environment-owned home, resumes the emitted thread id for FollowUps, and removes only AML-owned state. The selected Sandbox environment must contain the Codex CLI; structured output also requires Node.js to stage its schema. The remote bridge supports the Sandbox shell boundary, configured MCP servers, FollowUps, and structured output. JavaScript Tools currently reject because AML has not implemented their remote transport.
-
-The active AML Sandbox is the outer execution boundary. The Codex CLI therefore receives `--ignore-rules`, and its inner sandbox mode matches the effective AML access mode rather than replacing the provider's isolation. Codex credentials, base URL, model, reasoning settings, environment, and native recursive configuration remain factory inputs and are translated to the equivalent CLI boundary.
-
-#### Pi
-
-```ts
-type PiThinkingLevel = "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max"
-
-interface PiAgentOptions {
-  clientFactory?: PiSessionClientFactory
-  model?: string
-  providers?: Readonly<Record<string, PiProviderConfig>>
-  thinkingLevel?: PiThinkingLevel
-  workingDirectory?: string
-}
-
-function piAgent(options?: PiAgentOptions): AgentProvider
-```
-
-`piAgent()` is synchronous and performs no I/O. Each `run()` lazily creates one in-memory `@earendil-works/pi-coding-agent` session and disposes it after the complete authored turn plan. Model identities use Pi's `provider/model` form; `<Agent model>` overrides the configured default. `providers` maps provider IDs to Pi's native exported `ProviderConfig` shape. Each entry is registered on that invocation's `ModelRuntime`, so applications may supply keys, base URLs, headers, custom models, or callback-backed providers without an AML-specific translation layer or persistent Pi setup. When omitted, Pi owns its normal credential resolution, including provider environment variables such as `OPENCODE_API_KEY`.
-
-The adapter disables Pi extensions, Skills, prompt templates, context-file discovery, themes, retries, compaction, and persistent sessions. The complete AML system channel becomes Pi's system prompt. Only declared Pi host Tools (`read`, `bash`, `edit`, `write`, `grep`, `find`, and `ls`) and declared JavaScript Tools enter the session allowlist. JavaScript Tools execute in-process with AML's evaluation signal and trace identity. FollowUps call the same Pi session sequentially and only the final response crosses the Agent boundary. AML cancellation requests `session.abort()` and session disposal remains mandatory after success or failure.
-
-Pi 0.82.1 does not expose an AML-compatible MCP attachment boundary or a first-class per-turn JSON Schema output request. This adapter therefore rejects every MCP grant before session creation. Structured Agents append the portable JSON Schema as a final-output instruction, parse the returned text as JSON, and rely on AML's retained Standard Schema contract for authoritative validation. This is weaker model guidance than OpenCode or Codex native structured output and is reported as a provider capability difference rather than hidden.
-
-With an active compatible Sandbox, Pi remains embedded in the AML process but rebuilds its native `bash` Tool over `SandboxRuntime.exec()`. The model request may remain remote while every declared shell command executes at the effective Sandbox cwd. Other Pi filesystem host Tools reject inside a Sandbox until the common runtime grows a proven contract for them; JavaScript Tools remain trusted AML-host functions and are not made sandbox-confined by JSX placement.
+JavaScript Tools and structured output use the same invocation-owned MCP bridge for every profile. For a remote Sandbox, a small Sandbox-local HTTP relay carries MCP requests over the invocation's `SandboxProcess` streams to the authenticated host bridge. The relay is transport-only: it cannot execute Tools or own structured-output state.
 
 ## 17. Futurology
 
@@ -2236,10 +2196,7 @@ async function ReviewWorkflow() {
   const [finding, architecture] = await Promise.all([
     evaluate(<Reviewer />, Finding),
     evaluate(
-      <Agent>
-        <Tool name="read" />
-        Describe the architecture affected by this patch.
-      </Agent>
+      <Agent>Describe the architecture affected by this patch using the Agent's native repository tools.</Agent>
     ),
   ])
 
@@ -2253,7 +2210,7 @@ async function ReviewWorkflow() {
 
 const runtime = new AmlRuntime({
   agentProvider: provider,
-  allowedTools: ["load_patch", "read"],
+  allowedTools: ["load_patch"],
   trace: createConsoleTracer(),
 })
 

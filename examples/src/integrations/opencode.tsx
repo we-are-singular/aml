@@ -20,7 +20,6 @@ const ExampleTool = defineTool({
  */
 const ExampleProvider = opencodeAgent({
   model: process.env.AML_OPENCODE_MODEL ?? "opencode-go/minimax-m3",
-  server: { port: 0, timeout: 15_000 },
 })
 
 /**

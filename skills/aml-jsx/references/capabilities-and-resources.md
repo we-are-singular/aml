@@ -25,8 +25,9 @@ const ReadSource = defineTool({
 
 Use the execution context passed to `execute(input, context)` for invocation-scoped signals or resources. Do not capture mutable global execution state.
 
-Grant a provider-native tool with `<Tool name="..." />` only when that exact name is documented by the selected
-provider. Do not assume native Tool names are portable.
+Native repository reads, edits, shell commands, and network access belong to the coding Agent rather than `<Tool>`.
+They default optimistically on and can be narrowed with `<Agent permissions={...}>`. Profiles map those requests to
+their native controls where possible; the active Sandbox remains the authoritative security boundary.
 
 ## MCP servers
 
@@ -93,6 +94,9 @@ const Docker = dockerSandbox({ image: "node:26-alpine" })
 An outer Sandbox acquires a lease. A nested Sandbox narrows the active lease; it does not acquire a second environment. Make access, root, network, and provider compatibility explicit.
 
 Sandbox images and snapshots own their installed Agents and tools. AML does not build images or silently install dependencies. For experiments, provider factories may expose an explicit `setup` command that runs after the Workspace is visible and before the Agent starts.
+
+Built-in coding Agents launch through `SandboxRuntime.spawn()` and the shared ACP engine. A provider must never fall
+back to a host SDK, embedded loop, or one-shot CLI when a Sandbox is active.
 
 Remote providers keep their vendor configuration shapes:
 

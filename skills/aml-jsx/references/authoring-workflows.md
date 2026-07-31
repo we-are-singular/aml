@@ -105,7 +105,7 @@ Use the `system` prop for a simple static system prompt. Use `<System>` when the
 </Agent>
 ```
 
-Use `<FollowUp>` for later turns in the same provider-owned session:
+Use `<FollowUp>` for later turns in the same Agent session:
 
 ```tsx
 <Agent provider={OpenCode}>

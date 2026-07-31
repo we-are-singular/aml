@@ -26,22 +26,22 @@ const runtime = new AmlRuntime()
 const result = await runtime.evaluate(<Agent provider={opencodeAgent({})}>Summarize this repository.</Agent>)
 ```
 
-AML also embeds Pi without requiring a global Pi installation:
+The built-in coding-agent factories are thin profiles over AML's shared Agent Client Protocol (ACP) session engine:
 
 ```tsx
 import { Agent, AmlRuntime, piAgent } from "@aml-jsx/sdk"
 
 const Pi = piAgent({
+  env: { OPENCODE_API_KEY: process.env.OPENCODE_API_KEY ?? "" },
   model: "opencode-go/glm-5.1",
-  providers: {
-    "opencode-go": { apiKey: process.env.OPENCODE_API_KEY },
-  },
 })
 
 const result = await new AmlRuntime().evaluate(<Agent provider={Pi}>Say hello.</Agent>)
 ```
 
-`piAgent({ providers })` accepts Pi's native provider configuration. You can supply another provider, endpoint, model catalog, headers, or key instead of OpenCode Go, or omit `providers` to use Pi's normal credential discovery.
+Codex, OpenCode, and Pi use the same ACP lifecycle on the trusted local host and inside supported Sandboxes. Agents optimistically receive their native filesystem, shell, and network capabilities unless `<Agent permissions>` narrows them; the enclosing Sandbox remains authoritative. `<Tool>` is reserved for JavaScript functions created with `defineTool()`. The selected environment must contain the compatible ACP Agent executable; AML does not install it implicitly. Provider-specific options remain on each factory.
+
+The public factory names are `codexAgent()`, `opencodeAgent()`, and `piAgent()`.
 
 ## Coding agents
 

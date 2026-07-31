@@ -7,14 +7,13 @@ import { DeterministicAgentProvider } from "@aml-jsx/sdk/testing"
 export function createReviewProvider(name: string): AgentProvider {
   if (name === "codex") {
     return codexAgent({
-      model: process.env.AML_CODEX_MODEL ?? "gpt-5.3-codex-spark",
+      config: { model: process.env.AML_CODEX_MODEL ?? "gpt-5.3-codex-spark" },
     })
   }
 
   if (name === "opencode") {
     return opencodeAgent({
       model: process.env.AML_OPENCODE_MODEL ?? "opencode-go/minimax-m3",
-      server: { port: 0, timeout: 15_000 },
     })
   }
 

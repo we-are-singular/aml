@@ -1,8 +1,8 @@
-import { Agent, defineMcpServer, FollowUp, Mcp, Tool } from "@aml-jsx/sdk"
+import { Agent, defineMcpServer, FollowUp, Mcp } from "@aml-jsx/sdk"
 import { DeterministicAgentProvider } from "@aml-jsx/sdk/testing"
 
 /**
- * Gives the example Agent one MCP capability alongside its authored Tool.
+ * Gives the example Agent one explicit MCP capability.
  */
 const ExampleMcp = defineMcpServer({
   name: "project",
@@ -29,7 +29,6 @@ const ExampleProvider = new DeterministicAgentProvider({
 export default function FollowUpExample() {
   return (
     <Agent provider={ExampleProvider}>
-      <Tool name="read" />
       <Mcp use={ExampleMcp} />
       Investigate the implementation.
       <FollowUp>Challenge the evidence.</FollowUp>

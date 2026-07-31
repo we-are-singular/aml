@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto"
+import { fileURLToPath } from "node:url"
 
 import { Agent, defineTool, piAgent, Tool } from "@aml-jsx/sdk"
 import { z } from "zod"
@@ -14,15 +15,12 @@ const ExampleTool = defineTool({
 })
 
 /**
- * Uses Pi's embedded SDK with an explicitly configured OpenCode Go provider.
+ * Uses Pi's ACP adapter with explicit process environment and MCP extension paths.
  */
 const ExampleProvider = piAgent({
+  ...(process.env.OPENCODE_API_KEY === undefined ? {} : { env: { OPENCODE_API_KEY: process.env.OPENCODE_API_KEY } }),
+  mcpAdapterPath: fileURLToPath(import.meta.resolve("pi-mcp-adapter")),
   model: process.env.AML_PI_MODEL ?? "opencode-go/glm-5.1",
-  ...(process.env.OPENCODE_API_KEY === undefined
-    ? {}
-    : {
-        providers: { "opencode-go": { apiKey: process.env.OPENCODE_API_KEY } },
-      }),
 })
 
 /**

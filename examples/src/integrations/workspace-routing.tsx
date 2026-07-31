@@ -16,8 +16,7 @@ const WorkspaceSelection = z.object({
  */
 function createExampleProvider(workingDirectory: string) {
   return codexAgent({
-    ...(process.env.AML_CODEX_MODEL === undefined ? {} : { model: process.env.AML_CODEX_MODEL }),
-    skipGitRepoCheck: true,
+    ...(process.env.AML_CODEX_MODEL === undefined ? {} : { config: { model: process.env.AML_CODEX_MODEL } }),
     workingDirectory,
   })
 }

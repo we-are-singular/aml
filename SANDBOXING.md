@@ -9,9 +9,10 @@ This document records the architecture and current direction for connecting AML 
 The current design deliberately avoids turning AML into a generic filesystem, process, image-build, or container-security layer:
 
 - AML coordinates Sandboxes; it does not provision their software.
-- Applications select a provider-native image, snapshot, or environment that already contains the required Agent and tools.
+- Applications select a provider-native image, snapshot, package set, or host environment that already contains the required ACP Agent and tools.
 - An explicit `setup` hook may install missing software after acquisition as a convenience, but hidden installation is forbidden.
-- The common runtime starts with bounded process execution and a working directory. That contract is sufficient for Pi's shell bridge and for the implemented Codex and OpenCode CLI harnesses. File transfer, image building, snapshots, ports, and other provider features are not part of the baseline merely because one provider exposes them.
+- `SandboxRuntime.spawn()` is the process transport beneath the shared ACP session engine. `exec()` remains for bounded Scripts, setup, and provider internals; it is not an alternative Agent protocol.
+- Every built-in coding Agent uses the same ACP lifecycle on the trusted local host and inside every supported Sandbox.
 - Workspace attachment and reconciliation are lifecycle responsibilities, not a model-facing generic filesystem.
 
 ## Goal
@@ -19,18 +20,20 @@ The current design deliberately avoids turning AML into a generic filesystem, pr
 AML needs to support any compatible Agent with any compatible Sandbox without implementing every Agent × Sandbox combination.
 
 ```text
-Agent adapter                    Sandbox provider
-Pi ───────────────┐          ┌── Docker
-Codex ────────────┼─ Sandbox ├── Daytona
-OpenCode ─────────┘  Runtime └── Modal, Cloudflare, ...
-                         │
-                 attached Workspace
+Agent profile                 shared ACP engine               process launcher
+Pi ───────────────┐       ┌─ initialize/session ─┐       ┌── trusted local host
+Codex ────────────┼───────┤  prompts/updates     ├───────┼── Docker
+OpenCode ─────────┘       └─ cancel/cleanup ─────┘       ├── Daytona
+                                                        └── Modal
+                                                               │
+                                                       attached Workspace
 ```
 
 This creates two linear integration surfaces:
 
-- each Agent adapter learns how to start its Agent through the AML runtime
-- each Sandbox provider implements the small AML runtime and Workspace lifecycle
+- each Agent profile declares how to launch and configure its ACP Agent
+- the shared engine implements the protocol lifecycle once
+- each Sandbox provider implements the small process runtime and Workspace lifecycle
 
 Provider factories remain provider-specific. Applications construct `dockerSandbox(...)`, `daytonaSandbox(...)`, or `modalSandbox(...)` with the configuration concepts supported by that provider. Environment identity uses a consistent root option where the providers overlap: `image` for Docker, Daytona, and Modal, or Daytona's alternative `snapshot`. AML should not expose a generic `sandboxSdk({ adapter })` factory or force the remaining provider configuration into one lowest-common-denominator object.
 
@@ -46,9 +49,9 @@ The application selects the execution environment:
 - Cloudflare container configuration
 - another provider-native environment reference
 
-That environment is responsible for containing its operating-system dependencies, language runtimes, Agent SDKs or CLIs, and supporting tools. The environment author owns their versions and update policy.
+That environment is responsible for containing its operating-system dependencies, language runtimes, ACP Agent executables, and supporting tools. The environment author owns their versions and update policy.
 
-For example, choosing Codex for a Modal Sandbox means selecting a Modal image that already contains the required Codex package and Node.js runtime. AML does not detect that choice and install Codex automatically.
+For example, choosing Codex for a Modal Sandbox means selecting a Modal image that already contains the compatible Codex ACP adapter and runtime. AML does not detect that choice and install Codex automatically.
 
 AML may later publish a convenient, versioned image containing supported Agents and useful coding tools. That would be a separate distribution artifact, not a responsibility of the Sandbox runtime.
 
@@ -59,11 +62,11 @@ The AML coordinator remains local and owns sequencing:
 1. acquire the Workspace materialization
 2. acquire the configured Sandbox and attach or hydrate the Workspace
 3. run the explicit Sandbox `setup` hook, if configured
-4. ask the Agent adapter to start its Agent in the Sandbox
+4. ask the shared ACP engine to launch the selected Agent profile in the Sandbox
 5. reconcile writable Workspace changes
 6. release the Sandbox and Workspace
 
-“The Agent runs in the Sandbox” describes the Agent provider process, server, CLI, or SDK harness. The AML component tree and orchestration still run locally.
+“The Agent runs in the Sandbox” means the ACP Agent process and its native operations run beside the Workspace. The AML component tree, ACP client, JavaScript Tool execution, and orchestration remain in the AML host.
 
 ### Sandbox provider
 
@@ -72,6 +75,7 @@ A Sandbox provider owns:
 - creating or connecting to one environment selected by the application
 - attaching or hydrating the Workspace at a stable guest location
 - executing a command with a working directory, environment, cancellation, and a bounded result
+- spawning a long-lived process with queued output, writable input, repeatable completion, and process-tree termination
 - releasing the environment
 - reconciling the Workspace when its provider cannot use a shared mount
 - mapping explicitly supported provider options such as resources, secrets, or network policy
@@ -91,17 +95,24 @@ Docker is useful local process and filesystem isolation, but a lightweight `dock
 
 ### Agent adapter
 
-An Agent adapter owns:
+The shared ACP engine owns:
 
-- knowing how its already-installed Agent is started
-- staging only small AML-owned configuration or harness files when required
-- passing provider configuration and credentials to the Agent process
-- translating Agent events and results into AML
-- failing clearly when the selected environment does not contain its required runtime or executable
+- process launch through the current local or Sandbox launcher
+- ACP initialization, capability negotiation, and session creation
+- sequential initial and FollowUp prompts
+- streaming updates, cancellation, and final result collection
+- common MCP bridges for JavaScript Tools and structured output
+- closing streams, bridges, and the complete process tree on every exit path
 
-Staging a small AML harness is different from installing the Agent. The image contains packages and binaries; the adapter supplies the glue needed to run them as an AML Agent.
+An Agent profile owns:
 
-The default strategy is a remote harness: start the actual Agent beside its Workspace in the Sandbox and let its native tools operate on that filesystem. Codex and OpenCode now do this through their installed non-interactive CLIs. A native-tool bridge such as Pi's remains possible, but is an Agent-specific optimization rather than the reason to give every Sandbox a complete generic filesystem API.
+- the already-installed ACP command and arguments
+- provider configuration, environment, and credentials
+- model and system-instruction mappings not standardized by ACP
+- native permission mappings and enforcement limits
+- clear failure when the selected environment lacks its executable or negotiated capability
+
+Profiles do not own alternative SDK, CLI, embedded, or server session loops. Staging small AML-owned configuration is different from installing the Agent: the environment contains packages and binaries; the profile supplies only invocation glue.
 
 ### Workspace provider
 
@@ -147,26 +158,24 @@ Proposed semantics:
 
 Repeated or production use should prefer a prebuilt image or snapshot. Modal explicitly recommends building and publishing named images separately from Sandbox creation. Daytona snapshots and Cloudflare custom images serve the same reproducibility purpose.
 
-AML should not attempt to translate `setup` into every provider’s native image-build or boot-hook feature. Once the environment is ready, the adapter runs it through the same minimal execution primitive used to start an Agent. Provider-native startup configuration may still be passed through the provider’s own `config`.
+AML should not attempt to translate `setup` into every provider’s native image-build or boot-hook feature. The adapter runs it as a bounded command before the ACP process starts. Provider-native startup configuration may still be passed through the provider’s own `config`.
 
 The exact public type remains open. Start with one command string and add multiple or structured commands only when a real use case requires them.
 
-## Remote harness reference
+## ACP harness reference
 
-Daytona’s [Codex SDK guide](https://www.daytona.io/docs/en/guides/codex/codex-sdk-interactive-terminal-sandbox/) uses a remote harness:
+ACP defines a standard JSON-RPC session between a client and a coding Agent. AML connects its client to the Agent's
+standard input and output through the current process launcher:
 
-1. a local Node.js program creates and manages the Daytona Sandbox
-2. it passes the OpenAI API key into the Sandbox environment
-3. it writes Daytona-specific Codex instructions
-4. it uploads a small Node.js Agent package and installs its dependencies
-5. it starts that package as an asynchronous Daytona process and streams its output
-6. the remote package uses the Codex SDK with a working directory inside Daytona
+1. AML acquires the Sandbox and materializes the Workspace.
+2. The shared engine spawns the selected profile's ACP Agent at the guest working directory.
+3. AML initializes ACP and creates one session with the invocation's MCP servers.
+4. AML sends the initial prompt and FollowUps while consuming streamed updates.
+5. AML requests cancellation when needed, closes input, and terminates the process tree.
+6. Sandbox release reconciles the Workspace and reclaims any remaining lease-owned processes.
 
-The important architecture is that Codex and its CLI subprocess run inside Daytona. Daytona is the outer isolation boundary; Codex is not translating individual file and shell operations into Daytona API calls.
-
-Installing dependencies during the tutorial is a valid convenience, not AML’s production default. In AML it maps to an explicit `setup` hook. A reusable deployment should put those dependencies in the selected snapshot or image.
-
-The guide passes the model API key into the remote environment, where model-controlled code may read it. Credentials must follow the harness that needs them, be injected deliberately through provider-native secrets or process environment configuration, be redacted from traces, and never be persisted as Workspace files.
+Credentials follow the ACP Agent that needs them. They are injected deliberately through provider-native secrets or
+process environment configuration, redacted from traces, and never persisted as Workspace files.
 
 ## Workspace attachment lifecycle
 
@@ -219,12 +228,14 @@ The common runtime exposes the smallest process boundary required to start an Ag
 - optional working-directory and environment overrides
 - cancellation and timeout support
 - a bounded exit result containing standard output and error
+- a streaming process handle for interactive and server-based Agent harnesses
 
 Commands do not implicitly pass through a shell. The explicit `setup` convenience is the only common string interpreted through a provider-selected shell.
 
+`spawn()` is the long-running counterpart to `exec()`. It returns a portable process id, an optional provider OS pid, queued byte streams, writable input, repeatable completion, and idempotent input-close and process-tree termination. Output capture starts before the handle is returned. `closeInput()` always closes AML's writable side, but remote providers may only offer a closest half-close signal rather than a literal pipe EOF; process termination remains a separate `kill()`. Process ownership is scoped to one Sandbox lease, and releasing that lease reclaims its remaining processes or disposable environment.
+
 Do not add features until an Agent requirement demands them:
 
-- Long-running `spawn`, streaming output, and termination may be needed by interactive or server-based Agent harnesses, but the current Pi, Codex, and OpenCode integrations do not require them.
 - Authenticated port exposure may be needed to connect a local SDK to an Agent server.
 - Provider-native file transfer is needed internally for remote Workspace hydration, but it does not need to be Agent-facing runtime CRUD.
 - Snapshots, forks, and warm starts are control-plane features outside the Agent runtime.
@@ -232,43 +243,25 @@ Do not add features until an Agent requirement demands them:
 
 The API should grow from Agent requirements, not from the union of Daytona, Modal, Cloudflare, Docker, or Sandbox SDK feature lists.
 
-## Agent adapter strategies
+## ACP Agent profiles
 
-### Pi
+Codex, OpenCode, and Pi are configuration profiles over one engine:
 
-The Pi integration replaces only Pi’s native `bash` operation with the common `exec()` runtime. The model can still read, write, inspect, and run files through shell programs without forcing generic filesystem CRUD into every Sandbox.
+- Codex launches the maintained Codex ACP adapter.
+- OpenCode launches its native ACP Agent.
+- Pi launches the maintained Pi ACP adapter.
 
-This native-tool bridge deliberately keeps Pi itself in the local AML process, so its Sandbox needs only a compatible shell. Remote-harness Agents such as Codex and OpenCode remain responsible for selecting images that contain those Agents. Keep the Pi bridge only while it remains materially useful beside the remote-harness strategy.
+Each selected environment must contain the compatible executable. The engine passes the effective Workspace cwd,
+explicit MCP servers, and AML-owned bridges during ACP session creation; named native servers remain profile
+configuration. The engine reuses that session for FollowUps, consumes streaming updates, and owns process cleanup.
 
-### Codex
+ACP intentionally does not erase Agent differences. A profile may map AML's model and system channel through
+Agent-specific configuration, reject an unsupported MCP transport, or report that an exact native permission is not
+enforceable. Those are profile capability differences, not reasons to fork the session lifecycle.
 
-The Codex SDK starts a CLI subprocess and does not expose a native filesystem or command-executor injection point. The Sandbox adapter therefore runs the installed Codex CLI directly through bounded execution:
-
-- the selected environment must already contain the Codex CLI
-- each invocation gets isolated writable session state outside the Workspace unless the environment explicitly supplies its own authenticated state
-- environment-owned Agent state and configuration remain outside AML's cleanup ownership
-- provider-native credentials, model selection, reasoning, environment, and configuration are translated to the CLI boundary
-- Codex runs with its working directory at the runtime-mapped Workspace path
-- AML's outer Sandbox owns filesystem isolation, while Codex's access mode follows the Workspace policy
-- FollowUps resume the same Codex session
-- streamed command events are reduced to the final Agent response while tolerating provider diagnostics
-
-The bridge transports Codex's native shell capability. JavaScript Tools are intentionally rejected in a Sandbox until AML has a secure transport for invocation-local Tool servers.
-
-### OpenCode
-
-OpenCode exposes a server-oriented SDK, but its installed CLI already provides the bounded protocol AML needs. The Sandbox adapter runs that installed CLI through bounded execution:
-
-- the selected environment must already contain the OpenCode CLI
-- each invocation receives isolated application state outside the Workspace
-- provider-native configuration and credentials are supplied to the remote process
-- an invocation-local Agent grants exactly the authored native Tools and denies undeclared capabilities
-- FollowUps reuse the same OpenCode session
-- command events are reduced to the final response
-
-Isolation comes from explicit state and configuration rather than depending on version-specific convenience flags. The event parser accepts provider diagnostics while still requiring valid session events.
-
-OpenCode does not currently require a server, port exposure, or a long-running `spawn` primitive. JavaScript Tools and structured output are rejected in a Sandbox until their remote transport and CLI contracts are implemented deliberately.
+JavaScript Tools use one AML-owned MCP bridge. Structured output uses one AML-owned MCP submission Tool on the final
+turn. Native Agent operations remain inside the Agent process; the outer Sandbox is their security boundary. ACP
+permission requests are workflow interactions and must not be represented as filesystem or process confinement.
 
 ## Third-party Sandbox abstractions
 
@@ -279,35 +272,12 @@ OpenCode does not currently require a server, port exposure, or a long-running `
 
 AML should learn from those provider boundaries without copying the complete feature surface or taking a dependency before the external contracts are stable and useful to AML.
 
-### Deferred provider: AgentOS
-
-[AgentOS](https://agentos-sdk.dev/docs/) is a promising lightweight provider because its in-process virtual
-machines start quickly, support host-directory mounts, and expose literal process execution with environment,
-working-directory, timeout, and cancellation controls. A prototype successfully mounted an AML Workspace, enforced
-read-only mount policy, executed Pi's sandbox-backed shell tools, and persisted guest writes.
-
-The provider is deferred because AML requires every supported Agent to work with every supported Sandbox. Pi runs
-its SDK on the AML host and delegates only shell operations to the Sandbox runtime, so it worked with AgentOS's
-default common software. Codex and OpenCode instead launch their complete CLI processes inside the Sandbox.
-AgentOS's packages expose ACP-oriented adapters rather than the Codex `exec --json` and OpenCode JSON command
-contracts used by AML.
-
-Installing the standard Codex npm package at boot did not close the gap: a global install targeted a non-writable
-location, while a writable-prefix install downloaded a platform-native executable that AgentOS could not run.
-Supporting AgentOS without an exception in the compatibility matrix therefore requires one of:
-
-- AgentOS packages that implement the normal CLI contracts expected by AML
-- an AML ACP/session transport alongside the command runtime
-- a deliberate host-Agent architecture in which AML owns each Agent's complete sandbox-backed tool surface
-
-AgentOS should not be added to the public provider list or smoke matrix until one of these paths supports every
-built-in Agent.
-
 ## Security boundaries
 
 - Sandbox setup is trusted application configuration. Model-generated commands belong to the Agent running inside the Sandbox.
 - The Sandbox runtime is trusted adapter infrastructure; it is not automatically a set of model-callable tools.
 - Missing Agent binaries or runtimes fail clearly. AML never falls back to host execution.
+- ACP permission requests do not replace Sandbox access, process, mount, or network enforcement.
 - Environment variables and secrets are scoped to setup or Agent processes where possible, excluded from traces, and excluded from Workspace persistence.
 - Read-only Workspace policy must be enforced by the provider’s attachment or synchronization mechanism, including setup commands.
 - Exposed ports may contain bearer URLs, tokens, or required headers and must be treated as credentials.
@@ -323,7 +293,7 @@ Every selected cell runs the same end-to-end behavior:
 
 1. acquire a durable Workspace
 2. acquire the selected Sandbox and attach or hydrate that Workspace
-3. run the selected Agent through its production Sandbox strategy
+3. launch the selected Agent profile through the shared ACP engine and Sandbox `spawn()`
 4. have the Agent read an unpredictable input and write an exact output
 5. release the Sandbox and reconcile changes
 6. verify the output from the durable Workspace
@@ -341,7 +311,7 @@ These are possible extensions, not implementation phases:
 - publish a convenient, versioned AML Agent image after the environment contract is stable
 - add Sandbox providers only when they preserve provider-native environment configuration
 - evaluate snapshots, warm starts, retries, and forks as control-plane capabilities
-- add streaming processes or authenticated service access only when an Agent requires them
+- add authenticated service access only when an Agent requires it
 - revisit third-party Sandbox abstraction libraries when their packages and contracts are stable
 
 ## References
@@ -351,6 +321,6 @@ These are possible extensions, not implementation phases:
 - [Modal Sandboxes](https://modal.com/docs/guide/sandboxes)
 - [Cloudflare Sandbox custom images](https://github.com/cloudflare/sandbox-sdk/blob/main/docs/STANDALONE_BINARY.md)
 - [Sandbox SDK](https://sandbox-sdk.sh/)
-- [Pi Gondolin tool-operation bridge](https://github.com/earendil-works/pi/blob/main/packages/coding-agent/examples/extensions/gondolin/index.ts)
-- [OpenCode SDK](https://opencode.ai/docs/sdk/)
-- [Codex SDK subprocess implementation](https://github.com/openai/codex/blob/main/sdk/typescript/src/exec.ts)
+- [Agent Client Protocol architecture](https://agentclientprotocol.com/get-started/architecture)
+- [Agent Client Protocol session setup](https://agentclientprotocol.com/protocol/v1/session-setup)
+- [ACP Agents](https://agentclientprotocol.com/get-started/agents)
