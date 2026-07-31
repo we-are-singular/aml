@@ -4,8 +4,19 @@ import os from "node:os"
 import path from "node:path"
 
 import { describe, expect, it } from "vitest"
+import { z } from "zod"
 
-import { Agent, AmlRuntime, createConsoleTracer, localWorkspace, Sandbox, Tool, Workspace } from "../../src/index.js"
+import {
+  Agent,
+  AmlRuntime,
+  createConsoleTracer,
+  defineTool,
+  evaluate,
+  localWorkspace,
+  Sandbox,
+  Tool,
+  Workspace,
+} from "../../src/index.js"
 
 import {
   parseSmokeCommand,
@@ -27,7 +38,7 @@ describe("Agent x Sandbox smoke matrix", () => {
   for (const testCase of selectedCases) {
     it(`${testCase.agent} x ${testCase.sandbox}`, async () => {
       await runFileProof(testCase.agent, testCase.sandbox)
-    })
+    }, 300_000)
   }
 })
 
@@ -38,9 +49,17 @@ async function runFileProof(agentName: SmokeAgentName, sandboxName: SmokeSandbox
   const directory = await mkdtemp(path.join(os.tmpdir(), `aml-smoke-${agentName}-${sandboxName}-`))
   const input = randomUUID()
   const output = randomUUID()
+  const toolProof = randomUUID()
+  const Result = z.object({ proof: z.literal(toolProof), status: z.literal("done") })
+  const proofTool = defineTool({
+    description: "Return the private proof for this AML smoke invocation.",
+    input: z.object({}),
+    name: "aml_smoke_proof",
+    execute: async () => toolProof,
+  })
   const agentRegistration = SMOKE_AGENTS[agentName]
   const agent: SmokeAgentInstance = agentRegistration.create()
-  const sandboxRegistration = SMOKE_SANDBOXES[sandboxName][agentName]
+  const sandboxRegistration = SMOKE_SANDBOXES[sandboxName]
   const sandboxProvider = sandboxRegistration.create()
   const proofCommand = `test "$(cat input.txt)" = "${input}" && printf %s "${output}" > output.txt && test "$(cat output.txt)" = "${output}"`
   const startedAt = performance.now()
@@ -59,22 +78,30 @@ async function runFileProof(agentName: SmokeAgentName, sandboxName: SmokeSandbox
     })
   )
 
+  async function StructuredProof() {
+    const result = await evaluate(
+      <Agent model={agentRegistration.model}>
+        <Tool use={proofTool} />
+        Run this exact shell command in the current Workspace: {proofCommand}. Call aml_smoke_proof, then return the
+        requested structured result with status "done" and proof set to the exact Tool result.
+      </Agent>,
+      Result
+    )
+    return JSON.stringify(result)
+  }
+
   try {
     response = await runtime.evaluate(
       <Workspace id={`smoke-${agentName}-${sandboxName}-${randomUUID()}`} provider={localWorkspace({ directory })}>
         <Sandbox access="read-write" provider={sandboxProvider}>
-          <Agent>
-            <Tool name="bash" />
-            Call bash with this exact command and do not claim success without executing it:
-            {proofCommand}
-            After the command exits successfully, reply with exactly: done
-          </Agent>
+          <StructuredProof />
         </Sandbox>
-      </Workspace>
+      </Workspace>,
+      { signal: AbortSignal.timeout(240_000) }
     )
     const persisted = await readFile(path.join(directory, "output.txt"), "utf8")
 
-    expect(response).toContain("done")
+    expect(JSON.parse(String(response))).toEqual({ proof: toolProof, status: "done" })
     expect(persisted).toBe(output)
     console.log(
       `[smoke:proof] agent=${agentName} sandbox=${sandboxName} response=done persisted=true bytes=${Buffer.byteLength(persisted)} durationMs=${Math.round(performance.now() - startedAt)}`

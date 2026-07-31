@@ -8,6 +8,7 @@ import type {
   SandboxAcquireRequest,
   SandboxExecOptions,
   SandboxExecResult,
+  SandboxProcess,
   WorkspaceMaterializationReference,
 } from "@aml-jsx/sdk"
 import { sandboxProviderConformance } from "@aml-jsx/sdk/testing"
@@ -158,6 +159,55 @@ describe("dockerSandbox()", () => {
     expect(failure.calls.at(-1)?.args).toEqual(["rm", "--force", "container-123"])
   })
 
+  it("preserves startup and cleanup failures together", async () => {
+    const workspace = await createWorkspace()
+    const runner = new FakeRunner({
+      remove: { exitCode: 1, stderr: "", stdout: "docker unavailable" },
+      run: { exitCode: 1, stderr: "", stdout: "docker unavailable" },
+    })
+
+    const acquisition = createDockerSandboxProvider({ image: "agent-image", workspace }, runner).acquire(request())
+    await expect(acquisition).rejects.toMatchObject({
+      errors: [
+        expect.objectContaining({ message: 'Docker Sandbox failed to start image "agent-image": docker unavailable' }),
+        expect.objectContaining({ message: "Docker Sandbox cleanup failed: docker unavailable" }),
+      ],
+      message: "Docker Sandbox startup and cleanup failed",
+    })
+  })
+
+  it("spawns literal commands through a remote process-group wrapper", async () => {
+    const workspace = await createWorkspace()
+    const runner = new FakeRunner()
+    const lease = await createDockerSandboxProvider({ image: "agent-image", workspace }, runner).acquire(request())
+    const process = await lease.runtime.spawn("node", ["agent.mjs", "hello; literal"], {
+      cwd: "repository/src",
+      env: { API_KEY: "configured" },
+    })
+
+    expect(process.id).toBe("fake-process")
+    expect(runner.spawnCalls).toHaveLength(1)
+    expect(runner.spawnCalls[0]).toMatchObject({
+      args: [
+        "exec",
+        "--interactive",
+        "--workdir",
+        "/workspace/src",
+        "--env",
+        "API_KEY=configured",
+        "container-123",
+        "sh",
+        "-c",
+        expect.stringContaining('exec "$@"'),
+        "aml-spawn",
+        "node",
+        "agent.mjs",
+        "hello; literal",
+      ],
+      command: "docker",
+    })
+  })
+
   it("prefers an active Workspace and confines effective cwd", async () => {
     const fallback = await createWorkspace()
     const active = await createWorkspace()
@@ -203,10 +253,21 @@ describe("dockerSandbox()", () => {
 
 class FakeRunner {
   readonly calls: RunnerCall[] = []
+  readonly spawnCalls: Array<{ readonly args: readonly string[]; readonly command: string }> = []
   readonly #exec: Readonly<SandboxExecResult>
+  readonly #remove: Readonly<SandboxExecResult>
+  readonly #run: Readonly<SandboxExecResult>
 
-  constructor(options: { readonly exec?: Readonly<SandboxExecResult> } = {}) {
+  constructor(
+    options: {
+      readonly exec?: Readonly<SandboxExecResult>
+      readonly remove?: Readonly<SandboxExecResult>
+      readonly run?: Readonly<SandboxExecResult>
+    } = {}
+  ) {
     this.#exec = options.exec ?? { exitCode: 0, stderr: "", stdout: "" }
+    this.#remove = options.remove ?? { exitCode: 0, stderr: "", stdout: "" }
+    this.#run = options.run ?? { exitCode: 0, stderr: "", stdout: "container-123\n" }
   }
 
   async run(
@@ -221,15 +282,39 @@ class FakeRunner {
     })
 
     if (args[0] === "run") {
-      return { exitCode: 0, stderr: "", stdout: "container-123\n" }
+      return this.#run
     }
 
     if (args[0] === "rm") {
-      return { exitCode: 0, stderr: "", stdout: "" }
+      return this.#remove
     }
 
     return this.#exec
   }
+
+  async spawn(
+    command: string,
+    args: readonly string[],
+    _options: Readonly<SandboxExecOptions>,
+    _killRemote: () => Promise<void>
+  ): Promise<Readonly<SandboxProcess>> {
+    this.spawnCalls.push({ args: [...args], command })
+    return {
+      async closeInput() {},
+      id: "fake-process",
+      async kill() {},
+      stderr: emptyStream(),
+      stdout: emptyStream(),
+      async wait() {
+        return { exitCode: 0 }
+      },
+      async write() {},
+    }
+  }
+}
+
+function emptyStream(): ReadableStream<Uint8Array> {
+  return new ReadableStream({ start: controller => controller.close() })
 }
 
 async function createWorkspace(): Promise<string> {

@@ -26,20 +26,17 @@ export class ToolCollection {
    */
   add(props: Readonly<ToolProps>): void {
     const children = Reflect.get(props, "children")
-    const name = Reflect.get(props, "name")
     const use = Reflect.get(props, "use")
 
     if (children !== undefined) {
       throw new EvaluationError("<Tool> does not accept children")
     }
 
-    if ((name === undefined) === (use === undefined)) {
-      throw new EvaluationError("<Tool> requires exactly one of name or use")
+    if (use === undefined || Reflect.has(props, "name")) {
+      throw new EvaluationError("<Tool> requires exactly one JavaScript Tool through use")
     }
 
-    // Host Tools and JavaScript Tools share names but have different trust and
-    // execution owners, so normalize them through separate boundaries.
-    const tool = use === undefined ? this.#hostTool(name) : this.#javaScriptTool(use)
+    const tool = this.#javaScriptTool(use)
 
     if (this.#names.has(tool.name)) {
       throw new EvaluationError(`Agent declares duplicate Tool "${tool.name}"`)
@@ -74,14 +71,6 @@ export class ToolCollection {
 
     this.#names.add(tool.name)
     this.#tools.push(tool)
-  }
-
-  /**
-   * Captures a provider-owned Tool name after applying portable name rules.
-   */
-  #hostTool(name: unknown): AgentTool {
-    validateName(name)
-    return Object.freeze({ kind: "host", name })
   }
 
   /**
@@ -127,14 +116,5 @@ export class ToolCollection {
       kind,
       name,
     })
-  }
-}
-
-/**
- * Enforces the shared normalized capability-name contract.
- */
-function validateName(value: unknown): asserts value is string {
-  if (typeof value !== "string" || value.length === 0 || value !== value.trim()) {
-    throw new EvaluationError("Tool name must be a non-empty normalized string")
   }
 }

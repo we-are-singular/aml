@@ -5,13 +5,21 @@ import os from "node:os"
 import path from "node:path"
 import { promisify } from "node:util"
 
-import { ModalClient, type ModalClientParams, type Sandbox as ModalSdkSandbox, type SandboxCreateParams } from "modal"
+import {
+  ModalClient,
+  type ContainerProcess,
+  type ModalClientParams,
+  type Sandbox as ModalSdkSandbox,
+  type SandboxCreateParams,
+} from "modal"
 import {
   AbstractSandboxProvider,
   defineSandboxProvider,
   SandboxCommand,
   type ProvisionedSandbox,
   type SandboxAcquireRequest,
+  type SandboxProcess,
+  type SandboxProcessExit,
   type SandboxProvider,
   type SandboxRuntime,
 } from "@aml-jsx/sdk"
@@ -268,9 +276,121 @@ function createRuntime(
       }
     },
     root: request.root,
+    async spawn(command, args = [], options = {}) {
+      if (request.access !== "read-write") {
+        throw new Error(
+          "Modal Sandbox cannot execute under read-only access because its transferred Workspace is not mounted read-only"
+        )
+      }
+
+      const captured = SandboxCommand.from(request, command, args, options)
+      const marker = `/tmp/aml-process-${randomUUID()}.pid`
+      const execution = sandbox.exec(
+        ["sh", "-c", `echo $$ > ${marker}; exec "$@"`, "aml-spawn", captured.command, ...captured.args],
+        {
+          env: { ...captured.env },
+          mode: "binary",
+          stderr: "pipe",
+          stdout: "pipe",
+          ...(captured.timeoutMs === undefined ? {} : { timeoutMs: captured.timeoutMs }),
+          workdir: guestPath(request.root, captured.cwd),
+        }
+      )
+
+      try {
+        const process = await abortable(execution, captured.signal)
+        return new ModalSandboxProcess(sandbox, process, marker, captured.signal, destroy)
+      } catch (error) {
+        await destroy().catch(() => undefined)
+        throw error
+      }
+    },
   }
 
   return Object.freeze(runtime)
+}
+
+class ModalSandboxProcess implements SandboxProcess {
+  readonly #completion: Promise<Readonly<SandboxProcessExit>>
+  #closePromise: Promise<void> | undefined
+  #finished = false
+  #killPromise: Promise<void> | undefined
+  readonly #marker: string
+  readonly #process: ContainerProcess<Uint8Array>
+  readonly #sandbox: ModalSdkSandbox
+  readonly #terminateLease: () => Promise<void>
+  readonly id: string
+  readonly stderr: ReadableStream<Uint8Array>
+  readonly stdout: ReadableStream<Uint8Array>
+
+  constructor(
+    sandbox: ModalSdkSandbox,
+    process: ContainerProcess<Uint8Array>,
+    marker: string,
+    signal: AbortSignal,
+    terminateLease: () => Promise<void>
+  ) {
+    this.#sandbox = sandbox
+    this.#process = process
+    this.#marker = marker
+    this.#terminateLease = terminateLease
+    this.id = `modal:${randomUUID()}`
+    // Capture both remote streams immediately. Modal's streams preserve data
+    // until read, including output produced before this handle is returned.
+    this.stdout = process.stdout
+    this.stderr = process.stderr
+    this.#completion = process
+      .wait()
+      .then(exitCode => Object.freeze({ exitCode }))
+      .finally(() => {
+        this.#finished = true
+      })
+    void this.#completion.catch(() => undefined)
+    signal.addEventListener("abort", () => void this.kill(), { once: true })
+    if (signal.aborted) void this.kill()
+  }
+
+  async closeInput(): Promise<void> {
+    if (this.#finished) return
+    this.#closePromise ??= this.#process.closeStdin().catch(error => {
+      if (!this.#finished) throw error
+    })
+    await this.#closePromise
+  }
+
+  async kill(): Promise<void> {
+    if (this.#finished) return
+    this.#killPromise ??= (async () => {
+      try {
+        // Modal does not expose process signaling. A second exec targets the
+        // remote process group recorded by AML's wrapper.
+        const killer = await this.#sandbox.exec(
+          [
+            "sh",
+            "-c",
+            `if test -s ${this.#marker}; then kill -KILL -- -$(cat ${this.#marker}) 2>/dev/null || kill -KILL $(cat ${this.#marker}) 2>/dev/null || true; rm -f ${this.#marker}; fi`,
+          ],
+          { stderr: "ignore", stdout: "ignore" }
+        )
+        await killer.closeStdin()
+        await killer.wait()
+      } catch {
+        // A Modal Sandbox belongs to one AML lease. If per-process routing is
+        // unavailable, terminate that lease's compute rather than orphan work.
+        await this.#terminateLease()
+      }
+    })()
+    await this.#killPromise
+  }
+
+  async wait(): Promise<Readonly<SandboxProcessExit>> {
+    return await this.#completion
+  }
+
+  async write(data: Uint8Array): Promise<void> {
+    if (this.#finished) throw new Error("Modal Sandbox process input is closed")
+    await this.#process.stdin.writeBytes(new Uint8Array(data))
+  }
 }
 
 /**

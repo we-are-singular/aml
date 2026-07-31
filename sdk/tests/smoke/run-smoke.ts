@@ -55,6 +55,7 @@ async function main(): Promise<void> {
       "verbose",
       "--disableConsoleIntercept",
       "--no-file-parallelism",
+      "tests/smoke/sandbox-matrix.smoke.tsx",
     ],
     {
       cwd: sdkDirectory,

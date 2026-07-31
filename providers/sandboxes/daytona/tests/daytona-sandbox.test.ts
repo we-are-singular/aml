@@ -70,10 +70,57 @@ describe("daytonaSandbox()", () => {
       timeout: 2,
     })
 
+    const spawned = await lease.runtime.spawn("node", ["server.mjs"], {
+      cwd: "repository/src",
+      env: { API_KEY: "configured" },
+    })
+    await spawned.write(new TextEncoder().encode("input"))
+    await spawned.closeInput()
+    const [stdout, stderr, exit] = await Promise.all([
+      readStream(spawned.stdout),
+      readStream(spawned.stderr),
+      spawned.wait(),
+    ])
+
+    expect({ exit, stderr, stdout }).toEqual({
+      exit: { exitCode: 0 },
+      stderr: "spawn error",
+      stdout: "spawn output",
+    })
+    expect(fake.sessionCommands[0]?.request).toMatchObject({
+      command: expect.stringContaining("exec 'node' 'server.mjs'"),
+      runAsync: true,
+      suppressInputEcho: true,
+    })
+    expect(fake.sessionInputs).toEqual(["input", "\u0004"])
+
     await lease.release()
     await expect(readFile(path.join(repository, "output.txt"), "utf8")).resolves.toBe("downloaded")
     await expect(readFile(path.join(repository, "input.txt"), "utf8")).rejects.toMatchObject({ code: "ENOENT" })
     expect(fake.deleteCount).toBe(1)
+  })
+
+  it("caches a killed exit when Daytona deletes the owned process session", async () => {
+    const workspace = await temporaryDirectory("aml-daytona-kill-")
+    const fake = await FakeDaytona.create()
+    const releaseLogs = fake.pauseSessionLogs()
+    const lease = await daytonaSandbox({ client: fake.client, workspace }).acquire(request({ cwd: ".", root: "." }))
+    const process = await lease.runtime.spawn("node", ["server.mjs"])
+
+    await Promise.all([process.kill(), process.kill(), process.closeInput(), process.closeInput()])
+    releaseLogs()
+
+    const [first, second, stdout, stderr] = await Promise.all([
+      process.wait(),
+      process.wait(),
+      readStream(process.stdout),
+      readStream(process.stderr),
+    ])
+    expect(first).toBe(second)
+    expect({ exit: first, stderr, stdout }).toEqual({ exit: { exitCode: 137 }, stderr: "", stdout: "" })
+    await expect(process.write(new TextEncoder().encode("late"))).rejects.toThrow("input is closed")
+
+    await lease.release()
   })
 
   it("combines a root image with native image creation parameters", async () => {
@@ -174,6 +221,10 @@ class FakeDaytona {
   deleteCount = 0
   downloadCount = 0
   readonly remoteWorkspace: string
+  readonly sessionCommands: Array<{ request: Record<string, unknown>; sessionId: string }> = []
+  readonly sessionInputs: string[] = []
+  #sessionDeleted = false
+  #sessionLogGate: Promise<void> = Promise.resolve()
   readonly uploadedArchive: string
   readonly #downloadArchive: string
 
@@ -194,6 +245,10 @@ class FakeDaytona {
       },
       id: "daytona-test",
       process: {
+        createSession: async () => {},
+        deleteSession: async () => {
+          this.#sessionDeleted = true
+        },
         executeCommand: async (command: string, cwd?: string, env?: Record<string, string>, timeout?: number) => {
           this.commands.push({
             command,
@@ -210,6 +265,30 @@ class FakeDaytona {
             exitCode: 0,
             result: command.startsWith("'") ? "command output" : "",
           }
+        },
+        executeSessionCommand: async (sessionId: string, request: Record<string, unknown>) => {
+          this.sessionCommands.push({ request, sessionId })
+          return { cmdId: "command-1" }
+        },
+        getSessionCommand: async () => {
+          if (this.#sessionDeleted) {
+            throw Object.assign(new Error("session not found"), { code: "PROCESS_NOT_FOUND", statusCode: 404 })
+          }
+          return { command: "spawn", exitCode: 0, id: "command-1" }
+        },
+        getSessionCommandLogs: async (
+          _sessionId: string,
+          _commandId: string,
+          onStdout: (chunk: string) => void,
+          onStderr: (chunk: string) => void
+        ) => {
+          await this.#sessionLogGate
+          if (this.#sessionDeleted) return
+          onStdout("spawn output")
+          onStderr("spawn error")
+        },
+        sendSessionCommandInput: async (_sessionId: string, _commandId: string, data: string) => {
+          this.sessionInputs.push(data)
         },
       },
     } as unknown as DaytonaSdkSandbox
@@ -232,6 +311,18 @@ class FakeDaytona {
     await mkdir(fake.remoteWorkspace, { recursive: true })
     return fake
   }
+
+  pauseSessionLogs(): () => void {
+    let release!: () => void
+    this.#sessionLogGate = new Promise<void>(resolve => (release = resolve))
+    return release
+  }
+}
+
+async function readStream(stream: ReadableStream<Uint8Array>): Promise<string> {
+  const chunks: Uint8Array[] = []
+  for await (const chunk of stream) chunks.push(chunk)
+  return Buffer.concat(chunks).toString("utf8")
 }
 
 function request(overrides: Partial<SandboxAcquireRequest> = {}): Readonly<SandboxAcquireRequest> {

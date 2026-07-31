@@ -1,7 +1,8 @@
-import { execFile } from "node:child_process"
+import { execFile, spawn } from "node:child_process"
 import { realpath, stat } from "node:fs/promises"
 import path from "node:path"
 import { randomUUID } from "node:crypto"
+import type { Readable } from "node:stream"
 
 import {
   AbstractSandboxProvider,
@@ -11,6 +12,8 @@ import {
   type SandboxAcquireRequest,
   type SandboxExecOptions,
   type SandboxExecResult,
+  type SandboxProcess,
+  type SandboxProcessExit,
   type SandboxProvider,
   type SandboxRuntime,
 } from "@aml-jsx/sdk"
@@ -46,6 +49,12 @@ interface CommandRunner {
     args: readonly string[],
     options: Readonly<SandboxExecOptions & { maxOutputBytes: number }>
   ): Promise<Readonly<SandboxExecResult>>
+  spawn?(
+    command: string,
+    args: readonly string[],
+    options: Readonly<SandboxExecOptions>,
+    killRemote: () => Promise<void>
+  ): Promise<Readonly<SandboxProcess>>
 }
 
 /**
@@ -111,20 +120,35 @@ class DockerSandboxProvider
         }
       )
       .catch(async cause => {
-        await this.#removeContainer(containerName)
+        try {
+          await this.#removeContainer(containerName)
+        } catch (cleanupCause) {
+          throw new AggregateError([cause, cleanupCause], "Docker Sandbox startup and cleanup failed")
+        }
         throw cause
       })
 
     if (start.exitCode !== 0) {
-      await this.#removeContainer(containerName)
-      throw new Error(`Docker Sandbox failed to start image "${this.#options.image}": ${start.stderr.trim()}`)
+      const detail = (start.stderr || start.stdout).trim()
+      const cause = new Error(`Docker Sandbox failed to start image "${this.#options.image}": ${detail}`)
+      try {
+        await this.#removeContainer(containerName)
+      } catch (cleanupCause) {
+        throw new AggregateError([cause, cleanupCause], "Docker Sandbox startup and cleanup failed")
+      }
+      throw cause
     }
 
     const containerId = start.stdout.trim()
 
     if (containerId.length === 0) {
-      await this.#removeContainer(containerName)
-      throw new Error("Docker Sandbox started without returning a container id")
+      const cause = new Error("Docker Sandbox started without returning a container id")
+      try {
+        await this.#removeContainer(containerName)
+      } catch (cleanupCause) {
+        throw new AggregateError([cause, cleanupCause], "Docker Sandbox startup and cleanup failed")
+      }
+      throw cause
     }
 
     return Object.freeze({
@@ -169,6 +193,55 @@ class DockerSandboxProvider
         }
       },
       root: request.root,
+      spawn: async (command, args = [], options = {}) => {
+        const captured = SandboxCommand.from(request, command, args, options)
+        const spawnCommand = this.#runner.spawn
+
+        if (spawnCommand === undefined) {
+          throw new Error("Docker Sandbox command runner does not support spawn()")
+        }
+
+        const marker = `/tmp/aml-process-${randomUUID()}.pid`
+        const dockerArgs = ["exec", "--interactive", "--workdir", guestPath(request.root, captured.cwd)]
+
+        for (const [key, value] of Object.entries(captured.env)) {
+          dockerArgs.push("--env", `${key}=${value}`)
+        }
+
+        // The marker captures the remote process-group leader before exec
+        // replaces the shell with the requested literal command.
+        dockerArgs.push(
+          containerId,
+          "sh",
+          "-c",
+          `echo $$ > ${marker}; exec "$@"`,
+          "aml-spawn",
+          captured.command,
+          ...captured.args
+        )
+
+        return await Reflect.apply(spawnCommand, this.#runner, [
+          "docker",
+          dockerArgs,
+          {
+            signal: captured.signal,
+            ...(captured.timeoutMs === undefined ? {} : { timeoutMs: captured.timeoutMs }),
+          },
+          async () => {
+            await this.#runner.run(
+              "docker",
+              [
+                "exec",
+                containerId,
+                "sh",
+                "-c",
+                `if test -s ${marker}; then kill -KILL -- -$(cat ${marker}) 2>/dev/null || kill -KILL $(cat ${marker}) 2>/dev/null || true; rm -f ${marker}; fi`,
+              ],
+              { maxOutputBytes: this.#options.maxOutputBytes }
+            )
+          },
+        ])
+      },
     }
 
     return Object.freeze(runtime)
@@ -226,7 +299,7 @@ class DockerSandboxProvider
     })
 
     if (result.exitCode !== 0 && !result.stderr.includes("No such container")) {
-      throw new Error(`Docker Sandbox cleanup failed: ${result.stderr.trim()}`)
+      throw new Error(`Docker Sandbox cleanup failed: ${(result.stderr || result.stdout).trim()}`)
     }
   }
 }
@@ -275,6 +348,127 @@ class NodeCommandRunner implements CommandRunner {
       )
     })
   }
+
+  async spawn(
+    command: string,
+    args: readonly string[],
+    options: Readonly<SandboxExecOptions>,
+    killRemote: () => Promise<void>
+  ): Promise<Readonly<SandboxProcess>> {
+    options.signal?.throwIfAborted()
+    const child = spawn(command, [...args], {
+      detached: process.platform !== "win32",
+      stdio: ["pipe", "pipe", "pipe"],
+      windowsHide: true,
+    })
+    return new DockerSandboxProcess(child, options, killRemote)
+  }
+}
+
+class DockerSandboxProcess implements SandboxProcess {
+  readonly #child: ReturnType<typeof spawn>
+  readonly #completion: Promise<Readonly<SandboxProcessExit>>
+  readonly #hostProcessGroupId: number
+  readonly #killRemote: () => Promise<void>
+  #closePromise: Promise<void> | undefined
+  #finished = false
+  #killPromise: Promise<void> | undefined
+  readonly id: string
+  readonly stderr: ReadableStream<Uint8Array>
+  readonly stdout: ReadableStream<Uint8Array>
+
+  constructor(child: ReturnType<typeof spawn>, options: Readonly<SandboxExecOptions>, killRemote: () => Promise<void>) {
+    if (child.pid === undefined || child.stdout === null || child.stderr === null || child.stdin === null) {
+      child.kill()
+      throw new Error("Docker Sandbox failed to create process pipes")
+    }
+
+    this.#child = child
+    this.#hostProcessGroupId = child.pid
+    this.#killRemote = killRemote
+    this.id = `docker-exec:${child.pid}`
+    this.stdout = bufferedNodeStream(child.stdout)
+    this.stderr = bufferedNodeStream(child.stderr)
+    this.#completion = new Promise((resolve, reject) => {
+      child.once("error", reject)
+      child.once("close", code => {
+        this.#finished = true
+        if (options.signal?.aborted) {
+          reject(options.signal.reason)
+        } else if (code === null) {
+          reject(new Error("Docker Sandbox process exited without an exit code"))
+        } else {
+          resolve(Object.freeze({ exitCode: code }))
+        }
+      })
+    })
+    // A caller may use only the streams and kill handle. Keep the cached wait
+    // rejection observable without letting an optional wait() become unhandled.
+    void this.#completion.catch(() => undefined)
+
+    options.signal?.addEventListener("abort", () => void this.kill(), { once: true })
+    if (options.signal?.aborted) void this.kill()
+    if (options.timeoutMs !== undefined) {
+      setTimeout(() => void this.kill(), options.timeoutMs).unref()
+    }
+  }
+
+  async closeInput(): Promise<void> {
+    if (this.#finished) return
+    this.#closePromise ??= new Promise(resolve => this.#child.stdin?.end(resolve))
+    await this.#closePromise
+  }
+
+  async kill(): Promise<void> {
+    if (this.#finished) return
+    this.#killPromise ??= (async () => {
+      await this.#killRemote()
+      try {
+        if (process.platform === "win32") this.#child.kill("SIGKILL")
+        else process.kill(-this.#hostProcessGroupId, "SIGKILL")
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== "ESRCH") throw error
+      }
+    })()
+    await this.#killPromise
+  }
+
+  async wait(): Promise<Readonly<SandboxProcessExit>> {
+    return await this.#completion
+  }
+
+  async write(data: Uint8Array): Promise<void> {
+    if (this.#finished || this.#child.stdin === null || this.#child.stdin.destroyed) {
+      throw new Error("Docker Sandbox process input is closed")
+    }
+    await new Promise<void>((resolve, reject) => {
+      this.#child.stdin?.write(data, (error: Error | null | undefined) =>
+        error === null || error === undefined ? resolve() : reject(error)
+      )
+    })
+  }
+}
+
+function bufferedNodeStream(stream: Readable): ReadableStream<Uint8Array> {
+  let controller: ReadableStreamDefaultController<Uint8Array>
+  const readable = new ReadableStream<Uint8Array>({
+    start(value) {
+      controller = value
+    },
+    cancel() {
+      stream.destroy()
+    },
+    pull() {
+      stream.resume()
+    },
+  })
+  stream.on("data", chunk => {
+    controller.enqueue(new Uint8Array(Buffer.from(chunk)))
+    if ((controller.desiredSize ?? 0) <= 0) stream.pause()
+  })
+  stream.once("end", () => controller.close())
+  stream.once("error", error => controller.error(error))
+  return readable
 }
 
 function guestPath(root: string, logicalPath: string): string {

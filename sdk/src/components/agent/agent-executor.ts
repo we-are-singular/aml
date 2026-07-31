@@ -50,6 +50,26 @@ export class AgentExecutor {
       throw new EvaluationError("<Agent> system must be a string")
     }
 
+    if (props.permissions !== undefined) {
+      if (typeof props.permissions !== "object" || props.permissions === null || Array.isArray(props.permissions)) {
+        throw new EvaluationError("<Agent> permissions must be an object")
+      }
+
+      if (
+        props.permissions.filesystem !== undefined &&
+        props.permissions.filesystem !== "read-only" &&
+        props.permissions.filesystem !== "read-write"
+      ) {
+        throw new EvaluationError('<Agent> permissions.filesystem must be "read-only" or "read-write"')
+      }
+
+      for (const name of ["network", "shell"] as const) {
+        if (props.permissions[name] !== undefined && typeof props.permissions[name] !== "boolean") {
+          throw new EvaluationError(`<Agent> permissions.${name} must be a boolean`)
+        }
+      }
+    }
+
     const explicitProvider = props.provider
 
     return explicitProvider === undefined

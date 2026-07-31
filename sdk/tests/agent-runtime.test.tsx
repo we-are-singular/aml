@@ -5,6 +5,7 @@ import type { AgentProvider } from "../src/components/agent/agent-provider.js"
 import type { AgentRequest } from "../src/components/agent/agent-request.js"
 import { defineAgentProvider } from "../src/components/agent/define-agent-provider.js"
 import { System } from "../src/components/system/system.js"
+import { Sandbox } from "../src/components/sandbox/sandbox.js"
 import type { AmlRenderable } from "../src/core/aml-node.js"
 import { AmlRuntime } from "../src/core/aml-runtime.js"
 import { EvaluationError } from "../src/core/evaluation-error.js"
@@ -13,6 +14,7 @@ import type { AmlTraceEvent } from "../src/observability/trace-event.js"
 import { agentProviderConformance } from "../src/testing/agent-provider-conformance.js"
 import { createAgentExecutionContext } from "../src/testing/create-agent-execution-context.js"
 import { DeterministicAgentProvider } from "../src/testing/deterministic-agent-provider.js"
+import { DeterministicSandboxProvider } from "../src/testing/deterministic-sandbox-provider.js"
 
 describe("Agent", () => {
   it("uses the runtime provider unless an Agent overrides it", async () => {
@@ -39,8 +41,42 @@ describe("Agent", () => {
 
     expect(runtimeProvider.calls).toHaveLength(1)
     expect(runtimeProvider.calls[0]?.request.model).toBeUndefined()
+    expect(runtimeProvider.calls[0]?.request.permissions).toEqual({
+      filesystem: "read-write",
+      network: true,
+      shell: true,
+    })
     expect(localProvider.calls).toHaveLength(1)
     expect(localProvider.calls[0]?.request.model).toBe("provider/model")
+  })
+
+  it("normalizes Agent permission overrides into an immutable provider request", async () => {
+    const provider = new DeterministicAgentProvider()
+
+    await new AmlRuntime({ agentProvider: provider }).evaluate(
+      <Agent permissions={{ filesystem: "read-only", network: false }}>inspect</Agent>
+    )
+
+    expect(provider.calls[0]?.request.permissions).toEqual({
+      filesystem: "read-only",
+      network: false,
+      shell: true,
+    })
+    expect(Object.isFrozen(provider.calls[0]?.request.permissions)).toBe(true)
+
+    const sandboxProvider = new DeterministicAgentProvider({ supportsSandbox: () => true })
+    await new AmlRuntime({ agentProvider: sandboxProvider }).evaluate(
+      <Sandbox access="read-only" provider={new DeterministicSandboxProvider()}>
+        <Agent>inspect</Agent>
+      </Sandbox>
+    )
+    expect(sandboxProvider.calls[0]?.request.permissions.filesystem).toBe("read-only")
+
+    await expect(
+      new AmlRuntime({ agentProvider: provider }).evaluate(
+        <Agent permissions={{ shell: "yes" as never }}>invalid</Agent>
+      )
+    ).rejects.toThrow("<Agent> permissions.shell must be a boolean")
   })
 
   it("resolves child Agents and System subtrees before their parent", async () => {
@@ -403,6 +439,7 @@ describe("defineAgentProvider", () => {
     await expect(
       provider.run({
         mcpServers: [],
+        permissions: { filesystem: "read-write", network: true, shell: true },
         prompt: "prompt",
         system: "",
         tools: [],

@@ -33,6 +33,38 @@ describe.skipIf(!dockerEnabled)("Docker Sandbox integration", () => {
       ])
 
       expect(result).toMatchObject({ exitCode: 0, stderr: "" })
+      const spawned = await lease.runtime.spawn("sh", [
+        "-c",
+        "IFS= read -r value; printf '%s' \"$value\"; printf warning >&2",
+      ])
+      await spawned.write(new TextEncoder().encode("streamed\n"))
+      await spawned.closeInput()
+      const [stdout, stderr, exit] = await Promise.all([
+        readStream(spawned.stdout),
+        readStream(spawned.stderr),
+        spawned.wait(),
+      ])
+
+      expect({ exit, stderr, stdout }).toEqual({
+        exit: { exitCode: 0 },
+        stderr: "warning",
+        stdout: "streamed",
+      })
+
+      const processTree = await lease.runtime.spawn("sh", [
+        "-c",
+        'sleep 60 & child=$!; printf \'%s\\n\' "$child"; wait "$child"',
+      ])
+      const reader = processTree.stdout.getReader()
+      const firstChunk = await reader.read()
+      const childPid = new TextDecoder().decode(firstChunk.value).trim()
+      expect(childPid).toMatch(/^[0-9]+$/)
+      await processTree.kill()
+      await processTree.wait().catch(() => undefined)
+      await reader.cancel()
+      const childStatus = await lease.runtime.exec("sh", ["-c", `kill -0 ${childPid} 2>/dev/null`])
+      expect(childStatus.exitCode).not.toBe(0)
+
       await expect(readFile(path.join(workspace, "repository", "setup.txt"), "utf8")).resolves.toBe("setup")
       await expect(readFile(path.join(workspace, "repository", "output.txt"), "utf8")).resolves.toBe(
         "hello docker written"
@@ -43,3 +75,9 @@ describe.skipIf(!dockerEnabled)("Docker Sandbox integration", () => {
     }
   }, 120_000)
 })
+
+async function readStream(stream: ReadableStream<Uint8Array>): Promise<string> {
+  const chunks: Uint8Array[] = []
+  for await (const chunk of stream) chunks.push(chunk)
+  return Buffer.concat(chunks).toString("utf8")
+}

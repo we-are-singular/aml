@@ -15,18 +15,14 @@
   },
   "scripts": {
     "build": "vite build && tsc --project tsconfig.build.json",
-    "package:check": "node scripts/check-package.ts",
     "test": "vitest run",
     "test:integration": "vitest run tests/codex-agent.integration.test.tsx",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@aml-jsx/sdk": "*",
-    "@modelcontextprotocol/sdk": "^1.29.0",
-    "@openai/codex-sdk": "0.145.0",
-    "defu": "^6.1.7"
+    "@aml-jsx/sdk": "*"
   },
   "devDependencies": {
-    "zod": "^4.4.3"
+    "@aml-jsx/sandbox-local": "*"
   }
 }

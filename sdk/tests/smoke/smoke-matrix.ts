@@ -10,6 +10,28 @@ import {
   type SandboxProvider,
 } from "../../src/index.js"
 
+const CODEX_ACP_VERSION = "1.1.7"
+const CODEX_VERSION = "0.145.0"
+const OPENCODE_VERSION = "1.18.9"
+const PI_ACP_VERSION = "0.0.33"
+const PI_MCP_ADAPTER_VERSION = "2.16.0"
+const PI_VERSION = "0.82.1"
+const SMOKE_AGENT_PATH = `/tmp/aml-agents/bin:${process.env.PATH ?? "/usr/local/bin:/usr/bin:/bin"}`
+const ALL_AGENTS_SETUP =
+  "test -f input.txt && " +
+  `npm install --global --prefix /tmp/aml-agents @agentclientprotocol/codex-acp@${CODEX_ACP_VERSION} ` +
+  `@openai/codex@${CODEX_VERSION} opencode-ai@${OPENCODE_VERSION} pi-acp@${PI_ACP_VERSION} ` +
+  `pi-mcp-adapter@${PI_MCP_ADAPTER_VERSION} ` +
+  `@earendil-works/pi-coding-agent@${PI_VERSION} && ` +
+  "PATH=/tmp/aml-agents/bin:$PATH command -v codex-acp && " +
+  "PATH=/tmp/aml-agents/bin:$PATH command -v codex && " +
+  "PATH=/tmp/aml-agents/bin:$PATH command -v opencode && " +
+  "PATH=/tmp/aml-agents/bin:$PATH command -v pi-acp && " +
+  "PATH=/tmp/aml-agents/bin:$PATH command -v pi && " +
+  "PATH=/tmp/aml-agents/bin:$PATH command -v pi-mcp-adapter"
+const ALL_AGENTS_PRESENT =
+  "test -f input.txt && command -v codex-acp && command -v codex && command -v opencode && command -v pi-acp && command -v pi && command -v pi-mcp-adapter"
+
 export interface SmokeAgentInstance {
   readonly provider: AgentProvider
   release?(): Promise<void>
@@ -21,83 +43,45 @@ interface SmokeAgentRegistration {
 }
 
 /**
- * Canonical Agent registry. Every Agent automatically participates in every
- * Sandbox registered below.
+ * Canonical ACP Agent registry. Every Agent automatically participates in
+ * every Sandbox registered below.
  */
 export const SMOKE_AGENTS = {
   codex: {
     create() {
-      const apiKey = process.env.AML_CODEX_API_KEY ?? process.env.OPENAI_API_KEY
-      const codexHome = process.env.AML_CODEX_HOME
-
-      if (apiKey === undefined && codexHome === undefined) {
-        throw new Error("Codex smoke requires AML_CODEX_API_KEY, OPENAI_API_KEY, or an authenticated AML_CODEX_HOME")
-      }
-
-      return {
-        provider: codexAgent({
-          ...(apiKey === undefined ? {} : { apiKey }),
-          ...(process.env.AML_CODEX_BASE_URL === undefined ? {} : { baseUrl: process.env.AML_CODEX_BASE_URL }),
-          ...(codexHome === undefined ? {} : { env: { CODEX_HOME: codexHome } }),
-          model: process.env.AML_CODEX_MODEL ?? (apiKey === undefined ? "gpt-5.3-codex-spark" : "gpt-5.3-codex"),
-          skipGitRepoCheck: true,
-        }),
-      }
+      const apiKey = requiredOpenAiApiKey("Codex")
+      return { provider: codexAgent({ apiKey, env: { PATH: SMOKE_AGENT_PATH } }) }
     },
     get model() {
-      const apiKey = process.env.AML_CODEX_API_KEY ?? process.env.OPENAI_API_KEY
-      return process.env.AML_CODEX_MODEL ?? (apiKey === undefined ? "gpt-5.3-codex-spark" : "gpt-5.3-codex")
+      return process.env.AML_CODEX_MODEL ?? "gpt-5.3-codex"
     },
   },
   opencode: {
     create() {
-      const apiKey = process.env.OPENCODE_API_KEY
-
-      if (apiKey === undefined) {
-        throw new Error("OpenCode smoke requires OPENCODE_API_KEY")
-      }
-
-      const provider = opencodeAgent({
-        config: {
-          provider: {
-            "opencode-go": {
-              options: { apiKey },
-            },
-          },
-        },
-        model: process.env.AML_OPENCODE_MODEL ?? "opencode-go/glm-5.1",
-      })
-
+      const apiKey = requiredOpenAiApiKey("OpenCode")
       return {
-        provider,
-        async release() {
-          await provider.close()
-        },
-      }
-    },
-    get model() {
-      return process.env.AML_OPENCODE_MODEL ?? "opencode-go/glm-5.1"
-    },
-  },
-  pi: {
-    create() {
-      const apiKey = process.env.OPENCODE_API_KEY
-
-      if (apiKey === undefined) {
-        throw new Error("Pi smoke requires OPENCODE_API_KEY")
-      }
-
-      return {
-        provider: piAgent({
-          model: process.env.AML_PI_MODEL ?? "opencode-go/glm-5.1",
-          providers: {
-            "opencode-go": { apiKey },
-          },
+        provider: opencodeAgent({
+          env: { OPENAI_API_KEY: apiKey, PATH: SMOKE_AGENT_PATH },
+          model: process.env.AML_OPENCODE_MODEL ?? "openai/gpt-5.3-codex",
         }),
       }
     },
     get model() {
-      return process.env.AML_PI_MODEL ?? "opencode-go/glm-5.1"
+      return process.env.AML_OPENCODE_MODEL ?? "openai/gpt-5.3-codex"
+    },
+  },
+  pi: {
+    create() {
+      const apiKey = requiredOpenAiApiKey("Pi")
+      return {
+        provider: piAgent({
+          env: { OPENAI_API_KEY: apiKey, PATH: SMOKE_AGENT_PATH },
+          model: process.env.AML_PI_MODEL ?? "openai/gpt-5.3-codex",
+        }),
+      }
+    },
+    get model() {
+      return process.env.AML_PI_MODEL ?? "openai/gpt-5.3-codex"
     },
   },
 } satisfies Record<string, SmokeAgentRegistration>
@@ -110,166 +94,55 @@ interface SmokeSandboxRegistration {
 }
 
 /**
- * Each cell owns its complete environment instead of deriving hidden defaults
- * from the selected Agent name.
+ * Canonical Sandbox registry. Each environment explicitly contains every
+ * supported ACP Agent; no selected Agent changes Sandbox construction.
  */
 export const SMOKE_SANDBOXES = {
   daytona: {
-    codex: {
-      create() {
-        const apiKey = process.env.DAYTONA_API_KEY
-
-        if (apiKey === undefined) {
-          throw new Error("Daytona smoke requires DAYTONA_API_KEY")
-        }
-
-        return daytonaSandbox({
-          config: { apiKey },
-          setup: "test -f input.txt && command -v codex",
-        })
-      },
-      environment: "default-snapshot",
+    create() {
+      const apiKey = process.env.DAYTONA_API_KEY
+      if (apiKey === undefined) throw new Error("Daytona smoke requires DAYTONA_API_KEY")
+      return daytonaSandbox({
+        config: { apiKey },
+        image: "node:26",
+        setup: ALL_AGENTS_SETUP,
+      })
     },
-    opencode: {
-      create() {
-        const apiKey = process.env.DAYTONA_API_KEY
-
-        if (apiKey === undefined) {
-          throw new Error("Daytona smoke requires DAYTONA_API_KEY")
-        }
-
-        return daytonaSandbox({
-          config: { apiKey },
-          setup: "test -f input.txt && command -v opencode",
-        })
-      },
-      environment: "default-snapshot",
-    },
-    pi: {
-      create() {
-        const apiKey = process.env.DAYTONA_API_KEY
-
-        if (apiKey === undefined) {
-          throw new Error("Daytona smoke requires DAYTONA_API_KEY")
-        }
-
-        return daytonaSandbox({
-          config: { apiKey },
-          setup: "test -f input.txt",
-        })
-      },
-      environment: "default-snapshot",
-    },
+    environment: "node:26",
   },
   docker: {
-    codex: {
-      create() {
-        return dockerSandbox({
-          image: "node:26",
-          setup: "test -f input.txt && npm install --global @openai/codex@0.145.0",
-        })
-      },
-      environment: "node:26",
+    create() {
+      return dockerSandbox({
+        image: "node:26",
+        setup: ALL_AGENTS_SETUP,
+      })
     },
-    opencode: {
-      create() {
-        return dockerSandbox({
-          image: "node:26",
-          setup: "test -f input.txt && npm install --global opencode-ai@1.18.7",
-        })
-      },
-      environment: "node:26",
-    },
-    pi: {
-      create() {
-        return dockerSandbox({
-          image: "alpine:3.22",
-          setup: "test -f input.txt",
-        })
-      },
-      environment: "alpine:3.22",
-    },
+    environment: "node:26",
   },
   local: {
-    codex: {
-      create() {
-        return localSandbox({ setup: "test -f input.txt" })
-      },
-      environment: "host",
+    create() {
+      return localSandbox({ setup: ALL_AGENTS_PRESENT })
     },
-    opencode: {
-      create() {
-        return localSandbox({ setup: "test -f input.txt" })
-      },
-      environment: "host",
-    },
-    pi: {
-      create() {
-        return localSandbox({ setup: "test -f input.txt" })
-      },
-      environment: "host",
-    },
+    environment: "host",
   },
   modal: {
-    codex: {
-      create() {
-        const tokenId = process.env.MODAL_API_KEY
-        const tokenSecret = process.env.MODAL_API_SECRET
-
-        if (tokenId === undefined || tokenSecret === undefined) {
-          throw new Error("Modal smoke requires MODAL_API_KEY and MODAL_API_SECRET")
-        }
-
-        return modalSandbox({
-          appName: "aml-jsx-smoke",
-          config: { tokenId, tokenSecret },
-          create: { memoryMiB: 2_048, timeoutMs: 120_000 },
-          image: "node:26",
-          setup: "test -f input.txt && npm install --global @openai/codex@0.145.0",
-        })
-      },
-      environment: "node:26",
+    create() {
+      const tokenId = process.env.MODAL_API_KEY
+      const tokenSecret = process.env.MODAL_API_SECRET
+      if (tokenId === undefined || tokenSecret === undefined) {
+        throw new Error("Modal smoke requires MODAL_API_KEY and MODAL_API_SECRET")
+      }
+      return modalSandbox({
+        appName: "aml-jsx-smoke",
+        config: { tokenId, tokenSecret },
+        create: { memoryMiB: 2_048, timeoutMs: 300_000 },
+        image: "node:26",
+        setup: ALL_AGENTS_SETUP,
+      })
     },
-    opencode: {
-      create() {
-        const tokenId = process.env.MODAL_API_KEY
-        const tokenSecret = process.env.MODAL_API_SECRET
-
-        if (tokenId === undefined || tokenSecret === undefined) {
-          throw new Error("Modal smoke requires MODAL_API_KEY and MODAL_API_SECRET")
-        }
-
-        return modalSandbox({
-          appName: "aml-jsx-smoke",
-          config: { tokenId, tokenSecret },
-          create: { memoryMiB: 2_048, timeoutMs: 120_000 },
-          image: "node:26",
-          setup: "test -f input.txt && npm install --global opencode-ai@1.18.7",
-        })
-      },
-      environment: "node:26",
-    },
-    pi: {
-      create() {
-        const tokenId = process.env.MODAL_API_KEY
-        const tokenSecret = process.env.MODAL_API_SECRET
-
-        if (tokenId === undefined || tokenSecret === undefined) {
-          throw new Error("Modal smoke requires MODAL_API_KEY and MODAL_API_SECRET")
-        }
-
-        return modalSandbox({
-          appName: "aml-jsx-smoke",
-          config: { tokenId, tokenSecret },
-          create: { timeoutMs: 120_000 },
-          image: "alpine:3.22",
-          setup: "test -f input.txt",
-        })
-      },
-      environment: "alpine:3.22",
-    },
+    environment: "node:26",
   },
-} satisfies Record<string, Record<SmokeAgentName, SmokeSandboxRegistration>>
+} satisfies Record<string, SmokeSandboxRegistration>
 
 export type SmokeSandboxName = keyof typeof SMOKE_SANDBOXES
 
@@ -294,7 +167,6 @@ export type SmokeCommand =
 export function selectSmokeCases(selection: SmokeSelection = {}): SmokeCase[] {
   const agents = selection.agent === undefined ? SMOKE_AGENT_NAMES : [selection.agent]
   const sandboxes = selection.sandbox === undefined ? SMOKE_SANDBOX_NAMES : [selection.sandbox]
-
   return agents.flatMap(agent => sandboxes.map(sandbox => ({ agent, sandbox })))
 }
 
@@ -319,30 +191,20 @@ export function parseSmokeCommand(args: readonly string[]): SmokeCommand {
 
     if (argument === "--agent") {
       const value = args[++index]
-
-      if (value === undefined) {
-        throw new TypeError("--agent requires a value")
-      }
-
+      if (value === undefined) throw new TypeError("--agent requires a value")
       if (!SMOKE_AGENT_NAMES.includes(value as SmokeAgentName)) {
         throw new TypeError(`Unknown smoke Agent "${value}". Available: ${SMOKE_AGENT_NAMES.join(", ")}`)
       }
-
       agent = value as SmokeAgentName
       continue
     }
 
     if (argument === "--sandbox") {
       const value = args[++index]
-
-      if (value === undefined) {
-        throw new TypeError("--sandbox requires a value")
-      }
-
+      if (value === undefined) throw new TypeError("--sandbox requires a value")
       if (!SMOKE_SANDBOX_NAMES.includes(value as SmokeSandboxName)) {
         throw new TypeError(`Unknown smoke Sandbox "${value}". Available: ${SMOKE_SANDBOX_NAMES.join(", ")}`)
       }
-
       sandbox = value as SmokeSandboxName
       continue
     }
@@ -350,14 +212,16 @@ export function parseSmokeCommand(args: readonly string[]): SmokeCommand {
     throw new TypeError(`Unknown smoke argument "${argument}"`)
   }
 
-  if (help) {
-    return { kind: "help" }
-  }
-
+  if (help) return { kind: "help" }
   const selection = {
     ...(agent === undefined ? {} : { agent }),
     ...(sandbox === undefined ? {} : { sandbox }),
   }
-
   return list ? { kind: "list", selection } : { kind: "run", selection }
+}
+
+function requiredOpenAiApiKey(agent: string): string {
+  const apiKey = process.env.AML_CODEX_API_KEY ?? process.env.OPENAI_API_KEY
+  if (apiKey === undefined) throw new Error(`${agent} smoke requires AML_CODEX_API_KEY or OPENAI_API_KEY`)
+  return apiKey
 }

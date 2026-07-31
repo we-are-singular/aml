@@ -10,6 +10,7 @@ import { Sandbox } from "../src/components/sandbox/sandbox.js"
 import { Skill } from "../src/components/skill/skill.js"
 import { System } from "../src/components/system/system.js"
 import { Tool } from "../src/components/tool/tool.js"
+import { defineTool } from "../src/components/tool/define-tool.js"
 import { AmlRuntime } from "../src/core/aml-runtime.js"
 import { evaluate } from "../src/core/evaluate.js"
 import { DeterministicAgentProvider } from "../src/testing/deterministic-agent-provider.js"
@@ -18,6 +19,12 @@ import { DeterministicSandboxProvider } from "../src/testing/deterministic-sandb
 describe("FollowUp", () => {
   it("assembles one frozen ordered session plan with shared capabilities", async () => {
     const turns: string[] = []
+    const read = defineTool({
+      description: "Read fixture data",
+      input: z.object({}),
+      name: "read",
+      execute: async () => "fixture",
+    })
     const project = defineMcpServer({
       name: "project",
       transport: {
@@ -30,7 +37,7 @@ describe("FollowUp", () => {
       async run(request) {
         expect(request.followUps).toEqual(["Challenge the findings.", "Produce the final review."])
         expect(Object.isFrozen(request.followUps)).toBe(true)
-        expect(request.tools).toEqual([{ kind: "host", name: "read" }])
+        expect(request.tools.map(tool => tool.name)).toEqual(["read"])
         expect(request.mcpServers).toEqual([{ definition: project, kind: "configured" }])
 
         // A provider owns session history. This deterministic adapter records
@@ -43,7 +50,7 @@ describe("FollowUp", () => {
     await expect(
       new AmlRuntime({ agentProvider: provider }).evaluate(
         <Agent>
-          <Tool name="read" />
+          <Tool use={read} />
           <Mcp use={project} />
           Investigate the implementation.
           <FollowUp> Challenge the findings. </FollowUp>
@@ -199,13 +206,19 @@ describe("FollowUp", () => {
   it("rejects turn-specific Tool and MCP capability grants", async () => {
     const provider = new DeterministicAgentProvider()
     const runtime = new AmlRuntime({ agentProvider: provider })
+    const read = defineTool({
+      description: "Read fixture data",
+      input: z.object({}),
+      name: "read",
+      execute: async () => "fixture",
+    })
 
     await expect(
       runtime.evaluate(
         <Agent>
           initial
           <FollowUp>
-            <Tool name="read" />
+            <Tool use={read} />
             later
           </FollowUp>
         </Agent>

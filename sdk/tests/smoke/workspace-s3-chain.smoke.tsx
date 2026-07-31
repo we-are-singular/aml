@@ -15,7 +15,6 @@ import {
   Sandbox,
   Script,
   s3Workspace,
-  Tool,
   Workspace,
 } from "../../src/index.js"
 
@@ -52,9 +51,7 @@ const client = new S3Client({
 const workspaceProvider = s3Workspace({ bucket, client, prefix })
 const agent = codexAgent({
   apiKey: codexApiKey,
-  ...(process.env.AML_CODEX_BASE_URL === undefined ? {} : { baseUrl: process.env.AML_CODEX_BASE_URL }),
-  model: process.env.AML_CODEX_MODEL ?? "gpt-5.3-codex",
-  skipGitRepoCheck: true,
+  ...(process.env.AML_CODEX_BASE_URL === undefined ? {} : { env: { OPENAI_BASE_URL: process.env.AML_CODEX_BASE_URL } }),
 })
 
 /**
@@ -92,8 +89,7 @@ async function main(): Promise<void> {
             setup: "test -f original.txt && test -f docker.txt && command -v codex",
           })}
         >
-          <Agent>
-            <Tool name="bash" />
+          <Agent model={process.env.AML_CODEX_MODEL ?? "gpt-5.3-codex"}>
             Concatenate original.txt and docker.txt byte-for-byte, in that order, into final.txt. Do not insert
             separators or newlines. Do not create, delete, or modify any other Workspace file. After verifying the
             command succeeded, reply with exactly: done

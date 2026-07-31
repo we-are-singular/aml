@@ -1,521 +1,156 @@
 import {
-  AbstractAgentProvider,
+  AcpAgentProvider,
   defineAgentProvider,
-  supportsSandboxRuntime,
-  type AgentExecutionContext,
+  type AcpAgentLaunch,
+  type AcpAgentLaunchContext,
+  type AcpAgentProfile,
+  type AcpSessionFactory,
   type AgentProvider,
-  type AgentProviderSession,
-  type AgentProviderTurn,
-  type AgentRequest,
-  type AgentResponse,
 } from "@aml-jsx/sdk"
-import { defu } from "defu"
 
-import { CodexCapabilityAttachment } from "./codex-capability-attachment.js"
-import type {
-  CodexClient,
-  CodexClientFactory,
-  CodexClientOptions,
-  CodexConfig,
-  CodexConfigValue,
-  CodexReasoningEffort,
-} from "./codex-client-factory.js"
-import { CodexSdkClientFactory } from "./codex-sdk-client-factory.js"
-import { CodexSandboxClient } from "./codex-sandbox-client.js"
-import { CodexSession } from "./codex-session.js"
+/** JSON configuration passed to the maintained Codex ACP adapter. */
+export type CodexConfigValue =
+  | boolean
+  | number
+  | string
+  | null
+  | readonly CodexConfigValue[]
+  | Readonly<{ readonly [key: string]: CodexConfigValue }>
 
-const REASONING_EFFORTS = new Set<CodexReasoningEffort>(["minimal", "low", "medium", "high", "xhigh"])
-
-const MAX_CODEX_CONFIG_DEPTH = 128
-
-/**
- * Configures the Codex SDK and its provider-owned execution defaults.
- */
 export interface CodexAgentOptions {
   readonly apiKey?: string
-  readonly baseUrl?: string
-  readonly clientFactory?: CodexClientFactory
-  readonly codexPathOverride?: string
-  readonly config?: CodexConfig
+  readonly args?: readonly string[]
+  readonly command?: string
+  readonly config?: Readonly<Record<string, CodexConfigValue>>
   readonly env?: Readonly<Record<string, string>>
-  readonly model?: string
-  readonly reasoningEffort?: CodexReasoningEffort
-  readonly skipGitRepoCheck?: boolean
+  readonly sessionFactory?: AcpSessionFactory
   readonly workingDirectory?: string
 }
 
-/**
- * Configured Codex strategy used by `<Agent provider>`.
- */
 export interface CodexAgentProvider extends AgentProvider {
   readonly name: "codex"
 }
 
 interface CapturedCodexAgentOptions {
   readonly apiKey?: string
-  readonly baseUrl?: string
-  readonly clientFactory: CodexClientFactory
-  readonly codexPathOverride?: string
-  readonly config: CodexConfig
-  readonly env?: Readonly<Record<string, string>>
-  readonly model?: string
-  readonly reasoningEffort?: CodexReasoningEffort
-  readonly skipGitRepoCheck?: boolean
+  readonly args: readonly string[]
+  readonly command: string
+  readonly config: Readonly<Record<string, CodexConfigValue>>
+  readonly env: Readonly<Record<string, string>>
+  readonly sessionFactory?: AcpSessionFactory
   readonly workingDirectory?: string
 }
 
-class CodexAgentImplementation extends AbstractAgentProvider<"codex"> implements CodexAgentProvider {
-  readonly #apiKey: string | undefined
-  readonly #baseUrl: string | undefined
-  readonly #clientFactory: CodexClientFactory
-  readonly #clientFactoryCreate: CodexClientFactory["create"]
-  readonly #codexPathOverride: string | undefined
-  readonly #config: CodexConfig
-  readonly #env: Readonly<Record<string, string>> | undefined
-  readonly #model: string | undefined
-  readonly #reasoningEffort: CodexReasoningEffort | undefined
-  readonly #skipGitRepoCheck: boolean | undefined
-  readonly #workingDirectory: string | undefined
-  /**
-   * Captures immutable configuration without constructing the Codex SDK.
-   */
-  constructor(options: CapturedCodexAgentOptions) {
-    super("codex")
-    this.#apiKey = options.apiKey
-    this.#baseUrl = options.baseUrl
-    this.#clientFactory = options.clientFactory
-    this.#clientFactoryCreate = options.clientFactory.create
-    this.#codexPathOverride = options.codexPathOverride
-    this.#config = options.config
-    this.#env = options.env
-    this.#model = options.model
-    this.#reasoningEffort = options.reasoningEffort
-    this.#skipGitRepoCheck = options.skipGitRepoCheck
-    this.#workingDirectory = options.workingDirectory
+class CodexProfile implements AcpAgentProfile<"codex"> {
+  readonly name = "codex"
+  readonly #options: Readonly<CapturedCodexAgentOptions>
+
+  constructor(options: Readonly<CapturedCodexAgentOptions>) {
+    this.#options = options
   }
 
-  override supportsSandbox(sandbox: NonNullable<AgentExecutionContext["sandbox"]>): boolean {
-    return supportsSandboxRuntime(sandbox)
+  get sessionFactory(): AcpSessionFactory | undefined {
+    return this.#options.sessionFactory
   }
 
-  /**
-   * Opens one fresh Codex thread with invocation-local capabilities.
-   */
-  protected async openSession(request: AgentRequest, context: AgentExecutionContext): Promise<AgentProviderSession> {
-    context.signal.throwIfAborted()
-
-    if (typeof request.system !== "string") {
-      throw new TypeError("Codex system must be a string")
-    }
-
-    if (context.sandbox !== undefined && this.#workingDirectory !== undefined) {
-      throw new TypeError("Codex workingDirectory cannot be combined with AML Sandbox; use Agent cwd")
-    }
-
-    if (context.sandbox !== undefined && request.tools.some(tool => tool.kind === "javascript")) {
-      throw new TypeError("Codex JavaScript Tools are not yet transportable into AML Sandbox")
-    }
-
-    // Constructing the plan first makes invalid FollowUps and models fail
-    // before the optional localhost Tool bridge performs external work.
-    const session = new CodexSession(request, {
-      ...(this.#model === undefined ? {} : { model: this.#model }),
-      ...(this.#reasoningEffort === undefined ? {} : { reasoningEffort: this.#reasoningEffort }),
-      ...(this.#skipGitRepoCheck === undefined ? {} : { skipGitRepoCheck: this.#skipGitRepoCheck }),
-      ...(context.sandbox !== undefined || this.#workingDirectory === undefined
-        ? {}
-        : { workingDirectory: this.#workingDirectory }),
-    })
-    // This table contains only explicit factory options. Ambient repository
-    // and user MCP configuration remains visible only to the Codex host.
-    const suppliedMcpOverrides = CodexAgentImplementation.#configTable(
-      this.#config.mcp_servers,
-      "Codex config mcp_servers"
-    )
-    const attachment = await CodexCapabilityAttachment.create(request, context, suppliedMcpOverrides)
-    let sandboxClient: CodexSandboxClient | undefined
-
-    try {
-      const config = this.#invocationConfig(request, attachment, suppliedMcpOverrides)
-      const clientOptions = {
-        ...(this.#apiKey === undefined ? {} : { apiKey: this.#apiKey }),
-        ...(this.#baseUrl === undefined ? {} : { baseUrl: this.#baseUrl }),
-        ...(this.#codexPathOverride === undefined ? {} : { codexPathOverride: this.#codexPathOverride }),
-        config,
-        ...(this.#env === undefined ? {} : { env: this.#env }),
-      }
-      const client =
-        context.sandbox === undefined
-          ? this.#createClient(clientOptions)
-          : (sandboxClient = new CodexSandboxClient({
-              ...clientOptions,
-              sandbox: context.sandbox,
-            }))
-      return new CodexAgentProviderSession(session.open(client), attachment, sandboxClient)
-    } catch (error) {
-      const cleanupErrors = await closeCodexResources(attachment, sandboxClient)
-
-      if (cleanupErrors.length === 0) {
-        throw error
-      }
-
-      throw new AggregateError([error, ...cleanupErrors], "Codex Agent session creation and cleanup failed")
-    }
+  get workingDirectory(): string | undefined {
+    return this.#options.workingDirectory
   }
 
-  /**
-   * Calls the captured dependency-injection port and validates its result.
-   */
-  #createClient(options: CodexClientOptions): CodexClient {
-    const client = Reflect.apply(this.#clientFactoryCreate, this.#clientFactory, [options]) as CodexClient
-
-    if (typeof client !== "object" || client === null) {
-      throw new TypeError("Codex clientFactory must return a client object")
+  createLaunch(context: Readonly<AcpAgentLaunchContext>): Readonly<AcpAgentLaunch> {
+    const config = {
+      ...this.#options.config,
+      ...(context.request.model === undefined ? {} : { model: context.request.model }),
+      ...(context.request.system.length === 0 ? {} : { developer_instructions: context.request.system }),
     }
+    const hasApiKey =
+      this.#options.apiKey !== undefined ||
+      this.#options.env.CODEX_API_KEY !== undefined ||
+      this.#options.env.OPENAI_API_KEY !== undefined
+    const mode = context.request.permissions.filesystem === "read-only" ? "read-only" : "agent-full-access"
 
-    return client
-  }
-
-  /**
-   * Applies AML's invocation policy after provider-specific base config.
-   */
-  #invocationConfig(
-    request: AgentRequest,
-    attachment: CodexCapabilityAttachment,
-    suppliedMcpOverrides: Readonly<Record<string, CodexConfigValue>>
-  ): CodexConfig {
-    const userFeatures = CodexAgentImplementation.#configTable(this.#config.features, "Codex config features")
-    const imperativeFeatures = {
-      multi_agent: false,
-      shell_tool: attachment.shellEnabled,
-      unified_exec: attachment.shellEnabled,
-    }
-
-    // Preserve the provider's complete native top-level shape. Only known
-    // nested tables are defaulted recursively; authority-bearing AML values
-    // are then written explicitly so arrays and MCP definitions never combine.
     return Object.freeze({
-      ...this.#config,
-      developer_instructions: [request.system, attachment.developerInstructions]
-        .filter(fragment => fragment.length > 0)
-        .join("\n"),
-      features: Object.freeze(defu(imperativeFeatures, userFeatures)),
-      mcp_servers: Object.freeze({
-        ...suppliedMcpOverrides,
-        ...attachment.mcpServers,
-      }),
+      args: this.#options.args,
+      ...(hasApiKey ? { authenticationMethodId: "api-key" } : {}),
+      command: this.#options.command,
+      env: {
+        CODEX_HOME: context.stateDirectory,
+        ...this.#options.env,
+        APP_SERVER_LOGS: `${context.stateDirectory}/logs`,
+        CODEX_CONFIG: stringifyConfig(config),
+        CODEX_PATH: "codex",
+        CODEX_SQLITE_HOME: context.stateDirectory,
+        INITIAL_AGENT_MODE: mode,
+        NO_BROWSER: "1",
+        ...(this.#options.apiKey === undefined ? {} : { CODEX_API_KEY: this.#options.apiKey }),
+      },
+      // Codex ACP currently expresses filesystem access as a mode. Shell and
+      // network restrictions still rely on the enclosing Sandbox boundary.
+      permissionPolicy: mode === "agent-full-access" ? "allow_always" : "allow_once",
     })
   }
-
-  /**
-   * Narrows a validated optional Codex config section to a table.
-   */
-  static #configTable(value: CodexConfigValue | undefined, label: string): Readonly<Record<string, CodexConfigValue>> {
-    if (value === undefined) {
-      return Object.freeze({})
-    }
-
-    if (typeof value !== "object" || value === null || Array.isArray(value)) {
-      throw new TypeError(`${label} must be an object`)
-    }
-
-    // Array.isArray() narrows mutable arrays but not this recursive readonly
-    // union. The runtime checks above establish the config-table branch.
-    return value as CodexConfig
-  }
 }
 
 /**
- * Owns one live Codex thread and its invocation-scoped capability resources.
+ * Creates a Codex coding Agent through the maintained ACP adapter.
+ *
+ * The trusted host or selected Sandbox must contain `codex-acp` or the
+ * configured command. AML never installs the adapter implicitly.
  */
-class CodexAgentProviderSession implements AgentProviderSession {
-  readonly #attachment: CodexCapabilityAttachment
-  readonly #sandboxClient: CodexSandboxClient | undefined
-  readonly #session: AgentProviderSession
-
-  constructor(
-    session: AgentProviderSession,
-    attachment: CodexCapabilityAttachment,
-    sandboxClient: CodexSandboxClient | undefined
-  ) {
-    this.#attachment = attachment
-    this.#sandboxClient = sandboxClient
-    this.#session = session
-  }
-
-  async runTurn(turn: Readonly<AgentProviderTurn>, context: AgentExecutionContext): Promise<AgentResponse> {
-    return await this.#session.runTurn(turn, context)
-  }
-
-  async close(): Promise<void> {
-    const errors = await closeCodexResources(this.#attachment, this.#sandboxClient)
-
-    if (errors.length === 1) {
-      throw errors[0]
-    }
-
-    if (errors.length > 1) {
-      throw new AggregateError(errors, "Codex Agent capability cleanup failed")
-    }
-  }
+export function codexAgent(options: CodexAgentOptions = {}): Readonly<CodexAgentProvider> {
+  const profile = new CodexProfile(captureOptions(options))
+  return defineAgentProvider(new AcpAgentProvider(profile))
 }
 
-async function closeCodexResources(
-  attachment: CodexCapabilityAttachment,
-  sandboxClient: CodexSandboxClient | undefined
-): Promise<unknown[]> {
-  const errors: unknown[] = []
-
-  try {
-    await attachment.close()
-  } catch (error) {
-    errors.push(error)
-  }
-
-  try {
-    await sandboxClient?.close()
-  } catch (error) {
-    errors.push(error)
-  }
-
-  return errors
-}
-
-/**
- * Configures one immutable Codex Agent adapter without performing I/O.
- */
-export function codexAgent(options: CodexAgentOptions = {}): CodexAgentProvider {
-  const captured = captureOptions(options)
-
-  return defineAgentProvider(new CodexAgentImplementation(captured))
-}
-
-/**
- * Validates and snapshots provider configuration at the factory boundary.
- */
-function captureOptions(options: CodexAgentOptions): CapturedCodexAgentOptions {
-  if (typeof options !== "object" || options === null) {
+function captureOptions(value: CodexAgentOptions): Readonly<CapturedCodexAgentOptions> {
+  if (typeof value !== "object" || value === null) {
     throw new TypeError("Codex Agent options must be an object")
   }
 
-  // Capture each external property exactly once. Accessor-backed options must
-  // not validate one value and substitute another in the immutable provider.
-  const apiKeyValue = options.apiKey
-  const baseUrlValue = options.baseUrl
-  const clientFactoryValue = options.clientFactory
-  const codexPathOverrideValue = options.codexPathOverride
-  const configValue = options.config
-  const envValue = options.env
-  const modelValue = options.model
-  const reasoningEffort = options.reasoningEffort
-  const skipGitRepoCheck = options.skipGitRepoCheck
-  const workingDirectoryValue = options.workingDirectory
+  const command = normalizedString(value.command ?? "codex-acp", "Codex command")
+  const args = value.args ?? []
+  const env = value.env ?? {}
+  const config = value.config ?? {}
 
-  const apiKey = optionalSecret(apiKeyValue, "Codex apiKey")
-  const baseUrl = optionalNormalizedString(baseUrlValue, "Codex baseUrl")
-  const codexPathOverride = optionalNormalizedString(codexPathOverrideValue, "Codex codexPathOverride")
-  const model = optionalNormalizedString(modelValue, "Codex model")
-  const workingDirectory = optionalNormalizedString(workingDirectoryValue, "Codex workingDirectory")
-
-  if (reasoningEffort !== undefined && !REASONING_EFFORTS.has(reasoningEffort)) {
-    throw new TypeError("Codex reasoningEffort is unsupported")
+  if (!Array.isArray(args) || args.some(argument => typeof argument !== "string" || argument.includes("\0"))) {
+    throw new TypeError("Codex args must be strings without null bytes")
   }
 
-  if (skipGitRepoCheck !== undefined && typeof skipGitRepoCheck !== "boolean") {
-    throw new TypeError("Codex skipGitRepoCheck must be a boolean")
-  }
-
-  // Only omission selects the credentialed default. An explicit null must
-  // fail here rather than unexpectedly changing execution authority.
-  const suppliedClientFactory = clientFactoryValue === undefined ? new CodexSdkClientFactory() : clientFactoryValue
-  let clientFactoryCreate: unknown
-
-  if (typeof suppliedClientFactory !== "object" || suppliedClientFactory === null) {
-    throw new TypeError("Codex clientFactory create must be a function")
-  }
-
-  try {
-    // Capture the external method once. A stateful getter must not validate as
-    // one function and then substitute another when the first Agent runs.
-    clientFactoryCreate = Reflect.get(suppliedClientFactory, "create")
-  } catch (cause) {
-    throw new TypeError("Codex clientFactory create must be readable", { cause })
-  }
-
-  if (typeof clientFactoryCreate !== "function") {
-    throw new TypeError("Codex clientFactory create must be a function")
-  }
-
-  const clientFactory: CodexClientFactory = Object.freeze({
-    create(options: CodexClientOptions) {
-      return Reflect.apply(clientFactoryCreate as CodexClientFactory["create"], suppliedClientFactory, [
-        options,
-      ]) as CodexClient
-    },
-  })
-  const config = snapshotConfig(configValue === undefined ? {} : configValue, "config")
-  const env = envValue === undefined ? undefined : snapshotEnvironment(envValue)
-
-  // These invocation-owned tables are merged structurally during run().
-  // Reject incompatible base values now rather than silently discarding them.
-  for (const key of ["agents", "features", "mcp_servers"] as const) {
-    const value = config[key]
-
-    if (value !== undefined && (typeof value !== "object" || value === null || Array.isArray(value))) {
-      throw new TypeError(`Codex config ${key} must be an object`)
-    }
-  }
-
-  return Object.freeze({
-    ...(apiKey === undefined ? {} : { apiKey }),
-    ...(baseUrl === undefined ? {} : { baseUrl }),
-    clientFactory,
-    ...(codexPathOverride === undefined ? {} : { codexPathOverride }),
-    config,
-    ...(env === undefined ? {} : { env }),
-    ...(model === undefined ? {} : { model }),
-    ...(reasoningEffort === undefined ? {} : { reasoningEffort }),
-    ...(skipGitRepoCheck === undefined ? {} : { skipGitRepoCheck }),
-    ...(workingDirectory === undefined ? {} : { workingDirectory }),
-  })
-}
-
-/**
- * Copies a JSON-like Codex config while rejecting cycles and invalid values.
- */
-function snapshotConfig(value: CodexConfig, label: string, ancestors = new Set<object>(), depth = 0): CodexConfig {
-  if (depth > MAX_CODEX_CONFIG_DEPTH) {
-    throw new TypeError(`Codex config exceeds the maximum depth of ${MAX_CODEX_CONFIG_DEPTH}`)
-  }
-
-  if (
-    typeof value !== "object" ||
-    value === null ||
-    Array.isArray(value) ||
-    (Object.getPrototypeOf(value) !== Object.prototype && Object.getPrototypeOf(value) !== null)
-  ) {
-    throw new TypeError(`Codex ${label} must be a plain object`)
-  }
-
-  if (ancestors.has(value)) {
-    throw new TypeError(`Codex ${label} cannot contain cycles`)
-  }
-
-  const nextAncestors = new Set(ancestors)
-  nextAncestors.add(value)
-  const entries: Array<readonly [string, CodexConfigValue]> = []
-
-  for (const [key, child] of Object.entries(value)) {
-    if (key.length === 0) {
-      throw new TypeError(`Codex ${label} keys must be non-empty strings`)
-    }
-
-    entries.push([key, snapshotConfigValue(child, `${label}.${key}`, nextAncestors, depth + 1)])
-  }
-
-  // Object.fromEntries keeps "__proto__" as authored data rather than
-  // invoking the legacy prototype setter on a plain accumulator.
-  return Object.freeze(Object.fromEntries(entries))
-}
-
-/**
- * Recursively validates one supported Codex config value.
- */
-function snapshotConfigValue(
-  value: CodexConfigValue,
-  label: string,
-  ancestors: Set<object>,
-  depth: number
-): CodexConfigValue {
-  if (typeof value === "string" || typeof value === "boolean") {
-    return value
-  }
-
-  if (typeof value === "number") {
-    if (!Number.isFinite(value)) {
-      throw new TypeError(`Codex ${label} must be finite`)
-    }
-
-    return value
-  }
-
-  if (depth > MAX_CODEX_CONFIG_DEPTH) {
-    throw new TypeError(`Codex config exceeds the maximum depth of ${MAX_CODEX_CONFIG_DEPTH}`)
-  }
-
-  if (Array.isArray(value)) {
-    if (ancestors.has(value)) {
-      throw new TypeError(`Codex ${label} cannot contain cycles`)
-    }
-
-    const nextAncestors = new Set(ancestors)
-    nextAncestors.add(value)
-
-    // Array.map skips holes, but the Codex SDK later serializes every position
-    // into TOML. Reject sparse input here instead of opening Tool resources
-    // before a malformed empty array element fails in the CLI.
-    for (let index = 0; index < value.length; index += 1) {
-      if (!Object.hasOwn(value, index)) {
-        throw new TypeError(`Codex ${label} cannot contain sparse arrays`)
-      }
-    }
-
-    return Object.freeze(
-      value.map((child, index) => snapshotConfigValue(child, `${label}[${index}]`, nextAncestors, depth + 1))
-    )
-  }
-
-  // The preceding primitive and array branches leave only a config object;
-  // TypeScript does not remove readonly arrays from this recursive union.
-  return snapshotConfig(value as CodexConfig, label, ancestors, depth)
-}
-
-/**
- * Snapshots an explicit Codex process environment without reading host env.
- */
-function snapshotEnvironment(value: Readonly<Record<string, string>>): Readonly<Record<string, string>> {
-  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+  if (typeof env !== "object" || env === null || Array.isArray(env)) {
     throw new TypeError("Codex env must be an object")
   }
 
-  const entries: Array<readonly [string, string]> = []
-
-  for (const [name, entry] of Object.entries(value)) {
-    if (name.length === 0 || typeof entry !== "string") {
-      throw new TypeError("Codex env must contain non-empty names and string values")
-    }
-
-    entries.push([name, entry])
+  if (typeof config !== "object" || config === null || Array.isArray(config)) {
+    throw new TypeError("Codex config must be an object")
   }
 
-  return Object.freeze(Object.fromEntries(entries))
+  // Validate serialization before Sandbox acquisition performs external work.
+  stringifyConfig(config)
+
+  return Object.freeze({
+    ...(value.apiKey === undefined ? {} : { apiKey: normalizedString(value.apiKey, "Codex apiKey") }),
+    args: Object.freeze([...args]),
+    command,
+    config: Object.freeze({ ...config }),
+    env: Object.freeze({ ...env }),
+    ...(value.sessionFactory === undefined ? {} : { sessionFactory: value.sessionFactory }),
+    ...(value.workingDirectory === undefined
+      ? {}
+      : { workingDirectory: normalizedString(value.workingDirectory, "Codex workingDirectory") }),
+  })
 }
 
-/**
- * Validates provider identifiers and paths without interpreting them.
- */
-function optionalNormalizedString(value: string | undefined, label: string): string | undefined {
-  if (value === undefined) {
-    return undefined
+function stringifyConfig(value: Readonly<Record<string, CodexConfigValue>>): string {
+  try {
+    return JSON.stringify(value)
+  } catch (cause) {
+    throw new TypeError("Codex config must be JSON serializable", { cause })
   }
+}
 
-  if (typeof value !== "string" || value.length === 0 || value !== value.trim()) {
+function normalizedString(value: unknown, label: string): string {
+  if (typeof value !== "string" || value.length === 0 || value !== value.trim() || value.includes("\0")) {
     throw new TypeError(`${label} must be a non-empty normalized string`)
-  }
-
-  return value
-}
-
-/**
- * Accepts opaque credentials while still rejecting an empty value.
- */
-function optionalSecret(value: string | undefined, label: string): string | undefined {
-  if (value === undefined) {
-    return undefined
-  }
-
-  if (typeof value !== "string" || value.length === 0) {
-    throw new TypeError(`${label} must be a non-empty string`)
   }
 
   return value

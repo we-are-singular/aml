@@ -7,9 +7,6 @@ import { ToolInputError } from "./tool-input-error.js"
 
 /**
  * Adds runtime-owned trace spans around JavaScript Tools.
- *
- * Host Tools pass through untouched because AML cannot observe their
- * provider-native invocation boundary.
  */
 export function instrumentAgentTools(
   tools: readonly AgentTool[],
@@ -18,10 +15,6 @@ export function instrumentAgentTools(
 ): readonly AgentTool[] {
   return Object.freeze(
     tools.map((tool): AgentTool => {
-      if (tool.kind === "host") {
-        return tool
-      }
-
       return Object.freeze({
         description: tool.description,
         async execute(input: unknown, executionContext: AgentToolExecutionContext) {

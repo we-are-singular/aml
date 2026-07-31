@@ -23,6 +23,7 @@ const request: AgentRequest = Object.freeze({
     jsonSchema: Object.freeze({ type: "object" }),
     type: "json",
   }),
+  permissions: Object.freeze({ filesystem: "read-write", network: true, shell: true }),
   prompt: "first",
   system: "",
   tools: Object.freeze([]),
@@ -153,6 +154,7 @@ describe("AbstractAgentProvider", () => {
               return { exitCode: 0, stderr: "", stdout: "" }
             },
             root: ".",
+            spawn: async () => completedTestProcess(),
           },
         },
         nested: false,
@@ -202,6 +204,7 @@ class RecordingSandboxProvider extends AbstractSandboxProvider<
         return Object.freeze({ exitCode: 0, stderr: "", stdout: "" })
       },
       root: request.root,
+      spawn: async () => completedTestProcess(),
     })
   }
 
@@ -297,6 +300,7 @@ describe("validated Sandbox runtime", () => {
           return result
         },
         root: ".",
+        spawn: async () => completedTestProcess(),
       },
       "fixture"
     )
@@ -316,10 +320,80 @@ describe("validated Sandbox runtime", () => {
           return { exitCode: "0", stderr: "", stdout: "" }
         },
         root: ".",
+        spawn: async () => completedTestProcess(),
       },
       "fixture"
     )
 
     await expect(runtime.exec("true")).rejects.toThrow('Sandbox provider "fixture" returned an invalid command result')
   })
+
+  it("captures process identity and makes lifecycle operations idempotent", async () => {
+    let closes = 0
+    let kills = 0
+    let waits = 0
+    let written: Uint8Array | undefined
+    const exit = { exitCode: 0 }
+    const process = {
+      async closeInput() {
+        closes += 1
+      },
+      id: "process-1",
+      async kill() {
+        kills += 1
+      },
+      pid: 42,
+      stderr: new ReadableStream<Uint8Array>({ start: controller => controller.close() }),
+      stdout: new ReadableStream<Uint8Array>({ start: controller => controller.close() }),
+      async wait() {
+        waits += 1
+        return exit
+      },
+      async write(data: Uint8Array) {
+        written = data
+      },
+    }
+    const runtime = validateSandboxRuntime(
+      {
+        access: "read-write",
+        cwd: ".",
+        async exec() {
+          return { exitCode: 0, stderr: "", stdout: "" }
+        },
+        root: ".",
+        async spawn() {
+          return process
+        },
+      },
+      "fixture"
+    )
+    const captured = await runtime.spawn("server")
+    const input = new Uint8Array([1, 2, 3])
+
+    await Promise.all([captured.closeInput(), captured.closeInput(), captured.kill(), captured.kill()])
+    const [firstExit, secondExit] = await Promise.all([captured.wait(), captured.wait()])
+    await captured.write(input)
+    input[0] = 9
+    exit.exitCode = 7
+
+    expect({ closes, kills, waits }).toEqual({ closes: 1, kills: 1, waits: 1 })
+    expect(firstExit).toBe(secondExit)
+    expect(firstExit).toEqual({ exitCode: 0 })
+    expect(Object.isFrozen(firstExit)).toBe(true)
+    expect(written).toEqual(new Uint8Array([1, 2, 3]))
+  })
 })
+
+function completedTestProcess() {
+  return Object.freeze({
+    async closeInput() {},
+    id: "fixture-process",
+    async kill() {},
+    stderr: new ReadableStream<Uint8Array>({ start: controller => controller.close() }),
+    stdout: new ReadableStream<Uint8Array>({ start: controller => controller.close() }),
+    async wait() {
+      return Object.freeze({ exitCode: 0 })
+    },
+    async write() {},
+  })
+}

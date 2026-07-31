@@ -437,6 +437,7 @@ try {
   }
 
   for (const dependency of [
+    "@agentclientprotocol/sdk",
     "@aws-sdk/client-s3",
     "@daytona/sdk",
     "@earendil-works/pi-coding-agent",

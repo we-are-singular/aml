@@ -18,6 +18,8 @@ import {
   SandboxCommand,
   type ProvisionedSandbox,
   type SandboxAcquireRequest,
+  type SandboxProcess,
+  type SandboxProcessExit,
   type SandboxProvider,
   type SandboxRuntime,
 } from "@aml-jsx/sdk"
@@ -301,9 +303,214 @@ function createRuntime(
       })
     },
     root: request.root,
+    async spawn(command, args = [], options = {}) {
+      if (request.access !== "read-write") {
+        throw new Error(
+          "Daytona Sandbox cannot execute under read-only access because its transferred Workspace is not mounted read-only"
+        )
+      }
+
+      const captured = SandboxCommand.from(request, command, args, options)
+      const sessionId = `aml-${randomUUID()}`
+      await abortable(sandbox.process.createSession(sessionId), captured.signal)
+      const remoteCommand = [
+        `cd ${quoteShell(guestPath(request.root, captured.cwd))}`,
+        ...Object.entries(captured.env).map(([key, value]) => `export ${key}=${quoteShell(value)}`),
+        `exec ${shellCommand(captured.command, captured.args)}`,
+      ].join(" && ")
+
+      try {
+        const started = await abortable(
+          sandbox.process.executeSessionCommand(
+            sessionId,
+            { command: remoteCommand, runAsync: true, suppressInputEcho: true },
+            timeoutSeconds(captured.timeoutMs)
+          ),
+          captured.signal
+        )
+        return new DaytonaSandboxProcess(
+          sandbox,
+          sessionId,
+          started.cmdId,
+          captured.signal,
+          captured.timeoutMs,
+          maxOutputBytes
+        )
+      } catch (error) {
+        await sandbox.process.deleteSession(sessionId).catch(() => undefined)
+        throw error
+      }
+    },
   }
 
   return Object.freeze(runtime)
+}
+
+class DaytonaSandboxProcess implements SandboxProcess {
+  readonly #commandId: string
+  readonly #completion: Promise<Readonly<SandboxProcessExit>>
+  #closePromise: Promise<void> | undefined
+  #finished = false
+  #inputClosed = false
+  #killPromise: Promise<void> | undefined
+  #killed = false
+  readonly #sandbox: DaytonaSdkSandbox
+  readonly #sessionId: string
+  readonly id: string
+  readonly stderr: ReadableStream<Uint8Array>
+  readonly stdout: ReadableStream<Uint8Array>
+
+  constructor(
+    sandbox: DaytonaSdkSandbox,
+    sessionId: string,
+    commandId: string,
+    signal: AbortSignal,
+    timeoutMs: number | undefined,
+    maxOutputBytes: number
+  ) {
+    this.#sandbox = sandbox
+    this.#sessionId = sessionId
+    this.#commandId = commandId
+    this.id = `daytona:${sessionId}:${commandId}`
+
+    let stdoutController!: ReadableStreamDefaultController<Uint8Array>
+    let stderrController!: ReadableStreamDefaultController<Uint8Array>
+    let stdoutOpen = true
+    let stderrOpen = true
+    this.stdout = new ReadableStream({
+      cancel: () => {
+        stdoutOpen = false
+      },
+      start: controller => (stdoutController = controller),
+    })
+    this.stderr = new ReadableStream({
+      cancel: () => {
+        stderrOpen = false
+      },
+      start: controller => (stderrController = controller),
+    })
+    const encoder = new TextEncoder()
+    let bufferedBytes = 0
+    const enqueue = (
+      controller: ReadableStreamDefaultController<Uint8Array>,
+      open: () => boolean,
+      chunk: string
+    ): void => {
+      if (!open()) return
+      const bytes = encoder.encode(chunk)
+      bufferedBytes += bytes.byteLength
+      if (bufferedBytes > maxOutputBytes) {
+        const error = new RangeError(`Daytona Sandbox process output exceeded ${maxOutputBytes} bytes`)
+        if (stdoutOpen) {
+          stdoutOpen = false
+          stdoutController.error(error)
+        }
+        if (stderrOpen) {
+          stderrOpen = false
+          stderrController.error(error)
+        }
+        void this.kill()
+        return
+      }
+      controller.enqueue(bytes)
+    }
+    const finishStreams = (error?: unknown): void => {
+      if (stdoutOpen) {
+        stdoutOpen = false
+        if (error === undefined) stdoutController.close()
+        else stdoutController.error(error)
+      }
+      if (stderrOpen) {
+        stderrOpen = false
+        if (error === undefined) stderrController.close()
+        else stderrController.error(error)
+      }
+    }
+
+    // Daytona retains session logs, while these controllers queue chunks from
+    // the moment the command id becomes available until a consumer reads them.
+    this.#completion = sandbox.process
+      .getSessionCommandLogs(
+        sessionId,
+        commandId,
+        chunk => enqueue(stdoutController, () => stdoutOpen, chunk),
+        chunk => enqueue(stderrController, () => stderrOpen, chunk)
+      )
+      .then(async () => {
+        finishStreams()
+        const command = await sandbox.process.getSessionCommand(sessionId, commandId)
+        if (command.exitCode === undefined) {
+          throw new Error("Daytona Sandbox process completed without an exit code")
+        }
+        return Object.freeze({ exitCode: command.exitCode })
+      })
+      .catch(error => {
+        // Deleting an owned session is Daytona's process-tree kill. Its log or
+        // status request can then race the deletion and report a missing
+        // session; preserve that intentional termination as a stable result.
+        if (this.#killed && isMissingDaytonaProcess(error)) {
+          finishStreams()
+          return Object.freeze({ exitCode: 137 })
+        }
+
+        finishStreams(error)
+        throw error
+      })
+      .finally(() => {
+        this.#finished = true
+      })
+    void this.#completion.catch(() => undefined)
+
+    signal.addEventListener("abort", () => void this.kill(), { once: true })
+    if (signal.aborted) void this.kill()
+    if (timeoutMs !== undefined) {
+      setTimeout(() => void this.kill(), timeoutMs).unref()
+    }
+  }
+
+  async closeInput(): Promise<void> {
+    if (this.#finished || this.#inputClosed) return
+    this.#inputClosed = true
+    // Daytona exposes text input but no true stdin half-close. EOT is the
+    // closest process signal, while AML rejects every later local write.
+    this.#closePromise ??= this.#sandbox.process
+      .sendSessionCommandInput(this.#sessionId, this.#commandId, "\u0004")
+      .catch(error => {
+        if (!this.#finished) throw error
+      })
+    await this.#closePromise
+  }
+
+  async kill(): Promise<void> {
+    if (this.#finished) return
+    // Each AML spawn owns one Daytona session, so deleting it cannot terminate
+    // a process from another evaluation lane.
+    this.#killed = true
+    this.#killPromise ??= this.#sandbox.process.deleteSession(this.#sessionId).catch(error => {
+      if (!this.#finished && !isMissingDaytonaProcess(error)) throw error
+    })
+    await this.#killPromise
+  }
+
+  async wait(): Promise<Readonly<SandboxProcessExit>> {
+    return await this.#completion
+  }
+
+  async write(data: Uint8Array): Promise<void> {
+    if (this.#finished || this.#inputClosed) throw new Error("Daytona Sandbox process input is closed")
+    await this.#sandbox.process.sendSessionCommandInput(
+      this.#sessionId,
+      this.#commandId,
+      new TextDecoder().decode(data)
+    )
+  }
+}
+
+function isMissingDaytonaProcess(error: unknown): boolean {
+  if (typeof error !== "object" || error === null) return false
+  const code = Reflect.get(error, "code")
+  const statusCode = Reflect.get(error, "statusCode")
+  return code === "PROCESS_NOT_FOUND" || statusCode === 404
 }
 
 /**

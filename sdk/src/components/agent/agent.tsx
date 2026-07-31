@@ -2,12 +2,28 @@ import { AmlNode, type AmlRenderable } from "../../core/aml-node.js"
 import type { AgentProvider } from "./agent-provider.js"
 
 /**
+ * Native coding capabilities requested from an Agent harness.
+ *
+ * These settings configure the harness; an enclosing Sandbox remains the
+ * authoritative confinement boundary.
+ */
+export interface AgentPermissions {
+  readonly filesystem: "read-only" | "read-write"
+  readonly network: boolean
+  readonly shell: boolean
+}
+
+/** Optional overrides for AML's optimistic native-capability defaults. */
+export type AgentPermissionOverrides = Partial<AgentPermissions>
+
+/**
  * Provider selection, prompt children, and optional Agent-level overrides.
  */
 export interface AgentProps {
   readonly children?: AmlRenderable
   readonly cwd?: string
   readonly model?: string
+  readonly permissions?: AgentPermissionOverrides
   readonly provider?: AgentProvider
   readonly system?: string
 }

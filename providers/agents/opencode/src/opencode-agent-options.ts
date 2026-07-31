@@ -1,98 +1,78 @@
-import type {
-  OpenCodeCapabilityAttachment,
-  OpenCodeCapabilityAttachmentInput,
-  OpenCodeSessionClient,
-  OpenCodeSessionCreateInput,
-  OpenCodeSessionLocation,
-  OpenCodeSessionPromptInput,
-  OpenCodeSessionPromptResult,
-} from "./opencode-session-client.js"
-import { OpenCodeSession } from "./opencode-session.js"
+import type { AcpSessionFactory } from "@aml-jsx/sdk"
+import type { Config } from "@opencode-ai/sdk/v2"
 
 /**
- * Vendor-owned settings for a package-created local OpenCode server.
- */
-export interface OpenCodeServerOptions {
-  readonly hostname?: string
-
-  /**
-   * Fixed port for the reusable host; dynamic-capability hosts use port 0.
-   */
-  readonly port?: number
-  readonly timeout?: number
-}
-
-/**
- * Configures the OpenCode adapter and its resource ownership.
+ * Configures the OpenCode ACP profile without selecting another lifecycle.
  */
 export interface OpenCodeAgentOptions {
-  readonly config?: ServerOptions["config"]
+  readonly args?: readonly string[]
+  readonly command?: string
+  readonly config?: Config
   readonly directory?: string
+  readonly env?: Readonly<Record<string, string>>
   readonly model?: string
-  readonly server?: OpenCodeServerOptions
-  readonly sessionClient?: OpenCodeSessionClient
+  readonly sessionFactory?: AcpSessionFactory
 }
 
 /**
- * Stable provider configuration after the external options boundary is read.
+ * Immutable OpenCode ACP configuration captured by the public factory.
  */
 export interface CapturedOpenCodeAgentOptions {
-  readonly config?: ServerOptions["config"]
+  readonly args: readonly string[]
+  readonly command: string
+  readonly config: Readonly<Config>
   readonly directory?: string
+  readonly env: Readonly<Record<string, string>>
   readonly model?: string
-  readonly server?: Readonly<OpenCodeServerOptions>
-  readonly sessionClient?: OpenCodeSessionClient
+  readonly sessionFactory?: AcpSessionFactory
 }
 
 /**
- * Validates and snapshots provider configuration at the factory boundary.
+ * Validates configuration before any host or Sandbox process starts.
  */
 export function captureOpenCodeAgentOptions(options: OpenCodeAgentOptions): Readonly<CapturedOpenCodeAgentOptions> {
   if (typeof options !== "object" || options === null) {
     throw new TypeError("OpenCode Agent options must be an object")
   }
 
-  // Capture every external property once. Accessor-backed configuration must
-  // not validate one authority and substitute another when the Agent runs.
-  const config = captureConfig(options.config)
+  const args = options.args ?? []
+  const command = normalizedString(options.command ?? "opencode", "OpenCode command")
+  const config = options.config ?? {}
   const directory = options.directory
+  const env = options.env ?? {}
   const model = options.model
-  const serverValue = options.server
-  const sessionClientValue = options.sessionClient
 
-  // Portable model parsing happens synchronously so invalid configured
-  // identities never reach server or session creation.
-  if (directory !== undefined && (typeof directory !== "string" || directory.length === 0)) {
-    throw new TypeError("OpenCode directory must be a non-empty string")
+  if (!Array.isArray(args) || args.some(argument => typeof argument !== "string" || argument.includes("\0"))) {
+    throw new TypeError("OpenCode args must be strings without null bytes")
   }
 
-  OpenCodeSession.parseModel(model)
-
-  if (serverValue !== undefined && sessionClientValue !== undefined) {
-    throw new TypeError("OpenCode server and sessionClient options are mutually exclusive")
+  if (directory !== undefined) {
+    normalizedString(directory, "OpenCode directory")
   }
 
-  const server = serverValue === undefined ? undefined : captureServerOptions(serverValue)
-  const sessionClient = sessionClientValue === undefined ? undefined : captureSessionClient(sessionClientValue)
+  if (model !== undefined) {
+    normalizedString(model, "OpenCode model")
+  }
+
+  if (typeof env !== "object" || env === null || Array.isArray(env)) {
+    throw new TypeError("OpenCode env must be an object")
+  }
+
+  if (typeof config !== "object" || config === null || Array.isArray(config)) {
+    throw new TypeError("OpenCode config must be an object")
+  }
+
+  const capturedConfig = captureJson(config, "OpenCode config") as Readonly<Config>
 
   return Object.freeze({
-    ...(config === undefined ? {} : { config }),
+    args: Object.freeze([...args]),
+    command,
+    config: capturedConfig,
     ...(directory === undefined ? {} : { directory }),
+    env: Object.freeze({ ...env }),
     ...(model === undefined ? {} : { model }),
-    ...(server === undefined ? {} : { server }),
-    ...(sessionClient === undefined ? {} : { sessionClient }),
+    ...(options.sessionFactory === undefined ? {} : { sessionFactory: options.sessionFactory }),
   })
-}
-
-/**
- * Snapshots OpenCode's JSON-native config without adapting its vendor schema.
- */
-function captureConfig(value: ServerOptions["config"]): ServerOptions["config"] {
-  if (value === undefined) {
-    return undefined
-  }
-
-  return captureJson(value, "OpenCode config") as NonNullable<ServerOptions["config"]>
 }
 
 function captureJson(value: unknown, label: string, seen = new WeakSet<object>()): unknown {
@@ -134,96 +114,10 @@ function captureJson(value: unknown, label: string, seen = new WeakSet<object>()
   return Object.freeze(captured)
 }
 
-/**
- * Snapshots child-host configuration without retaining external accessors.
- */
-function captureServerOptions(value: OpenCodeServerOptions): Readonly<OpenCodeServerOptions> {
-  if (typeof value !== "object" || value === null) {
-    throw new TypeError("OpenCode server options must be an object")
+function normalizedString(value: unknown, label: string): string {
+  if (typeof value !== "string" || value.length === 0 || value !== value.trim() || value.includes("\0")) {
+    throw new TypeError(`${label} must be a non-empty normalized string`)
   }
 
-  const hostname = value.hostname
-  const port = value.port
-  const timeout = value.timeout
-
-  if (hostname !== undefined && (typeof hostname !== "string" || hostname.length === 0)) {
-    throw new TypeError("OpenCode server hostname must be a non-empty string")
-  }
-
-  if (port !== undefined && (!Number.isSafeInteger(port) || port < 0 || port > 65_535)) {
-    throw new TypeError("OpenCode server port must be an integer between 0 and 65535")
-  }
-
-  if (timeout !== undefined && (!Number.isSafeInteger(timeout) || timeout < 0)) {
-    throw new TypeError("OpenCode server timeout must be a non-negative safe integer")
-  }
-
-  return Object.freeze({
-    ...(hostname === undefined ? {} : { hostname }),
-    ...(port === undefined ? {} : { port }),
-    ...(timeout === undefined ? {} : { timeout }),
-  })
+  return value
 }
-
-/**
- * Captures an injected session port and binds each method to its original owner.
- */
-function captureSessionClient(value: OpenCodeSessionClient): OpenCodeSessionClient {
-  if (typeof value !== "object" || value === null) {
-    throw new TypeError("OpenCode sessionClient must be an object")
-  }
-
-  // Method getters are another authority boundary. Resolve each exactly once
-  // before any remote session exists, then expose a stable AML-owned facade.
-  const abort = captureSessionClientMethod(value, "abort")
-  const attachCapabilities = captureSessionClientMethod(value, "attachCapabilities")
-  const create = captureSessionClientMethod(value, "create")
-  const deleteSession = captureSessionClientMethod(value, "delete")
-  const prompt = captureSessionClientMethod(value, "prompt")
-
-  return Object.freeze({
-    abort(input: OpenCodeSessionLocation): Promise<void> {
-      return Reflect.apply(abort, value, [input])
-    },
-    attachCapabilities(
-      input: OpenCodeCapabilityAttachmentInput,
-      signal: AbortSignal
-    ): Promise<OpenCodeCapabilityAttachment> {
-      return Reflect.apply(attachCapabilities, value, [input, signal])
-    },
-    create(input: OpenCodeSessionCreateInput, signal: AbortSignal): Promise<string> {
-      return Reflect.apply(create, value, [input, signal])
-    },
-    delete(input: OpenCodeSessionLocation): Promise<void> {
-      return Reflect.apply(deleteSession, value, [input])
-    },
-    prompt(input: OpenCodeSessionPromptInput, signal: AbortSignal): Promise<OpenCodeSessionPromptResult> {
-      return Reflect.apply(prompt, value, [input, signal])
-    },
-  })
-}
-
-/**
- * Reads one injected port method without allowing validation/use substitution.
- */
-function captureSessionClientMethod<Name extends keyof OpenCodeSessionClient>(
-  client: OpenCodeSessionClient,
-  name: Name
-): OpenCodeSessionClient[Name] {
-  let method: unknown
-
-  try {
-    method = Reflect.get(client, name)
-  } catch (cause) {
-    throw new TypeError(`OpenCode sessionClient ${name} must be readable`, {
-      cause,
-    })
-  }
-
-  if (typeof method !== "function") {
-    throw new TypeError(`OpenCode sessionClient ${name} must be a function`)
-  }
-
-  return method as OpenCodeSessionClient[Name]
-}
-import type { ServerOptions } from "@opencode-ai/sdk/v2"

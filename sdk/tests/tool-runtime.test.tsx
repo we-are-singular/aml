@@ -11,7 +11,7 @@ import { AmlRuntime } from "../src/core/aml-runtime.js"
 import { DeterministicAgentProvider } from "../src/testing/deterministic-agent-provider.js"
 
 describe("Tool", () => {
-  it("collects host and JavaScript capabilities without adding prompt text", async () => {
+  it("collects JavaScript capabilities without adding prompt text", async () => {
     const lookup = defineTool({
       description: "Look up a customer",
       input: z.object({ id: z.number() }),
@@ -25,9 +25,9 @@ describe("Tool", () => {
     const provider = new DeterministicAgentProvider({
       async respond(request, context) {
         expect(request.prompt).toBe("Inspect the customer.")
-        expect(request.tools.map(({ name }) => name)).toEqual(["read", "lookup_customer"])
+        expect(request.tools.map(({ name }) => name)).toEqual(["lookup_customer"])
 
-        const tool = request.tools[1]
+        const tool = request.tools[0]
         expect(tool).toMatchObject({
           description: "Look up a customer",
           inputSchema: {
@@ -60,7 +60,6 @@ describe("Tool", () => {
     await expect(
       new AmlRuntime({ agentProvider: provider }).evaluate(
         <Agent>
-          <Tool name="read" />
           <Tool use={lookup} />
           Inspect the customer.
         </Agent>
@@ -69,6 +68,8 @@ describe("Tool", () => {
   })
 
   it("scopes capabilities to their containing Agent", async () => {
+    const childTool = fixtureTool("child")
+    const parentTool = fixtureTool("parent")
     const child = new DeterministicAgentProvider({
       respond(request) {
         expect(request.tools.map(({ name }) => name)).toEqual(["child"])
@@ -87,10 +88,10 @@ describe("Tool", () => {
       new AmlRuntime().evaluate(
         <Agent provider={parent}>
           <Agent provider={child}>
-            <Tool name="child" />
+            <Tool use={childTool} />
             child prompt
           </Agent>
-          <Tool name="parent" />
+          <Tool use={parentTool} />
           parent prompt
         </Agent>
       )
@@ -99,13 +100,14 @@ describe("Tool", () => {
 
   it("rejects invalid placement, duplicates, and disallowed names before execution", async () => {
     const provider = new DeterministicAgentProvider()
+    const read = fixtureTool("read")
 
-    await expect(new AmlRuntime().evaluate(<Tool name="read" />)).rejects.toThrow("<Tool> is only valid inside <Agent>")
+    await expect(new AmlRuntime().evaluate(<Tool use={read} />)).rejects.toThrow("<Tool> is only valid inside <Agent>")
     await expect(
       new AmlRuntime({ agentProvider: provider }).evaluate(
         <Agent>
-          <Tool name="read" />
-          <Tool name="read" />
+          <Tool use={read} />
+          <Tool use={read} />
         </Agent>
       )
     ).rejects.toThrow('Agent declares duplicate Tool "read"')
@@ -115,7 +117,7 @@ describe("Tool", () => {
         allowedTools: ["grep"],
       }).evaluate(
         <Agent>
-          <Tool name="read" />
+          <Tool use={read} />
           prompt
         </Agent>
       )
@@ -162,6 +164,15 @@ describe("Tool", () => {
     expect(provider.calls).toHaveLength(0)
   })
 })
+
+function fixtureTool(name: string) {
+  return defineTool({
+    description: `Fixture ${name}`,
+    input: z.object({}),
+    name,
+    execute: async () => name,
+  })
+}
 
 describe("defineTool", () => {
   it("implements exact transport input normalization", async () => {

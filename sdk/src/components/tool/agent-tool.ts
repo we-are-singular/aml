@@ -27,14 +27,6 @@ export interface AgentToolExecutionContext {
 }
 
 /**
- * Capability implemented and resolved by the selected Agent provider.
- */
-export interface AgentHostTool {
-  readonly kind: "host"
-  readonly name: string
-}
-
-/**
  * Provider-facing JavaScript capability after AML has captured its contract.
  */
 export interface AgentJavaScriptTool {
@@ -50,9 +42,9 @@ export interface AgentJavaScriptTool {
 }
 
 /**
- * Complete provider-neutral capability union for one Agent request.
+ * Complete provider-neutral JavaScript capability for one Agent request.
  */
-export type AgentTool = AgentHostTool | AgentJavaScriptTool
+export type AgentTool = AgentJavaScriptTool
 
 /**
  * A JavaScript Tool created by defineTool().

@@ -84,6 +84,12 @@ export class AgentRequestPlan {
     }
 
     const tools = instrumentAgentTools(input.tools, input.context, input.trace)
+    const permissions = Object.freeze({
+      filesystem:
+        input.sandbox?.access === "read-only" ? "read-only" : (input.props.permissions?.filesystem ?? "read-write"),
+      network: input.props.permissions?.network ?? true,
+      shell: input.props.permissions?.shell ?? true,
+    })
     const request: AgentRequest = Object.freeze({
       ...(followUps.length === 0 ? {} : { followUps: Object.freeze(followUps) }),
       ...(input.props.model === undefined ? {} : { model: input.props.model }),
@@ -96,6 +102,7 @@ export class AgentRequestPlan {
               type: "json" as const,
             }),
           }),
+      permissions,
       prompt,
       system: systemFragments.join("\n"),
       tools,

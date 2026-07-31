@@ -1,7 +1,28 @@
 // Core agent authoring and provider-neutral execution contracts.
-export { Agent, type AgentProps } from "./components/agent/agent.js"
+export {
+  Agent,
+  type AgentPermissionOverrides,
+  type AgentPermissions,
+  type AgentProps,
+} from "./components/agent/agent.js"
 export type { AgentExecutionContext } from "./components/agent/agent-execution-context.js"
 export { AbstractAgentProvider } from "./components/agent/abstract-agent-provider.js"
+export {
+  AcpAgentProvider,
+  type AcpAgentLaunch,
+  type AcpAgentLaunchContext,
+  type AcpAgentLaunchFile,
+  type AcpAgentProfile,
+} from "./components/agent/acp-agent-provider.js"
+export {
+  AcpSdkSessionFactory,
+  type AcpPermissionPolicy,
+  type AcpSessionConfiguration,
+  type AcpSessionFactory,
+  type AcpSessionOpenInput,
+  type AcpSessionTextTransform,
+  type AcpStructuredOutputController,
+} from "./components/agent/acp-agent-session.js"
 export type { AmlModelSchema } from "./components/agent/aml-model-schema.js"
 export type { AgentOutputRequest } from "./components/agent/agent-output-request.js"
 export type { AgentProvider } from "./components/agent/agent-provider.js"
@@ -11,6 +32,7 @@ export type { AgentResponse } from "./components/agent/agent-response.js"
 export { createAgentProviderTurns } from "./components/agent/create-agent-provider-turns.js"
 export { defineAgentProvider } from "./components/agent/define-agent-provider.js"
 export { executeAgentProviderSession } from "./components/agent/execute-agent-provider-session.js"
+export { spawnLocalProcess, type LocalProcessOptions } from "./components/agent/spawn-local-process.js"
 export type {
   AmlEvaluationFinishEvent,
   AmlEvaluationStartEvent,
@@ -65,6 +87,8 @@ export {
 export {
   type SandboxExecOptions,
   type SandboxExecResult,
+  type SandboxProcess,
+  type SandboxProcessExit,
   type SandboxRuntime,
   supportsSandboxRuntime,
 } from "./components/sandbox/sandbox-runtime.js"
@@ -115,7 +139,6 @@ export {
 
 // Scoped provider-native and application-owned capabilities.
 export type {
-  AgentHostTool,
   AgentJavaScriptTool,
   AgentTool,
   AgentToolExecutionContext,

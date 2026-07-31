@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto"
+import { fileURLToPath } from "node:url"
 
 import { Agent, AmlRuntime, defineTool, evaluate, FollowUp, Tool } from "@aml-jsx/sdk"
 import { expect, it } from "vitest"
@@ -7,36 +8,17 @@ import { z } from "zod"
 import { piAgent } from "../src/index.js"
 
 const liveTest = process.env.AML_PI_LIVE === "1" ? it : it.skip
-const model = process.env.AML_PI_MODEL ?? "opencode-go/glm-5.1"
 
 liveTest(
-  "returns hello world from a real Pi-backed model",
-  async () => {
-    const apiKey = process.env.OPENCODE_API_KEY
-    const provider = piAgent({
-      model,
-      ...(apiKey === undefined ? {} : { providers: { "opencode-go": { apiKey } } }),
-    })
-    const output = await new AmlRuntime({ agentProvider: provider }).evaluate(
-      <Agent>Reply with exactly: Hello, world!</Agent>
-    )
-
-    expect(output.trim()).toBe("Hello, world!")
-  },
-  180_000
-)
-
-liveTest(
-  "retains conversation history across real Pi FollowUps",
+  "retains conversation history through the installed pi-acp adapter",
   async () => {
     const secret = randomUUID()
-    const apiKey = process.env.OPENCODE_API_KEY
     const provider = piAgent({
-      model,
-      ...(apiKey === undefined ? {} : { providers: { "opencode-go": { apiKey } } }),
+      model: process.env.AML_PI_MODEL ?? "opencode-go/glm-5.1",
+      workingDirectory: process.cwd(),
     })
     const output = await new AmlRuntime({ agentProvider: provider }).evaluate(
-      <Agent>
+      <Agent system="Return only what each user message explicitly requests.">
         Remember the exact token "{secret}". Reply only with acknowledged.
         <FollowUp>Return only the exact token from the preceding message.</FollowUp>
       </Agent>
@@ -48,63 +30,61 @@ liveTest(
 )
 
 liveTest(
-  "runs a real Pi Agent with an AML JavaScript Tool",
+  "returns schema-validated structured output from a real Pi Agent",
   async () => {
-    const expected = randomUUID()
-    let calls = 0
-    const lookup = defineTool({
-      description: "Return the exact live-test fixture",
-      input: z.object({}),
-      name: "lookup_pi_fixture",
-      async execute() {
-        calls += 1
-        return expected
-      },
-    })
-    const apiKey = process.env.OPENCODE_API_KEY
-    const provider = piAgent({
-      model,
-      ...(apiKey === undefined ? {} : { providers: { "opencode-go": { apiKey } } }),
-    })
-    const output = await new AmlRuntime({ agentProvider: provider }).evaluate(
-      <Agent>
-        <Tool use={lookup} />
-        Call lookup_pi_fixture and return only its result.
-      </Agent>
-    )
-
-    expect(output.trim()).toBe(expected)
-    expect(calls).toBe(1)
-  },
-  180_000
-)
-
-liveTest(
-  "returns schema-validated JSON from a real Pi Agent",
-  async () => {
-    const expected = randomUUID()
+    const secret = randomUUID()
     const Result = z.object({
       count: z.number().int(),
       proof: z.string(),
     })
-    const apiKey = process.env.OPENCODE_API_KEY
     const provider = piAgent({
-      model,
-      ...(apiKey === undefined ? {} : { providers: { "opencode-go": { apiKey } } }),
+      mcpAdapterPath: fileURLToPath(import.meta.resolve("pi-mcp-adapter")),
+      model: process.env.AML_PI_MODEL ?? "opencode-go/glm-5.1",
+      workingDirectory: process.cwd(),
     })
 
     async function StructuredProof() {
       const result = await evaluate(
-        <Agent provider={provider}>
-          Set the proof field to the exact literal string "{expected}" and the count field to the integer 7.
-        </Agent>,
+        <Agent>Return proof "{secret}" and count 7 as the requested structured result.</Agent>,
         Result
       )
 
       return `${result.proof}:${result.count}`
     }
 
-    await expect(new AmlRuntime().evaluate(<StructuredProof />)).resolves.toBe(`${expected}:7`)
+    await expect(new AmlRuntime({ agentProvider: provider }).evaluate(<StructuredProof />)).resolves.toBe(`${secret}:7`)
+  },
+  180_000
+)
+
+liveTest(
+  "runs a real Pi Agent with an AML JavaScript Tool through the MCP extension",
+  async () => {
+    const secret = randomUUID()
+    let calls = 0
+    const reveal = defineTool({
+      description: "Return the private AML Pi integration proof",
+      input: z.object({}),
+      name: "reveal_aml_pi_proof",
+      async execute() {
+        calls += 1
+        return secret
+      },
+    })
+    const provider = piAgent({
+      mcpAdapterPath: fileURLToPath(import.meta.resolve("pi-mcp-adapter")),
+      model: process.env.AML_PI_MODEL ?? "opencode-go/glm-5.1",
+      workingDirectory: process.cwd(),
+    })
+    const output = await new AmlRuntime({ agentProvider: provider }).evaluate(
+      <Agent>
+        <Tool use={reveal} />
+        Call reveal_aml_pi_proof and return only its exact result.
+      </Agent>
+    )
+
+    expect(output.trim()).toBe(secret)
+    expect(calls).toBe(1)
   },
   180_000
 )

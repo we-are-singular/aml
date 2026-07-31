@@ -97,6 +97,71 @@ describe("localSandbox()", () => {
     await lease.release()
   })
 
+  it("buffers early output and provides repeatable process lifecycle operations", async () => {
+    const workspace = await createWorkspace()
+    const lease = await localSandbox({ workspace }).acquire(request())
+    const spawned = await lease.runtime.spawn(process.execPath, [
+      "-e",
+      "process.stdout.write('early');process.stderr.write('warning')",
+    ])
+
+    const firstExit = await spawned.wait()
+    const secondExit = await spawned.wait()
+
+    // Read only after the short-lived process has exited. Both streams must
+    // still contain every chunk emitted since spawn.
+    await expect(readText(spawned.stdout)).resolves.toBe("early")
+    await expect(readText(spawned.stderr)).resolves.toBe("warning")
+    expect(secondExit).toBe(firstExit)
+    await expect(
+      Promise.all([spawned.closeInput(), spawned.closeInput(), spawned.kill(), spawned.kill()])
+    ).resolves.toBeDefined()
+    await lease.release()
+  })
+
+  it("streams input and output through a spawned process", async () => {
+    const workspace = await createWorkspace()
+    const lease = await localSandbox({ workspace }).acquire(request())
+    const spawned = await lease.runtime.spawn(process.execPath, [
+      "-e",
+      "process.stdin.pipe(process.stdout);process.stdin.once('end',()=>process.stderr.write('closed'))",
+    ])
+
+    await spawned.write(new TextEncoder().encode("hello"))
+    await spawned.closeInput()
+    const [stdout, stderr, exit] = await Promise.all([
+      readText(spawned.stdout),
+      readText(spawned.stderr),
+      spawned.wait(),
+    ])
+
+    expect({ exit, stderr, stdout }).toEqual({
+      exit: { exitCode: 0 },
+      stderr: "closed",
+      stdout: "hello",
+    })
+    await lease.release()
+  })
+
+  it("kills the complete spawned process group", async () => {
+    const workspace = await createWorkspace()
+    const lease = await localSandbox({ workspace }).acquire(request())
+    const spawned = await lease.runtime.spawn("sh", [
+      "-c",
+      'sleep 60 & child=$!; printf \'%s\\n\' "$child"; wait "$child"',
+    ])
+    const reader = spawned.stdout.getReader()
+    const firstChunk = await reader.read()
+    const childPid = Number(new TextDecoder().decode(firstChunk.value).trim())
+
+    expect(childPid).toBeGreaterThan(0)
+    await spawned.kill()
+    await spawned.wait().catch(() => undefined)
+    await reader.cancel()
+    expect(() => process.kill(childPid, 0)).toThrow(expect.objectContaining({ code: "ESRCH" }))
+    await lease.release()
+  })
+
   it("runs explicit setup before returning the lease", async () => {
     const workspace = await createWorkspace()
     const provider = localSandbox({
@@ -150,6 +215,12 @@ async function createWorkspace(): Promise<string> {
   await mkdir(path.join(workspace, "repository", "src"), { recursive: true })
   await writeFile(path.join(workspace, "repository", "fixture.txt"), "fixture")
   return workspace
+}
+
+async function readText(stream: ReadableStream<Uint8Array>): Promise<string> {
+  const chunks: Uint8Array[] = []
+  for await (const chunk of stream) chunks.push(chunk)
+  return Buffer.concat(chunks).toString("utf8")
 }
 
 function request(overrides: Partial<SandboxAcquireRequest> = {}): SandboxAcquireRequest {

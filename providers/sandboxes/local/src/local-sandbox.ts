@@ -1,4 +1,3 @@
-import { execFile } from "node:child_process"
 import { realpath, stat } from "node:fs/promises"
 import path from "node:path"
 import { randomUUID } from "node:crypto"
@@ -7,9 +6,11 @@ import {
   AbstractSandboxProvider,
   defineSandboxProvider,
   SandboxCommand,
+  spawnLocalProcess,
   type ProvisionedSandbox,
   type SandboxAcquireRequest,
   type SandboxExecResult,
+  type SandboxProcess,
   type SandboxProvider,
   type SandboxRuntime,
 } from "@aml-jsx/sdk"
@@ -37,6 +38,7 @@ interface LocalSandboxHandle {
 }
 
 interface LocalSandboxResource {
+  readonly processes: Set<Readonly<SandboxProcess>>
   readonly root: string
   readonly workspace: string
 }
@@ -82,7 +84,7 @@ class LocalSandboxProvider
         kind: "local" as const,
       }),
       id: `local:${randomUUID()}`,
-      resource: Object.freeze({ root, workspace }),
+      resource: Object.freeze({ processes: new Set<Readonly<SandboxProcess>>(), root, workspace }),
     })
   }
 
@@ -94,6 +96,7 @@ class LocalSandboxProvider
       request,
       provisioned.resource.workspace,
       provisioned.resource.root,
+      provisioned.resource.processes,
       this.#options.maxOutputBytes
     )
   }
@@ -117,7 +120,11 @@ class LocalSandboxProvider
     }
   }
 
-  protected async releaseResource(): Promise<void> {}
+  protected async releaseResource(
+    provisioned: Readonly<ProvisionedSandbox<LocalSandboxHandle, LocalSandboxResource>>
+  ): Promise<void> {
+    await Promise.all([...provisioned.resource.processes].map(async process => await process.kill()))
+  }
 }
 
 /**
@@ -127,6 +134,7 @@ function createRuntime(
   request: SandboxAcquireRequest,
   workspace: string,
   root: string,
+  processes: Set<Readonly<SandboxProcess>>,
   maxOutputBytes: number
 ): Readonly<SandboxRuntime> {
   const runtime: SandboxRuntime = {
@@ -139,64 +147,83 @@ function createRuntime(
 
       const captured = SandboxCommand.from(request, command, args, options)
       const cwd = await resolveDirectory(workspace, captured.cwd, root, "command cwd")
-      return await execute(captured, cwd, maxOutputBytes)
+      const process = await startProcess(captured, cwd, processes)
+      await process.closeInput()
+      return await collectProcess(process, maxOutputBytes)
     },
     root: request.root,
+    async spawn(command, args = [], options = {}) {
+      if (request.access !== "read-write") {
+        throw new Error("Local Sandbox cannot execute under read-only access because host processes cannot enforce it")
+      }
+
+      const captured = SandboxCommand.from(request, command, args, options)
+      const cwd = await resolveDirectory(workspace, captured.cwd, root, "command cwd")
+      return await startProcess(captured, cwd, processes)
+    },
   }
 
   return Object.freeze(runtime)
 }
 
 /**
- * Executes one literal host command with Node's bounded child-process API.
+ * Starts one literal host command in its own process group.
  */
-async function execute(
+async function startProcess(
   command: SandboxCommand,
   cwd: string,
+  processes: Set<Readonly<SandboxProcess>>
+): Promise<Readonly<SandboxProcess>> {
+  command.signal.throwIfAborted()
+  const processHandle = await spawnLocalProcess(command.command, command.args, {
+    cwd,
+    env: command.env,
+    signal: command.signal,
+    ...(command.timeoutMs === undefined ? {} : { timeoutMs: command.timeoutMs }),
+  })
+  processes.add(processHandle)
+  void processHandle.wait().then(
+    () => processes.delete(processHandle),
+    () => processes.delete(processHandle)
+  )
+  return processHandle
+}
+
+async function collectProcess(
+  process: Readonly<SandboxProcess>,
   maxOutputBytes: number
 ): Promise<Readonly<SandboxExecResult>> {
-  return await new Promise<Readonly<SandboxExecResult>>((resolve, reject) => {
-    const child = execFile(
-      command.command,
-      [...command.args],
-      {
-        cwd,
-        encoding: "utf8",
-        // Some coding Agents resolve their project from PWD before asking the
-        // operating system for cwd. Keep both views on the attached Workspace.
-        env: { ...process.env, ...command.env, PWD: cwd },
-        maxBuffer: maxOutputBytes,
-        signal: command.signal,
-        timeout: command.timeoutMs,
-        windowsHide: true,
-      },
-      (error, stdout, stderr) => {
-        if (command.signal.aborted) {
-          reject(command.signal.reason)
-          return
-        }
+  const budget = { bytes: 0 }
 
-        const exitCode = error === null ? 0 : error.code
+  try {
+    const [stdout, stderr, exit] = await Promise.all([
+      readBoundedText(process.stdout, budget, maxOutputBytes),
+      readBoundedText(process.stderr, budget, maxOutputBytes),
+      process.wait(),
+    ])
+    return Object.freeze({ exitCode: exit.exitCode, stderr, stdout })
+  } catch (error) {
+    await process.kill()
+    throw error
+  }
+}
 
-        if (typeof exitCode !== "number") {
-          reject(new Error(`Local Sandbox command failed: ${error?.message ?? "unknown failure"}`, { cause: error }))
-          return
-        }
+async function readBoundedText(
+  stream: ReadableStream<Uint8Array>,
+  budget: { bytes: number },
+  maxOutputBytes: number
+): Promise<string> {
+  const chunks: Uint8Array[] = []
 
-        resolve(
-          Object.freeze({
-            exitCode,
-            stderr,
-            stdout,
-          })
-        )
-      }
-    )
+  for await (const chunk of stream) {
+    budget.bytes += chunk.byteLength
+    if (budget.bytes > maxOutputBytes) {
+      throw new RangeError(`Local Sandbox command output exceeded ${maxOutputBytes} bytes`)
+    }
+    chunks.push(chunk)
+  }
 
-    // The common runtime has no stdin channel. Close the implicit pipe so
-    // programs that probe piped input observe EOF instead of waiting forever.
-    child.stdin?.end()
-  })
+  return Buffer.concat(chunks).toString("utf8")
 }
 
 /**

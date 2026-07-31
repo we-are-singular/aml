@@ -78,6 +78,17 @@ describe("modalSandbox()", () => {
     })
     expect(fake.stdinCloseCount).toBeGreaterThanOrEqual(2)
 
+    const spawned = await lease.runtime.spawn("node", ["server.mjs"], {
+      cwd: "repository/src",
+    })
+    await spawned.write(new TextEncoder().encode("input"))
+    await spawned.closeInput()
+    await expect(spawned.wait()).resolves.toEqual({ exitCode: 0 })
+    expect(fake.commands.at(-1)).toMatchObject({
+      command: ["sh", "-c", expect.stringContaining('exec "$@"'), "aml-spawn", "node", "server.mjs"],
+      workdir: "/workspace/src",
+    })
+
     await lease.release()
     await expect(readFile(path.join(repository, "output.txt"), "utf8")).resolves.toBe("downloaded")
     await expect(readFile(path.join(repository, "input.txt"), "utf8")).rejects.toMatchObject({ code: "ENOENT" })
@@ -174,9 +185,14 @@ class FakeModal {
         }
 
         const isRuntimeCommand = command[0] === "node"
-        return processResult(isRuntimeCommand ? "command output" : "", isRuntimeCommand ? "command error" : "", () => {
-          this.stdinCloseCount += 1
-        })
+        return processResult(
+          isRuntimeCommand ? "command output" : "",
+          isRuntimeCommand ? "command error" : "",
+          params.mode === "binary",
+          () => {
+            this.stdinCloseCount += 1
+          }
+        )
       },
       filesystem: {
         copyFromLocal: async (localPath: string) => {
@@ -223,15 +239,26 @@ class FakeModal {
   }
 }
 
-function processResult(stdout: string, stderr: string, closeStdin: () => void) {
+function processResult(stdout: string, stderr: string, binary: boolean, closeStdin: () => void) {
   return {
+    closeStdin: async () => closeStdin(),
     stdin: {
       close: async () => closeStdin(),
+      writeBytes: async () => {},
     },
-    stderr: textStream(stderr),
-    stdout: textStream(stdout),
+    stderr: binary ? byteStream(stderr) : textStream(stderr),
+    stdout: binary ? byteStream(stdout) : textStream(stdout),
     wait: async () => 0,
   }
+}
+
+function byteStream(value: string): ReadableStream<Uint8Array> {
+  return new ReadableStream({
+    start(controller) {
+      controller.enqueue(new TextEncoder().encode(value))
+      controller.close()
+    },
+  })
 }
 
 function textStream(value: string): ReadableStream<string> {

@@ -61,6 +61,7 @@ export default defineConfig({
       // bundling shims would obscure the SDK's actual platform requirement.
       external: [
         /^node:/,
+        /^@agentclientprotocol\/sdk(?:\/.*)?$/,
         /^@modelcontextprotocol\/sdk(?:\/.*)?$/,
         /^@daytona\/sdk(?:\/.*)?$/,
         /^@aws-sdk\/client-s3$/,

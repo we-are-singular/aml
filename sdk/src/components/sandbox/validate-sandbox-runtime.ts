@@ -1,4 +1,10 @@
-import type { SandboxExecOptions, SandboxExecResult, SandboxRuntime } from "./sandbox-runtime.js"
+import type {
+  SandboxExecOptions,
+  SandboxExecResult,
+  SandboxProcess,
+  SandboxProcessExit,
+  SandboxRuntime,
+} from "./sandbox-runtime.js"
 
 /**
  * Validates and captures the minimal runtime returned by a Sandbox provider.
@@ -13,12 +19,14 @@ export function validateSandboxRuntime(value: unknown, providerName: string): Re
   let cwd: unknown
   let exec: unknown
   let root: unknown
+  let spawn: unknown
 
   try {
     access = candidate.access
     cwd = candidate.cwd
     exec = candidate.exec
     root = candidate.root
+    spawn = candidate.spawn
   } catch (cause) {
     throw new TypeError(`Sandbox provider "${providerName}" returned an unreadable runtime`, { cause })
   }
@@ -34,6 +42,10 @@ export function validateSandboxRuntime(value: unknown, providerName: string): Re
     throw new TypeError(`Sandbox provider "${providerName}" returned a runtime without exec()`)
   }
 
+  if (typeof spawn !== "function") {
+    throw new TypeError(`Sandbox provider "${providerName}" returned a runtime without spawn()`)
+  }
+
   const runtime: SandboxRuntime = {
     access,
     cwd,
@@ -46,9 +58,101 @@ export function validateSandboxRuntime(value: unknown, providerName: string): Re
       return validateSandboxExecResult(result, providerName)
     },
     root,
+    spawn: async (
+      command: string,
+      args?: readonly string[],
+      options?: Readonly<SandboxExecOptions>
+    ): Promise<Readonly<SandboxProcess>> => {
+      const process = await Reflect.apply(spawn, value, [command, args, options])
+      return validateSandboxProcess(process, providerName)
+    },
   }
 
   return Object.freeze(runtime)
+}
+
+/**
+ * Captures one provider-owned process handle before it crosses into an Agent.
+ */
+function validateSandboxProcess(value: unknown, providerName: string): Readonly<SandboxProcess> {
+  if (typeof value !== "object" || value === null) {
+    throw new TypeError(`Sandbox provider "${providerName}" returned an invalid process`)
+  }
+
+  let id: unknown
+  let pid: unknown
+  let stderr: unknown
+  let stdout: unknown
+  let closeInput: unknown
+  let kill: unknown
+  let wait: unknown
+  let write: unknown
+
+  try {
+    id = Reflect.get(value, "id")
+    pid = Reflect.get(value, "pid")
+    stderr = Reflect.get(value, "stderr")
+    stdout = Reflect.get(value, "stdout")
+    closeInput = Reflect.get(value, "closeInput")
+    kill = Reflect.get(value, "kill")
+    wait = Reflect.get(value, "wait")
+    write = Reflect.get(value, "write")
+  } catch (cause) {
+    throw new TypeError(`Sandbox provider "${providerName}" returned an unreadable process`, { cause })
+  }
+
+  if (
+    typeof id !== "string" ||
+    id.length === 0 ||
+    id !== id.trim() ||
+    (pid !== undefined && (!Number.isSafeInteger(pid) || (pid as number) <= 0)) ||
+    !(stderr instanceof ReadableStream) ||
+    !(stdout instanceof ReadableStream) ||
+    typeof closeInput !== "function" ||
+    typeof kill !== "function" ||
+    typeof wait !== "function" ||
+    typeof write !== "function"
+  ) {
+    throw new TypeError(`Sandbox provider "${providerName}" returned an invalid process`)
+  }
+
+  let closePromise: Promise<void> | undefined
+  let killPromise: Promise<void> | undefined
+  let waitPromise: Promise<Readonly<SandboxProcessExit>> | undefined
+
+  return Object.freeze({
+    closeInput: () => (closePromise ??= Promise.resolve().then(() => Reflect.apply(closeInput, value, []))),
+    id,
+    kill: () => (killPromise ??= Promise.resolve().then(() => Reflect.apply(kill, value, []))),
+    ...(pid === undefined ? {} : { pid: pid as number }),
+    stderr,
+    stdout,
+    wait: () =>
+      (waitPromise ??= Promise.resolve()
+        .then(() => Reflect.apply(wait, value, []))
+        .then(result => validateSandboxProcessExit(result, providerName))),
+    write: async (data: Uint8Array) => {
+      if (!(data instanceof Uint8Array)) {
+        throw new TypeError("Sandbox process input must be a Uint8Array")
+      }
+
+      await Reflect.apply(write, value, [new Uint8Array(data)])
+    },
+  })
+}
+
+function validateSandboxProcessExit(value: unknown, providerName: string): Readonly<SandboxProcessExit> {
+  if (typeof value !== "object" || value === null) {
+    throw new TypeError(`Sandbox provider "${providerName}" returned an invalid process exit`)
+  }
+
+  const exitCode = Reflect.get(value, "exitCode")
+
+  if (!Number.isSafeInteger(exitCode)) {
+    throw new TypeError(`Sandbox provider "${providerName}" returned an invalid process exit`)
+  }
+
+  return Object.freeze({ exitCode: exitCode as number })
 }
 
 /**

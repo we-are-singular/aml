@@ -1,83 +1,39 @@
-import { randomUUID } from "node:crypto"
+import { cp, mkdtemp, rm } from "node:fs/promises"
+import os from "node:os"
+import path from "node:path"
 
-import { Agent, AmlRuntime, defineTool, evaluate, FollowUp, Tool } from "@aml-jsx/sdk"
+import { Agent, AmlRuntime } from "@aml-jsx/sdk"
 import { expect, it } from "vitest"
-import { z } from "zod"
 
 import { codexAgent } from "../src/index.js"
 
-const liveTest = process.env.AML_CODEX_LIVE === "1" ? it : it.skip
-const model = process.env.AML_CODEX_MODEL ?? "gpt-5.3-codex-spark"
+const liveTest = process.env.AML_CODEX_ACP_LIVE === "1" ? it : it.skip
 
 liveTest(
-  "retains conversation history across real Codex FollowUps",
+  "runs Codex through the published ACP adapter on the trusted local launcher",
   async () => {
-    const secret = randomUUID()
-    const provider = codexAgent({ model })
-    const output = await new AmlRuntime({
-      agentProvider: provider,
-    }).evaluate(
-      <Agent>
-        Remember the exact token "{secret}". Reply only with acknowledged.
-        <FollowUp>Return only the exact token from the preceding message.</FollowUp>
-      </Agent>
-    )
-
-    expect(output.trim()).toBe(secret)
-  },
-  180_000
-)
-
-liveTest(
-  "runs a real Codex Agent with an AML JavaScript Tool",
-  async () => {
-    const expectedLabel = randomUUID()
-    let calls = 0
-    const lookupLabel = defineTool({
-      description: "Look up the current JavaScript Tool fixture label",
-      input: z.object({}),
-      name: "lookup_aml_fixture_label",
-      async execute() {
-        calls += 1
-        return expectedLabel
-      },
+    const workspace = await mkdtemp(path.join(os.tmpdir(), "aml-codex-acp-"))
+    const codexHome = await mkdtemp(path.join(os.tmpdir(), "aml-codex-acp-home-"))
+    await cp(path.join(os.homedir(), ".codex", "auth.json"), path.join(codexHome, "auth.json"))
+    const provider = codexAgent({
+      args: ["-y", "@agentclientprotocol/codex-acp@1.1.7"],
+      command: "npx",
+      env: { CODEX_HOME: codexHome },
+      workingDirectory: workspace,
     })
-    const provider = codexAgent({ model })
-    const output = await new AmlRuntime({
-      agentProvider: provider,
-    }).evaluate(
-      <Agent>
-        <Tool use={lookupLabel} />
-        Use lookup_aml_fixture_label and return only its exact result.
-      </Agent>
-    )
 
-    expect(output.trim()).toBe(expectedLabel)
-    expect(calls).toBe(1)
-  },
-  180_000
-)
-
-liveTest(
-  "returns schema-validated structured output from a real Codex Agent",
-  async () => {
-    const secret = randomUUID()
-    const Result = z.object({
-      count: z.number().int(),
-      proof: z.string(),
-    })
-    const provider = codexAgent({ model })
-
-    async function StructuredProof() {
-      const result = await evaluate(
-        <Agent>Return proof "{secret}" and count 7 as the requested structured result.</Agent>,
-        Result
+    try {
+      const output = await new AmlRuntime({ agentProvider: provider }).evaluate(
+        <Agent>Reply with exactly: Hello from ACP</Agent>
       )
 
-      return `${result.proof}:${result.count}`
+      expect(output.trim()).toBe("Hello from ACP")
+    } finally {
+      await Promise.all([
+        rm(workspace, { force: true, recursive: true }),
+        rm(codexHome, { force: true, recursive: true }),
+      ])
     }
-
-    await expect(new AmlRuntime({ agentProvider: provider }).evaluate(<StructuredProof />)).resolves.toBe(`${secret}:7`)
   },
   180_000
 )

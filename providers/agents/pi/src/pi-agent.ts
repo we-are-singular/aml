@@ -1,297 +1,300 @@
 import {
-  AbstractAgentProvider,
+  AcpAgentProvider,
   defineAgentProvider,
-  type AgentExecutionContext,
+  type AcpAgentLaunch,
+  type AcpAgentLaunchContext,
+  type AcpAgentProfile,
+  type AcpSessionConfiguration,
+  type AcpSessionFactory,
   type AgentProvider,
-  type AgentProviderSession,
-  type AgentRequest,
-  type SandboxSession,
-  supportsSandboxRuntime,
 } from "@aml-jsx/sdk"
-import type { ProviderConfig } from "@earendil-works/pi-coding-agent"
-import { defu } from "defu"
 
-import { PiSdkSessionClientFactory } from "./pi-sdk-session-client.js"
-import type {
-  PiSessionClient,
-  PiSessionClientFactory,
-  PiSessionCreateInput,
-  PiThinkingLevel,
-} from "./pi-session-client.js"
-
-const PI_HOST_TOOLS = new Set(["bash", "edit", "find", "grep", "ls", "read", "write"])
+/** Reasoning levels exposed by the maintained Pi ACP adapter. */
+export type PiThinkingLevel = "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max"
 const PI_THINKING_LEVELS = new Set<PiThinkingLevel>(["off", "minimal", "low", "medium", "high", "xhigh", "max"])
 
 /**
- * Configures Pi's SDK and invocation defaults.
+ * Configures the maintained pi-acp adapter and underlying Pi command.
  */
 export interface PiAgentOptions {
-  readonly clientFactory?: PiSessionClientFactory
+  readonly args?: readonly string[]
+  readonly command?: string
+  readonly env?: Readonly<Record<string, string>>
+  /**
+   * Path to the environment-installed pi-mcp-adapter entrypoint.
+   *
+   * When omitted, the launch wrapper resolves the installed package beside its
+   * `pi-mcp-adapter` executable. AML never installs runtime software implicitly.
+   */
+  readonly mcpAdapterPath?: string
   readonly model?: string
-  readonly providers?: Readonly<Record<string, ProviderConfig>>
+  readonly piCommand?: string
+  readonly sessionFactory?: AcpSessionFactory
   readonly thinkingLevel?: PiThinkingLevel
   readonly workingDirectory?: string
 }
 
-/**
- * Configured Pi strategy used by `<Agent provider>`.
- */
 export interface PiAgentProvider extends AgentProvider {
   readonly name: "pi"
 }
 
 interface CapturedPiAgentOptions {
-  readonly clientFactory: PiSessionClientFactory
+  readonly args: readonly string[]
+  readonly command: string
+  readonly env: Readonly<Record<string, string>>
+  readonly mcpAdapterPath?: string
   readonly model?: string
-  readonly providers?: Readonly<Record<string, ProviderConfig>>
+  readonly piCommand: string
+  readonly sessionFactory?: AcpSessionFactory
   readonly thinkingLevel?: PiThinkingLevel
   readonly workingDirectory?: string
 }
 
-class PiAgentImplementation extends AbstractAgentProvider<"pi"> implements PiAgentProvider {
-  readonly #clientFactory: PiSessionClientFactory
-  readonly #clientFactoryCreate: PiSessionClientFactory["create"]
-  readonly #model: string | undefined
-  readonly #providers: Readonly<Record<string, ProviderConfig>> | undefined
-  readonly #thinkingLevel: PiThinkingLevel | undefined
-  readonly #workingDirectory: string | undefined
-  constructor(options: CapturedPiAgentOptions) {
-    super("pi")
-    this.#clientFactory = options.clientFactory
-    this.#clientFactoryCreate = options.clientFactory.create
-    this.#model = options.model
-    this.#providers = options.providers
-    this.#thinkingLevel = options.thinkingLevel
-    this.#workingDirectory = options.workingDirectory
+class PiAcpProfile implements AcpAgentProfile<"pi"> {
+  readonly name = "pi"
+  readonly #options: Readonly<CapturedPiAgentOptions>
+
+  constructor(options: Readonly<CapturedPiAgentOptions>) {
+    this.#options = options
   }
 
-  /**
-   * Accepts provider-neutral runtimes that enforce the effective Sandbox.
-   */
-  override supportsSandbox(sandbox: SandboxSession): boolean {
-    return supportsSandboxRuntime(sandbox)
+  get sessionFactory(): AcpSessionFactory | undefined {
+    return this.#options.sessionFactory
   }
 
-  /**
-   * Creates one fresh in-memory Pi session with invocation-wide capabilities.
-   */
-  protected async openSession(request: AgentRequest, context: AgentExecutionContext): Promise<AgentProviderSession> {
-    context.signal.throwIfAborted()
+  get workingDirectory(): string | undefined {
+    return this.#options.workingDirectory
+  }
 
-    if (request.mcpServers.length > 0) {
-      throw new Error("Pi Agent does not yet support AML MCP servers")
+  createLaunch(context: Readonly<AcpAgentLaunchContext>): Readonly<AcpAgentLaunch> {
+    const configuration: AcpSessionConfiguration[] = []
+    const model = context.request.model ?? this.#options.model
+    const usesMcp = context.mcpServers.length > 0
+
+    if (model !== undefined) {
+      configuration.push({ category: "model", value: model })
     }
 
-    const requestedModel = validateModel(request.model)
-    const tools = request.tools.map(tool => {
-      if (tool.kind === "host") {
-        if (!PI_HOST_TOOLS.has(tool.name)) {
-          throw new Error(`Pi host Tool "${tool.name}" is unsupported`)
-        }
-
-        return tool.name
-      }
-
-      return {
-        description: tool.description,
-        execute: tool.execute,
-        inputSchema: tool.inputSchema,
-        name: tool.name,
-      }
-    })
-    const sandbox = context.sandbox
-
-    if (sandbox !== undefined && !supportsSandboxRuntime(sandbox)) {
-      throw new Error("Pi Agent received an incompatible Sandbox runtime")
+    if (this.#options.thinkingLevel !== undefined) {
+      configuration.push({ category: "thought_level", value: this.#options.thinkingLevel })
     }
 
-    const defaults = {
-      cwd: this.#workingDirectory ?? process.cwd(),
-      ...(this.#model === undefined ? {} : { model: this.#model }),
-      ...(this.#providers === undefined ? {} : { providers: this.#providers }),
-      ...(this.#thinkingLevel === undefined ? {} : { thinkingLevel: this.#thinkingLevel }),
-    }
-    const userInputs = {
-      ...(requestedModel === undefined ? {} : { model: requestedModel }),
-    }
-    const imperativeConfig = {
-      ...(sandbox === undefined
+    const needsWrapper = usesMcp || !hasDefaultPiPermissions(context.request.permissions)
+    const piCommand = needsWrapper ? `${context.stateDirectory}/pi-for-aml` : this.#options.piCommand
+    return Object.freeze({
+      args: this.#options.args,
+      command: this.#options.command,
+      configuration: Object.freeze(configuration),
+      env: {
+        ...this.#options.env,
+        // pi-acp stores its own session map under os.homedir(). Isolate that
+        // adapter-owned state alongside Pi's invocation-owned state.
+        HOME: context.stateDirectory,
+        PI_ACP_PI_COMMAND: piCommand,
+        PI_CODING_AGENT_DIR: `${context.stateDirectory}/agent`,
+        PI_CODING_AGENT_SESSION_DIR: `${context.stateDirectory}/sessions`,
+        PI_SKIP_VERSION_CHECK: "1",
+      },
+      files: [
+        {
+          content: '{\n  "quietStartup": true\n}\n',
+          path: "agent/settings.json",
+        },
+        ...(needsWrapper
+          ? [
+              {
+                content: createPiWrapper(
+                  this.#options.piCommand,
+                  context.request.permissions,
+                  usesMcp,
+                  this.#options.mcpAdapterPath
+                ),
+                executable: true,
+                path: "pi-for-aml",
+              },
+            ]
+          : []),
+        ...(usesMcp
+          ? [
+              {
+                content: createPiMcpConfiguration(context.mcpServers),
+                path: "agent/mcp.json",
+              },
+              {
+                // An existing empty cache keeps lazy servers lazy on the first
+                // invocation instead of emitting connection UI before a turn.
+                content: '{\n  "version": 1,\n  "servers": {}\n}\n',
+                path: "agent/mcp-cache.json",
+              },
+            ]
+          : []),
+      ],
+      ...(usesMcp
+        ? {
+            // pi-acp currently stores ACP MCP descriptors but does not connect
+            // them. The maintained Pi extension above owns those connections.
+            sessionMcpServers: [],
+          }
+        : {}),
+      ...(context.request.system.length === 0 && !usesMcp
         ? {}
         : {
-            sandbox: Object.freeze({
-              cwd: sandbox.cwd,
-              runtime: sandbox.lease.runtime,
-            }),
+            // ACP has no system-instruction field and pi-acp does not expose
+            // Pi's CLI flag, so retain the authored priority as first-turn text.
+            initialPromptPrefix: [
+              ...(context.request.system.length === 0
+                ? []
+                : [`System instructions for this AML session:\n${context.request.system}`]),
+              ...(usesMcp
+                ? [
+                    "AML JavaScript Tools and MCP capabilities use Pi's mcp proxy. Call mcp with the exact tool name and an args object.",
+                  ]
+                : []),
+            ].join("\n\n"),
           }),
-      system: request.system,
-      tools: Object.freeze(tools),
-      trace: context.trace,
-    }
-    // defu is priority-first: AML policy wins, authored input overrides
-    // factory defaults, and provider-native nested tables remain intact.
-    const input = Object.freeze(defu(imperativeConfig, userInputs, defaults)) as PiSessionCreateInput
-    const session = await this.#createSession(input, context.signal)
-
-    return {
-      abort: async () => await session.abort(),
-      close: async () => session.dispose(),
-      async runTurn(turn) {
-        const text = await session.prompt(turn.prompt, turn.output?.jsonSchema)
-
-        if (turn.output === undefined) {
-          return Object.freeze({ text })
-        }
-
-        let structured: unknown
-
-        try {
-          structured = JSON.parse(text)
-        } catch (cause) {
-          throw new TypeError("Pi structured response is not valid JSON", {
-            cause,
-          })
-        }
-
-        return Object.freeze({ structured, text })
-      },
-    }
-  }
-
-  /**
-   * Calls the captured construction port and validates its session result.
-   */
-  async #createSession(input: PiSessionCreateInput, signal: AbortSignal): Promise<PiSessionClient> {
-    const session = await Reflect.apply(this.#clientFactoryCreate, this.#clientFactory, [input, signal])
-
-    if (typeof session !== "object" || session === null) {
-      throw new TypeError("Pi clientFactory must return a session object")
-    }
-
-    for (const method of ["abort", "dispose", "prompt"] as const) {
-      if (typeof session[method] !== "function") {
-        throw new TypeError(`Pi session ${method} must be a function`)
-      }
-    }
-
-    return session
+      permissionPolicy: "allow_always",
+      structuredOutputInstruction:
+        'Call the mcp tool exactly once with tool "aml_submit_result". ' +
+        'Pass the final value as args.result, for example {"tool":"aml_submit_result","args":{"result":...}}. ' +
+        "Do not return substitute JSON only as message text.",
+      transformText: stripPiAcpStartupInfo,
+    })
   }
 }
 
 /**
- * Configures one immutable Pi Agent adapter without performing I/O.
+ * Creates a Pi coding Agent through the maintained pi-acp adapter.
  */
-export function piAgent(options: PiAgentOptions = {}): PiAgentProvider {
-  return defineAgentProvider(new PiAgentImplementation(captureOptions(options)))
+export function piAgent(options: PiAgentOptions = {}): Readonly<PiAgentProvider> {
+  const profile = new PiAcpProfile(captureOptions(options))
+  return defineAgentProvider(new AcpAgentProvider(profile))
 }
 
-/**
- * Validates and snapshots provider configuration at the factory boundary.
- */
-function captureOptions(options: PiAgentOptions): CapturedPiAgentOptions {
+function captureOptions(options: PiAgentOptions): Readonly<CapturedPiAgentOptions> {
   if (typeof options !== "object" || options === null) {
     throw new TypeError("Pi Agent options must be an object")
   }
 
-  const clientFactoryValue = options.clientFactory
-  const model = validateModel(options.model)
-  const providers = captureProviders(options.providers)
+  const args = options.args ?? []
+  const command = normalizedString(options.command ?? "pi-acp", "Pi ACP command")
+  const env = options.env ?? {}
+  const mcpAdapterPath = optionalNormalizedString(options.mcpAdapterPath, "Pi MCP adapter path")
+  const model = optionalNormalizedString(options.model, "Pi model")
+  const piCommand = normalizedString(options.piCommand ?? "pi", "Pi command")
   const thinkingLevel = options.thinkingLevel
   const workingDirectory = optionalNormalizedString(options.workingDirectory, "Pi workingDirectory")
+
+  if (!Array.isArray(args) || args.some(argument => typeof argument !== "string" || argument.includes("\0"))) {
+    throw new TypeError("Pi ACP args must be strings without null bytes")
+  }
+
+  if (typeof env !== "object" || env === null || Array.isArray(env)) {
+    throw new TypeError("Pi env must be an object")
+  }
 
   if (thinkingLevel !== undefined && !PI_THINKING_LEVELS.has(thinkingLevel)) {
     throw new TypeError("Pi thinkingLevel is unsupported")
   }
 
-  const clientFactory = clientFactoryValue === undefined ? new PiSdkSessionClientFactory() : clientFactoryValue
-
-  if (typeof clientFactory !== "object" || clientFactory === null || typeof clientFactory.create !== "function") {
-    throw new TypeError("Pi clientFactory create must be a function")
-  }
-
   return Object.freeze({
-    clientFactory,
+    args: Object.freeze([...args]),
+    command,
+    env: Object.freeze({ ...env }),
+    ...(mcpAdapterPath === undefined ? {} : { mcpAdapterPath }),
     ...(model === undefined ? {} : { model }),
-    ...(providers === undefined ? {} : { providers }),
+    piCommand,
+    ...(options.sessionFactory === undefined ? {} : { sessionFactory: options.sessionFactory }),
     ...(thinkingLevel === undefined ? {} : { thinkingLevel }),
     ...(workingDirectory === undefined ? {} : { workingDirectory }),
   })
 }
 
-function validateModel(value: string | undefined): string | undefined {
-  return optionalNormalizedString(value, "Pi model")
+function stripPiAcpStartupInfo(
+  text: string,
+  session: Parameters<NonNullable<AcpAgentLaunch["transformText"]>>[1]
+): string {
+  const metadata = session.meta
+  if (typeof metadata !== "object" || metadata === null) return text
+  const piAcp = Reflect.get(metadata, "piAcp")
+  if (typeof piAcp !== "object" || piAcp === null) return text
+  const startupInfo = Reflect.get(piAcp, "startupInfo")
+  return typeof startupInfo === "string" && text.startsWith(startupInfo) ? text.slice(startupInfo.length) : text
+}
+
+function hasDefaultPiPermissions(permissions: AcpAgentLaunchContext["request"]["permissions"]): boolean {
+  return permissions.filesystem === "read-write" && permissions.network && permissions.shell
+}
+
+function createPiWrapper(
+  piCommand: string,
+  permissions: AcpAgentLaunchContext["request"]["permissions"],
+  usesMcp: boolean,
+  adapterPath: string | undefined
+): string {
+  const tools = ["read", "grep", "find", "ls"]
+  if (permissions.filesystem === "read-write") tools.push("edit", "write")
+  if (permissions.shell) tools.push("bash")
+  if (usesMcp) tools.push("mcp")
+
+  const adapter = !usesMcp
+    ? ""
+    : adapterPath === undefined
+      ? '\nadapter_path="$(dirname "$(readlink -f "$(command -v pi-mcp-adapter)")")/index.ts"'
+      : `\nadapter_path=${shellArgument(adapterPath)}`
+  const command = `exec ${shellArgument(piCommand)} --tools ${shellArgument(tools.join(","))}`
+
+  return `#!/bin/sh${adapter}\n${command}${usesMcp ? ' -e "$adapter_path"' : ""} "$@"\n`
+}
+
+function createPiMcpConfiguration(servers: AcpAgentLaunchContext["mcpServers"]): string {
+  return `${JSON.stringify(
+    {
+      mcpServers: Object.fromEntries(servers.map(server => [server.name, createPiMcpServerConfiguration(server)])),
+    },
+    null,
+    2
+  )}\n`
+}
+
+function createPiMcpServerConfiguration(
+  server: AcpAgentLaunchContext["mcpServers"][number]
+): Readonly<Record<string, unknown>> {
+  if ("url" in server) {
+    return {
+      directTools: false,
+      headers: Object.fromEntries(server.headers.map(header => [header.name, header.value])),
+      lifecycle: "lazy",
+      toolPrefix: "none",
+      url: server.url,
+    }
+  }
+
+  if ("command" in server) {
+    return {
+      args: [...server.args],
+      command: server.command,
+      directTools: false,
+      env: Object.fromEntries(server.env.map(variable => [variable.name, variable.value])),
+      lifecycle: "lazy",
+      toolPrefix: "none",
+    }
+  }
+
+  throw new TypeError(`Pi MCP adapter cannot represent ACP-native server "${server.name}"`)
+}
+
+function shellArgument(value: string): string {
+  return `'${value.replaceAll("'", "'\\''")}'`
 }
 
 function optionalNormalizedString(value: string | undefined, label: string): string | undefined {
-  if (value === undefined) {
-    return undefined
-  }
+  return value === undefined ? undefined : normalizedString(value, label)
+}
 
-  if (typeof value !== "string" || value.length === 0 || value !== value.trim()) {
+function normalizedString(value: unknown, label: string): string {
+  if (typeof value !== "string" || value.length === 0 || value !== value.trim() || value.includes("\0")) {
     throw new TypeError(`${label} must be a non-empty normalized string`)
   }
 
   return value
-}
-
-/**
- * Captures Pi's native provider map while preserving its callback identities.
- */
-function captureProviders(
-  value: Readonly<Record<string, ProviderConfig>> | undefined
-): Readonly<Record<string, ProviderConfig>> | undefined {
-  if (value === undefined) {
-    return undefined
-  }
-
-  if (typeof value !== "object" || value === null || Array.isArray(value)) {
-    throw new TypeError("Pi providers must be an object")
-  }
-
-  const providers: Record<string, ProviderConfig> = {}
-
-  for (const providerId of Object.keys(value)) {
-    if (providerId.length === 0 || providerId !== providerId.trim()) {
-      throw new TypeError("Pi provider IDs must be non-empty normalized strings")
-    }
-
-    const config = value[providerId]
-
-    if (typeof config !== "object" || config === null || Array.isArray(config)) {
-      throw new TypeError(`Pi provider "${providerId}" config must be an object`)
-    }
-
-    providers[providerId] = captureProviderValue(config, `Pi provider "${providerId}"`) as ProviderConfig
-  }
-
-  return Object.freeze(providers)
-}
-
-/**
- * Recursively snapshots native Pi data while retaining provider callback identities.
- */
-function captureProviderValue(value: unknown, label: string, seen = new WeakSet<object>()): unknown {
-  if (value === null || typeof value !== "object") {
-    return value
-  }
-
-  if (seen.has(value)) {
-    throw new TypeError(`${label} must not contain cycles`)
-  }
-
-  seen.add(value)
-
-  if (Array.isArray(value)) {
-    const captured = value.map(item => captureProviderValue(item, label, seen))
-    seen.delete(value)
-    return Object.freeze(captured)
-  }
-
-  const captured: Record<string, unknown> = {}
-
-  for (const key of Object.keys(value)) {
-    captured[key] = captureProviderValue(Reflect.get(value, key), label, seen)
-  }
-
-  seen.delete(value)
-  return Object.freeze(captured)
 }

@@ -15,15 +15,14 @@
   },
   "scripts": {
     "build": "vite build && tsc --project tsconfig.build.json",
-    "package:check": "node scripts/check-package.ts",
     "test": "vitest run",
     "test:integration": "vitest run tests/pi-agent.integration.test.tsx",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@aml-jsx/sdk": "*",
-    "@earendil-works/pi-coding-agent": "0.82.1",
-    "defu": "^6.1.7",
-    "typebox": "1.1.38"
+    "@aml-jsx/sdk": "*"
+  },
+  "devDependencies": {
+    "zod": "^4.4.3"
   }
 }

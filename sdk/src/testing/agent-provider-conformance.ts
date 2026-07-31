@@ -19,6 +19,7 @@ export async function agentProviderConformance(provider: AgentProvider): Promise
     // conformance run exercises more than one authored input.
     followUps: Object.freeze(["agent-provider-conformance-final"]),
     mcpServers: Object.freeze([]),
+    permissions: Object.freeze({ filesystem: "read-write", network: true, shell: true }),
     prompt: "agent-provider-conformance",
     system: "Follow the provider contract.",
     tools: Object.freeze([]),

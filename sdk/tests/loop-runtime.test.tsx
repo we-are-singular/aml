@@ -10,6 +10,7 @@ import { FollowUp } from "../src/components/follow-up/follow-up.js"
 import { type DeepReadonly, Loop, type LoopProps } from "../src/components/loop/loop.js"
 import { Sandbox } from "../src/components/sandbox/sandbox.js"
 import type { AgentJavaScriptTool } from "../src/components/tool/agent-tool.js"
+import { defineTool } from "../src/components/tool/define-tool.js"
 import { Tool } from "../src/components/tool/tool.js"
 import { AmlRuntime } from "../src/core/aml-runtime.js"
 import { evaluate } from "../src/core/evaluate.js"
@@ -519,6 +520,12 @@ describe("Loop", () => {
 
   it("reserves the runtime Tool name while bypassing author allowlists", async () => {
     const State = z.object({ done: z.boolean() })
+    const collidingTool = defineTool({
+      description: "Collides with the Loop-owned capability",
+      input: z.object({}),
+      name: "aml_set_state",
+      execute: async () => ({ done: true }),
+    })
     const provider = new DeterministicAgentProvider({
       respond(request) {
         expect(request.tools.map(tool => tool.name)).toEqual(["aml_set_state"])
@@ -539,7 +546,7 @@ describe("Loop", () => {
           initial={{ done: false }}
           render={() => (
             <Agent>
-              <Tool name="aml_set_state" />
+              <Tool use={collidingTool} />
               duplicate
             </Agent>
           )}

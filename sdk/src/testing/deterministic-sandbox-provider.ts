@@ -1,5 +1,10 @@
 import type { SandboxAcquireRequest, SandboxLease, SandboxProvider } from "../components/sandbox/sandbox-provider.js"
-import type { SandboxExecOptions, SandboxExecResult, SandboxRuntime } from "../components/sandbox/sandbox-runtime.js"
+import type {
+  SandboxExecOptions,
+  SandboxExecResult,
+  SandboxProcess,
+  SandboxRuntime,
+} from "../components/sandbox/sandbox-runtime.js"
 
 /**
  * Default opaque handle exposed by the deterministic Sandbox fixture.
@@ -23,6 +28,12 @@ export interface DeterministicSandboxProviderOptions<Handle> {
   ) => SandboxExecResult | PromiseLike<SandboxExecResult>
   readonly name?: string
   readonly release?: (lease: Readonly<{ handle: Handle; id: string }>, acquisition: number) => void | PromiseLike<void>
+  readonly spawn?: (
+    command: string,
+    args: readonly string[],
+    request: SandboxAcquireRequest,
+    options: Readonly<SandboxExecOptions>
+  ) => SandboxProcess | PromiseLike<SandboxProcess>
 }
 
 /**
@@ -34,6 +45,7 @@ export class DeterministicSandboxProvider<Handle = DeterministicSandboxHandle> i
   readonly #exec: NonNullable<DeterministicSandboxProviderOptions<Handle>["exec"]>
   readonly #release: (lease: Readonly<{ handle: Handle; id: string }>, acquisition: number) => void | PromiseLike<void>
   readonly #releases: string[] = []
+  readonly #spawn: NonNullable<DeterministicSandboxProviderOptions<Handle>["spawn"]>
   readonly name: string
 
   /**
@@ -67,6 +79,10 @@ export class DeterministicSandboxProvider<Handle = DeterministicSandboxHandle> i
         stdout: [command, ...args].join(" "),
       }))
     this.#release = options.release ?? (() => {})
+    this.#spawn =
+      options.spawn ??
+      ((command: string, args: readonly string[]) =>
+        completedProcess(`deterministic-process:${command}`, [command, ...args].join(" ")))
   }
 
   /**
@@ -97,6 +113,8 @@ export class DeterministicSandboxProvider<Handle = DeterministicSandboxHandle> i
       exec: async (command: string, args: readonly string[] = [], options = {}) =>
         await this.#exec(command, args, request, options),
       root: request.root,
+      spawn: async (command: string, args: readonly string[] = [], options = {}) =>
+        await this.#spawn(command, args, request, options),
     })
 
     return Object.freeze({
@@ -109,4 +127,32 @@ export class DeterministicSandboxProvider<Handle = DeterministicSandboxHandle> i
       },
     })
   }
+}
+
+function completedProcess(id: string, stdout: string): Readonly<SandboxProcess> {
+  return Object.freeze({
+    async closeInput() {},
+    id,
+    async kill() {},
+    stderr: byteStream(""),
+    stdout: byteStream(stdout),
+    async wait() {
+      return Object.freeze({ exitCode: 0 })
+    },
+    async write() {
+      throw new Error("Deterministic Sandbox process input is closed")
+    },
+  })
+}
+
+function byteStream(value: string): ReadableStream<Uint8Array> {
+  const bytes = new TextEncoder().encode(value)
+  return new ReadableStream({
+    start(controller) {
+      if (bytes.byteLength > 0) {
+        controller.enqueue(bytes)
+      }
+      controller.close()
+    },
+  })
 }
