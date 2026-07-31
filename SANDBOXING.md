@@ -279,6 +279,30 @@ OpenCode does not currently require a server, port exposure, or a long-running `
 
 AML should learn from those provider boundaries without copying the complete feature surface or taking a dependency before the external contracts are stable and useful to AML.
 
+### Deferred provider: AgentOS
+
+[AgentOS](https://agentos-sdk.dev/docs/) is a promising lightweight provider because its in-process virtual
+machines start quickly, support host-directory mounts, and expose literal process execution with environment,
+working-directory, timeout, and cancellation controls. A prototype successfully mounted an AML Workspace, enforced
+read-only mount policy, executed Pi's sandbox-backed shell tools, and persisted guest writes.
+
+The provider is deferred because AML requires every supported Agent to work with every supported Sandbox. Pi runs
+its SDK on the AML host and delegates only shell operations to the Sandbox runtime, so it worked with AgentOS's
+default common software. Codex and OpenCode instead launch their complete CLI processes inside the Sandbox.
+AgentOS's packages expose ACP-oriented adapters rather than the Codex `exec --json` and OpenCode JSON command
+contracts used by AML.
+
+Installing the standard Codex npm package at boot did not close the gap: a global install targeted a non-writable
+location, while a writable-prefix install downloaded a platform-native executable that AgentOS could not run.
+Supporting AgentOS without an exception in the compatibility matrix therefore requires one of:
+
+- AgentOS packages that implement the normal CLI contracts expected by AML
+- an AML ACP/session transport alongside the command runtime
+- a deliberate host-Agent architecture in which AML owns each Agent's complete sandbox-backed tool surface
+
+AgentOS should not be added to the public provider list or smoke matrix until one of these paths supports every
+built-in Agent.
+
 ## Security boundaries
 
 - Sandbox setup is trusted application configuration. Model-generated commands belong to the Agent running inside the Sandbox.
