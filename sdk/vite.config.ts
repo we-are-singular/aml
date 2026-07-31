@@ -65,8 +65,6 @@ export default defineConfig({
         /^@modelcontextprotocol\/sdk(?:\/.*)?$/,
         /^@daytona\/sdk(?:\/.*)?$/,
         /^@aws-sdk\/client-s3$/,
-        /^@earendil-works\/pi-coding-agent(?:\/.*)?$/,
-        /^@openai\/codex-sdk$/,
         /^@opencode-ai\/sdk(?:\/.*)?$/,
         /^execa$/,
         /^globby$/,

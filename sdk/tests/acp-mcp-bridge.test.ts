@@ -1,5 +1,6 @@
 import { Client as McpClient } from "@modelcontextprotocol/sdk/client/index.js"
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js"
+import { createServer, request } from "node:http"
 import { z } from "zod"
 import { describe, expect, it, vi } from "vitest"
 import { execa } from "execa"
@@ -13,7 +14,9 @@ import { createAgentExecutionContext } from "../src/testing/create-agent-executi
 
 describe("AcpMcpBridge", () => {
   it("serves JavaScript Tools and structured submission over authenticated MCP", async () => {
-    const execute = vi.fn(async ({ value }: { value: string }) => ({ echoed: value }))
+    const execute = vi.fn(async ({ value }: { value: string }) => ({
+      echoed: value,
+    }))
     const tool = defineTool({
       description: "Echo one fixture value",
       input: z.object({ value: z.string() }),
@@ -95,6 +98,44 @@ describe("AcpMcpBridge", () => {
     }
   })
 
+  it("does not let the Sandbox relay proxy requests to other host endpoints", async () => {
+    let reached = false
+    const target = createServer((_request, response) => {
+      reached = true
+      response.writeHead(204).end()
+    })
+    await new Promise<void>(resolve => target.listen(0, "127.0.0.1", resolve))
+    const address = target.address()
+    if (address === null || typeof address === "string") throw new Error("Test target did not bind a TCP port")
+
+    const context = createAgentExecutionContext()
+    const bridge = new AcpMcpBridge([], undefined, context)
+    const direct = await bridge.start(context.signal)
+    const started = await AcpMcpRelay.start(localSandboxRuntime(), process.cwd(), direct, context.signal)
+
+    try {
+      const status = await requestAbsolute(started.connection.url, `http://127.0.0.1:${address.port}/private`)
+      expect(status).toBe(502)
+      expect(reached).toBe(false)
+    } finally {
+      await started.relay.close()
+      await bridge.close()
+      await new Promise<void>((resolve, reject) =>
+        target.close(error => (error === undefined ? resolve() : reject(error)))
+      )
+    }
+  })
+
+  it("rejects a missing local executable without an unhandled process error", async () => {
+    const signal = new AbortController().signal
+    await expect(
+      spawnLocalProcess(`aml-missing-executable-${Date.now()}`, [], {
+        cwd: process.cwd(),
+        signal,
+      })
+    ).rejects.toMatchObject({ code: "ENOENT" })
+  })
+
   it("accepts a fresh client after an MCP capability probe disconnects", async () => {
     const tool = defineTool({
       description: "Return the reconnect fixture",
@@ -133,7 +174,11 @@ function localSandboxRuntime(): SandboxRuntime {
         reject: false,
         ...(options?.signal === undefined ? {} : { cancelSignal: options.signal }),
       })
-      return { exitCode: result.exitCode ?? 1, stderr: result.stderr, stdout: result.stdout }
+      return {
+        exitCode: result.exitCode ?? 1,
+        stderr: result.stderr,
+        stdout: result.stdout,
+      }
     },
     root: process.cwd(),
     async spawn(command, args, options) {
@@ -157,4 +202,25 @@ async function connectMcp(connection: {
   })
   await client.connect(transport as never)
   return client
+}
+
+async function requestAbsolute(relayUrl: string, targetUrl: string): Promise<number | undefined> {
+  const relay = new URL(relayUrl)
+
+  return await new Promise((resolve, reject) => {
+    const outgoing = request(
+      {
+        hostname: relay.hostname,
+        method: "POST",
+        path: targetUrl,
+        port: relay.port,
+      },
+      response => {
+        response.resume()
+        response.once("end", () => resolve(response.statusCode))
+      }
+    )
+    outgoing.once("error", reject)
+    outgoing.end("{}")
+  })
 }

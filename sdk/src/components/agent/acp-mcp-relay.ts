@@ -48,7 +48,10 @@ export class AcpMcpRelay {
     cwd: string,
     bridge: Readonly<AcpMcpBridgeConnection>,
     signal: AbortSignal
-  ): Promise<{ readonly connection: Readonly<AcpMcpBridgeConnection>; readonly relay: AcpMcpRelay }> {
+  ): Promise<{
+    readonly connection: Readonly<AcpMcpBridgeConnection>
+    readonly relay: AcpMcpRelay
+  }> {
     const directory = `/tmp/aml-mcp-relay-${randomUUID()}`
     const program = path.posix.join(directory, "relay.cjs")
     await materializeSandboxFiles(runtime, directory, [{ content: relayProgram, path: "relay.cjs" }], signal)
@@ -107,7 +110,9 @@ export class AcpMcpRelay {
       await removeRelayDirectory(runtime, directory).catch(() => undefined)
       throw errorText.trim().length === 0
         ? error
-        : new Error(`Sandbox MCP relay failed: ${errorText.trim()}`, { cause: error })
+        : new Error(`Sandbox MCP relay failed: ${errorText.trim()}`, {
+            cause: error,
+          })
     }
   }
 
@@ -162,7 +167,16 @@ export class AcpMcpRelay {
     }
 
     try {
-      const response = await fetch(new URL(requestPath, this.#bridge.url), {
+      const target = new URL(requestPath, this.#bridge.url)
+      const bridgeTarget = new URL(this.#bridge.url)
+
+      // The guest controls the HTTP request line. Keep the relay pinned to the
+      // invocation-owned MCP endpoint instead of becoming a host-side proxy.
+      if (target.origin !== bridgeTarget.origin || target.pathname !== bridgeTarget.pathname) {
+        throw new Error("Sandbox MCP relay rejected a request outside its bridge endpoint")
+      }
+
+      const response = await fetch(target, {
         ...(method === "GET" || method === "HEAD" ? {} : { body }),
         headers: requestHeaders(headers as Record<string, string>),
         method,
