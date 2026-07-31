@@ -57,7 +57,7 @@ AML is under active development. Public APIs and examples may change before the 
 
 - [Documentation and examples](https://github.com/we-are-singular/aml)
 - [Specification](https://github.com/we-are-singular/aml/blob/main/SPEC.md)
-- [Project website](https://aml.wearesingular.com/)
+- [Project website](https://agent-markup-language.com/)
 
 ## License
 

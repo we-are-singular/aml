@@ -375,7 +375,7 @@ npm run dev --workspace=@aml-jsx/website
 ```
 
 Pushes to `main` deploy `apps/website/dist` to GitHub Pages at
-[`aml.wearesingular.com`](https://aml.wearesingular.com/). The generated directory is ignored and uploaded directly
+[`agent-markup-language.com`](https://agent-markup-language.com/). The generated directory is ignored and uploaded directly
 by GitHub Actions; it is not committed to a publishing branch.
 
 ## License
