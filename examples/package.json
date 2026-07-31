@@ -4,8 +4,8 @@
   "type": "module",
   "scripts": {
     "example": "vite-node --script run.ts",
-    "test": "vitest run test",
-    "typecheck": "tsc --noEmit"
+    "lint": "tsc --noEmit && oxlint .",
+    "test": "vitest run test"
   },
   "dependencies": {
     "@aml-jsx/sdk": "*",

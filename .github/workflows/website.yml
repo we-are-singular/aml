@@ -46,13 +46,13 @@ jobs:
         run: npm run format:check
 
       - name: Lint and type-check
-        run: npm run lint
+        run: npm run lint -- --force
 
       - name: Test
-        run: npm run test
+        run: npm run test -- --force
 
       - name: Build
-        run: npm run build
+        run: npm run build -- --force
         env:
           SITE_BASE: /
           SITE_URL: https://aml.wearesingular.com

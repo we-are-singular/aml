@@ -15,10 +15,10 @@
   },
   "scripts": {
     "build": "vite build && tsc --project tsconfig.build.json",
+    "lint": "tsc --noEmit && oxlint .",
     "package:check": "node scripts/check-package.ts",
     "test": "vitest run",
-    "test:integration": "AML_S3_TEST=1 vitest run tests/s3-workspace.integration.test.tsx",
-    "typecheck": "tsc --noEmit"
+    "test:integration": "AML_S3_TEST=1 vitest run tests/s3-workspace.integration.test.tsx"
   },
   "dependencies": {
     "@aml-jsx/sdk": "*",

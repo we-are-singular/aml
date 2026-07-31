@@ -9,19 +9,18 @@
   ],
   "type": "module",
   "scripts": {
-    "build": "turbo run build",
+    "build": "turbo build",
     "example": "turbo run example --filter=@aml-jsx/examples --",
     "format": "oxfmt",
     "format:check": "oxfmt --check",
-    "lint": "npm run typecheck && oxlint .",
+    "lint": "turbo lint",
     "lint:fix": "oxlint --fix .",
     "pack:check": "turbo run package:check",
     "prepare": "husky",
     "release": "npm run release --workspace=@aml-jsx/sdk --",
     "release:check": "npm run format:check && npm run lint && npm run test && npm run build && npm run pack:check",
     "smoke": "vite-node sdk/tests/smoke/run-smoke.ts",
-    "test": "turbo run test",
-    "typecheck": "turbo run typecheck"
+    "test": "turbo test"
   },
   "devDependencies": {
     "@agentclientprotocol/codex-acp": "1.1.7",

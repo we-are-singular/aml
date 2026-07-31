@@ -3,6 +3,11 @@
   "globalDependencies": ["config/**", "tsconfig.json"],
   "tasks": {
     "build": {
+      "dependsOn": ["^build"],
+      "outputs": ["dist/**"]
+    },
+    "@aml-jsx/website#build": {
+      "env": ["SITE_BASE", "SITE_URL"],
       "outputs": ["dist/**"]
     },
     "example": {
@@ -14,11 +19,11 @@
       "dependsOn": ["build", "^build"],
       "outputs": []
     },
-    "test": {
+    "lint": {
       "dependsOn": ["^build"],
       "outputs": []
     },
-    "typecheck": {
+    "test": {
       "dependsOn": ["^build"],
       "outputs": []
     }

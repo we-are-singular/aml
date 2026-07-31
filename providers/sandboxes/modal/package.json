@@ -15,9 +15,9 @@
   },
   "scripts": {
     "build": "vite build && tsc --project tsconfig.build.json",
+    "lint": "tsc --noEmit && oxlint .",
     "test": "vitest run",
-    "test:integration": "AML_MODAL_TEST=1 vitest run tests/modal-sandbox.integration.test.ts",
-    "typecheck": "tsc --noEmit"
+    "test:integration": "AML_MODAL_TEST=1 vitest run tests/modal-sandbox.integration.test.ts"
   },
   "dependencies": {
     "@aml-jsx/sdk": "*",

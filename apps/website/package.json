@@ -6,8 +6,9 @@
   "scripts": {
     "build": "vite build",
     "dev": "vite",
+    "lint": "tsc --noEmit && oxlint .",
     "preview": "vite preview",
-    "typecheck": "tsc --noEmit"
+    "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
     "shiki": "^4.3.1"

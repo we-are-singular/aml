@@ -15,9 +15,9 @@
   },
   "scripts": {
     "build": "vite build && tsc --project tsconfig.build.json",
+    "lint": "tsc --noEmit && oxlint .",
     "package:check": "node scripts/check-package.ts",
-    "test": "vitest run",
-    "typecheck": "tsc --noEmit"
+    "test": "vitest run"
   },
   "dependencies": {
     "@aml-jsx/sdk": "*",

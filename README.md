@@ -314,7 +314,6 @@ Common commands:
 | `npm run format:check`                                        | Verify formatting without changing files.                       |
 | `npm run lint`                                                | Type-check and lint every workspace.                            |
 | `npm run test`                                                | Run deterministic tests across every workspace.                 |
-| `npm run typecheck`                                           | Type-check the SDK, providers, and examples.                    |
 | `npm run build`                                               | Build every distributable package.                              |
 | `npm run pack:check`                                          | Validate built exports, packed files, and provider conformance. |
 | `npm run example -- basic`                                    | Run one example through built package exports.                  |
