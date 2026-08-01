@@ -601,6 +601,7 @@ body {
 }
 
 .integration-logo::before {
+  display: none;
   position: absolute;
   bottom: calc(100% + 0.65rem);
   left: 50%;
@@ -626,6 +627,7 @@ body {
 }
 
 .integration-logo::after {
+  display: none;
   position: absolute;
   bottom: calc(100% + 0.32rem);
   left: 50%;
@@ -645,6 +647,7 @@ body {
 .integration-logo:hover::after,
 .integration-logo:focus-visible::before,
 .integration-logo:focus-visible::after {
+  display: block;
   opacity: 1;
 }
 
