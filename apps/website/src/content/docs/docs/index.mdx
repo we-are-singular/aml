@@ -1,0 +1,62 @@
+---
+title: AML documentation
+description: Build, understand, and operate typed agent workflows with Agent Markup Language.
+hero:
+  tagline: The practical guide to composing agents, capabilities, sandboxes, and durable workspaces with TypeScript and JSX.
+  actions:
+    - text: Build your first workflow
+      link: ./getting-started/
+      icon: right-arrow
+    - text: View on GitHub
+      link: https://github.com/we-are-singular/aml
+      variant: minimal
+---
+
+<nav class="docs-hot-links" aria-label="Documentation shortcuts">
+  <a href="/docs/faq/">FAQ</a>
+  <a href="/docs/examples/">Examples</a>
+  <a href="/docs/agent-skill/">Agent skill</a>
+  <a href="/docs/providers/">Providers</a>
+  <a href="/docs/cookbook/">Cookbook</a>
+  <a href="/docs/reference/">Reference</a>
+  <a href="/docs/llms.txt">Full docs for LLMs</a>
+  <a href="/llms.txt">Project llms.txt</a>
+</nav>
+
+AML is an asynchronous TypeScript and JSX runtime for building executable agent workflows. JSX describes the dependency tree; `AmlRuntime` evaluates it, opens scoped resources, runs provider sessions, and cleans up in reverse order. It is not a UI framework or a second workflow language—ordinary TypeScript still owns control flow and concurrency.
+
+## Install AML
+
+<div class="docs-install-grid">
+  <section class="docs-install-panel">
+    <p class="docs-install-panel__eyebrow">Application runtime</p>
+    <h3>Install the SDK</h3>
+    <p>Add the public ESM package to a Node.js 26+ TypeScript project.</p>
+
+```sh
+npm install @aml-jsx/sdk
+```
+
+    <a href="/docs/getting-started/">Configure TSX and run a credential-free workflow →</a>
+
+  </section>
+
+  <section class="docs-install-panel docs-install-panel--agent">
+    <p class="docs-install-panel__eyebrow">Coding agents</p>
+    <h3>Install the AML authoring skill</h3>
+    <p>Give a compatible coding agent the repository-backed AML API, composition, provider, and security guidance.</p>
+
+```sh
+npx skills add \
+  we-are-singular/aml \
+  --skill aml-jsx
+```
+
+    <p class="docs-install-panel__note">The skill guides the agent; your project still needs the SDK and its selected provider executables.</p>
+
+    <a href="/docs/agent-skill/">Install, verify, and use the skill →</a>
+
+  </section>
+</div>
+
+Start with the [credential-free tutorial](/docs/getting-started/), then use the provider guides and cookbook to assemble a production workflow. Search the complete documentation with <kbd>Ctrl</kbd> + <kbd>K</kbd>.

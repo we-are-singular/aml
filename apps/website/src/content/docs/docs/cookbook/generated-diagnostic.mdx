@@ -1,0 +1,148 @@
+---
+title: Run generated diagnostics in a Sandbox
+description: "Let <Agent /> propose diagnostic source, execute it in a selected <Sandbox />, and review its output as evidence."
+---
+
+import { Aside, Badge, Steps } from "@astrojs/starlight/components"
+
+<Badge text="Deterministic Agent + Docker Sandbox" variant="success" />
+
+## Goal
+
+Build a repository diagnostic with three visible boundaries:
+
+1. `<Agent />` proposes a small Node.js program;
+2. `<Script />` executes that resolved text inside an explicitly selected Docker Sandbox;
+3. a later `<Agent />` receives standard output as evidence.
+
+The workflow is deterministic at the Agent layer, so the example needs no model credentials. It still needs Docker and a local `node:26` image: that image supplies the Node interpreter used by `<Script />`, not an Agent executable. A live Agent provider can be substituted later, but the selected image must then also contain the compatible ACP executable and its dependencies.
+
+## Prerequisites and status
+
+- Node.js `>=26`, ESM TypeScript/TSX execution, and `@aml-jsx/sdk`;
+- Docker running locally with `node:26` available (`docker pull node:26` if needed);
+- the current directory is mounted read-only into the container by the configured Docker Sandbox;
+- no model credentials are required because both Agent responses are deterministic fixtures.
+
+This is a runnable boundary demonstration, not a claim that arbitrary generated code is safe. The source returned by an Agent remains untrusted input.
+
+## Complete source
+
+```tsx
+import { Agent, AmlRuntime, Sandbox, Script, dockerSandbox } from "@aml-jsx/sdk"
+import { DeterministicAgentProvider } from "@aml-jsx/sdk/testing"
+
+const generator = new DeterministicAgentProvider({
+  name: "diagnostic-generator",
+  respond() {
+    return {
+      text: `const { readdir } = await import("node:fs/promises")
+const entries = (await readdir(process.cwd(), { withFileTypes: true }))
+  .filter(entry => entry.isFile())
+  .map(entry => entry.name)
+  .sort()
+console.log(JSON.stringify({ files: entries }))`,
+    }
+  },
+})
+
+const reviewer = new DeterministicAgentProvider({
+  name: "diagnostic-reviewer",
+  respond(request) {
+    return { text: `Evidence received: ${request.prompt}` }
+  },
+})
+
+const DiagnosticsSandbox = dockerSandbox({
+  image: "node:26",
+  workspace: process.cwd(),
+})
+
+async function TriageRepository() {
+  const source = await new AmlRuntime({ agentProvider: generator }).evaluate(
+    <Agent>Return only a short Node.js diagnostic that lists files in the current working directory as JSON.</Agent>
+  )
+
+  const evidence = await new AmlRuntime().evaluate(
+    <Sandbox provider={DiagnosticsSandbox} access="read-only">
+      <Script shell="node" timeoutMs={10_000}>
+        {source}
+      </Script>
+    </Sandbox>
+  )
+
+  return await new AmlRuntime({ agentProvider: reviewer }).evaluate(
+    <Agent>
+      Review only this diagnostic output. Do not claim to have inspected files that are not listed:
+      {evidence}
+    </Agent>
+  )
+}
+
+console.log(await TriageRepository())
+```
+
+## Run it
+
+Save the complete source as `recipe.tsx` in a project configured as shown in [Getting started](/docs/getting-started/). Verify the required image, then run that exact workflow:
+
+```sh title="Terminal"
+docker image inspect node:26
+npx vite-node recipe.tsx
+```
+
+A successful run prints JSON evidence from the container and then a reviewer message containing that evidence. File names vary with the directory from which the program is launched.
+
+## Observable result
+
+The diagnostic emits a line shaped like:
+
+```text
+{"files":["README.md","package.json"]}
+```
+
+The final `<Agent />` receives that line as ordinary prompt data. Docker Sandbox is acquired and released around the `<Script />` evaluation; the workflow does not expose the container as durable execution.
+
+## How the boundaries work
+
+<Steps>
+
+1. The application authors the order in TypeScript. The first `<Agent />` returns source text; it does not create AML nodes or change the workflow.
+2. `<Script />` requires an enclosing `<Sandbox />`. Its `shell="node"` form invokes Node with the resolved source, and `timeoutMs` bounds that execution request.
+3. The Docker adapter mounts the configured workspace at `/workspace` and applies the requested read-only mount. The image must already contain the interpreter; AML does not build images or install tools.
+4. The second `<Agent />` gets the script's stdout as data. It is not given an implicit tool, filesystem access, or permission to execute the generated source again.
+
+</Steps>
+
+<Aside type="caution" title="A prompt is not a security boundary">
+  The generator's instruction to avoid writes, networking, or child processes is advisory. A malicious or compromised
+  response can ignore it. Use a Sandbox policy that is appropriate for the threat model, validate generated source and
+  output, keep credentials out of the environment, and do not treat this Docker adapter as a complete hostile-code
+  boundary: it does not configure network policy, Linux capabilities, seccomp, CPU, memory, or user identity for you.
+</Aside>
+
+## Failure, cancellation, and security notes
+
+- If Docker cannot start `node:26`, the Sandbox acquisition fails before the script runs.
+- If the generated source is empty, `<Script shell="node" />` rejects it. A non-zero exit code becomes an AML evaluation error and includes the captured stderr detail.
+- Cancellation is propagated to the active Sandbox command and provider work. It cannot undo a side effect that already completed inside a command.
+- `access="read-only"` protects the mounted workspace from ordinary writes through that mount; it does not make the image, kernel, network, host, or inherited credentials a complete isolation boundary.
+- Do not run arbitrary model-authored code with `localSandbox()`: local execution is trusted host-process execution, not isolation.
+- Do not put secrets in generated source, prompts, Workspace files, or trace content.
+
+## Variations
+
+- Replace `generator` with `opencodeAgent({})` or `codexAgent({})` only after selecting a host or image that contains the required ACP executable and configuring its credentials. A plain `node:26` image is not sufficient for that live-provider variant.
+- Replace the Docker provider with Daytona or Modal when the deployment needs remote disposable compute; read their transfer and cancellation semantics before relying on Workspace state.
+- Add a schema or ordinary TypeScript validator for the generated source and output when the diagnostic has a stricter contract. Shape validation still does not establish authorization or factual correctness.
+- Wrap the Sandbox in a Workspace when the workflow must materialize or reconcile files. A Sandbox lease alone is not durable persistence.
+
+## References
+
+- [Sandbox provider boundary](/docs/reference/providers/#sandbox)
+- [Docker Sandbox provider](/docs/providers/sandboxes/docker/)
+- [Sandbox provider contract and security boundaries](/docs/providers/sandboxes/)
+- [`<Script />` implementation](https://github.com/we-are-singular/aml/blob/main/sdk/src/components/script/script-evaluator.ts)
+- [`dockerSandbox` implementation](https://github.com/we-are-singular/aml/blob/main/providers/sandboxes/docker/src/docker-sandbox.ts)
+- [Maintained Docker example](https://github.com/we-are-singular/aml/blob/main/examples/src/integrations/docker.tsx)
+- Adapted from the local editorial source `marketing/examples/001-generated-diagnostic-pipeline.md`; the public contract is verified against the implementation links above.

@@ -1,0 +1,136 @@
+---
+title: Operate AML in a background job
+description: Build a bounded, cancellable, redacted AML job around an injected Agent provider.
+---
+
+import { Aside, Badge, Steps } from "@astrojs/starlight/components"
+
+<Badge text="Deployment shape" variant="caution" />
+
+This is an operational recipe, not a zero-credential demo. It shows the runtime boundary a Node job should own: provider construction, finite limits, redacted tracing, cancellation, and a clear result boundary. The live Agent still needs its executable, model configuration, and credentials.
+
+## Goal
+
+Create a job function that:
+
+- accepts a caller-owned `AbortSignal`;
+- uses an explicit OpenCode provider;
+- limits Agent calls, concurrency, depth, state transitions, and turns;
+- emits lifecycle traces without prompt content;
+- returns only after AML has completed provider cleanup.
+
+## Prerequisites
+
+- Node.js `>=26` and an ESM TypeScript/TSX runtime;
+- `@aml-jsx/sdk` and its OpenCode provider export;
+- the `opencode` executable available to the host or selected Sandbox;
+- model-provider credentials configured through environment or provider-native configuration;
+- a structured logger in the surrounding job runner.
+
+AML does not install the executable, provision a model account, or turn `localSandbox()` into a security boundary.
+
+## Complete source
+
+```tsx
+import { Agent, AmlRuntime, createConsoleTracer, opencodeAgent } from "@aml-jsx/sdk"
+
+const agentProvider = opencodeAgent({
+  model: process.env.AML_MODEL ?? "opencode-go/minimax-m3",
+})
+
+const runtime = new AmlRuntime({
+  agentProvider,
+  maxAgentCalls: 8,
+  maxConcurrentAgents: 2,
+  maxDepth: 12,
+  maxStateTransitions: 8,
+  maxTurnsPerAgent: 8,
+  trace: createConsoleTracer({
+    captureContent: false,
+    write(line) {
+      process.stdout.write(`[aml] ` + line + `\n`)
+    },
+  }),
+})
+
+export async function runReview(input: string, signal: AbortSignal): Promise<string> {
+  if (input.trim().length === 0) {
+    throw new TypeError("Review input must not be empty")
+  }
+
+  return await runtime.evaluate(
+    <Agent system="Review only the supplied input. Do not claim to have inspected files you were not given.">
+      Produce a concise review of this input:
+      {input}
+    </Agent>,
+    { signal }
+  )
+}
+
+const signal = AbortSignal.timeout(120_000)
+console.log(await runReview("The authorization check occurs after the mutation.", signal))
+```
+
+## Run it
+
+Set up OpenCode and its model credentials first, save the complete source as `recipe.tsx`, then run that file through the TSX runner configured in [Getting started](/docs/getting-started/):
+
+```sh title="Terminal"
+npx vite-node recipe.tsx
+```
+
+From an AML repository checkout, a separate maintained example proves a real OpenCode session can call an AML Tool:
+
+```sh title="Terminal"
+AML_OPENCODE_MODEL=opencode-go/minimax-m3 npm run example -- opencode
+```
+
+That example additionally proves that a real OpenCode session can call an AML Tool. It does not provide a deployment image or credentials for you.
+
+## Expected output
+
+The exact model prose is provider- and model-dependent. A successful run should produce one concise review and trace lines containing lifecycle identity, event name, and timing without prompt content. Treat model wording as nondeterministic; assert application-level structure or policy, not an exact sentence.
+
+## How it works
+
+<Steps>
+
+1. Construct the provider once at the job boundary. Provider options and credentials are not hidden in a component.
+2. Construct `AmlRuntime` with finite budgets. The defaults are finite too, but production jobs should make their workload profile explicit.
+3. Pass the request's cancellation signal to `runtime.evaluate`. AML propagates cancellation to active providers and stops later frames; it cannot undo a side effect already completed by a Tool or provider.
+4. Keep `captureContent: false` in ordinary logs. A trace sink can receive redacted lifecycle information while the job result remains application data.
+
+</Steps>
+
+## Production checklist
+
+<Aside type="note" title="Inject deployment-specific providers">
+  The code above uses OpenCode directly to show a complete provider boundary. In a production service, inject the Agent,
+  Sandbox, and Workspace providers from the job's composition root so the same workflow can use a container or remote
+  execution environment without changing its JSX.
+</Aside>
+
+- Put credentials in the deployment secret store or environment; never write them into a Workspace or trace payload.
+- If the workflow handles untrusted code, use a provider with an explicitly reviewed isolation configuration. Local execution is trusted host execution. Docker's adapter does not itself configure network policy, capabilities, seccomp, CPU, memory, or user identity.
+- Add a durable Workspace only when the job needs persistence. For S3 or revision-backed storage, plan for locks, conditional publication, retention, and conflict recovery.
+- Retry only transient and idempotent boundaries. Do not blindly retry a Tool that already sent an email, mutated a repository, or published a revision.
+- Record the AML run identity and provider failure cause in job metadata. Avoid recording prompts, secrets, or full model output by default.
+- Set a job-level timeout shorter than the queue visibility or request deadline, and abort the runtime before the host forcibly kills the process.
+
+## Failure notes
+
+- Missing `opencode` or credentials fails at the provider boundary; it is not an AML syntax error.
+- An exceeded budget rejects the evaluation before more work is scheduled.
+- Cancellation stops future work but cannot roll back external effects.
+- A provider cleanup failure may be aggregated with the primary evaluation failure. Preserve both when reporting the job.
+- `createConsoleTracer()` is a dependency-free console sink, not a metrics backend. Adapt `TraceSink` to your logger or telemetry system if you need durable event aggregation.
+
+## API and source links
+
+- [`AmlRuntime`](https://github.com/we-are-singular/aml/blob/main/sdk/src/core/aml-runtime.ts)
+- [`AmlRuntimeOptions`](https://github.com/we-are-singular/aml/blob/main/sdk/src/core/aml-runtime.ts)
+- [`AmlEvaluationOptions`](https://github.com/we-are-singular/aml/blob/main/sdk/src/core/aml-runtime.ts)
+- [`createConsoleTracer`](https://github.com/we-are-singular/aml/blob/main/sdk/src/observability/create-console-tracer.ts)
+- [`TraceSink`](https://github.com/we-are-singular/aml/blob/main/sdk/src/observability/trace-sink.ts)
+- [`opencodeAgent`](https://github.com/we-are-singular/aml/blob/main/providers/agents/opencode/src/opencode-agent.ts)
+- [Provider-backed OpenCode example](https://github.com/we-are-singular/aml/blob/main/examples/src/integrations/opencode.tsx)

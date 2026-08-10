@@ -1,0 +1,39 @@
+---
+title: "<>…</>"
+description: Group AML values without adding text, scheduling, capability scope, or a runtime resource boundary.
+---
+
+A JSX fragment (`<>…</>`) returns its children directly. Use it when a component needs to contribute several authored values without inventing a wrapper primitive.
+
+```tsx
+import { Agent, AmlRuntime, System } from "@aml-jsx/sdk"
+import { DeterministicAgentProvider } from "@aml-jsx/sdk/testing"
+
+function ReviewInstructions() {
+  return (
+    <>
+      <System>Be concise and evidence-first.</System>
+      Review the authorization change.
+    </>
+  )
+}
+
+const runtime = new AmlRuntime({ agentProvider: new DeterministicAgentProvider() })
+const result = await runtime.evaluate(
+  <Agent>
+    <ReviewInstructions />
+  </Agent>
+)
+```
+
+The automatic JSX transform imports `Fragment` from `@aml-jsx/sdk/jsx-runtime`; application code normally does not import it by hand.
+
+## Semantics
+
+- Children are resolved and concatenated in authored order.
+- `<>…</>` inserts no separators or prompt text of its own.
+- It creates no Agent, Sandbox, Workspace, capability, trace, or cleanup boundary.
+- It does not start siblings concurrently. Use `Promise.all()` around component-local [`evaluate()`](/docs/reference/runtime/#component-local-evaluation) calls when independent work may overlap.
+- Descriptor placement still follows the eventual containing boundary. A `<System />` or `<Tool />` inside `<>…</>` still belongs to its nearest [`<Agent />`](../agent/).
+
+An explicit `<Fragment>…</Fragment>` form is also exported, but shorthand fragments are the conventional authoring form. See [AST and evaluation](/docs/ast/) for renderable values and node construction.

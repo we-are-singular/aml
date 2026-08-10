@@ -1,0 +1,26 @@
+---
+import DefaultMobileMenuToggle from "@astrojs/starlight/components/MobileMenuToggle.astro"
+---
+
+<DefaultMobileMenuToggle />
+
+<script>
+  /* eslint-disable no-undef -- Astro executes this script in the browser. */
+  function syncMobileMenuState() {
+    const host = document.querySelector("starlight-menu-button")
+    const button = host?.querySelector("button[aria-controls='starlight__sidebar']")
+
+    if (!(host instanceof HTMLElement) || !(button instanceof HTMLButtonElement)) return
+
+    const sync = () => button.setAttribute("aria-expanded", host.getAttribute("aria-expanded") ?? "false")
+    sync()
+
+    if (host.dataset.ariaSyncReady === "true") return
+
+    new MutationObserver(sync).observe(host, { attributeFilter: ["aria-expanded"] })
+    host.dataset.ariaSyncReady = "true"
+  }
+
+  syncMobileMenuState()
+  document.addEventListener("astro:page-load", syncMobileMenuState)
+</script>

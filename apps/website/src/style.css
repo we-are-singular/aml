@@ -1,62 +1,13 @@
-@import "tailwindcss";
+@import "tailwindcss" source(none);
+@import "./styles/theme.css";
+@import "./styles/fonts.css";
 
-@theme {
-  --font-display: "Space Grotesk", "Inter", system-ui, sans-serif;
-  --font-mono: "IBM Plex Mono", "SFMono-Regular", Menlo, monospace;
-
-  --color-paper: #fafaf7;
-  --color-surface: #ffffff;
-  --color-ink: #1a1914;
-  --color-ink-soft: #4a463c;
-  --color-muted: #757163;
-  --color-line: #e6e3d8;
-  --color-line-strong: #d4d0c2;
-
-  --color-resolve: #2e4bff;
-  --color-resolve-soft: #e6ebff;
-  --color-signal: #ff5a1f;
-  --color-signal-soft: #ffe9df;
-  --color-ok: #0f9d6c;
-  --color-ok-soft: #ddf5ea;
-  --color-agent: #7c3aed;
-  --color-agent-soft: #f0e8fd;
-
-  --animate-marquee: marquee 42s linear infinite;
-  --animate-ticker: marquee 30s linear infinite;
-  --animate-pulse-dot: pulse-dot 1.6s ease-in-out infinite;
-  --animate-caret: caret 1s steps(1) infinite;
-  --animate-spin-slow: spin 14s linear infinite;
-
-  @keyframes marquee {
-    from {
-      transform: translateX(0);
-    }
-    to {
-      transform: translateX(-50%);
-    }
-  }
-  @keyframes pulse-dot {
-    0%,
-    100% {
-      opacity: 1;
-      transform: scale(1);
-    }
-    50% {
-      opacity: 0.45;
-      transform: scale(0.8);
-    }
-  }
-  @keyframes caret {
-    0%,
-    49% {
-      opacity: 1;
-    }
-    50%,
-    100% {
-      opacity: 0;
-    }
-  }
-}
+@source "./components/marketing";
+@source "./components/ProviderIcon.astro";
+@source "./data";
+@source "./layouts";
+@source "./pages";
+@source "./*.ts";
 
 html {
   scroll-behavior: smooth;
@@ -78,6 +29,10 @@ body {
 .dot-grid {
   background-image: radial-gradient(circle, var(--color-line-strong) 1px, transparent 1px);
   background-size: 22px 22px;
+}
+
+.hero-vignette {
+  background: radial-gradient(75% 60% at 50% 30%, transparent 30%, var(--color-paper) 100%);
 }
 
 .blueprint-grid {
@@ -147,20 +102,34 @@ body {
   }
 }
 
-/* ---------- scroll reveal ---------- */
+/* ---------- entrance motion ---------- */
 
 .reveal {
-  opacity: 0;
-  translate: 0 26px;
-  transition:
-    opacity 0.7s cubic-bezier(0.22, 1, 0.36, 1),
-    translate 0.7s cubic-bezier(0.22, 1, 0.36, 1);
-  transition-delay: var(--reveal-delay, 0ms);
+  animation: reveal-in 0.7s cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation-delay: var(--reveal-delay, 0ms);
 }
 
-.reveal.is-visible {
-  opacity: 1;
-  translate: 0 0;
+.benefit-grid > .reveal:nth-child(2) {
+  --reveal-delay: 80ms;
+}
+
+.benefit-grid > .reveal:nth-child(3) {
+  --reveal-delay: 160ms;
+}
+
+.benefit-grid > .reveal:nth-child(4) {
+  --reveal-delay: 240ms;
+}
+
+@keyframes reveal-in {
+  from {
+    opacity: 0;
+    translate: 0 26px;
+  }
+  to {
+    opacity: 1;
+    translate: 0 0;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -168,9 +137,9 @@ body {
     scroll-behavior: auto;
   }
   .reveal {
+    animation: none;
     opacity: 1;
     translate: none;
-    transition: none;
   }
   .animate-marquee,
   .animate-ticker {
@@ -179,6 +148,14 @@ body {
   .contributing-stars,
   .contributing-orbit {
     animation: none;
+  }
+}
+
+@media print {
+  .reveal {
+    animation: none;
+    opacity: 1;
+    translate: none;
   }
 }
 
@@ -692,7 +669,7 @@ body {
 
 .pick-row.is-active .pick-row-fn {
   color: var(--color-resolve);
-  opacity: 0.68;
+  opacity: 1;
 }
 
 .provider-code {
@@ -727,79 +704,12 @@ body {
   scrollbar-width: thin;
 }
 
-/* ---------- how-it-works source flip ---------- */
-
-.how-card {
-  perspective: 1800px;
-}
-
-.how-card-inner {
-  display: grid;
-  position: relative;
-  transform-style: preserve-3d;
-  transition:
-    height 560ms cubic-bezier(0.22, 1, 0.36, 1),
-    transform 560ms cubic-bezier(0.22, 1, 0.36, 1);
-}
-
-.how-card-inner.is-source {
-  transform: rotateY(180deg);
-}
-
-.how-card-face {
-  grid-area: 1 / 1;
-  align-self: start;
-  backface-visibility: hidden;
-}
-
-.how-card-back {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  transform: rotateY(180deg);
-}
-
-.source-attention::after {
-  position: absolute;
-  inset: -0.2rem;
-  border: 1px solid color-mix(in srgb, var(--color-resolve) 65%, transparent);
-  border-radius: 999px;
-  content: "";
-  pointer-events: none;
-  animation: source-ripple 1.5s ease-out infinite;
-}
-
-@keyframes source-ripple {
-  0%,
-  35% {
-    opacity: 0;
-    scale: 1;
-  }
-  45% {
-    opacity: 0.82;
-  }
-  100% {
-    opacity: 0;
-    scale: 1.32;
-  }
-}
-
 #ref-example {
   border: 0;
   border-radius: 0 0 1rem 1rem;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .how-card-inner {
-    transition: none;
-  }
-
-  .source-attention::after {
-    animation: none;
-    opacity: 0.35;
-  }
-
   .magnetic-card {
     transform: none;
     transition: none;

@@ -1,0 +1,76 @@
+---
+title: Provider catalog
+description: Select the Agent, Sandbox, and Workspace adapters that own each AML execution boundary.
+---
+
+import { Aside, Card, CardGrid } from "@astrojs/starlight/components"
+import ArchitectureMap from "../../../../components/docs/ArchitectureMap.astro"
+import ProviderCatalog from "../../../../components/docs/ProviderCatalog.astro"
+
+AML providers are adapters around three independent responsibilities. Select one provider for each boundary your workflow uses; a tree that only runs an Agent does not need a Sandbox or Workspace.
+
+<ArchitectureMap />
+
+## Choose by responsibility
+
+| Layer         | Owns                                                                              | Does not own                                               |
+| ------------- | --------------------------------------------------------------------------------- | ---------------------------------------------------------- |
+| **Agent**     | Model sessions, turns, native tools, ACP launch and protocol translation          | Process or filesystem isolation unless a Sandbox is active |
+| **Sandbox**   | Ephemeral commands, process lifetime, filesystem access, cancellation and cleanup | Durable revisions or model credentials                     |
+| **Workspace** | Materialization, durable files, revisions, locking and save policy                | Command isolation or Agent behavior                        |
+
+<Aside type="note" title="Provider-independent does not mean capability-identical">
+  AML normalizes the orchestration contract, but providers retain meaningful differences: supported tools, permission
+  translation, read-only behavior, executable requirements, cancellation semantics, persistence formats, and failure
+  modes. Read the detail page before treating two adapters as interchangeable.
+</Aside>
+
+## A direct selection rule
+
+1. Pick an **Agent** only when the work needs a model or coding-harness session.
+2. Add a **Sandbox** when that Agent or a Script must execute processes in a deliberate host, container, or remote boundary.
+3. Add a **Workspace** when files need durable identity, sharing, revision publication, or conflict control across evaluations.
+
+For a first workflow, begin with `DeterministicAgentProvider`. Move to one live Agent, then add a Sandbox, and add durable Workspace storage last. Each step introduces a separate credential, failure, and cleanup surface that should earn its place.
+
+## Current built-ins
+
+<ProviderCatalog />
+
+All factories above are exported from `@aml-jsx/sdk` and installed with the SDK.
+
+## Practical starting points
+
+<CardGrid>
+  <Card title="Credential-free learning" icon="approve-check">
+    Use `DeterministicAgentProvider` from `@aml-jsx/sdk/testing`. It records normalized calls and avoids network or
+    executable setup.
+  </Card>
+  <Card title="Trusted local automation" icon="laptop">
+    Pair an Agent with `localSandbox()` and `localWorkspace()` only when the workflow and every generated command are
+    trusted on the host.
+  </Card>
+  <Card title="Disposable container work" icon="seti:docker">
+    Use Docker with an image that already contains the selected ACP executable. Add your own hardening for network,
+    users, capabilities, resources, and daemon exposure.
+  </Card>
+  <Card title="Durable remote workflows" icon="cloud-download">
+    Combine Daytona or Modal with `filesystemWorkspace()` or `s3Workspace()` when disposable execution must load and
+    publish revision-backed state.
+  </Card>
+</CardGrid>
+
+## Selection checklist
+
+Before evaluating a provider-backed workflow, verify:
+
+1. The Agent executable exists in the host, image, snapshot, or remote environment where AML will launch it.
+2. Required vendor credentials are available to that executable without being embedded in authored prompts or persisted files.
+3. The Agent provider reports compatibility with the effective Sandbox runtime.
+4. Sandbox `access`, `root`, and `cwd` semantics match the provider's actual enforcement.
+5. Workspace `load`, `save`, locking, retention, and cancellation behavior match your durability requirements.
+6. Cleanup and telemetry failures are visible to production operators.
+
+Continue to the [Agent](/docs/providers/agents/), [Sandbox](/docs/providers/sandboxes/), or [Workspace](/docs/providers/workspaces/) comparison, or read [Production security](/docs/production/security/) before running untrusted work.
+
+Adding an integration instead of selecting a built-in? Start with [Provider engineering](/docs/provider-authoring/) to choose the extension boundary, then use the exact [Provider authoring reference](/docs/reference/provider-authoring/) while implementing it.

@@ -1,0 +1,145 @@
+---
+title: Combine Sandboxes and Workspaces
+description: Scope ephemeral execution and durable materialized files in one bounded, deterministic AML workflow.
+---
+
+import { Aside, Badge, Steps } from "@astrojs/starlight/components"
+
+<Badge text="Deterministic local workflow" variant="success" />
+
+## Goal
+
+Use `<Workspace />` for files that should survive resource scopes, then give `<Sandbox />` a narrower execution boundary for `<Agent />`. This recipe is intentionally deterministic and uses a temporary directory; it does not require Docker, credentials, or a model.
+
+AML separates the two responsibilities:
+
+```text
+Workspace = materialize, lock, load, save, and release file state
+Sandbox   = lease an execution environment with root/cwd/access policy
+```
+
+## Prerequisites
+
+- Node.js `>=26`;
+- `@aml-jsx/sdk` and `@aml-jsx/sdk/testing`;
+- a writable OS temporary directory;
+- no credentials or network access.
+
+## Complete source
+
+```tsx
+import { mkdtemp } from "node:fs/promises"
+import { tmpdir } from "node:os"
+import { join } from "node:path"
+
+import {
+  Agent,
+  AmlRuntime,
+  File,
+  localSandbox,
+  localWorkspace,
+  Sandbox,
+  supportsSandboxRuntime,
+  Workspace,
+} from "@aml-jsx/sdk"
+import { DeterministicAgentProvider } from "@aml-jsx/sdk/testing"
+
+const directory = await mkdtemp(join(tmpdir(), "aml-cookbook-"))
+const workspace = localWorkspace({ directory })
+const sandbox = localSandbox()
+
+const provider = new DeterministicAgentProvider({
+  supportsSandbox: supportsSandboxRuntime,
+  respond(_request, context) {
+    if (context.sandbox === undefined) {
+      throw new Error("The Agent must receive the active Sandbox")
+    }
+
+    return {
+      text: `inspected:${context.sandbox.cwd}:${context.sandbox.lease.id}`,
+    }
+  },
+})
+
+const workflow = (
+  <Workspace id="cookbook-review" provider={workspace} save={false}>
+    <File path="reports/summary.md">Generated before the Sandbox runs.</File>
+    <Sandbox provider={sandbox} access="read-only" root=".">
+      <Agent provider={provider} cwd=".">
+        Inspect the report without modifying files.
+      </Agent>
+    </Sandbox>
+  </Workspace>
+)
+
+console.log(await new AmlRuntime().evaluate(workflow))
+console.log(`workspace=${directory}`)
+```
+
+## Run it
+
+Save the complete combined source as `recipe.tsx` in a project configured as shown in [Getting started](/docs/getting-started/), then run it directly:
+
+```sh title="Terminal"
+npx vite-node recipe.tsx
+```
+
+From an AML repository checkout, the smaller maintained resource fixtures are:
+
+```sh
+npm run example -- workspace
+npm run example -- sandbox
+```
+
+The repository's [`workspace.tsx`](https://github.com/we-are-singular/aml/blob/main/examples/src/resources/workspace.tsx) and [`sandbox.tsx`](https://github.com/we-are-singular/aml/blob/main/examples/src/resources/sandbox.tsx) isolate the same contracts in smaller fixtures.
+
+## Expected output
+
+The exact lease ID is provider-generated, so the stable shape is:
+
+```text
+inspected:.:<sandbox-lease-id>
+workspace=/tmp/aml-cookbook-<random-suffix>
+```
+
+The temporary directory contains `reports/summary.md` until the operating system or your workflow cleanup removes it.
+
+## How it works
+
+<Steps>
+
+1. `<Workspace />` acquires one materialization. By default it loads and locks; `save={false}` means this recipe does not publish a revision.
+2. `<File />` writes into the active materialized Workspace. It must be outside `<Sandbox />`; AML rejects `<File />` evaluation inside `<Sandbox />`.
+3. `<Sandbox access="read-only" />` reuses the Workspace and narrows the active root/cwd. Nested `<Sandbox />` components narrow one existing lease; they do not acquire another provider resource.
+4. `localSandbox()` executes trusted host processes. The deterministic `<Agent />` receives the Sandbox session and reports its narrowed cwd.
+
+</Steps>
+
+## Provider choices
+
+- `localWorkspace()` directly materializes an existing directory; writes are immediately visible and there are no archived revisions.
+- `filesystemWorkspace()` adds local revision storage, retention, and conditional publication.
+- `s3Workspace()` stores revisions remotely and depends on conditional object writes and ETags.
+- `dockerSandbox()` bind-mounts the Workspace into a disposable container, but its security posture depends on the Docker daemon and image.
+- Daytona and Modal transfer a Workspace and reconcile changes on writable release; unsynchronized remote changes can be lost if the Sandbox fails before reconciliation.
+
+## Failure and security notes
+
+<Aside type="danger" title="Local is trusted host execution">
+  `localSandbox()` is appropriate for development and trusted jobs. It is not an isolation boundary for model-generated
+  or user-supplied code. Use an appropriately configured remote or container provider for stronger separation.
+</Aside>
+
+- A read-only Sandbox is not universally launchable by every Agent provider. ACP providers need to create state and spawn their executable; check the [compatibility guide](/docs/compatibility/).
+- `root` and `cwd` are logical paths within the materialized Workspace. Validate model-selected paths before turning them into a Workspace or provider option.
+- `save={false}` is deliberate here. For durable revisions use `save={{ on: "success", retention: 3 }}` with a revision-backed provider and handle conflicts as a concurrency decision.
+- Cleanup can fail independently of the Agent result. Preserve both the primary failure and cleanup cause in operational logs.
+
+## API and source links
+
+- [`<Workspace />`](https://github.com/we-are-singular/aml/blob/main/sdk/src/components/workspace/workspace.tsx)
+- [`<File />`](https://github.com/we-are-singular/aml/blob/main/sdk/src/components/file/file.tsx)
+- [`<Sandbox />`](https://github.com/we-are-singular/aml/blob/main/sdk/src/components/sandbox/sandbox.tsx)
+- [`localWorkspace`](https://github.com/we-are-singular/aml/blob/main/providers/workspaces/local/src/index.ts)
+- [`localSandbox`](https://github.com/we-are-singular/aml/blob/main/providers/sandboxes/local/src/index.ts)
+- [Workspace resource example](https://github.com/we-are-singular/aml/blob/main/examples/src/resources/workspace.tsx)

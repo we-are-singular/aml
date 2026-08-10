@@ -1,0 +1,114 @@
+---
+title: Sandbox providers
+description: Choose and configure the execution environment where AML commands and Agent processes run.
+---
+
+import ProviderHero from "../../../../../components/docs/ProviderHero.astro"
+
+<ProviderHero
+  names={["local-sandbox", "docker", "daytona", "modal"]}
+  eyebrow="Execution layer"
+  title="Sandbox providers"
+  factory="localSandbox · dockerSandbox · daytonaSandbox · modalSandbox"
+  summary="A Sandbox is the process boundary around an AML workflow. It gives <Script /> components and Agent adapters a working directory, command execution, streaming processes, cancellation, and cleanup while the Workspace remains the durable working tree."
+  bestFor="Choosing the right host, container, or remote runtime for a workflow."
+  caution="A Sandbox does not install an Agent or automatically make model-generated code safe. The selected environment must already contain the runtime and ACP executable your Agent profile needs."
+/>
+
+## Choose by trust boundary
+
+| Provider           | Execution model            | Workspace attachment                                   | Read-only `exec` / `spawn`                         | Use it when                                                                      |
+| ------------------ | -------------------------- | ------------------------------------------------------ | -------------------------------------------------- | -------------------------------------------------------------------------------- |
+| `localSandbox()`   | Ordinary host processes    | Direct path                                            | No; host processes cannot enforce read-only access | You trust the workflow and need fast local development or conformance runs.      |
+| `dockerSandbox()`  | A named Docker image       | Same-host bind mount at `/workspace`                   | Yes, through a read-only bind mount                | You need a local container boundary and can operate the Docker daemon and image. |
+| `daytonaSandbox()` | Disposable Daytona Sandbox | Archive upload to relative `workspace` guest directory | No; the transferred tree is not a read-only mount  | You need a remote disposable environment with Daytona-managed lifecycle.         |
+| `modalSandbox()`   | Disposable Modal Sandbox   | Archive upload to `/workspace`                         | No; the transferred tree is not a read-only mount  | You need a remote disposable environment backed by a registry image.             |
+
+The compatibility check between an Agent and a Sandbox is structural: it verifies the runtime shape, root, and access mode. It does not prove that an image contains the right executable, that credentials work, that network access is available, or that provider-native utilities are installed. Treat image and credential validation as part of deployment readiness.
+
+Need a concrete starting point? [Recommended Sandbox images](./images/) tracks public images we have inspected, upstream image recipes, exact Agent requirements, and combinations we deliberately do not claim are ready.
+
+## The shared lifecycle
+
+AML coordinates the resources in this order:
+
+```text
+Workspace acquire
+      ↓
+Sandbox acquire and attach/hydrate the Workspace
+      ↓
+trusted setup hook (optional)
+      ↓
+Agent ACP process, Script exec(), or long-lived spawn()
+      ↓
+reconcile remote changes when the provider transferred the tree
+      ↓
+Sandbox release
+      ↓
+Workspace save and release
+```
+
+The component tree owns the Workspace materialization. A child `<Sandbox />` does not acquire a second Workspace. The active Workspace directory wins over a provider-level `workspace` fallback. `root` and `cwd` are logical paths within that materialization; the provider maps them to its own guest path.
+
+Every provider bounds captured output with `maxOutputBytes` (4 MiB by default), accepts cancellation through `AbortSignal`, and owns the process/environment cleanup associated with its lease. A non-zero setup command fails acquisition before the Agent starts. Setup is trusted application configuration, not model-generated input, and runs on every acquisition rather than being cached implicitly.
+
+## Access modes
+
+`<Sandbox />` defaults to `access="read-only"`. A nested `<Sandbox />` may narrow the parent root or access mode, but it cannot widen access, replace the provider, or acquire a separate lease.
+
+Read-only has provider-specific consequences:
+
+- Docker adds `:ro` to the Workspace bind mount. Commands can still execute against the image, but writes to the mounted Workspace fail.
+- Local, Daytona, and Modal reject `exec()` and `spawn()` in read-only mode because their host/remote transfer model cannot enforce read-only execution for the process runtime.
+- A built-in ACP Agent generally needs a writable process environment for state, launch files, MCP bridges, or its own session. Use `read-write` unless the selected Agent image and provider contract explicitly support the narrower mode.
+
+## Trusted local baseline
+
+The following example keeps its files in a temporary directory, but the command still runs as an ordinary trusted host process. It does not point an execution provider at the caller’s project directory and it is not a hostile-code boundary:
+
+```tsx
+/** @jsxImportSource @aml-jsx/sdk */
+import { mkdtemp } from "node:fs/promises"
+import { join } from "node:path"
+import { tmpdir } from "node:os"
+import { AmlRuntime, Sandbox, Script, Workspace, localSandbox, localWorkspace } from "@aml-jsx/sdk"
+
+const directory = await mkdtemp(join(tmpdir(), "aml-sandbox-example-"))
+const runtime = new AmlRuntime({
+  sandboxProvider: localSandbox(),
+  workspaceProvider: localWorkspace({ directory }),
+})
+
+const result = await runtime.evaluate(
+  <Workspace id="sandbox-example" load={false} save={false}>
+    <Sandbox access="read-write">
+      <Script command="node" args={["-e", "process.stdout.write(process.cwd())"]} />
+    </Sandbox>
+  </Workspace>
+)
+
+console.log(result)
+```
+
+Use `localSandbox({ workspace: directory })` only when you intentionally want to use a configured fallback without an active `<Workspace />`. For a real Agent, the image or host must contain the Agent executable and its dependencies; AML never silently installs them.
+
+## Production checklist
+
+Before shipping a workflow, verify:
+
+- the provider’s CLI or SDK credentials are available to the host;
+- the selected image/environment contains `sh`, `mkdir`, `rm`, `tar` where transfer requires them, and the ACP executable;
+- Workspace changes are either directly materialized or reconciled before release;
+- cancellation and output overflow do not leave an owned process or remote Sandbox running;
+- `setup` does not contain secrets or untrusted model output;
+- Agent-native permissions are not being mistaken for host, container, network, or credential isolation;
+- remote transfer loss is acceptable or the workflow has an explicit recovery policy;
+- production resource, network, identity, and filesystem limits are configured by the image/provider platform.
+
+## References
+
+- [Sandbox runtime and lifecycle contract](https://github.com/we-are-singular/aml/blob/main/SANDBOXING.md)
+- [AML specification: Sandbox composition](https://github.com/we-are-singular/aml/blob/main/SPEC.md)
+- [Agent and Sandbox compatibility](../../compatibility/)
+- [Workspace providers](../workspaces/)
+- [Agent providers](../agents/)

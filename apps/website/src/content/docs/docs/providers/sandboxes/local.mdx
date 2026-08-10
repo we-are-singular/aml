@@ -1,0 +1,136 @@
+---
+title: Local Sandbox
+description: Run trusted AML commands as ordinary host processes with localSandbox().
+---
+
+import ProviderHero from "../../../../../components/docs/ProviderHero.astro"
+
+<ProviderHero
+  name="local-sandbox"
+  eyebrow="Sandbox provider"
+  title="Local Sandbox"
+  factory="localSandbox(options?)"
+  summary="The local provider maps AML’s narrow SandboxRuntime directly to host processes inside a validated Workspace directory. It is fast, transparent, and deliberately trusted."
+  bestFor="Development, local automation, and provider conformance tests."
+  caution="Commands run with the application’s host privileges. Do not use this provider for model-generated or user-supplied code you do not already trust."
+/>
+
+## When to use it
+
+Choose Local when the application already trusts the commands it is asking AML to run and you want the smallest setup. It is useful for a local review tool, a deterministic fixture, or a development loop where Docker or a remote provider would add unnecessary overhead.
+
+Do not describe it as a security boundary. A command can observe the host process environment and anything else available to the application user. AML confines the logical Workspace paths and rejects symlink escapes, but that is path hygiene, not host isolation.
+
+## Options
+
+| Option           | Type     | Default           | Contract                                                                                                      |
+| ---------------- | -------- | ----------------- | ------------------------------------------------------------------------------------------------------------- |
+| `maxOutputBytes` | `number` | `4 * 1024 * 1024` | Shared byte budget for `stdout` and `stderr` from one command. Must be a positive safe integer.               |
+| `setup`          | `string` | None              | Runs once per acquisition through `sh -lc` after the Workspace is available and before the lease is returned. |
+| `workspace`      | `string` | None              | Absolute or relative fallback directory. An active `<Workspace />` materialization takes precedence.          |
+
+The factory validates option strings as non-empty, trimmed values without NUL characters. `workspace` is resolved to an absolute path when the provider is constructed. Acquisition then requires an existing directory.
+
+## Workspace and path semantics
+
+Local needs either an active `<Workspace />` or `workspace` in the factory options:
+
+```tsx
+import { AmlRuntime, Sandbox, Script, Workspace, localSandbox, localWorkspace } from "@aml-jsx/sdk"
+
+const runtime = new AmlRuntime({
+  sandboxProvider: localSandbox(),
+  workspaceProvider: localWorkspace({ directory: "/tmp/aml-review" }),
+})
+
+await runtime.evaluate(
+  <Workspace id="review" cwd="src" load={false} save={false}>
+    <Sandbox root="." cwd=".">
+      <Script command="git" args={["status", "--short"]} />
+    </Sandbox>
+  </Workspace>
+)
+```
+
+`root` and `cwd` are logical paths within the Workspace. The provider resolves them with real paths, requires directories, and rejects a path that escapes the configured root—including a symlink that points outside it. Command arguments are literal and are not shell-interpreted. Use the explicit `setup` option when a shell command is intentionally required.
+
+The active Workspace wins over `localSandbox({ workspace })`. The fallback is useful for a direct provider integration, but an explicit `<Workspace />` is clearer when the workflow needs load, save, locking, or revisions.
+
+## Lifecycle
+
+1. AML resolves the active Workspace directory or configured fallback.
+2. Local resolves the requested logical root and cwd and checks both are directories within the Workspace.
+3. The optional `setup` command runs through `sh -lc`. A non-zero exit rejects acquisition.
+4. `exec()` starts a literal host process, closes stdin, collects bounded output, and waits for exit.
+5. `spawn()` starts a tracked process group with streaming input/output and repeatable `wait()`.
+6. Cancellation, timeout, output overflow, and lease release kill tracked process groups.
+7. Release does not copy files: writes already happened in the materialized local directory. Workspace persistence decides whether those writes are saved.
+
+## Read-only behavior
+
+Local rejects both `exec()` and `spawn()` under `access="read-only"`:
+
+> Host processes cannot enforce the required read-only contract for this provider.
+
+That means a read-only Local Sandbox can be acquired for structural composition, but it cannot run `<Script />` or an ACP Agent process through the runtime. Use `read-write` for Local, or select a provider whose mount/runtime can enforce the requested policy.
+
+## Setup and safe example
+
+Setup is trusted configuration and runs before the lease is returned. It is not a package image build and it is not cached:
+
+```tsx
+/** @jsxImportSource @aml-jsx/sdk */
+import { mkdtemp } from "node:fs/promises"
+import { join } from "node:path"
+import { tmpdir } from "node:os"
+import { AmlRuntime, Sandbox, Script, Workspace, localSandbox, localWorkspace } from "@aml-jsx/sdk"
+
+const directory = await mkdtemp(join(tmpdir(), "aml-local-"))
+const runtime = new AmlRuntime({
+  sandboxProvider: localSandbox({ setup: "printf prepared > .aml-ready" }),
+  workspaceProvider: localWorkspace({ directory }),
+})
+
+await runtime.evaluate(
+  <Workspace id="local-demo" load={false} save={false}>
+    <Sandbox access="read-write">
+      <Script command="node" args={["-e", "console.log(process.cwd())"]} />
+    </Sandbox>
+  </Workspace>
+)
+```
+
+For a project directory, make the trust decision explicit and prefer `localWorkspace({ directory: process.cwd() })` over an implicit `workspace: "."` fallback. Do not interpolate model text into `setup`, `command`, or `args` without your own validation.
+
+## Failure modes and troubleshooting
+
+| Symptom                                                | Cause                                                            | What to check                                                                            |
+| ------------------------------------------------------ | ---------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| `requires an active Workspace or configured workspace` | No Workspace was attached and no fallback was configured.        | Add `<Workspace />` or `localSandbox({ workspace })`.                                    |
+| `must be a directory`                                  | The Workspace, root, or cwd does not exist or is a file.         | Create the directory before acquisition and verify logical paths.                        |
+| `resolves outside its configured boundary`             | A path or symlink escapes the Workspace/root.                    | Use a child path inside the Workspace; do not rely on symlinked escape paths.            |
+| `cannot execute under read-only access`                | Local cannot enforce read-only host execution.                   | Change to `access="read-write"` or use a suitable provider.                              |
+| `setup failed with exit code ...`                      | The shell setup command failed.                                  | Run it manually as the same host user; keep setup deterministic and trusted.             |
+| `output exceeded ... bytes`                            | Combined stdout/stderr exceeded the configured budget.           | Reduce command output, stream with `spawn()`, or raise `maxOutputBytes` deliberately.    |
+| A process remains after failure                        | A provider or OS-level process failure prevented normal cleanup. | Inspect the host process group and treat Local as trusted infrastructure, not isolation. |
+
+## Security posture
+
+Local is appropriate only when the application trusts the host execution. It does not isolate:
+
+- filesystem access outside the logical Workspace;
+- environment variables or credentials;
+- network access;
+- CPU, memory, or syscall behavior;
+- commands launched by a child process.
+
+For untrusted code, use a separately hardened environment and review the provider platform’s security model. AML’s `access` value is not a substitute for that review.
+
+## References
+
+- [Sandbox provider overview](./)
+- [Workspace providers](/docs/providers/workspaces/)
+- [AML Local provider implementation](https://github.com/we-are-singular/aml/blob/main/providers/sandboxes/local/src/local-sandbox.ts)
+- [AML Local provider tests](https://github.com/we-are-singular/aml/blob/main/providers/sandboxes/local/tests/local-sandbox.test.tsx)
+- [Sandboxing architecture](https://github.com/we-are-singular/aml/blob/main/SANDBOXING.md)
+- [AML specification: Sandbox composition](https://github.com/we-are-singular/aml/blob/main/SPEC.md)

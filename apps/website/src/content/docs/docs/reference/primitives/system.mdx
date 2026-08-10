@@ -1,0 +1,44 @@
+---
+title: "<System />"
+description: "Add resolved instruction text to the nearest <Agent /> system prompt in authored order."
+---
+
+`<System />` routes resolved child text into the system channel of its nearest containing [`<Agent />`](../agent/). It does not open a provider session itself.
+
+```tsx
+import { Agent, AmlRuntime, System } from "@aml-jsx/sdk"
+import { DeterministicAgentProvider } from "@aml-jsx/sdk/testing"
+
+const provider = new DeterministicAgentProvider({
+  respond: request => ({ text: request.system }),
+})
+
+const runtime = new AmlRuntime({
+  agentProvider: provider,
+  system: "Follow application security policy.",
+})
+
+const system = await runtime.evaluate(
+  <Agent system="Act as a code reviewer.">
+    <System>Report only evidence you can identify.</System>
+    Review the patch.
+  </Agent>
+)
+```
+
+The provider receives system text in this order: runtime `system`, `<Agent />` `system`, then child `<System />` blocks in authored order. Empty fixed fragments are omitted and the remaining fragments are joined with newlines.
+
+## Props
+
+| Prop       | Type            | Default | Meaning                                     |
+| ---------- | --------------- | ------- | ------------------------------------------- |
+| `children` | `AmlRenderable` | empty   | Any AML value that resolves to system text. |
+
+## Composition rules
+
+- `<System />` is valid only inside its nearest `<Agent />` plan.
+- A child `<Agent />` inside `<System />` runs first; its final text becomes system text for the parent `<Agent />`.
+- Multiple `<System />` blocks preserve authored order.
+- `<System />` changes the message channel, not provider selection, Sandbox authority, or Tool scope.
+
+Use [`<Skill />`](../skill/) for reusable instruction files and [`<FollowUp />`](../follow-up/) for later user turns in the same session.

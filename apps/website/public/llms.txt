@@ -1,37 +1,58 @@
 # Agent Markup Language (AML)
 
-> AML is an asynchronous TypeScript and JSX runtime for composing complex, provider-agnostic agent workflows.
-
-AML gives JSX a new job. Instead of describing a user interface, the tree describes an agent workflow. The runtime resolves that tree from the leaves upward, manages provider and resource lifecycles, and returns the final Agent output as text or schema-validated structured data.
+> AML is an asynchronous TypeScript and JSX runtime for composing provider-agnostic agent workflows.
 
 Website: https://agent-markup-language.com/
-Package: `@aml-jsx/sdk`
+Documentation: https://agent-markup-language.com/docs/
+Complete documentation: https://agent-markup-language.com/docs/llms.txt
+Source: https://github.com/we-are-singular/aml
+Package: https://www.npmjs.com/package/@aml-jsx/sdk
+Specification: https://github.com/we-are-singular/aml/blob/main/SPEC.md
 License: MIT
-Status: under active development; public APIs and examples may change before the first stable release.
+Status: pre-stable and under active development.
 
-## Why AML
+## Reading the documentation
 
-Most AI SDKs are designed around chat: send a message, call a model, and stream a response. Agentic workflows need more around that conversation: multiple agents, tools, permissions, sandboxed execution, persistent files, explicit dataflow, provider adapters, and useful traces.
+Use the focused page that matches the task before loading the complete corpus. Every documentation route has a source-Markdown alternative formed by adding `.md` to the route:
 
-AML brings those concerns into one executable async JSX tree. Developers use ordinary TypeScript, functions, promises, conditions, and schemas instead of learning a separate orchestration DSL. Editors already understand JSX, TypeScript already checks it, and coding agents already know how to write it.
+```sh
+curl -fsSL https://agent-markup-language.com/docs/getting-started.md
+curl -fsSL https://agent-markup-language.com/docs/providers/agents/codex.md
+curl -fsSL https://agent-markup-language.com/docs/reference/primitives/agent.md
+```
 
-When an `<Agent />` node resolves, the AML Runtime preloads its `<Workspace />` into the selected `<Sandbox />` and prompts the Agent SDK through the Agent Client Protocol (ACP). The Workspace keeps files durable between runs; the Sandbox owns code execution, filesystem access, and permissions.
+Use https://agent-markup-language.com/docs/llms.txt when a question spans multiple sections or when discovering the relevant page. The HTML and Markdown routes are generated from the same source. For an installed project, its `@aml-jsx/sdk` types remain authoritative when the current website documents a newer pre-stable version.
 
-AML workflows are:
+The documentation has four primary areas:
 
-- Composable: package agents, prompts, capabilities, and control flow as async JSX components.
-- Provider-agnostic: use OpenCode, Codex, Pi, deterministic test providers, or custom provider adapters without rewriting the tree.
-- Explicit: child results appear in parent prompts at authored positions; parallel work starts through ordinary JavaScript.
-- Scoped: Tools, MCP servers, Sandboxes, and Workspaces are granted only where they are declared.
-- Observable: runtime lifecycle and trace events describe what happened during evaluation.
+- Learn: https://agent-markup-language.com/docs/
+- Providers: https://agent-markup-language.com/docs/providers/
+- Cookbook: https://agent-markup-language.com/docs/cookbook/
+- Reference: https://agent-markup-language.com/docs/reference/
 
-## Installation
+## Project orientation
+
+AML gives JSX a job unrelated to user interfaces: an AML tree describes executable dependencies between Agents, prompts, capabilities, Sandboxes, and durable Workspaces. `AmlRuntime` resolves that tree from the leaves upward, passes child results into parent prompts at their authored positions, and releases acquired resources in reverse order.
+
+AML is not React, a visual workflow builder, or a replacement for TypeScript control flow. Conditions, functions, promises, loops, and explicit `Promise.all()` calls remain ordinary TypeScript. JSX children resolve in authored order; sibling JSX does not imply concurrency.
+
+The library separates three provider responsibilities:
+
+- Agent providers own model sessions, turns, native capabilities, and Agent Client Protocol translation.
+- Sandbox providers own process execution, filesystem authority, cancellation, and ephemeral cleanup.
+- Workspace providers own durable materialization, locking, revisions, restore, and save policy.
+
+Those providers are independent choices around one authored AML tree.
+
+## Install and configure
+
+AML is ESM-only and currently requires Node.js 26 or newer.
 
 ```sh
 npm install @aml-jsx/sdk
 ```
 
-Configure TypeScript to use AML's automatic JSX runtime:
+Configure TypeScript's automatic JSX runtime:
 
 ```json
 {
@@ -42,269 +63,93 @@ Configure TypeScript to use AML's automatic JSX runtime:
 }
 ```
 
-Use `.tsx` for files containing AML markup. AML is not React and does not require React.
+Use `.tsx` for AML markup. React is not installed or involved.
 
-## First workflow
+## Credential-free first workflow
 
 ```tsx
-import { Agent, AmlRuntime, opencodeAgent } from "@aml-jsx/sdk"
+import { Agent, AmlRuntime } from "@aml-jsx/sdk"
+import { DeterministicAgentProvider } from "@aml-jsx/sdk/testing"
 
-const OpenCode = opencodeAgent({})
-const runtime = new AmlRuntime()
+const provider = new DeterministicAgentProvider({
+  name: "first-workflow",
+  respond: request => ({ text: `Resolved: ${request.prompt}` }),
+})
 
-const result = await runtime.evaluate(
-  <Agent provider={OpenCode}>Summarize this repository.</Agent>,
+const result = await new AmlRuntime({ agentProvider: provider }).evaluate(
+  <Agent>Explain what AML evaluates.</Agent>,
 )
 ```
 
-Root evaluation starts with `runtime.evaluate(tree)`. The standalone `evaluate(tree)` API is for work started inside an actively evaluated AML function component.
+The deterministic testing provider requires no API key, network, or Agent executable. For a real provider, install and configure the compatible ACP executable in the host or Sandbox where AML will launch it.
 
-## Evaluation model
+## Core surface
 
-AML resolves the tree from the leaves upward:
+- `<Agent>` runs one provider-owned session after its prompt, system content, capabilities, and child Agent results resolve.
+- `<System>` contributes ordered system instructions to the nearest Agent.
+- `<Tool>` grants a provider-native Tool or a typed JavaScript Tool created with `defineTool()`.
+- `<Mcp>` grants a named or explicitly configured MCP server.
+- `<Skill>` contributes reusable inline or file-backed instructions.
+- `<FollowUp>` adds an ordered later turn to the same Agent session.
+- `<Workspace>` materializes durable files and may publish revision-backed state.
+- `<File>` writes resolved content beneath the active Workspace.
+- `<Sandbox>` acquires ephemeral execution and scopes filesystem policy.
+- `<Script>` executes a literal command or resolved script only through an active Sandbox.
+- `AmlRuntime` owns complete root evaluation, limits, cancellation, events, tracing, and cleanup.
+- Component-local `evaluate()` starts nested evaluation inside an active AML function component and can validate structured output.
 
-1. Resolve ordinary values, promises, fragments, and function components.
-2. Resolve capability and prompt descriptors into their nearest Agent.
-3. Run child Agents before their parents.
-4. Insert child output into the parent prompt at its authored position.
-5. Acquire and release Sandbox and Workspace resources around descendant work.
-6. Return the final text or structured result.
+`Loop` and scoped Context are public draft surfaces. Consult the current docs before depending on them.
 
-JSX children resolve in authored order. Sibling JSX does not imply concurrency. Start independent branches explicitly with `Promise.all()` and `evaluate()`:
+## Built-in providers
 
-```tsx
-import { Agent, evaluate } from "@aml-jsx/sdk"
+Agent providers:
 
-async function WeeklyStandup() {
-  const [linear, github] = await Promise.all([
-    evaluate(<Agent provider={OpenCode}>Gather this week's Linear updates.</Agent>),
-    evaluate(<Agent provider={Codex}>Gather this week's GitHub updates.</Agent>),
-  ])
+- `codexAgent()` for Codex through `codex-acp`.
+- `opencodeAgent()` for OpenCode's ACP server.
+- `piAgent()` for `pi-acp` and Pi.
 
-  return (
-    <Agent provider={OpenCode}>
-      Prepare our weekly standup.
-      Linear: {linear}
-      GitHub: {github}
-    </Agent>
-  )
-}
-```
+Sandbox providers:
 
-## Core primitives
+- `localSandbox()` for trusted host development; it is not an isolation boundary.
+- `dockerSandbox()` for disposable container execution using an application-owned image.
+- `daytonaSandbox()` for disposable Daytona environments.
+- `modalSandbox()` for disposable Modal Sandboxes.
 
-- `<Agent>` runs one provider-owned Agent session after its prompt, system content, capabilities, and child Agent results resolve.
-- `<System>` adds resolved content to the nearest Agent's system prompt.
-- `<Tool>` grants a provider-native Tool name or a JavaScript Tool created with `defineTool()`.
-- `<Skill>` adds reusable inline instructions or instructions loaded from a local file.
-- `<File>` writes resolved text, including Agent output, beneath the active Workspace before later siblings run.
-- `<Mcp>` grants a provider-native MCP name or a server created with `defineMcpServer()`.
-- `<FollowUp>` adds an ordered later turn to the same provider-owned Agent session.
-- `<Sandbox>` acquires ephemeral execution and scopes a narrowed filesystem policy to descendants.
-- `<Script>` executes an argument vector or resolved sh, bash, or node source only through an active Sandbox runtime.
-- `<Workspace>` materializes durable files that can survive across disposable Sandbox leases.
-- `<>...</>` groups AML values without adding prompt text or another runtime boundary.
+Workspace providers:
 
-Scoped Context and `<Loop>` exist as draft surfaces. Do not depend on them for stable workflows yet.
+- `localWorkspace()` for one existing durable host directory.
+- `filesystemWorkspace()` for local archive or folder revisions.
+- `s3Workspace()` for S3-compatible revision storage with conditional locking and publication.
 
-## Core APIs
+The package also exports provider-authoring contracts and `@aml-jsx/sdk/testing` conformance helpers.
 
-- `AmlRuntime`: evaluates a complete AML tree and owns defaults, budgets, resource lifecycles, events, and tracing.
-- `evaluate()`: starts nested AML evaluation inside an active async component and optionally validates structured output.
-- `defineTool()`: creates an immutable schema-validated JavaScript Tool.
-- `defineMcpServer()`: creates a provider-neutral stdio or Streamable HTTP MCP descriptor.
-- `defineAgentProvider()`: implements an Agent harness adapter.
-- `defineSandboxProvider()`: implements ephemeral execution.
-- `defineWorkspaceProvider()`: implements durable filesystem materialization.
-- `createPersistentWorkspaceProvider()`: adds archive or folder revisions, selection, retention, and atomic publication to a storage adapter.
-- `runtime.on()` and `runtime.once()`: subscribe to runtime lifecycle and trace events.
+## Security and lifecycle boundaries
 
-## Providers and integrations
+ACP is the session protocol, not the security boundary. A selected Sandbox must enforce the process, filesystem, network, identity, and resource policy the application requires. Agent permission mappings cannot grant or remove authority that the Sandbox does not enforce.
 
-The public SDK exports all implemented providers and their types from `@aml-jsx/sdk`. Agent, Sandbox, and Workspace providers are independent choices: the AML tree does not change when one provider is replaced with another compatible provider.
+AML does not install Agent executables, build Docker images, provision remote credentials, or create S3 buckets. Credentials should come from the deployment environment or deliberate provider configuration, never from prompt text or Workspace files. Content capture in traces is off by default and should remain an explicit data-handling decision.
 
-### Implemented Agent providers
-
-- OpenCode: `opencodeAgent({ config })` creates an OpenCode ACP profile with native configuration, model and system mapping, JavaScript Tools, MCP grants, FollowUps, cancellation, and structured output.
-- Codex: `codexAgent({ model, reasoningEffort })` uses the maintained Codex ACP adapter and supports JavaScript Tools, MCP grants, FollowUps, cancellation, and structured output.
-- Pi: `piAgent({ model, thinkingLevel })` uses the maintained Pi ACP adapter and supports JavaScript Tools, MCP grants, FollowUps, cancellation, and structured output.
-
-All three are thin launch profiles over the same AML-owned ACP session engine. A profile selects its executable, environment, credentials, and provider-specific mappings; it does not implement a separate session lifecycle.
-
-### Implemented Sandbox providers
-
-- Local: `localSandbox({})` runs trusted host processes for development and testing. It is not an isolation boundary.
-- Docker: `dockerSandbox({ image, setup })` starts a disposable named image, mounts the Workspace, and cleans up the container. AML does not build the image.
-- Daytona: `daytonaSandbox({ config, create, image })` or its `snapshot` alternative creates a disposable remote Sandbox, transfers the Workspace, reconciles changes, and deletes the Sandbox.
-- Modal: `modalSandbox({ config, create, image })` creates a disposable Sandbox from a named registry image, transfers the Workspace, reconciles changes, and terminates it.
-
-Every implemented Agent is smoke-tested through every implemented Sandbox: OpenCode, Codex, and Pi × Local, Docker, Daytona, and Modal.
-
-### Implemented Workspace providers
-
-- Direct local directory: `localWorkspace({ directory })` uses an existing durable directory with cross-process writer locking.
-- Local revision storage: `filesystemWorkspace({ directory, format })` stores immutable archive or folder revisions on the local filesystem.
-- S3-compatible object storage: `s3Workspace({ bucket, config, format })` stores immutable revisions through Amazon S3 or a compatible endpoint.
-
-The S3-compatible surface can target Amazon S3, Cloudflare R2, Backblaze B2, MinIO, DigitalOcean Spaces, Wasabi, Vultr Object Storage, and Scaleway Object Storage when the service supports the conditional object operations required by AML's locking and publication protocol. Endpoint compatibility should be tested before production use.
-
-The testing entry point, `@aml-jsx/sdk/testing`, provides deterministic Agent, Sandbox, and Workspace providers plus reusable provider conformance suites.
-
-## How ACP execution works
-
-The Agent Client Protocol (ACP) is the standard JSON-RPC session boundary between the AML Runtime and every built-in coding Agent. AML currently carries ACP over the Agent process's standard input and output. ACP lets AML use one lifecycle for OpenCode, Codex, and Pi without replacing their models, credentials, native tools, skills, or internal agent loops.
-
-One built-in Agent invocation proceeds as follows:
-
-1. The AML Runtime resolves the JSX tree, materializes the Workspace, and acquires the selected Sandbox.
-2. The Sandbox attaches or transfers the Workspace to the Agent's working directory and runs any explicit trusted `setup` command.
-3. The Agent profile selects its installed ACP executable and maps provider-specific options such as model, system instructions, credentials, and permissions.
-4. The shared engine launches that process with `SandboxRuntime.spawn()`. Without an active Sandbox it uses the trusted local launcher; with a Sandbox it never falls back to the AML host.
-5. AML and the Agent communicate over ACP through the process's standard input and output: initialize capabilities, create a session, attach MCP servers, send the initial prompt and ordered FollowUps, and consume streamed updates.
-6. Native filesystem, editing, search, shell, and network operations remain inside the Agent process. AML-owned JavaScript Tools and structured output use invocation-scoped MCP bridges back to the AML host.
-7. On every exit path, AML closes its bridges, terminates invocation-owned processes, asks the Sandbox to reconcile changed files, and releases every resource. Revision-backed Workspaces save after success by default; `save.on="always"` also saves after descendant failure, while cancellation skips saving.
-
-ACP is not the security boundary. The selected Sandbox confines model-controlled native operations. ACP also does not install Agents: the trusted host, Docker image, Daytona image or snapshot, or Modal image must already contain the compatible ACP Agent executable and supporting runtime. An explicit Sandbox `setup` command is available for experiments, but repeatable use should prefer a prebuilt image or snapshot.
-
-Credentials belong to the Agent that needs them. Keep them in the selected environment or pass deliberate provider `env` or secret configuration. AML redacts configured secrets from traces and never persists them as Workspace files.
-
-### Complete ACP, Sandbox, and Workspace example
-
-The same tree works with any supported Agent and Sandbox combination. Only the provider factories and their native configuration change:
-
-```tsx
-import {
-  Agent,
-  AmlRuntime,
-  codexAgent,
-  dockerSandbox,
-  localWorkspace,
-  Sandbox,
-  Workspace,
-} from "@aml-jsx/sdk"
-
-const CodingAgent = codexAgent({})
-
-// This image is application-owned and must already contain codex-acp and Codex.
-const Execution = dockerSandbox({
-  image: "your-image-with-codex-acp",
-})
-
-const Project = localWorkspace({
-  directory: process.cwd(),
-})
-
-const runtime = new AmlRuntime()
-
-const result = await runtime.evaluate(
-  <Workspace id="project" provider={Project}>
-    <Sandbox access="read-write" provider={Execution}>
-      <Agent provider={CodingAgent}>
-        Inspect the repository, run the relevant tests, and implement the requested change.
-      </Agent>
-    </Sandbox>
-  </Workspace>,
-)
-
-console.log(result)
-```
-
-Replace `codexAgent()` with `opencodeAgent()` or `piAgent()`, or replace `dockerSandbox()` with Local, Daytona, or Modal configuration. The `<Workspace>`, `<Sandbox>`, and `<Agent>` composition remains the same. The environment must contain the executable required by the selected Agent.
-
-### Roadmap providers
-
-Roadmap and research candidates are not current package exports. Agent candidates include GitHub Copilot, Hermes, Amp, Claude Code, Cursor, Gemini CLI, Cline, Goose, OpenHands, and Devin. Sandbox candidates include E2B, AgentOS, Cloudflare Sandbox SDK, Vercel Sandbox, CodeSandbox, Blaxel, Firecracker, Fly Machines/Fly.io, Northflank, Railway, GitHub Codespaces, and AWS Fargate. Workspace candidates include provider-native volume mounts, network mounts such as SMB and NFS, SFTP, and Google Drive. A future built-in coding Agent must use the shared ACP lifecycle, and a future Sandbox must support the same provider-neutral process and Workspace contracts.
-
-## Capabilities
-
-Define a typed JavaScript Tool and grant it to one Agent:
-
-```tsx
-import { readFile } from "node:fs/promises"
-
-import { Agent, defineTool, Tool } from "@aml-jsx/sdk"
-import { z } from "zod"
-
-const ReadSource = defineTool({
-  name: "read_source",
-  description: "Read one source file from the current project",
-  input: z.object({ path: z.string() }),
-  execute: async ({ path }) => await readFile(path, "utf8"),
-})
-
-<Agent provider={OpenCode}>
-  <Tool use={ReadSource} />
-  Read src/index.ts and summarize it.
-</Agent>
-```
-
-Tool, MCP, Skill, and FollowUp declarations belong to their nearest Agent. Grants do not leak into sibling Agents.
-
-## Sandboxes and workspaces
-
-A Sandbox is ephemeral execution. A Workspace is durable materialization. Use them together when disposable execution must read or write persistent files:
-
-```tsx
-<Workspace id="review-42" provider={Project} load save={{ include: ["**/*.md"] }}>
-  <File path="task.md">
-    <Agent provider={Planner}>Write a focused implementation task.</Agent>
-  </File>
-  <Sandbox provider={Docker} access="read-write">
-    <Script command="npm" args={["test"]} />
-    <Agent provider={OpenCode}>Read task.md and write findings.md.</Agent>
-  </Sandbox>
-  <Sandbox provider={Docker} access="read-only">
-    <Agent provider={Codex}>Review findings.md.</Agent>
-  </Sandbox>
-</Workspace>
-```
-
-An outer Sandbox acquires a lease. Nested Sandboxes narrow that lease rather than acquiring another environment.
+Revision-backed Workspaces become durable only after save and conditional publication complete. Healthy competing writers should produce `WorkspaceConflictError`; cancellation skips save. Every provider must release invocation-owned processes, temporary materialization, locks, and remote resources on success and failure.
 
 ## Coding-agent skill
 
-Install the repository's AML skill so a supported coding agent can author workflows using the current API and semantics:
+Install the repository-backed AML authoring skill for compatible coding agents:
 
 ```sh
 npx skills add we-are-singular/aml --skill aml-jsx
 ```
 
-Add `-g` for a global installation. The skill includes workflow-authoring, capability, resource, provider, and testing guidance.
+Add `-g` for a global installation. The skill guides AML authoring; an application still needs the SDK and its selected provider executables.
 
-## Development
+## Canonical references
 
-Repository requirements:
-
-- Node.js 26 or newer.
-- npm 11 or newer.
-- Docker only for Docker integration tests and examples.
-- Configured OpenCode, Pi-supported model-provider, or Codex credentials only for live Agent examples.
-
-Common repository commands:
-
-```sh
-npm install
-npm run format:check
-npm run lint
-npm run test
-npm run build
-npm run pack:check
-```
-
-Deterministic examples are snapshot-tested. Live model, Docker, and filesystem integrations are opt-in.
-
-## Documentation
-
-- [Project website](https://agent-markup-language.com/): Product overview, evaluation walkthrough, integrations, reference, and getting started.
-- [Repository README](https://github.com/we-are-singular/aml#readme): Complete project overview, examples, development, and release instructions.
-- [Package README](https://github.com/we-are-singular/aml/blob/main/sdk/README.md): Concise package installation and first evaluation.
-- [Specification](https://github.com/we-are-singular/aml/blob/main/SPEC.md): Normative runtime semantics and provider contracts.
-- [Examples](https://github.com/we-are-singular/aml/tree/main/examples/src): Executable TSX examples for dataflow, capabilities, resources, and integrations.
-- [AML coding-agent skill](https://github.com/we-are-singular/aml/tree/main/skills/aml-jsx): Installable instructions for building with AML.
-- [Provider roadmap](https://github.com/we-are-singular/aml/blob/main/PROVIDERS.md): Implemented providers and future integration candidates.
-- [npm package](https://www.npmjs.com/package/@aml-jsx/sdk): Published `@aml-jsx/sdk` package.
-
-## Optional
-
-- [Contributing](https://github.com/we-are-singular/aml#development): Local setup and repository validation commands.
-- [MIT License](https://github.com/we-are-singular/aml/blob/main/LICENSE): License text.
+- Getting started: https://agent-markup-language.com/docs/getting-started/
+- Examples: https://agent-markup-language.com/docs/examples/
+- Concepts and evaluation: https://agent-markup-language.com/docs/concepts/
+- Cookbook: https://agent-markup-language.com/docs/cookbook/
+- Provider catalog: https://agent-markup-language.com/docs/providers/
+- Production guidance: https://agent-markup-language.com/docs/production/
+- Runtime and provider reference: https://agent-markup-language.com/docs/reference/
+- Complete LLM-readable docs: https://agent-markup-language.com/docs/llms.txt
+- Executable examples: https://github.com/we-are-singular/aml/tree/main/examples/src
+- AML authoring skill: https://github.com/we-are-singular/aml/tree/main/skills/aml-jsx

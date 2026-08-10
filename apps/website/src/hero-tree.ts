@@ -116,13 +116,13 @@ export function initHeroTree(): void {
       case "root":
         return "<WeeklyStandup />"
       case "synth":
-        return "<Agent> synthesize"
+        return "<Agent /> synthesize"
       case "spec-a":
-        return `<Agent> ${GATHERERS[0]}`
+        return `<Agent /> ${GATHERERS[0]}`
       case "spec-b":
-        return `<Agent> ${GATHERERS[1]}`
+        return `<Agent /> ${GATHERERS[1]}`
       default:
-        return "<Mcp> linear"
+        return "<Mcp /> linear"
     }
   }
 

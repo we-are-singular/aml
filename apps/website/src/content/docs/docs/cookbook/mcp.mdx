@@ -1,0 +1,134 @@
+---
+title: Model Context Protocol capabilities
+description: Declare and scope MCP servers without confusing a capability fixture with a live connection.
+---
+
+import { Aside, Badge, Steps } from "@astrojs/starlight/components"
+
+<Badge text="Capability fixture" variant="note" />
+
+## Goal
+
+Understand how AML attaches an MCP descriptor to one Agent and keeps that capability scoped. This page intentionally uses the repository's non-networking [`mcp.tsx`](https://github.com/we-are-singular/aml/blob/main/examples/src/capabilities/mcp.tsx) fixture.
+
+<Aside type="caution" title="This example does not connect to an MCP server">
+  `https://example.com/mcp` is metadata in a deterministic test. The example runner never contacts that URL, discovers
+  tools, or authenticates. It is safe to run, but it is not a remote MCP integration tutorial.
+</Aside>
+
+## Prerequisites
+
+- Node.js `>=26`;
+- `@aml-jsx/sdk` and `@aml-jsx/sdk/testing`;
+- no MCP server, credentials, or network access.
+
+## Complete source
+
+```tsx
+import { Agent, AmlRuntime, defineMcpServer, Mcp } from "@aml-jsx/sdk"
+import { DeterministicAgentProvider } from "@aml-jsx/sdk/testing"
+
+const projectServer = defineMcpServer({
+  name: "project",
+  transport: {
+    type: "streamable-http",
+    url: "https://example.com/mcp",
+  },
+})
+
+const provider = new DeterministicAgentProvider({
+  respond(request) {
+    if (request.prompt === "Inspect the project.") {
+      return { text: request.mcpServers.length === 1 ? "MCP attached." : "MCP missing." }
+    }
+
+    return { text: request.mcpServers.length === 0 ? "Sibling isolated." : "MCP leaked." }
+  },
+})
+
+const workflow = (
+  <>
+    <Agent provider={provider}>
+      <Mcp use={projectServer} />
+      Inspect the project.
+    </Agent>
+    <Agent provider={provider}>Summarize without capabilities.</Agent>
+  </>
+)
+
+console.log(await new AmlRuntime().evaluate(workflow))
+```
+
+## Run it
+
+Save the complete source as `recipe.tsx` in a project configured as shown in [Getting started](/docs/getting-started/), then run the non-networking fixture directly:
+
+```sh title="Terminal"
+npx vite-node recipe.tsx
+```
+
+From an AML repository checkout, run the maintained fixture with:
+
+```sh title="Terminal"
+npm run example -- mcp
+```
+
+## Expected output
+
+```text
+MCP attached. Sibling isolated.
+```
+
+## How it works
+
+<Steps>
+
+1. `defineMcpServer()` validates and freezes a named stdio or Streamable HTTP descriptor. It does not open a connection.
+2. `<Mcp use={projectServer} />` attaches that exact descriptor to the nearest Agent.
+3. The provider receives MCP metadata in the normalized Agent request. A real provider decides how to negotiate and relay the server.
+4. A sibling `<Agent />` has no `<Mcp />` child, so it receives no MCP capability. Capability scope follows the authored tree.
+
+</Steps>
+
+## Live transport shapes
+
+AML supports these descriptor shapes, but a live example also needs a compatible Agent provider, server, executable, credentials, and policy:
+
+```tsx
+const localServer = defineMcpServer({
+  name: "local-tools",
+  transport: {
+    type: "stdio",
+    command: "my-mcp-server",
+    args: ["--project", "/absolute/project"],
+    env: { MCP_LOG_LEVEL: "warn" },
+  },
+})
+
+const remoteServer = defineMcpServer({
+  name: "remote-tools",
+  transport: {
+    type: "streamable-http",
+    url: "https://mcp.example.invalid/mcp",
+    headers: { Authorization: \`Bearer \${process.env.MCP_TOKEN ?? ""}\` },
+  },
+})
+```
+
+These snippets describe valid AML transport data; they are not runnable against the placeholder executable or domain. Never hard-code a real token into a descriptor committed to source.
+
+## Failure and security notes
+
+- The server name must be non-empty and normalized; transport URLs must be absolute `http:` or `https:` URLs.
+- An Agent provider may reject a transport, unavailable executable, unsupported server, disallowed name, or failed authentication.
+- Use `allowedMcpServers` in `AmlRuntime` to constrain explicit names when the workflow is user-authored.
+- Treat remote MCP tools as external capabilities with their own trust, data egress, and prompt-injection risks. Allowlist servers and inspect the tools they expose.
+- A Sandbox does not automatically make a remote MCP server trustworthy; network and credential policy remain deployment concerns.
+
+## API and source links
+
+- [`defineMcpServer`](https://github.com/we-are-singular/aml/blob/main/sdk/src/components/mcp/define-mcp-server.ts)
+- [`<Mcp />`](https://github.com/we-are-singular/aml/blob/main/sdk/src/components/mcp/mcp.tsx)
+- [`AmlMcpServer` transport types](https://github.com/we-are-singular/aml/blob/main/sdk/src/components/mcp/aml-mcp-server.ts)
+- [Maintained fixture](https://github.com/we-are-singular/aml/blob/main/examples/src/capabilities/mcp.tsx)
+- [MCP specification](https://modelcontextprotocol.io/specification/2025-06-18)

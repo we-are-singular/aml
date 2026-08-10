@@ -1,0 +1,145 @@
+---
+title: Cookbook
+description: Task-oriented AML recipes for building workflows, capabilities, resource boundaries, and production jobs.
+hero:
+  tagline: Build useful AML workflows one task at a time
+  actions:
+    - text: Start with code review
+      link: ./code-review-workflow/
+      icon: right-arrow
+    - text: Browse examples
+      link: ../examples/
+      variant: minimal
+---
+
+import { Aside, Badge, CardGrid, LinkCard } from "@astrojs/starlight/components"
+
+AML is easiest to learn by building a workflow with a clear job to do. This cookbook moves from a credential-free review pipeline to typed outputs, application Tools, capability-scoped MCP, filesystem resources, durable provider composition, and operational jobs.
+
+<Aside type="tip" title="Recommended path">
+  Start with [Build a code-review workflow](/docs/cookbook/code-review-workflow/). It demonstrates the core composition
+  pattern—Tools, specialist Agents, explicit parallelism, and synthesis—without requiring model credentials by default.
+</Aside>
+
+## Before you begin
+
+Every recipe assumes:
+
+- Node.js `>=26`;
+- dependencies installed with `npm install`;
+- TypeScript/TSX support with AML's automatic JSX runtime;
+- the public application entrypoint, `@aml-jsx/sdk`.
+
+The recipe status tells you what the source actually does:
+
+- <Badge text="Deterministic" variant="success" /> uses `@aml-jsx/sdk/testing` and needs no model, credentials, or
+  network.
+- <Badge text="Credentialed" variant="caution" /> starts a real Agent adapter or expects provider credentials and an
+  executable.
+- <Badge text="Resource-backed" variant="note" /> exercises a local, container, or remote filesystem/execution boundary.
+  Read its mutation and isolation notes before running it.
+
+## Learn the workflow shape
+
+<CardGrid>
+  <LinkCard
+    title="Build a code-review workflow"
+    href="/docs/cookbook/code-review-workflow/"
+    description="Compose two parallel specialist Agents, a typed fixture Tool, and final synthesis. Deterministic by default; OpenCode and Codex are opt-in."
+  />
+  <LinkCard
+    title="Return structured output"
+    href="/docs/cookbook/structured-output/"
+    description="Validate a provider response with a Standard Schema and pass the typed finding into a later <Agent />."
+  />
+  <LinkCard
+    title="Give an Agent a JavaScript Tool"
+    href="/docs/cookbook/tools/"
+    description="Define a schema-backed, scoped application capability and understand why Tool code remains host-process code."
+  />
+</CardGrid>
+
+| Recipe                                                       | Status                                           | Needs                                                                               | Best for                                           |
+| ------------------------------------------------------------ | ------------------------------------------------ | ----------------------------------------------------------------------------------- | -------------------------------------------------- |
+| [Code-review workflow](/docs/cookbook/code-review-workflow/) | Deterministic by default; credentialed by opt-in | Node, SDK, `zod`; provider executable and credentials only for OpenCode/Codex modes | A first useful multi-Agent workflow                |
+| [Structured output](/docs/cookbook/structured-output/)       | Deterministic                                    | Node, SDK, `zod`                                                                    | Typed findings and validation boundaries           |
+| [Tools](/docs/cookbook/tools/)                               | Deterministic                                    | Node, SDK/testing, `zod`                                                            | Application-owned functions and capability scoping |
+
+## Add capabilities and resources
+
+<CardGrid>
+  <LinkCard
+    title="Model Context Protocol capabilities"
+    href="/docs/cookbook/mcp/"
+    description="Learn MCP descriptor validation and Agent scoping. The included example URL is fixture metadata; this recipe makes no connection."
+  />
+  <LinkCard
+    title="Combine Sandboxes and Workspaces"
+    href="/docs/cookbook/sandboxes-and-workspaces/"
+    description="Materialize files in a temporary local Workspace, narrow an execution Sandbox, and understand trusted-host boundaries."
+  />
+  <LinkCard
+    title="Choose between a Tool and MCP"
+    href="/docs/cookbook/tool-or-mcp/"
+    description="Compare ownership, transport, credentials, failure modes, and host-process security with complete examples of both."
+  />
+</CardGrid>
+
+| Recipe                                                               | Status                                        | Needs                                                                            | Best for                                                          |
+| -------------------------------------------------------------------- | --------------------------------------------- | -------------------------------------------------------------------------------- | ----------------------------------------------------------------- |
+| [MCP capabilities](/docs/cookbook/mcp/)                              | Deterministic fixture                         | Node, SDK/testing; no MCP server or credentials                                  | Capability isolation without pretending to run an external server |
+| [Tool or MCP?](/docs/cookbook/tool-or-mcp/)                          | Deterministic Tool + credentialed MCP example | Node and SDK; OpenCode, credentials, and an operated MCP server for the MCP path | Choosing the correct capability boundary                          |
+| [Sandboxes and Workspaces](/docs/cookbook/sandboxes-and-workspaces/) | Deterministic + resource-backed               | Node, SDK/testing, writable temp directory                                       | Local file materialization and execution-scope composition        |
+| [Generated diagnostics](/docs/cookbook/generated-diagnostic/)        | Deterministic Agent + resource-backed         | Node, SDK/testing, Docker, and the selected interpreter image                    | Treating generated code as data before explicit execution         |
+
+<Aside type="caution" title="Resource-backed is not the same as isolated">
+  `localSandbox()` executes trusted host processes. The Sandbox/Workspace recipe uses a temporary directory for a
+  deterministic walkthrough; it is not a hostile-code security boundary. For stronger isolation, compare the actual
+  Docker, Daytona, and Modal provider contracts in the [provider docs](/docs/providers/).
+</Aside>
+
+## Compose and operate real jobs
+
+<CardGrid>
+  <LinkCard
+    title="Operate AML in a background job"
+    href="/docs/cookbook/production-job/"
+    description="Set explicit runtime budgets, propagate cancellation, and emit content-minimizing traces around a real OpenCode Agent provider."
+  />
+  <LinkCard
+    title="Compose Codex, Docker, and S3"
+    href="/docs/cookbook/codex-docker-s3/"
+    description="Follow one production skeleton across a credentialed Agent, disposable container, and durable revisioned Workspace."
+  />
+  <LinkCard
+    title="Route typed data safely"
+    href="/docs/cookbook/structured-routing/"
+    description="Validate a model-shaped route, canonicalize it, enforce root containment, and only then construct the selected Workspace."
+  />
+</CardGrid>
+
+| Recipe                                                   | Status                                     | Needs                                                                                     | Best for                                                             |
+| -------------------------------------------------------- | ------------------------------------------ | ----------------------------------------------------------------------------------------- | -------------------------------------------------------------------- |
+| [Production job](/docs/cookbook/production-job/)         | Credentialed + deployment shape            | Node/ESM TSX runtime, OpenCode executable, model configuration, credentials, and a logger | Background jobs that need bounded execution and operational controls |
+| [Codex + Docker + S3](/docs/cookbook/codex-docker-s3/)   | Credentialed + container + durable storage | Codex ACP image, Docker, model credentials, S3 bucket, and AWS identity                   | Understanding the complete three-provider lifecycle                  |
+| [Structured routing](/docs/cookbook/structured-routing/) | Deterministic                              | Node, SDK/testing, `zod`, and an application-owned root directory                         | Safely turning model-shaped data into resource selection             |
+
+This recipe is intentionally provider-backed. It does not install OpenCode, provision credentials, define a deployment image, or make local execution safe for untrusted code. Treat the code as a composition-root pattern and inject the Sandbox/Workspace providers required by your deployment.
+
+## Control a session's authored turns
+
+Use [deliberate editorial passes with FollowUp](/docs/cookbook/follow-up-editorial-passes/) when several authored instructions should run in one provider session. The recipe explains what AML guarantees, what conversation history remains provider-owned, and when separate evaluations are clearer.
+
+## Recipe format
+
+Each page follows the same reading order:
+
+1. **Goal** — the user task and the AML shape it produces.
+2. **Prerequisites** — credentials, executables, packages, and resource requirements.
+3. **Complete source** — imports included, with provider assumptions visible.
+4. **Run and expected output** — what is safe to execute and what success looks like.
+5. **How it works** — the runtime contract behind the example.
+6. **Failure and security notes** — boundaries that should affect production decisions.
+7. **API and source links** — public contracts and the maintained repository example.
+
+For the repository's current runnable catalog, use the command on the [Examples](/docs/examples/) page. The runner remains the source of truth; the docs recommend paths by learning goal instead of maintaining a second export inventory.

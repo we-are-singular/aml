@@ -1,0 +1,174 @@
+---
+/* eslint-disable no-undef -- Astro exposes this global inside component frontmatter. */
+import { Icon } from "@astrojs/starlight/components"
+import MobileMenuFooter from "@astrojs/starlight/components/MobileMenuFooter.astro"
+import SidebarPersister from "@astrojs/starlight/components/SidebarPersister.astro"
+import SidebarSublist from "@astrojs/starlight/components/SidebarSublist.astro"
+import type { StarlightRouteData } from "@astrojs/starlight/route-data"
+
+import ProviderSidebarSublist from "./ProviderSidebarSublist.astro"
+
+const { sidebar } = Astro.locals.starlightRoute
+
+type SidebarEntry = StarlightRouteData["sidebar"][number]
+type SidebarGroup = Extract<SidebarEntry, { type: "group" }>
+
+function assertTopLevelGroups(entries: SidebarEntry[]): asserts entries is SidebarGroup[] {
+  if (entries.some(entry => entry.type !== "group")) {
+    throw new Error("AML documentation areas must be top-level Starlight sidebar groups.")
+  }
+}
+
+function containsCurrentPage(entries: SidebarEntry[]): boolean {
+  return entries.some(entry =>
+    entry.type === "link" ? entry.isCurrent : containsCurrentPage(entry.entries),
+  )
+}
+
+function firstLink(entries: SidebarEntry[]): string | undefined {
+  for (const entry of entries) {
+    if (entry.type === "link") return entry.href
+    const nestedLink = firstLink(entry.entries)
+    if (nestedLink) return nestedLink
+  }
+}
+
+assertTopLevelGroups(sidebar)
+
+const areaIcons = {
+  Learn: "open-book",
+  Providers: "code-branch",
+  Cookbook: "puzzle",
+  Reference: "document",
+} as const
+
+const activeArea = sidebar.find(area => containsCurrentPage(area.entries)) ?? sidebar[0]
+---
+
+<SidebarPersister>
+  <nav class="docs-area-switcher" aria-label="Documentation areas">
+    <ul>
+      {
+        sidebar.map(area => {
+          const href = firstLink(area.entries)
+          const isActive = area === activeArea
+          const icon = areaIcons[area.label as keyof typeof areaIcons] ?? "open-book"
+
+          return (
+            <li>
+              <a href={href} aria-current={isActive ? "location" : undefined}>
+                {
+                  icon === "code-branch" ? (
+                    <svg
+                      viewBox="0 0 24 24"
+                      width="1rem"
+                      height="1rem"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      aria-hidden="true"
+                    >
+                      <line x1="6" x2="6" y1="3" y2="15" />
+                      <circle cx="18" cy="6" r="3" />
+                      <circle cx="6" cy="18" r="3" />
+                      <path d="M18 9a9 9 0 0 1-9 9" />
+                    </svg>
+                  ) : (
+                    <Icon name={icon} size="1rem" />
+                  )
+                }
+                <span>{area.label}</span>
+              </a>
+            </li>
+          )
+        })
+      }
+    </ul>
+  </nav>
+
+  {
+    activeArea &&
+      (activeArea.label === "Providers" ? (
+        <ProviderSidebarSublist sublist={activeArea.entries} />
+      ) : (
+        <SidebarSublist sublist={activeArea.entries} />
+      ))
+  }
+</SidebarPersister>
+
+<div class="md:sl-hidden">
+  <MobileMenuFooter />
+</div>
+
+<style>
+  @layer aml {
+    .docs-area-switcher {
+      background: var(--aml-surface-subtle);
+      border: 1px solid var(--aml-border);
+      border-radius: var(--aml-radius-md);
+      margin-bottom: 1.4rem;
+      padding: 0.25rem;
+    }
+
+    .docs-area-switcher ul {
+      display: grid;
+      gap: 0.2rem;
+      list-style: none;
+      margin: 0;
+      padding: 0;
+    }
+
+    .docs-area-switcher a {
+      align-items: center;
+      border: 1px solid transparent;
+      border-radius: calc(var(--aml-radius-md) - 0.3rem);
+      color: var(--aml-text-muted);
+      display: flex;
+      font-family: var(--aml-font-display);
+      font-size: 0.86rem;
+      font-weight: 650;
+      gap: 0.65rem;
+      min-height: 2.55rem;
+      padding: 0.55rem 0.65rem;
+      text-decoration: none;
+      transition:
+        background-color 140ms ease,
+        border-color 140ms ease,
+        color 140ms ease;
+    }
+
+    .docs-area-switcher a:hover {
+      background: var(--aml-surface-hover);
+      color: var(--aml-text);
+    }
+
+    .docs-area-switcher a[aria-current="location"] {
+      background: var(--aml-surface-raised);
+      border-color: var(--aml-border-strong);
+      box-shadow: var(--aml-shadow-xs);
+      color: var(--aml-text);
+    }
+
+    .docs-area-switcher a :global(svg) {
+      color: var(--aml-text-faint);
+      flex: none;
+    }
+
+    .docs-area-switcher a[aria-current="location"] :global(svg) {
+      color: var(--aml-accent);
+    }
+
+    .docs-area-switcher a:focus-visible {
+      outline: 2px solid var(--aml-accent);
+      outline-offset: 2px;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .docs-area-switcher a {
+        transition: none;
+      }
+    }
+  }
+</style>

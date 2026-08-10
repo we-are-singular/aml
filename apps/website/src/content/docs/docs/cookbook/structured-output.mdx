@@ -1,0 +1,113 @@
+---
+title: Return structured output
+description: "Validate an <Agent /> result with a Standard Schema and use the typed value in a later AML step."
+---
+
+import { Aside, Badge, Steps } from "@astrojs/starlight/components"
+
+<Badge text="Deterministic" variant="success" />
+
+## Goal
+
+Turn an Agent response into a typed finding instead of passing unvalidated prose between workflow stages. This recipe follows the maintained [`structured.tsx`](https://github.com/we-are-singular/aml/blob/main/examples/src/core/structured.tsx) example.
+
+## Prerequisites
+
+- Node.js `>=26`;
+- `@aml-jsx/sdk` and `zod` installed;
+- no model credentials or network access for the deterministic example.
+
+## Complete source
+
+```tsx
+import { Agent, AmlRuntime, evaluate } from "@aml-jsx/sdk"
+import { DeterministicAgentProvider } from "@aml-jsx/sdk/testing"
+import { z } from "zod"
+
+const Finding = z.object({
+  severity: z.enum(["low", "high"]),
+  summary: z.string(),
+})
+
+const provider = new DeterministicAgentProvider({
+  respond(request) {
+    if (request.output?.type === "json") {
+      return {
+        structured: {
+          severity: "high",
+          summary: "authorization is checked after mutation",
+        },
+        text: "",
+      }
+    }
+
+    return { text: `synthesized:` + request.prompt }
+  },
+})
+
+async function Review() {
+  const finding = await evaluate(<Agent provider={provider}>Inspect the change.</Agent>, Finding)
+
+  return (
+    <Agent provider={provider}>
+      Explain this {finding.severity} finding: {finding.summary}
+    </Agent>
+  )
+}
+
+const result = await new AmlRuntime().evaluate(<Review />)
+console.log(result)
+```
+
+## Run it
+
+Save the complete source as `recipe.tsx` in a project configured as shown in [Getting started](/docs/getting-started/), then run exactly that file:
+
+```sh title="Terminal"
+npx vite-node recipe.tsx
+```
+
+From an AML repository checkout, the smaller maintained example exercises the same structured-result contract:
+
+```sh title="Terminal"
+npm run example -- structured
+```
+
+## Expected output
+
+```text
+synthesized:Explain this high finding: authorization is checked after mutation
+```
+
+The deterministic provider returns a JSON-shaped value only when AML asks for JSON. The schema then validates that value before the typed `finding` is interpolated into the second `<Agent />`.
+
+## How it works
+
+<Steps>
+
+1. `evaluate(value, Finding)` requests structured output from the nearest Agent provider.
+2. AML validates the provider's JSON-compatible response with the supplied Standard Schema. Zod is one implementation of that schema contract.
+3. The helper resolves to the schema's output type, so `finding.severity` and `finding.summary` are typed TypeScript values.
+4. The second `<Agent />` remains text-producing. In this example, structured output applies to the specialist, not to the final response.
+
+</Steps>
+
+<Aside type="note" title="Structured output is a validation boundary">
+  A schema does not make an external model correct. It guarantees shape and validation behavior. Put semantic
+  checks—such as severity policy, allowed file paths, or required evidence—inside your schema or application code.
+</Aside>
+
+## Failure and security notes
+
+- Missing fields, invalid enum values, malformed JSON, or a provider that cannot honor JSON output reject the evaluation.
+- The repository example uses a deterministic provider; it does not prove that every Agent provider supports the same native structured-output mechanism.
+- Do not treat a valid shape as authorization to perform an external side effect. Validate business rules before writing files, merging code, or sending messages.
+- If you need structured output from a final `<FollowUp />`, remember that the final turn is the output boundary; earlier turns remain session inputs.
+
+## API and source links
+
+- [`evaluate`](https://github.com/we-are-singular/aml/blob/main/sdk/src/core/evaluate.ts)
+- [`AmlModelSchema`](https://github.com/we-are-singular/aml/blob/main/sdk/src/components/agent/aml-model-schema.ts)
+- [`<Agent />`](https://github.com/we-are-singular/aml/blob/main/sdk/src/components/agent/agent.tsx)
+- [Maintained source example](https://github.com/we-are-singular/aml/blob/main/examples/src/core/structured.tsx)
+- [Zod](https://zod.dev/)

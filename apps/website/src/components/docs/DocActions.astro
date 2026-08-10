@@ -1,0 +1,142 @@
+---
+/* eslint-disable no-undef -- Astro and the component script expose framework and browser globals. */
+import { withBase } from "../../config/site"
+import { markdownPathForDocsRoute } from "../../lib/docs-markdown"
+
+const site = Astro.site ?? new URL("https://agent-markup-language.com")
+const isDocsRoute = Astro.url.pathname.startsWith(withBase("docs/"))
+const markdownPath = markdownPathForDocsRoute(Astro.url.pathname)
+const markdownUrl = new URL(markdownPath, site)
+const prompt = `Read ${markdownUrl.href} so I can ask questions about this AML documentation page.`
+
+const assistantLinks = {
+  claude: `https://claude.ai/new?q=${encodeURIComponent(prompt)}`,
+  chatgpt: `https://chatgpt.com/?q=${encodeURIComponent(prompt)}`,
+  gemini: `https://gemini.google.com/app?q=${encodeURIComponent(prompt)}`,
+}
+---
+
+{
+  isDocsRoute && (
+    <div class="doc-actions" data-doc-actions>
+      <button class="doc-actions__primary" type="button" data-copy-page data-markdown-url={markdownPath}>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true">
+          <rect width="14" height="14" x="8" y="8" rx="2" ry="2" />
+          <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2" />
+        </svg>
+        <span data-action-label>Copy page</span>
+      </button>
+
+      <details class="doc-actions__menu">
+        <summary aria-label="More page actions" title="More page actions">
+          <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+            <circle cx="12" cy="5" r="1.5" />
+            <circle cx="12" cy="12" r="1.5" />
+            <circle cx="12" cy="19" r="1.5" />
+          </svg>
+        </summary>
+
+        <div class="doc-actions__popover">
+          <a
+            href={markdownPath}
+            target="_blank"
+            rel="alternate noopener"
+            aria-label="View as Markdown (opens in a new tab)"
+          >
+            <svg class="doc-actions__view-icon" viewBox="0 0 208 128" aria-hidden="true">
+              <rect width="198" height="118" x="5" y="5" rx="10" fill="none" stroke="currentColor" stroke-width="10" />
+              <path
+                fill="currentColor"
+                d="M30 98V30h20l20 25 20-25h20v68H90V59L70 84 50 59v39zm125 0-30-33h20V30h20v35h20z"
+              />
+            </svg>
+            <span>View as Markdown</span>
+          </a>
+
+          <a
+            href={assistantLinks.claude}
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label="Ask Claude about this page (opens in a new tab)"
+          >
+            <svg class="doc-actions__claude-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+              <path d="M4.7144 15.9555 9.4318 13.3084l.079-.2307-.079-.1275h-.2307l-.7893-.0486-2.6956-.0729-2.3375-.0971-2.2646-.1214-.5707-.1215-.5343-.7042.0546-.3522.4797-.3218.686.0608 1.5179.1032 2.2767.1578 1.6514.0972 2.4468.255h.3886l.0546-.1579-.1336-.0971-.1032-.0972L6.973 9.8356l-2.55-1.6879-1.3356-.9714-.7225-.4918-.3643-.4614-.1578-1.0078.6557-.7225.8803.0607.2246.0607.8925.686 1.9064 1.4754 2.4893 1.8336.3643.3035.1457-.1032.0182-.0728-.164-.2733-1.3539-2.4467-1.445-2.4893-.6435-1.032-.17-.6194c-.0607-.255-.1032-.4674-.1032-.7285L6.287.1335 6.6997 0l.9957.1336.419.3642.6192 1.4147 1.0018 2.2282 1.5543 3.0296.4553.8985.2429.8318.091.255h.1579v-.1457l.1275-1.706.2368-2.0947.2307-2.6957.0789-.7589.3764-.9107.7468-.4918.5828.2793.4797.686-.0668.4433-.2853 1.8517-.5586 2.9021-.3643 1.9429h.2125l.2429-.2429.9835-1.3053 1.6514-2.0643.7286-.8196.85-.9046.5464-.4311h1.0321l.759 1.1293-.34 1.1657-1.0625 1.3478-.8804 1.1414-1.2628 1.7-.7893 1.36.0729.1093.1882-.0183 2.8535-.607 1.5421-.2794 1.8396-.3157.8318.3886.091.3946-.3278.8075-1.967.4857-2.3072.4614-3.4364.8136-.0425.0304.0486.0607 1.5482.1457.6618.0364h1.621l3.0175.2247.7892.522.4736.6376-.079.4857-1.2142.6193-1.6393-.3886-3.825-.9107-1.3113-.3279h-.1822v.1093l1.0929 1.0686 2.0035 1.8092 2.5075 2.3314.1275.5768-.3218.4554-.34-.0486-2.2039-1.6575-.85-.7468-1.9246-1.621h-.1275v.17l.4432.6496 2.3436 3.5214.1214 1.0807-.17.3521-.6071.2125-.6679-.1214-1.3721-1.9246L14.38 17.959l-1.1414-1.9428-.1397.079-.674 7.2552-.3156.3703-.7286.2793-.6071-.4614-.3218-.7468.3218-1.4753.3886-1.9246.3157-1.53.2853-1.9004.17-.6314-.0121-.0425-.1397.0182-1.4328 1.9672-2.1796 2.9446-1.7243 1.8456-.4128.164-.7164-.3704.0667-.6618.4008-.5889 2.386-3.0357 1.4389-1.882.929-1.0868-.0062-.1579h-.0546l-6.3385 4.1164-1.1293.1457-.4857-.4554.0608-.7467.2307-.2429 1.9064-1.3114Z" />
+            </svg>
+            <span>Ask Claude about this page</span>
+          </a>
+
+          <a
+            href={assistantLinks.chatgpt}
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label="Ask ChatGPT about this page (opens in a new tab)"
+          >
+            <svg class="doc-actions__chatgpt-icon" viewBox="0 0 320 320" fill="currentColor" aria-hidden="true">
+              <path d="m297.06 130.97c7.26-21.79 4.76-45.66-6.85-65.48-17.46-30.4-52.56-46.04-86.84-38.68-15.25-17.18-37.16-26.95-60.13-26.81-35.04-.08-66.13 22.48-76.91 55.82-22.51 4.61-41.94 18.7-53.31 38.67-17.59 30.32-13.58 68.54 9.92 94.54-7.26 21.79-4.76 45.66 6.85 65.48 17.46 30.4 52.56 46.04 86.84 38.68 15.24 17.18 37.16 26.95 60.13 26.8 35.06.09 66.16-22.49 76.94-55.86 22.51-4.61 41.94-18.7 53.31-38.67 17.57-30.32 13.55-68.51-9.94-94.51zm-120.28 168.11c-14.03.02-27.62-4.89-38.39-13.88.49-.26 1.34-.73 1.89-1.07l63.72-36.8c3.26-1.85 5.26-5.32 5.24-9.07v-89.83l26.93 15.55c.29.14.48.42.52.74v74.39c-.04 33.08-26.83 59.9-59.91 59.97zm-128.84-55.03c-7.03-12.14-9.56-26.37-7.15-40.18.47.28 1.3.79 1.89 1.13l63.72 36.8c3.23 1.89 7.23 1.89 10.47 0l77.79-44.92v31.1c.02.32-.13.63-.38.83l-64.41 37.19c-28.69 16.52-65.33 6.7-81.92-21.95zm-16.77-139.09c7-12.16 18.05-21.46 31.21-26.29 0 .55-.03 1.52-.03 2.2v73.61c-.02 3.74 1.98 7.21 5.23 9.06l77.79 44.91-26.93 15.55c-.27.18-.61.21-.91.08l-64.42-37.22c-28.63-16.58-38.45-53.21-21.95-81.89zm221.26 51.49-77.79-44.92 26.93-15.54c.27-.18.61-.21.91-.08l64.42 37.19c28.68 16.57 38.51 53.26 21.94 81.94-7.01 12.14-18.05 21.44-31.2 26.28v-75.81c.03-3.74-1.96-7.2-5.2-9.06zm26.8-40.34c-.47-.29-1.3-.79-1.89-1.13l-63.72-36.8c-3.23-1.89-7.23-1.89-10.47 0l-77.79 44.92v-31.1c-.02-.32.13-.63.38-.83l64.41-37.16c28.69-16.55 65.37-6.7 81.91 22 6.99 12.12 9.52 26.31 7.15 40.1zm-168.51 55.43-26.94-15.55c-.29-.14-.48-.42-.52-.74v-74.39c.02-33.12 26.89-59.96 60.01-59.94 14.01 0 27.57 4.92 38.34 13.88-.49.26-1.33.73-1.89 1.07l-63.72 36.8c-3.26 1.85-5.26 5.31-5.24 9.06l-.04 89.79zm14.63-31.54 34.65-20.01 34.65 20v40.01l-34.65 20-34.65-20z" />
+            </svg>
+            <span>Ask ChatGPT about this page</span>
+          </a>
+
+          <a
+            href={assistantLinks.gemini}
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label="Ask Gemini about this page (opens in a new tab)"
+          >
+            <svg class="doc-actions__gemini-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+              <path d="M20.616 10.835a14.147 14.147 0 0 1-4.45-3.001 14.111 14.111 0 0 1-3.678-6.452.503.503 0 0 0-.975 0 14.134 14.134 0 0 1-3.679 6.452 14.155 14.155 0 0 1-4.45 3.001c-.65.28-1.318.505-2.002.678a.502.502 0 0 0 0 .975c.684.172 1.35.397 2.002.677a14.147 14.147 0 0 1 4.45 3.001 14.112 14.112 0 0 1 3.679 6.453.502.502 0 0 0 .975 0c.172-.685.397-1.351.677-2.003a14.145 14.145 0 0 1 3.001-4.45 14.113 14.113 0 0 1 6.453-3.678.503.503 0 0 0 0-.975 13.245 13.245 0 0 1-2.003-.678Z" />
+            </svg>
+            <span>Ask Gemini about this page</span>
+          </a>
+        </div>
+      </details>
+    </div>
+  )
+}
+
+<script>
+  /* eslint-disable no-undef -- This script runs in the browser. */
+  const flash = (element: HTMLElement, message: string, fallback: string): void => {
+    element.textContent = message
+    window.setTimeout(() => {
+      element.textContent = fallback
+    }, 1800)
+  }
+
+  document.querySelectorAll<HTMLElement>("[data-doc-actions]").forEach(actions => {
+    const copyButton = actions.querySelector<HTMLButtonElement>("[data-copy-page]")
+    const copyLabel = copyButton?.querySelector<HTMLElement>("[data-action-label]")
+    const menu = actions.querySelector<HTMLDetailsElement>(".doc-actions__menu")
+    const summary = menu?.querySelector<HTMLElement>("summary")
+
+    copyButton?.addEventListener("click", async () => {
+      const markdownUrl = copyButton.dataset.markdownUrl
+      if (!markdownUrl || !copyLabel) return
+
+      try {
+        const response = await fetch(markdownUrl)
+        if (!response.ok) throw new Error(`Markdown request failed with ${response.status}`)
+        await navigator.clipboard.writeText(await response.text())
+        flash(copyLabel, "Copied!", "Copy page")
+      } catch (error) {
+        console.error("Unable to copy the documentation page.", error)
+        flash(copyLabel, "Open Markdown", "Copy page")
+      }
+    })
+
+    menu?.querySelectorAll("a").forEach(link => {
+      link.addEventListener("click", () => menu.removeAttribute("open"))
+    })
+
+    menu?.addEventListener("keydown", event => {
+      if (event.key !== "Escape") return
+      menu.removeAttribute("open")
+      summary?.focus()
+    })
+
+    document.addEventListener("click", event => {
+      if (!menu?.open || !(event.target instanceof Node) || menu.contains(event.target)) return
+      menu.removeAttribute("open")
+    })
+  })
+</script>

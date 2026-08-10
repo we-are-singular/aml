@@ -1,0 +1,58 @@
+---
+import { benefits } from "../../data/marketing"
+---
+
+<section id="why" class="mx-auto max-w-6xl scroll-mt-20 px-5 py-24 sm:py-32">
+  <div>
+    <p class="reveal font-mono text-[12px] uppercase tracking-[0.2em] text-resolve">why aml</p>
+    <h2 class="reveal mt-3 text-3xl font-bold tracking-tight [--reveal-delay:60ms] sm:text-5xl">
+      Your agent sdk isn’t enough.
+    </h2>
+    <p class="reveal mt-5 text-[15px] leading-relaxed text-ink-soft [--reveal-delay:120ms]">
+      Most AI SDKs are designed around chat: send a message, call a model, stream a response. Agentic workflows
+      need much more around that conversation — tools, permissions, sandboxed execution, persistent files,
+      multiple agents, and clear control over how work moves between them. AML brings those pieces into one
+      provider-agnostic runtime, expressed as composable, human-readable JSX trees that developers can read,
+      reason about, and reuse.
+    </p>
+  </div>
+
+  <div class="benefit-grid mt-14 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+    {
+      benefits.map(benefit => (
+        <article class="magnetic-card reveal card-hover rounded-2xl border border-line bg-surface p-6">
+          <div class:list={["grid size-10 place-items-center rounded-xl", benefit.iconClass]}>
+            {benefit.icon === "markup" && <>{"</>"}</>}
+            {benefit.icon === "sandbox" && <>▣</>}
+            {benefit.icon === "switch" && (
+              <svg viewBox="0 0 24 24" class="size-5" aria-hidden="true">
+                <path
+                  d="M4 8h14m0 0-3.5-3.5M18 8l-3.5 3.5M20 16H6m0 0 3.5-3.5M6 16l3.5 3.5"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                />
+              </svg>
+            )}
+            {benefit.icon === "observe" && (
+              <svg viewBox="0 0 24 24" class="size-5" aria-hidden="true">
+                <path
+                  d="m5 5 13 5-2 5L3 10l2-5ZM18 10l2-1M11 13l-4 8M12 13l3 8M11.5 13l7 7"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.8"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                />
+              </svg>
+            )}
+          </div>
+          <h3 class="mt-5 text-lg font-semibold">{benefit.title}</h3>
+          <p class="mt-2 text-[14.5px] leading-relaxed text-ink-soft">{benefit.description}</p>
+        </article>
+      ))
+    }
+  </div>
+</section>

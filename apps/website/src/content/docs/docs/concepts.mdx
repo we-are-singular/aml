@@ -1,0 +1,214 @@
+---
+title: The AML mental model
+description: Learn how AML turns asynchronous JSX into provider-independent agent workflows.
+---
+
+import { Aside, Card, CardGrid, LinkCard, Steps, TabItem, Tabs } from "@astrojs/starlight/components"
+import ExecutionDirections from "../../../components/docs/ExecutionDirections.astro"
+
+AML is an execution model for agent workflows written as TypeScript and JSX. It is not a UI renderer, a prompt templating language, or a second markup parser. JSX is the authoring syntax; `AmlRuntime` is the interpreter that resolves the resulting tree.
+
+## The three boundaries
+
+Most AML workflows are easier to reason about when you separate three responsibilities:
+
+| Boundary                                                 | Owns                                                                   | Provider guides                                                    |
+| -------------------------------------------------------- | ---------------------------------------------------------------------- | ------------------------------------------------------------------ |
+| [`<Agent />`](/docs/reference/primitives/agent/)         | A provider session, prompts, turns, capabilities, and the final result | [Codex, OpenCode, and Pi](/docs/providers/agents/)                 |
+| [`<Sandbox />`](/docs/reference/primitives/sandbox/)     | Processes, working directory, filesystem permissions, and cleanup      | [Local, Docker, Daytona, and Modal](/docs/providers/sandboxes/)    |
+| [`<Workspace />`](/docs/reference/primitives/workspace/) | Durable files, revisions, locks, materialization, and publication      | [Local directory, filesystem, and S3](/docs/providers/workspaces/) |
+
+`<Agent />` may run without an explicit `<Sandbox />` or `<Workspace />` when its provider can do so, but `<Script />`, `<File />`, and provider features that require a resource must have the appropriate active boundary. AML never silently executes `<Script />` on the host because no `<Sandbox />` was configured.
+
+### Choose the smallest boundary
+
+| The work needs to…                                      | Use       | Decision rule                                                                  |
+| ------------------------------------------------------- | --------- | ------------------------------------------------------------------------------ |
+| ask a model or coding harness to reason, plan, or edit  | Agent     | The result depends on a provider session rather than deterministic code.       |
+| run a command or long-lived process in a controlled cwd | Sandbox   | The operation needs execution authority, limits, cancellation, or isolation.   |
+| preserve or publish files across evaluations            | Workspace | The files need durable identity, locking, revisions, or an explicit save rule. |
+
+Compose boundaries only when the task needs them. A text-only Agent does not need an empty Workspace; a deterministic file transform does not become safer or clearer merely because a model performs it.
+
+### Keep ordinary control flow in TypeScript
+
+Use TypeScript for deterministic branching, loops, retries, data transformation, policy checks, and explicit concurrency. Use AML for the semantic tree that scopes `<Agent />`, capabilities, `<Sandbox />`, `<Workspace />`, and their lifecycle.
+
+```tsx
+async function Review({ files }: { files: readonly string[] }) {
+  const selected = files.filter(file => file.endsWith(".ts"))
+  if (selected.length === 0) return "No TypeScript files to review."
+
+  const findings = await Promise.all(selected.map(file => evaluate(<Agent>Review {file}.</Agent>)))
+  return <Agent>Synthesize these application-selected findings: {findings}</Agent>
+}
+```
+
+Here TypeScript owns selection, the empty case, and concurrency. AML owns each provider call and the final dataflow. This keeps business policy inspectable instead of hiding it inside prompts or inventing JSX primitives for ordinary programming.
+
+<ExecutionDirections />
+
+## What runs where
+
+| Authored element                    | Execution location                                                                                                       | Authority and result                                                                                                                 |
+| ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------ |
+| Function component and `evaluate()` | AML application process                                                                                                  | Builds or resolves AML values using the active lexical scope. It does not create isolation.                                          |
+| `<Agent />`                         | The selected Agent provider and its ACP/native process; a compatible active Sandbox supplies its cwd and process runtime | Owns model turns and returns an `AgentResponse`. Agent-native permissions cannot widen the Sandbox.                                  |
+| JavaScript `<Tool />`               | AML application process                                                                                                  | Calls the function captured by `defineTool()`. It is an application capability, not code moved into the Sandbox.                     |
+| `<Mcp />`                           | The location chosen by the provider integration and transport                                                            | A stdio command or remote HTTP URL remains privileged deployment configuration. Do not assume it shares the Tool or Sandbox process. |
+| `<Script />`                        | Active Sandbox runtime                                                                                                   | Executes only through `SandboxRuntime.exec()` or `spawn()` with that lease's cwd, access, timeout, and cancellation behavior.        |
+| `<File />`                          | Active Workspace materialization                                                                                         | Writes a validated logical Workspace path before descendants consume it. It does not write through an active Sandbox.                |
+| Workspace load/save                 | Workspace provider and its storage service                                                                               | Materializes before descendants, publishes according to save policy, and releases locks/temporary state after the subtree settles.   |
+
+### Provider selection and path rules
+
+- An `<Agent provider={...} />` prop wins over `AmlRuntime({ agentProvider })` for that `<Agent />` only.
+- The outer `<Sandbox provider={...} />` selects the lease. Nested `<Sandbox />` components reuse it and may narrow access or root, but cannot switch providers or widen authority.
+- The top-level `<Workspace provider={...} />` wins over the runtime default. AML supports one top-level `<Workspace />` for an evaluation.
+- Workspace paths are logical. Each Sandbox provider must map the Workspace materialization into its host, container, or remote cwd; application code should not guess the provider's physical path.
+- `read-only` is a requested policy with provider-specific enforcement. It never grants writes, but the exact handling of process execution and mounted files differs by Sandbox.
+
+These are the canonical execution-direction rules. Provider guides add vendor prerequisites and path mappings; they do not redefine the evaluation model.
+
+<CardGrid>
+  <Card title="Agent" icon="rocket">
+    A model-facing session. Child `<Agent />` results become parent input; `<Tool />
+    `, `<Mcp />
+    `, `<Skill />
+    `, and `<FollowUp />` are scoped to the owning `<Agent />
+    `.
+  </Card>
+  <Card title="Sandbox" icon="setting">
+    An ephemeral execution lease. Nested scopes can narrow access, but cannot widen a read-only parent or select another
+    provider.
+  </Card>
+  <Card title="Workspace" icon="open-book">
+    A durable file identity. It materializes before descendants run, publishes according to its save policy, and
+    releases after cleanup.
+  </Card>
+</CardGrid>
+
+## Authored order is dataflow
+
+AML resolves consumers after the values they consume. This is a post-order rule: a child `<Agent />` must finish before the parent session can be assembled.
+
+```tsx
+function Specialist() {
+  return <Agent>Find concrete correctness risks.</Agent>
+}
+
+function Review() {
+  return (
+    <Agent system="Synthesize only evidence supplied by the specialists.">
+      Specialist findings:
+      <Specialist />
+      Write the final review.
+    </Agent>
+  )
+}
+```
+
+The parent receives the child's final text at the child's authored position. Ordinary text is prompt content only when it is inside `<Agent />` or one of its prompt-bearing descriptors. A child `<Agent />` is not an independent side effect that the parent may race; it is a dependency in the parent's input.
+
+### Sequential siblings
+
+JavaScript evaluates ordinary expressions in authored order. If two JSX values are written as separate synchronous siblings, AML preserves their order in the resulting text. This matters when the second sibling depends on files or external effects produced by the first.
+
+### Explicit concurrency
+
+AML does not infer that sibling `<Agent />` components are safe to run concurrently. Start independent evaluations with JavaScript concurrency primitives, then pass their results into a later `<Agent />`:
+
+```tsx
+async function Review() {
+  const [correctness, maintainability] = await Promise.all([
+    evaluate(<Agent>Review correctness.</Agent>),
+    evaluate(<Agent>Review maintainability.</Agent>),
+  ])
+
+  return (
+    <Agent>
+      Correctness:
+      {correctness}
+      Maintainability:
+      {maintainability}
+    </Agent>
+  )
+}
+```
+
+The array keeps the authored `[correctness, maintainability]` order even if the second provider call finishes first. `maxConcurrentAgents` limits active provider calls; it does not turn sequential JSX into concurrent work.
+
+## Lexical scope and cleanup
+
+`<Workspace />`, `<Sandbox />`, and `<Context.Provider />` are lexical boundaries. A descendant inherits the active scope while it evaluates, and the boundary releases after its subtree settles.
+
+<Steps>
+  1. **Enter the outer scope.** AML acquires the Workspace and materializes its selected revision, then acquires the
+  Sandbox and establishes its effective access policy. 2. **Resolve the subtree.** Descendant components, capabilities,
+  scripts, and Agent sessions run inside those resources. 3. **Commit or discard.** The Workspace applies its save
+  policy (`always` or `success`); a provider may reconcile changed files or publish a revision. 4. **Release in reverse
+  order.** Child Agent sessions and Sandbox leases release before their parent Workspace scope. Cleanup failures remain
+  observable.
+</Steps>
+
+```tsx
+<Workspace id="review-42" provider={workspaceProvider}>
+  <Sandbox access="read-write" provider={sandboxProvider}>
+    <Agent provider={agentProvider}>Inspect and update the project.</Agent>
+  </Sandbox>
+</Workspace>
+```
+
+Nested `<Sandbox />` components reuse the outer lease. They may narrow `read-write` to `read-only`, or narrow a root path, but cannot widen permissions. `<File />` must be inside `<Workspace />` and cannot be used inside `<Sandbox />` because it writes through the durable Workspace boundary.
+
+<Aside type="caution" title="Local is trusted execution">
+  `localSandbox()` runs host processes. It provides the common Sandbox API but is not a hostile-code isolation boundary.
+  Use a provider with an appropriate isolation model for model-controlled or untrusted work.
+</Aside>
+
+## Provider neutrality has limits
+
+AML keeps the workflow tree stable while provider factories own vendor behavior: executable discovery, credentials, model names, transport, capability translation, and environment setup. The same `<Agent />` tree can use Codex, OpenCode, or Pi, but their options and prerequisites are not interchangeable. Read the [compatibility guide](/docs/compatibility/) and the relevant [provider guide](/docs/providers/) before treating a combination as supported.
+
+## Cancellation and failure
+
+Pass an `AbortSignal` to the root evaluation when the caller owns a deadline or cancellation action:
+
+```tsx
+const controller = new AbortController()
+const timeout = setTimeout(() => controller.abort(), 30_000)
+
+try {
+  const result = await runtime.evaluate(<Workflow />, { signal: controller.signal })
+  console.log(result)
+} finally {
+  clearTimeout(timeout)
+}
+```
+
+AML propagates cancellation to active provider calls and stops advancing to later frames. It cannot undo external effects already performed by a Tool, Script, provider, or Agent. Treat persistence, network calls, and repository mutations as real effects even when a later frame fails.
+
+## Where to go next
+
+<CardGrid>
+  <LinkCard
+    title="AST and evaluation"
+    href="/docs/ast/"
+    description="See the distinction between authored JSX, immutable nodes, and runtime normalization."
+  />
+  <LinkCard
+    title="Runtime lifecycle"
+    href="/docs/runtime/"
+    description="Configure domains, limits, cancellation, and lifecycle events."
+  />
+  <LinkCard
+    title="Integrations"
+    href="/docs/integrations/"
+    description="Assemble complete Agent, Sandbox, and Workspace stacks."
+  />
+  <LinkCard
+    title="Errors and recovery"
+    href="/docs/errors/"
+    description="Classify failures without retrying unsafe or invalid work."
+  />
+</CardGrid>

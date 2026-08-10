@@ -1,0 +1,60 @@
+---
+title: "<File />"
+description: Resolve AML text and atomically write it beneath the active host Workspace materialization.
+---
+
+`<File />` writes resolved child text into its enclosing [`<Workspace />`](../workspace/) and contributes no text to the surrounding AML result. Later siblings can consume the materialized file.
+
+```tsx
+import { mkdtemp, readFile, rm } from "node:fs/promises"
+import { tmpdir } from "node:os"
+import { join } from "node:path"
+import { AmlRuntime, File, localWorkspace, Workspace } from "@aml-jsx/sdk"
+
+const directory = await mkdtemp(join(tmpdir(), "aml-file-"))
+
+try {
+  const runtime = new AmlRuntime({
+    workspaceProvider: localWorkspace({ directory }),
+  })
+
+  await runtime.evaluate(
+    <Workspace id="file-example" load={false} save={false}>
+      <File path="reports/summary.md">Review completed.</File>
+    </Workspace>
+  )
+
+  console.log(await readFile(join(directory, "reports/summary.md"), "utf8"))
+} finally {
+  await rm(directory, { recursive: true, force: true })
+}
+```
+
+## Props
+
+| Prop       | Type            | Required | Meaning                                                                          |
+| ---------- | --------------- | -------- | -------------------------------------------------------------------------------- |
+| `path`     | `string`        | yes      | Normalized logical file path beneath the Workspace root.                         |
+| `children` | `AmlRenderable` | yes      | Text content, including the resolved result of a child `<Agent />` or component. |
+
+## Placement and write behavior
+
+- `<File />` requires an active `<Workspace />` and is invalid inside [`<Sandbox />`](../sandbox/).
+- Parent directories are created without following symlinks out of the materialization.
+- An existing symlink or directory at the destination is rejected.
+- AML writes through a temporary file and renames it over the destination where the filesystem permits.
+- `<File />` does not append, write binary content, or accept a host source path.
+- The write affects the current materialization. The `<Workspace />` `save` policy decides whether a revision is published.
+
+```tsx
+<Workspace id="review-42" provider={workspace} save>
+  <File path="handoff/plan.md">
+    <Agent provider={planner}>Write the implementation plan.</Agent>
+  </File>
+  <Agent provider={reviewer}>Review handoff/plan.md.</Agent>
+</Workspace>
+```
+
+The first `<Agent />` completes before `<File />` writes its result; the later sibling `<Agent />` then sees that file. For commands or guest-side file changes, add [`<Sandbox />`](../sandbox/) and let `<Agent />` or [`<Script />`](../script/) write through its runtime instead.
+
+See [Sandbox and Workspace composition](/docs/cookbook/sandboxes-and-workspaces/) and the [Workspace provider guides](/docs/providers/workspaces/).

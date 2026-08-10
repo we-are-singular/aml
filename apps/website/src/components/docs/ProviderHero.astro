@@ -1,0 +1,137 @@
+---
+/* eslint-disable no-undef -- Astro exposes this global inside component frontmatter. */
+import ProviderMark from "./ProviderMark.astro"
+import type { ProviderVisualName } from "../../data/provider-catalog"
+
+interface SharedProps {
+  eyebrow: string
+  title: string
+  factory: string
+  summary: string
+  bestFor: string
+  caution: string
+}
+
+type Props = SharedProps &
+  (
+    | { name: ProviderVisualName; names?: never }
+    | { name?: never; names: readonly ProviderVisualName[] }
+  )
+
+const props = Astro.props
+const { eyebrow, title, factory, summary, bestFor, caution } = props
+const names = "names" in props ? props.names : [props.name]
+const markSize = names.length > 1 ? "md" : "lg"
+---
+
+<section class="provider-hero" aria-label={`${title} provider overview`}>
+  <div class="provider-hero__identity">
+    <div class:list={["provider-hero__marks", { "provider-hero__marks--group": names.length > 1 }]}>
+      {names.map(name => <ProviderMark name={name} size={markSize} />)}
+    </div>
+    <div>
+      <p class="provider-hero__eyebrow">{eyebrow}</p>
+      <code>{factory}</code>
+    </div>
+  </div>
+  <p class="provider-hero__summary">{summary}</p>
+  <dl>
+    <div>
+      <dt>Best for</dt>
+      <dd>{bestFor}</dd>
+    </div>
+    <div>
+      <dt>Know before using</dt>
+      <dd>{caution}</dd>
+    </div>
+  </dl>
+</section>
+
+<style>
+  .provider-hero {
+    background:
+      radial-gradient(circle at 90% 10%, color-mix(in srgb, var(--sl-color-accent) 13%, transparent), transparent 35%),
+      var(--sl-color-bg-nav);
+    border: 1px solid var(--sl-color-hairline-light);
+    border-radius: 1.25rem;
+    box-shadow: var(--aml-shadow-sm);
+    margin: 0 0 2.5rem;
+    overflow: hidden;
+    padding: clamp(1.4rem, 3vw, 2.25rem);
+    position: relative;
+  }
+
+  .provider-hero__identity {
+    align-items: center;
+    display: flex;
+    gap: 1.15rem;
+  }
+
+  .provider-hero__marks {
+    align-items: center;
+    display: flex;
+    flex: none;
+  }
+
+  .provider-hero__marks--group {
+    gap: 0.35rem;
+  }
+
+  .provider-hero__eyebrow {
+    color: var(--sl-color-gray-2);
+    font-family: var(--sl-font-mono);
+    font-size: 0.68rem;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    margin: 0 0 0.32rem;
+    text-transform: uppercase;
+  }
+
+  code {
+    background: var(--sl-color-accent-low);
+    border-radius: 999px;
+    color: var(--sl-color-accent-high);
+    font-size: 0.72rem;
+    padding: 0.28rem 0.55rem;
+  }
+
+  .provider-hero__summary {
+    color: var(--sl-color-gray-1);
+    font-size: clamp(1rem, 1.8vw, 1.16rem);
+    line-height: 1.68;
+    margin: 1.5rem 0;
+    max-width: 44rem;
+  }
+
+  dl {
+    border-top: 1px solid var(--sl-color-hairline-light);
+    display: grid;
+    gap: 1.25rem;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    margin: 0;
+    padding-top: 1.25rem;
+  }
+
+  dt {
+    color: var(--sl-color-gray-2);
+    font-family: var(--sl-font-mono);
+    font-size: 0.65rem;
+    font-weight: 600;
+    letter-spacing: 0.09em;
+    margin-bottom: 0.3rem;
+    text-transform: uppercase;
+  }
+
+  dd {
+    color: var(--sl-color-white);
+    font-size: 0.86rem;
+    line-height: 1.5;
+    margin: 0;
+  }
+
+  @media (max-width: 36rem) {
+    dl {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>

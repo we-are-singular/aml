@@ -1,0 +1,58 @@
+/*
+ * The site is English-only today, so loading the Latin files directly keeps the
+ * font contract explicit and avoids emitting unused language subsets. `optional`
+ * prevents a late metric-changing swap; the critical faces are also preloaded.
+ */
+@font-face {
+  font-family: "Space Grotesk Variable";
+  font-style: normal;
+  font-display: optional;
+  font-weight: 300 700;
+  src: url(@fontsource-variable/space-grotesk/files/space-grotesk-latin-wght-normal.woff2) format("woff2-variations");
+  unicode-range:
+    U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC,
+    U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@font-face {
+  font-family: "Source Sans 3 Variable";
+  font-style: normal;
+  font-display: optional;
+  font-weight: 200 900;
+  src: url(@fontsource-variable/source-sans-3/files/source-sans-3-latin-wght-normal.woff2) format("woff2-variations");
+  unicode-range:
+    U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC,
+    U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@font-face {
+  font-family: "IBM Plex Mono";
+  font-style: normal;
+  font-display: optional;
+  font-weight: 400;
+  src: url(@fontsource/ibm-plex-mono/files/ibm-plex-mono-latin-400-normal.woff2) format("woff2");
+}
+
+@font-face {
+  font-family: "IBM Plex Mono";
+  font-style: italic;
+  font-display: optional;
+  font-weight: 400;
+  src: url(@fontsource/ibm-plex-mono/files/ibm-plex-mono-latin-400-italic.woff2) format("woff2");
+}
+
+@font-face {
+  font-family: "IBM Plex Mono";
+  font-style: normal;
+  font-display: optional;
+  font-weight: 500;
+  src: url(@fontsource/ibm-plex-mono/files/ibm-plex-mono-latin-500-normal.woff2) format("woff2");
+}
+
+@font-face {
+  font-family: "IBM Plex Mono";
+  font-style: normal;
+  font-display: optional;
+  font-weight: 600;
+  src: url(@fontsource/ibm-plex-mono/files/ibm-plex-mono-latin-600-normal.woff2) format("woff2");
+}

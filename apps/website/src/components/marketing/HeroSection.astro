@@ -1,0 +1,139 @@
+<section class="relative overflow-hidden pt-14">
+  <div class="dot-grid absolute inset-0" aria-hidden="true"></div>
+  <div class="hero-vignette absolute inset-0" aria-hidden="true"></div>
+  <div id="hero-glow" class="pointer-events-none absolute inset-0" aria-hidden="true"></div>
+
+  <div class="relative mx-auto max-w-6xl px-5 pb-28 pt-14 sm:pb-40 sm:pt-20">
+    <div class="grid items-center gap-8 lg:grid-cols-[1.05fr_0.95fr]">
+      <div>
+        <p
+          class="reveal mb-5 inline-flex items-center gap-2 rounded-full border border-line bg-surface px-3 py-1 font-mono text-[11.5px] text-muted"
+        >
+          <span class="size-1.5 rounded-full bg-ok animate-pulse-dot"></span>
+          agent markup language
+          <span class="text-line-strong">|</span>
+          <span class="text-resolve">async JSX runtime</span>
+        </p>
+
+        <h1
+          class="reveal text-balance text-5xl font-bold leading-[1.02] tracking-tight [--reveal-delay:80ms] sm:text-6xl lg:text-7xl"
+        >
+          Agent workflows<br />
+          authored as
+          <span class="relative inline-block text-resolve">
+            &lt;markup /&gt;
+            <svg class="absolute -bottom-2 left-0 w-full" viewBox="0 0 220 12" fill="none" aria-hidden="true">
+              <path
+                d="M3 9C60 3 160 3 217 8"
+                stroke="var(--color-signal)"
+                stroke-width="4"
+                stroke-linecap="round"
+              />
+            </svg>
+          </span>
+        </h1>
+
+        <p
+          class="reveal mt-7 max-w-xl text-pretty text-lg leading-relaxed text-ink-soft [--reveal-delay:160ms]"
+        >
+          Write the workflow you mean. AML brings agents, tools, sandboxes, persistent files, and multi-step logic
+          into <strong class="font-semibold text-ink">one async JSX tree</strong> — without tying that workflow to
+          one provider.
+        </p>
+
+        <div class="reveal mt-9 flex flex-wrap items-center gap-3 [--reveal-delay:240ms]">
+          <a
+            href="#how"
+            class="group flex items-center gap-2 rounded-full bg-resolve px-6 py-3 text-[15px] font-semibold text-white shadow-lg shadow-resolve/25 transition-all hover:shadow-xl hover:shadow-resolve/35"
+          >
+            <span
+              class="grid size-5 place-items-center rounded-full bg-white/20 transition-transform group-hover:scale-110"
+            >
+              <svg viewBox="0 0 16 16" class="ml-px size-2.5 fill-current" aria-hidden="true">
+                <path d="M4 2.75v10.5L13 8 4 2.75Z" />
+              </svg>
+            </span>
+            See how it works
+          </a>
+          <a
+            href="https://github.com/we-are-singular/aml/blob/main/SPEC.md"
+            target="_blank"
+            rel="noreferrer"
+            class="rounded-full border border-line-strong bg-surface px-6 py-3 text-[15px] font-semibold transition-colors hover:border-ink"
+          >
+            Read the spec ↗
+          </a>
+        </div>
+      </div>
+
+      <!-- hero canvas: a tree continuously resolving -->
+      <div class="reveal relative [--reveal-delay:200ms]">
+        <div
+          class="relative rounded-2xl border border-line bg-surface/80 shadow-2xl shadow-ink/5 backdrop-blur-sm"
+        >
+          <div class="flex items-center justify-between border-b border-line px-4 py-2.5">
+            <div class="flex items-center gap-1.5">
+              <span class="size-2.5 rounded-full bg-line-strong"></span>
+              <span class="size-2.5 rounded-full bg-line-strong"></span>
+              <span class="size-2.5 rounded-full bg-ok"></span>
+            </div>
+            <p class="font-mono text-[11px] text-muted">AmlRuntime · example leaves-first resolution tree</p>
+          </div>
+          <canvas id="hero-canvas" class="block h-[310px] w-full sm:h-[390px]"></canvas>
+          <div class="flex items-center justify-between border-t border-line px-4 py-2 font-mono text-[11px]">
+            <span class="flex items-center gap-1.5 text-muted">
+              <span class="size-2 rounded-full bg-resolve"></span> resolving
+              <span class="ml-2 size-2 rounded-full bg-signal"></span> running
+              <span class="ml-2 size-2 rounded-full bg-ok"></span> resolved
+            </span>
+            <span id="hero-cycle" class="text-muted">cycle 1</span>
+          </div>
+        </div>
+
+        <div
+          class="absolute -left-4 bottom-28 hidden rounded-lg border border-line bg-surface px-3 py-1.5 font-mono text-[11px] text-ink-soft shadow-md sm:block"
+          data-float="1"
+        >
+          evaluate(<span class="text-resolve">&lt;WeeklyStandup /&gt;</span>)
+        </div>
+        <div
+          class="absolute -right-3 top-20 hidden rounded-lg border border-line bg-surface px-3 py-1.5 font-mono text-[11px] text-ink-soft shadow-md sm:block"
+          data-float="2"
+        >
+          Promise.all(<span class="text-signal">gatherers</span>)
+        </div>
+        <!-- The elevator pitch stays visible on mobile: it is the first concrete glimpse of AML syntax. -->
+        <div
+          class="relative z-10 ml-auto mt-3 w-full max-w-sm rounded-xl border border-line bg-surface/95 px-4 py-3 font-mono text-[11.5px] leading-[1.75] shadow-lg backdrop-blur-sm sm:absolute sm:-bottom-4 sm:-right-10 sm:mt-0 sm:w-56"
+          data-float="3"
+        >
+          <p>
+            <span class="text-muted">&lt;</span><span class="text-agent">Agent</span>
+            <span class="text-resolve">provider</span><span class="text-muted">=</span>&#123;codex&#125;<span
+              class="text-muted"
+              >&gt;</span
+            >
+          </p>
+          <p class="pl-4">
+            <span class="text-muted">&lt;</span><span class="text-ok">Mcp</span>
+            <span class="text-resolve">use</span><span class="text-muted">=</span>&#123;slack&#125;
+            <span class="text-muted">/&gt;</span>
+          </p>
+          <p class="pl-4 text-ink">post our weekly standup:</p>
+          <p class="pl-4 text-ink"><span class="text-signal">&#123;synthesis&#125;</span></p>
+          <p>
+            <span class="text-muted">&lt;/</span><span class="text-agent">Agent</span
+            ><span class="text-muted">&gt;</span>
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================== product thesis ============================== -->
+<section class="border-y border-ink bg-ink text-paper">
+  <div class="mx-auto max-w-6xl px-5 py-5">
+    <p class="text-lg font-semibold">A framework for building complex, provider-agnostic agent workflows.</p>
+  </div>
+</section>

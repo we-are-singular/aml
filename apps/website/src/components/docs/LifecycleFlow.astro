@@ -1,0 +1,35 @@
+---
+const lifecycleSteps = [
+  ["01", "Resolve", "Evaluate leaves first"],
+  ["02", "Acquire", "Open scoped resources"],
+  ["03", "Execute", "Run sessions and commands"],
+  ["04", "Persist", "Publish selected changes"],
+  ["05", "Release", "Clean up in reverse order"],
+] as const
+---
+
+<div
+  class="my-[1.8rem] mb-[2.5rem] grid grid-cols-1 items-stretch gap-[0.4rem] min-[56rem]:grid-cols-[1fr_auto_1fr_auto_1fr_auto_1fr_auto_1fr]"
+  role="img"
+  aria-label="AML evaluation lifecycle: resolve, acquire, execute, persist, release"
+>
+  {
+    lifecycleSteps.map(([number, title, detail], index) => (
+      <>
+        <div class="grid min-w-0 gap-[0.28rem] rounded-[0.8rem] border border-[var(--sl-color-hairline-light)] bg-[var(--sl-color-bg-nav)] p-[0.8rem]">
+          <span class="font-mono text-[0.58rem] font-semibold text-[var(--sl-color-accent)]">{number}</span>
+          <strong class="text-[0.78rem] text-[var(--sl-color-white)]">{title}</strong>
+          <small class="text-[0.62rem] leading-[1.35] text-[var(--sl-color-gray-2)]">{detail}</small>
+        </div>
+        {index < lifecycleSteps.length - 1 && (
+          <i
+            class="self-center justify-self-center rotate-90 text-[var(--sl-color-gray-3)] not-italic min-[56rem]:rotate-0"
+            aria-hidden="true"
+          >
+            →
+          </i>
+        )}
+      </>
+    ))
+  }
+</div>

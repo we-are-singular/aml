@@ -1,0 +1,127 @@
+---
+title: AML authoring skill
+description: Install, verify, and use AML's repository-backed guidance with coding agents.
+---
+
+import { Aside, Card, CardGrid, Steps } from "@astrojs/starlight/components"
+
+The AML authoring skill gives a compatible coding agent the project’s current API, composition rules, provider boundaries, and security guidance. It is useful when an agent is creating or reviewing AML code; it is not a runtime dependency and does not install the SDK or provider executables for your application.
+
+## Install the skill
+
+Run the project-local install from the repository where you want an agent to use AML:
+
+```sh title="Terminal"
+npx skills add we-are-singular/aml \
+  --skill aml-jsx
+```
+
+The Skills CLI detects compatible clients and asks where to install when a choice is required. To target a supported client explicitly, pass its client identifier:
+
+```sh title="Terminal"
+npx skills add we-are-singular/aml \
+  --skill aml-jsx \
+  --agent codex
+```
+
+Use a global install only when you want the skill available across projects:
+
+```sh title="Terminal"
+npx skills add we-are-singular/aml \
+  --skill aml-jsx \
+  --global
+```
+
+<Aside type="note" title="Client support changes independently">
+  The skill is a portable `SKILL.md`, but automatic discovery depends on the coding client and the installed Skills CLI
+  version. Let the CLI auto-detect your clients, or use `--agent` with an identifier accepted by `npx skills --help`.
+  Project-local installation is the safer default because it travels with the repository context instead of affecting
+  every project.
+</Aside>
+
+## Verify the installation
+
+List project-local skills as machine-readable output:
+
+```sh title="Terminal"
+npx skills list --json
+```
+
+For a global installation:
+
+```sh title="Terminal"
+npx skills list --global --json
+```
+
+Confirm that the result contains `aml-jsx`. If you targeted one client, you can also filter the listing with `--agent <client>`.
+
+The canonical source remains [`skills/aml-jsx/SKILL.md`](https://github.com/we-are-singular/aml/blob/main/skills/aml-jsx/SKILL.md). Review that file when you need to confirm exactly what an installed copy teaches an agent.
+
+## What the skill asks an agent to do
+
+<Steps>
+
+1. **Preflight the project.** Confirm Node.js, ESM, TypeScript, JSX runtime configuration, and the public `@aml-jsx/sdk` package boundary.
+2. **Choose explicit providers.** Separate the Agent, Sandbox, and Workspace responsibilities and check each provider’s prerequisites.
+3. **Author the smallest complete tree.** Keep ordinary branching and concurrency in TypeScript while AML owns dependency resolution and resource scopes.
+4. **Review authority and lifecycle.** Treat Sandbox isolation, credentials, Workspace publication, cancellation, and cleanup as explicit application decisions.
+5. **Verify against public contracts.** Use public SDK imports, compile the workflow, and distinguish deterministic checks from vendor integration evidence.
+
+</Steps>
+
+The skill routes an agent to focused references for composition, capabilities, resources, providers, and security. It deliberately tells the agent not to invent SDK exports or silently add infrastructure.
+
+## What the skill does not do
+
+<CardGrid>
+  <Card title="It does not install AML" icon="download">
+    Your application still needs `npm install @aml-jsx/sdk`, an ESM/TSX configuration, and a way to execute or compile
+    TypeScript.
+  </Card>
+  <Card title="It does not install providers" icon="setting">
+    Codex ACP, OpenCode, Pi, Docker, and remote provider clients remain explicit deployment prerequisites.
+  </Card>
+  <Card title="It does not grant authority" icon="seti:lock">
+    A skill can guide code generation, but only your selected Sandbox and deployment policy control processes, files,
+    network access, and credentials.
+  </Card>
+  <Card title="It does not replace these docs" icon="open-book">
+    Provider versions and public contracts can change while AML is pre-stable. Use the linked documentation and source
+    as the current authority.
+  </Card>
+</CardGrid>
+
+## A useful first prompt
+
+After installation, give the agent a concrete provider and safety boundary instead of asking only for “an AML workflow”:
+
+```text
+Use the aml-jsx skill to create a credential-free AML workflow first.
+Then show the smallest change required to run it with Codex inside Docker.
+Keep secrets outside the AML tree and explain the Workspace save policy.
+```
+
+This prompt forces the important choices into the open: deterministic versus live execution, Agent provider, Sandbox authority, and durable state.
+
+## Update or remove
+
+Refresh the installed copy when the SDK or docs change:
+
+```sh title="Terminal"
+npx skills update aml-jsx
+```
+
+Remove the project-local skill with the interactive remover, or name it directly:
+
+```sh title="Terminal"
+npx skills remove aml-jsx
+```
+
+For a global installation, add `--global` to the update or remove command.
+
+## Continue from here
+
+- [Install the SDK and run the credential-free tutorial](/docs/getting-started/).
+- [Choose an Agent, Sandbox, and Workspace](/docs/providers/).
+- [Read the canonical execution model](/docs/concepts/).
+- [Review production security boundaries](/docs/production/security/).

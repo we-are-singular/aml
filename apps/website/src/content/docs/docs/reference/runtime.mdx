@@ -1,0 +1,106 @@
+---
+title: Runtime and evaluation
+description: Choose AML runtime defaults, budgets, cancellation, and result handling.
+---
+
+`AmlRuntime` owns one complete AML evaluation. It resolves the JSX tree, creates lexical context, schedules provider calls, propagates cancellation, enforces limits, emits lifecycle events, and releases resources. A runtime instance can be reused; evaluation state belongs to each call.
+
+```tsx
+import { Agent, AmlRuntime } from "@aml-jsx/sdk"
+import { DeterministicAgentProvider } from "@aml-jsx/sdk/testing"
+
+const agentProvider = new DeterministicAgentProvider({
+  respond: request => ({ text: `Summary: ${request.prompt}` }),
+})
+
+const runtime = new AmlRuntime({
+  agentProvider,
+  maxConcurrentAgents: 4,
+  maxAgentCalls: 32,
+})
+
+const answer = await runtime.evaluate(<Agent>Summarize the repository.</Agent>)
+```
+
+## Runtime options
+
+Choose the provider defaults and safety budgets at construction time. The input options are captured; mutating the original object later does not change the runtime. Every numeric limit is a non-negative safe integer. A limit of `0` disables that limit.
+
+| Option                |         Default | Decide this when…                                                    |
+| --------------------- | --------------: | -------------------------------------------------------------------- |
+| `agentProvider`       |               — | `<Agent />` nodes should use one default Agent provider.             |
+| `sandboxProvider`     |               — | Outer `<Sandbox />` nodes should use one default execution provider. |
+| `workspaceProvider`   |               — | The evaluation may use one top-level durable `<Workspace />`.        |
+| `cwd`                 | `process.cwd()` | Relative `<Skill />` sources need a controlled base directory.       |
+| `system`              |               — | Every `<Agent />` should receive a shared system instruction.        |
+| `allowedTools`        |    unrestricted | The application must allow only named Tool capabilities.             |
+| `allowedMcpServers`   |    unrestricted | The application must allow only named MCP servers.                   |
+| `trace`               |               — | The application needs immutable trace events.                        |
+| `onTraceError`        |               — | Trace consumer failures need a dedicated policy.                     |
+| `maxAgentCalls`       |            `32` | Total Agent sessions must be bounded.                                |
+| `maxConcurrentAgents` |             `4` | Parallel Agent work must be bounded.                                 |
+| `maxTurnsPerAgent`    |            `16` | Follow-ups and authored `<Agent />` inputs must be bounded.          |
+| `maxDepth`            |            `16` | Recursive semantic JSX needs a depth budget.                         |
+| `maxStateTransitions` |            `16` | `<Loop />` transitions need a workflow budget.                       |
+
+## Evaluation options and cancellation
+
+`runtime.evaluate(value, options?)` returns a promise. Its only current per-call option is a caller-owned `AbortSignal`:
+
+```tsx
+const controller = new AbortController()
+
+const result = await runtime.evaluate(<Agent>Review the changed files.</Agent>, {
+  signal: controller.signal,
+})
+```
+
+AML checks cancellation before work and across asynchronous provider and cleanup boundaries. Evaluation settles only after owned Sandbox and Workspace resources have completed cleanup. If cancellation and cleanup both fail, AML preserves both causes in an `AggregateError`.
+
+Evaluation is post-order: child components resolve before their containing `<Agent />` plan is sent to a provider. Follow-ups share the Agent session history and count toward `maxTurnsPerAgent`.
+
+## Component-local evaluation
+
+The `evaluate` export is available only inside an active function component. It inherits the current lexical context, Sandbox, Workspace, trace parent, limits, and cancellation. It does not create a new runtime or provider session, and detached work is rejected after its AML evaluation domain closes.
+
+| Call                              | Use it when…                                                                                                   |
+| --------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| `runtime.evaluate(tree, options)` | The application is starting a root run and owns provider defaults, cancellation, events, and the final result. |
+| `evaluate(value, schema?)`        | An active AML function component needs to resolve a nested value inside the current lexical evaluation domain. |
+
+Do not use the component helper as a general top-level shortcut. Do not create another `AmlRuntime` inside a component just to evaluate a child; that would discard the active scopes, limits, trace ancestry, and cancellation relationship.
+
+Use a Standard Schema only when the component has one structured `<Agent />` result to validate:
+
+```tsx
+const report = await evaluate(<Agent>Return the report.</Agent>, ReportSchema)
+```
+
+The schema remains application-owned. AML converts it for the provider and validates the final structured value before returning it.
+
+## Errors and lifecycle events
+
+`EvaluationError` identifies invalid authored AML values and evaluator invariants. Provider failures, schema failures, capability validation, cancellation, and cleanup failures retain their original causes where possible. Catch `EvaluationError` when you specifically need to distinguish an AML authoring/runtime failure from an upstream failure.
+
+`start` and `finish` listeners are awaited. Trace sinks are dispatched according to their own policy and do not delay workflow completion:
+
+```ts
+runtime.on("start", event => {})
+runtime.once("finish", event => {})
+const unsubscribe = runtime.on("trace", sink)
+unsubscribe()
+```
+
+The finish event reports `status: "ok" | "error"`, `runId`, `signal`, and an optional `error`.
+
+## Choosing budgets
+
+- Keep the defaults for bounded, interactive workflows.
+- Raise `maxAgentCalls` and `maxTurnsPerAgent` only when the workflow intentionally uses repeated Agent work.
+- Set `maxConcurrentAgents` to the capacity of the provider, Sandbox, and downstream APIs—not just the host CPU.
+- Set `maxStateTransitions` for every workflow that uses `<Loop />`; an unbounded loop is not a retry policy.
+- Treat `allowedTools` and `allowedMcpServers` as application policy. Provider credentials and network policy still belong to the deployment boundary.
+
+For end-to-end lifecycle patterns, see [Runtime lifecycle](/docs/runtime/). For provider-specific defaults and credentials, see the [provider catalog](/docs/providers/).
+
+Sources: [`AmlRuntime`](https://github.com/we-are-singular/aml/blob/main/sdk/src/core/aml-runtime.ts), [`evaluate`](https://github.com/we-are-singular/aml/blob/main/sdk/src/core/evaluate.ts), [`EvaluationError`](https://github.com/we-are-singular/aml/blob/main/sdk/src/core/evaluation-error.ts), and [`AmlEventSubscriber`](https://github.com/we-are-singular/aml/blob/main/sdk/src/core/aml-event-subscriber.ts).

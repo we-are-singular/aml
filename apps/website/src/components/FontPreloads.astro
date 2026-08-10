@@ -1,0 +1,19 @@
+---
+/* eslint-disable no-undef -- Astro exposes this global inside component frontmatter. */
+import ibmPlexMono from "@fontsource/ibm-plex-mono/files/ibm-plex-mono-latin-400-normal.woff2?url"
+import sourceSans from "@fontsource-variable/source-sans-3/files/source-sans-3-latin-wght-normal.woff2?url"
+import spaceGrotesk from "@fontsource-variable/space-grotesk/files/space-grotesk-latin-wght-normal.woff2?url"
+
+interface Props {
+  includeBodyFont?: boolean
+}
+
+const { includeBodyFont = false } = Astro.props
+const fontUrls = [spaceGrotesk, ...(includeBodyFont ? [sourceSans] : []), ibmPlexMono]
+---
+
+{
+  fontUrls.map(href => (
+    <link rel="preload" href={href} as="font" type="font/woff2" crossorigin="anonymous" />
+  ))
+}

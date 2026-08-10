@@ -1,0 +1,93 @@
+---
+title: Compatibility
+description: Establish what an AML provider combination proves before calling it deployable or production-ready.
+---
+
+import { Aside } from "@astrojs/starlight/components"
+
+Compatibility is a layered decision, not one support badge. AML can ship an adapter while your chosen executable, image, credentials, model, endpoint, or vendor behavior still makes a concrete deployment unusable.
+
+## Four layers of evidence
+
+| Layer           | Question                                                                | Evidence to require                                                      |
+| --------------- | ----------------------------------------------------------------------- | ------------------------------------------------------------------------ |
+| AML contract    | Does the adapter preserve acquire, run, save, release, and error rules? | Provider source, type checks, deterministic conformance, and fixtures.   |
+| Runtime shape   | Can the Agent consume the effective Sandbox root and access mode?       | `supportsSandboxRuntime` and the provider handshake.                     |
+| Deployment      | Are the executable, image, credentials, model, and network usable?      | A smoke run in the exact environment you will deploy.                    |
+| Vendor behavior | Does the upstream service preserve every operation AML relies on?       | Vendor documentation plus a real compatibility run against your account. |
+
+`supportsSandboxRuntime` proves only a structural handshake. It does not inspect an image, authenticate a vendor account, enforce isolation, or prove that network and model access work.
+
+## Implemented provider families
+
+| Boundary  | Built-ins                                  | What remains deployment-owned                                                               |
+| --------- | ------------------------------------------ | ------------------------------------------------------------------------------------------- |
+| Agent     | Codex, OpenCode, Pi                        | ACP executable, model credentials, native configuration, network, and capability behavior.  |
+| Sandbox   | Local, Docker, Daytona, Modal              | Host or image contents, identity, isolation policy, resources, transfer, and cleanup.       |
+| Workspace | Local directory, Filesystem, S3-compatible | Writable materialization or storage semantics, locking, publication, retention, and access. |
+
+The repository generates every built-in Agent × Sandbox case through one smoke runner. The docs do not duplicate that matrix or its pinned tool versions: inspect the current [`smoke-matrix.ts`](https://github.com/we-are-singular/aml/blob/main/sdk/tests/smoke/smoke-matrix.ts) when the exact setup matters.
+
+List cases without contacting a provider:
+
+```sh title="Terminal"
+npm run smoke -- --list
+```
+
+Run one concrete case only in a credentialed environment you control:
+
+```sh title="Terminal"
+npm run smoke -- --agent codex --sandbox docker
+```
+
+<Aside type="note" title="A runner case is not continuous certification">
+  A generated case means the repository has a source-backed path for that combination. One passing invocation proves
+  only the executable, model, credentials, image, access mode, and vendor behavior used by that invocation.
+</Aside>
+
+## Composition rules that change the result
+
+### Agent and Sandbox
+
+- The Agent executable must exist where the Sandbox launches processes. A host installation is not visible inside Docker, Daytona, or Modal unless the selected environment contains it.
+- `localSandbox()` runs trusted host processes and cannot enforce read-only execution.
+- Docker can execute while presenting a read-only Workspace mount; Daytona and Modal currently reject process execution when the requested access cannot be enforced as read-only.
+- Agent-native filesystem, shell, or network permissions are policy translation. The Sandbox and deployment platform remain the enforcement boundary.
+- Tools run in the AML application process. An enclosing Sandbox does not automatically contain application-owned Tool code.
+
+Read the [Agent comparison](/docs/providers/agents/) and [Sandbox comparison](/docs/providers/sandboxes/) before choosing a pair.
+
+### Workspace and Sandbox
+
+| Workspace               | Persistence shape                      | Compatibility question                                                                     |
+| ----------------------- | -------------------------------------- | ------------------------------------------------------------------------------------------ |
+| `localWorkspace()`      | Existing directory                     | Does the Sandbox operate on that same host path, and do you need revisions?                |
+| `filesystemWorkspace()` | Local archive or folder revisions      | Can the deployment materialize temporary state and preserve its lock/revision storage?     |
+| `s3Workspace()`         | S3-compatible archive/folder revisions | Does the backend preserve conditional writes, stable ETags, listing, deletes, and streams? |
+
+Revision-backed Workspaces share AML's persistence engine, but their storage adapter still has to preserve the required protocol. “S3-compatible” is not enough by itself; use the [S3 compatibility checklist](/docs/providers/workspaces/s3/).
+
+## Maturity vocabulary
+
+These labels are intentionally narrower than “supported”:
+
+| Label                         | What it means                                                                                        |
+| ----------------------------- | ---------------------------------------------------------------------------------------------------- |
+| **Built-in**                  | The adapter ships from the public `@aml-jsx/sdk` entrypoint.                                         |
+| **Repository baseline**       | Source records a concrete executable, image, model, or version path for repeatable validation.       |
+| **Repository smoke evidence** | A credentialed path exists in the repository; it is not a continuously published certification.      |
+| **S3-compatible candidate**   | The vendor advertises the protocol; AML has not proved its exact lock/publication contract.          |
+| **Production-ready**          | You validated the complete graph in your exact image, identity, network, storage, and failure model. |
+
+AML is pre-stable. A built-in provider is a shipped implementation, not a promise of identical capabilities or unchanged options across releases.
+
+## Verify a deployment
+
+1. Build a minimal workflow with the intended Agent, Sandbox, and Workspace.
+2. Verify executable discovery and credentials from inside the target environment.
+3. Exercise read-only behavior, cancellation, timeout, output limits, and cleanup.
+4. Exercise Workspace load, conflict, successful publication, failed publication, and retention.
+5. Record the exact SDK, executable, model, image or snapshot, endpoint, and provider SDK versions you validated.
+6. Re-run that proof whenever any of those inputs changes.
+
+The [provider catalog](/docs/providers/) owns selection guidance and operational prerequisites. The [provider wishlist](https://github.com/we-are-singular/aml/blob/main/PROVIDERS.md) is roadmap context, not compatibility evidence.

@@ -1,0 +1,74 @@
+---
+import { withBase } from "../../config/site"
+import { highlightTsx } from "../../highlight"
+
+const source = `import { Agent, evaluate, System, Tool } from "@aml-jsx/sdk"
+
+async function Review() {
+  const [correctness, maintainability] = await Promise.all([
+    evaluate(
+      <Agent provider={OpenCode}>
+        <Tool use={ReadSource} />
+        Review src/index.ts for correctness defects.
+      </Agent>,
+    ),
+    evaluate(
+      <Agent provider={OpenCode}>
+        Review src/index.ts for maintainability issues.
+      </Agent>,
+    ),
+  ])
+
+  return (
+    <Agent provider={OpenCode}>
+      <System>Synthesize evidence without inventing findings.</System>
+      Correctness: {correctness}
+      Maintainability: {maintainability}
+      Produce the final review.
+    </Agent>
+  )
+}
+
+const result = await runtime.evaluate(<Review />)`
+
+const highlightedSource = await highlightTsx(source)
+---
+
+<section id="how" class="scroll-mt-20 border-y border-line bg-surface">
+  <div class="mx-auto max-w-6xl px-5 py-24 sm:py-32">
+    <p class="reveal font-mono text-[12px] uppercase tracking-[0.2em] text-resolve">how it works</p>
+    <div class="mt-3 grid items-start gap-8 lg:grid-cols-[minmax(0,0.85fr)_minmax(28rem,1.15fr)]">
+      <div>
+        <h2 class="reveal text-3xl font-bold tracking-tight [--reveal-delay:60ms] sm:text-5xl">
+          Results flow up. Scope flows down.
+        </h2>
+        <p class="reveal mt-5 text-[15px] leading-relaxed text-ink-soft [--reveal-delay:120ms]">
+          AML resolves every value before the boundary that consumes it. JSX describes the dependency structure;
+          ordinary TypeScript still owns branching, concurrency, and data flow.
+        </p>
+        <div class="reveal mt-7 flex flex-wrap gap-x-6 gap-y-3 [--reveal-delay:160ms]">
+          <a
+            href={withBase("docs/concepts/")}
+            class="font-mono text-[12px] font-semibold text-resolve underline-offset-4 hover:underline"
+          >
+            Read the execution model →
+          </a>
+          <a
+            href={withBase("docs/cookbook/code-review-workflow/")}
+            class="font-mono text-[12px] font-semibold text-ink-soft underline-offset-4 hover:text-ink hover:underline"
+          >
+            Build this workflow →
+          </a>
+        </div>
+      </div>
+
+      <div class="reveal overflow-hidden rounded-2xl border border-line bg-[#12110d] [--reveal-delay:180ms]">
+        <div class="flex items-center justify-between border-b border-white/10 px-5 py-3">
+          <p class="font-mono text-[11.5px] text-white/55">parallel-review.tsx</p>
+          <p class="font-mono text-[10.5px] text-white/35">explicit concurrency, composed results</p>
+        </div>
+        <pre class="code-block max-h-[36rem] overflow-auto border-0 px-5 py-5 text-[12.5px] leading-[1.75]"><code set:html={highlightedSource} /></pre>
+      </div>
+    </div>
+  </div>
+</section>

@@ -1,0 +1,64 @@
+@theme static {
+  --spacing: 0.25rem;
+
+  --font-display: "Space Grotesk Variable", "Space Grotesk", system-ui, sans-serif;
+  --font-body: "Source Sans 3 Variable", "Source Sans 3", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", "SFMono-Regular", Menlo, monospace;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 700;
+
+  --color-paper: #fafaf7;
+  --color-surface: #ffffff;
+  --color-ink: #1a1914;
+  --color-ink-soft: #4a463c;
+  --color-muted: #757163;
+  --color-line: #e6e3d8;
+  --color-line-strong: #d4d0c2;
+
+  --color-resolve: #2e4bff;
+  --color-resolve-soft: #e6ebff;
+  --color-signal: #c94716;
+  --color-signal-soft: #ffe9df;
+  --color-ok: #087653;
+  --color-ok-soft: #ddf5ea;
+  --color-agent: #7c3aed;
+  --color-agent-soft: #f0e8fd;
+
+  --animate-marquee: marquee 42s linear infinite;
+  --animate-ticker: marquee 30s linear infinite;
+  --animate-pulse-dot: pulse-dot 1.6s ease-in-out infinite;
+  --animate-caret: caret 1s steps(1) infinite;
+  --animate-spin-slow: spin 14s linear infinite;
+
+  @keyframes marquee {
+    from {
+      transform: translateX(0);
+    }
+    to {
+      transform: translateX(-50%);
+    }
+  }
+
+  @keyframes pulse-dot {
+    0%,
+    100% {
+      opacity: 1;
+      transform: scale(1);
+    }
+    50% {
+      opacity: 0.45;
+      transform: scale(0.8);
+    }
+  }
+
+  @keyframes caret {
+    0%,
+    49% {
+      opacity: 1;
+    }
+    50%,
+    100% {
+      opacity: 0;
+    }
+  }
+}

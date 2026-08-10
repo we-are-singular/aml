@@ -1,0 +1,122 @@
+---
+title: Filesystem Workspace
+description: Persist immutable AML Workspace revisions on a local filesystem.
+---
+
+import ProviderHero from "../../../../../components/docs/ProviderHero.astro"
+
+<ProviderHero
+  name="filesystem"
+  eyebrow="Revision-backed local storage"
+  title="Filesystem Workspace"
+  factory="filesystemWorkspace({ directory, ...options })"
+  summary="Filesystem Workspace separates a disposable materialization from a durable local revision store. Each evaluation gets a temporary directory; successful saves publish immutable archive or folder revisions."
+  bestFor="Local job runners, review history, reproducible fixtures, and workflows that need load-by-revision or retention."
+  caution="The temporary materialization is not the persistence directory. A failure before publication can lose unsaved edits, and local storage is still a same-host trust boundary."
+/>
+
+## Materialization versus durability
+
+The configured `directory` stores provider metadata and revision artifacts. It is not the directory passed to descendants. On acquire, AML creates a unique directory under `temporaryDirectory`, restores the selected revision into it, and exposes that directory through the Workspace reference.
+
+```text
+.aml/workspaces/<workspace-id>/
+├── workspace.json                 current revision + retained history
+└── revisions/
+    ├── <revision>.tar.gz          archive format
+    └── <revision>/                folder format
+        ├── manifest.json
+        └── files/...
+
+<temporaryDirectory>/aml-workspace-*/workspace/
+└── files visible to Agents, Sandboxes, File, and Script
+```
+
+`release()` removes the temporary lease root. It does not delete published revisions. The provider holds a renewable lock for the Workspace identity by default; unlocked runs still serialize the index compare-and-swap write.
+
+## Options
+
+| Option               | Type                    | Default               | Notes                                                                                              |
+| -------------------- | ----------------------- | --------------------- | -------------------------------------------------------------------------------------------------- |
+| `directory`          | `string`                | Required              | Durable local persistence root; resolved at construction.                                          |
+| `format`             | `"archive" \| "folder"` | `"archive"`           | Format is recorded per revision. Existing revisions retain their own format when restored.         |
+| `maxArchiveBytes`    | `number`                | `268435456` (256 MiB) | Maximum archive bytes during upload/restore. Must be a positive safe integer.                      |
+| `maxEntries`         | `number`                | `100000`              | Maximum selected entries, including the archive root entry where applicable.                       |
+| `maxExtractedBytes`  | `number`                | `1073741824` (1 GiB)  | Maximum selected uncompressed bytes.                                                               |
+| `temporaryDirectory` | `string`                | `os.tmpdir()`         | Parent for per-acquisition materializations; must have enough space for restore and snapshot work. |
+
+The options are validated without creating storage entries. `directory` and `temporaryDirectory` must be non-empty normalized strings. Storage paths reject absolute paths, backslashes, `.` segments, `..` segments, and empty object paths.
+
+## A safe complete example
+
+This example starts empty, writes only a report subtree, and retains the three latest successful revisions.
+
+```tsx
+import { AmlRuntime, Agent, Workspace, filesystemWorkspace } from "@aml-jsx/sdk"
+
+const workspace = filesystemWorkspace({
+  directory: ".aml/workspaces",
+  format: "folder",
+  temporaryDirectory: ".aml/tmp",
+})
+
+await new AmlRuntime({ workspaceProvider: workspace }).evaluate(
+  <Workspace
+    id="review-42"
+    load={false}
+    save={{
+      on: "success",
+      include: ["reports/**"],
+      exclude: ["reports/**/*.tmp"],
+      gitignore: true,
+      retention: 3,
+    }}
+  >
+    <Agent>Read the available review inputs and write the final answer to reports/summary.md.</Agent>
+  </Workspace>
+)
+```
+
+For a second run, omit `load` or use `load={{ revision: "current" }}` to restore the last published revision. To start from a named historical revision, pass its id. `include` and `exclude` apply to the restored snapshot as well as the save snapshot.
+
+## Archive and folder formats
+
+Both formats describe the same logical Workspace contract.
+
+| Format    | Storage shape                                                               | Trade-off                                                                            |
+| --------- | --------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| `archive` | One AML-created `tar.gz` per revision                                       | Compact and simple to move; restore and save stage an archive locally.               |
+| `folder`  | One manifest plus provider-native objects under an isolated revision prefix | Enables file-level storage and listing; uses more objects and must list recursively. |
+
+The format is recorded on each `WorkspaceRevision`. Changing `format` for a later provider configuration does not reinterpret old data: the current revision is restored using its recorded format, then the next save uses the new configured format.
+
+Archive extraction validates entry types, paths, entry count, and extracted bytes. Folder manifests and paths are validated the same way. Invalid metadata or missing referenced artifacts reject acquisition; the provider never silently starts fresh when an index points at broken state.
+
+## Save and publication protocol
+
+`save` creates a complete snapshot, uploads the immutable artifact, and conditionally replaces `workspace.json`. The condition is `absent` for a new Workspace or the exact storage version observed at acquisition. After publication, revisions beyond `retention` are pruned.
+
+If publication fails, the previous current revision remains authoritative and the newly uploaded artifact is removed when possible. If pruning fails after publication, the current index is still valid but old artifacts may require operational cleanup.
+
+`save={{ on: "always" }}` can publish a partial snapshot after descendant failure. Cancellation skips saving. This is not crash-safe checkpointing: a process or provider failure can lose edits that were not yet published.
+
+## Locking and concurrency
+
+The default Workspace lock uses the same fixed renewable policy as the direct local provider: 5-minute heartbeat and 20-minute stale boundary. A competing locked acquire rejects with `WorkspaceConflictError` for active ownership. It does not mean that every S3/filesystem conditional-write failure is that error class.
+
+With `lock={false}`, multiple materializations may load the same current revision. Their saves race on the index version. The first successful publication wins; a stale save fails rather than overwriting it. Reconcile against the new current revision before retrying.
+
+`writeConcurrency="serial"` is an AML scheduling option for writable descendant Sandboxes. It does not alter revision publication or make a provider lock unnecessary.
+
+## Operational guidance
+
+- Keep the persistence root outside the temporary directory so cleanup cannot remove durable revisions.
+- Put temporary materializations on a volume with enough room for the restored tree, snapshot, and archive at the same time.
+- Use `retention` deliberately: every retained revision consumes storage, and pruning happens after publication.
+- Treat the persistence root as sensitive. It contains generated files and potentially model-produced content.
+- Back up the revision directory if it is part of a recovery plan; an unbacked local disk is not durable across host loss.
+- Use a unique Workspace id per logical resource, not per retry, when retries should continue the same revision history.
+
+## References
+
+See the shared persistence implementation in [`WorkspacePersistence`](https://github.com/we-are-singular/aml/blob/main/sdk/src/workspace-persistence/workspace-persistence.ts), the local adapter in [`filesystem-workspace.ts`](https://github.com/we-are-singular/aml/blob/main/providers/workspaces/local/src/filesystem-workspace.ts), and [`SPEC.md` §14.5–14.6](https://github.com/we-are-singular/aml/blob/main/SPEC.md#145-shared-workspace-persistence).

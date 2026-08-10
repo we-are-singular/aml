@@ -1,0 +1,128 @@
+---
+title: FAQ
+description: Plain-language answers to the questions people ask before trying Agent Markup Language.
+---
+
+import { Aside } from "@astrojs/starlight/components"
+
+New to AML? Start here. These answers explain the essentials without assuming you already know AML's components or provider terminology.
+
+## First things first
+
+### What is AML?
+
+Agent Markup Language is a TypeScript library for building workflows with coding agents. It gives you a way to describe prompts, agents, tools, files, and execution environments as one readable tree, then run that tree from your application.
+
+Start with [the AML mental model](/docs/concepts/) for a visual explanation or [getting started](/docs/getting-started/) to run a small example.
+
+### Is AML a new programming language?
+
+No. Despite the name, AML is ordinary TypeScript and JSX. There is no separate AML syntax, compiler, or graph configuration format to learn. You can use normal variables, functions, imports, loops, promises, and validation libraries around an AML workflow.
+
+### What can I build with it?
+
+AML is useful when an application needs to coordinate agent work: ask several agents to review the same change, research in parallel and combine the findings, let an agent work on files in a controlled environment, or route a result through validation before the next step.
+
+Browse the [examples](/docs/examples/) for small patterns and the [cookbook](/docs/cookbook/) for complete workflows.
+
+### How is this different from calling an AI model directly?
+
+A direct model call is often enough for one prompt and one response. AML is for the surrounding workflow: which agent receives which instructions and capabilities, where it can work, how several results fit together, and when resources should be cleaned up.
+
+AML does not replace the coding agent or model. It composes and runs them as part of your application.
+
+### Do I need to know React?
+
+No. AML uses JSX because nested tags make the shape and ownership of a workflow easy to see, but it does not render a user interface or use React. Basic TypeScript plus a little JSX syntax is enough.
+
+The [AST and evaluation guide](/docs/ast/) explains what AML creates from JSX when you want the deeper version.
+
+## Trying AML
+
+### What do I need to try it?
+
+You need Node.js 26 or newer, an ESM project, and a runner that understands TypeScript and TSX. The first tutorial uses a deterministic test provider, so you do not need an API key, coding-agent executable, Docker daemon, or remote account.
+
+Follow [getting started](/docs/getting-started/) for the exact install and run commands.
+
+### Does AML include an AI model or an account?
+
+No. AML does not sell model access or proxy credentials through an AML service. For live work, it connects to a coding-agent provider that you install and authenticate in the environment where AML runs.
+
+For learning and repeatable examples, `@aml-jsx/sdk/testing` includes deterministic providers that do not call a model.
+
+### Which coding agents can I use?
+
+AML includes adapters for [Codex](/docs/providers/agents/codex/), [OpenCode](/docs/providers/agents/opencode/), and [Pi](/docs/providers/agents/pi/). An adapter connects AML to an existing installation; it does not install the agent or create its account for you.
+
+The [coding-agent guide](/docs/providers/agents/) compares setup and capabilities. You can also implement AML's provider contract for another agent harness.
+
+### What do `<Agent />` and the other angle-bracket names mean?
+
+They are AML components. Each component adds one piece of the workflow. For example, `<Agent />` describes one coding-agent session, `<Tool />` grants a function to an agent, and `<Sandbox />` chooses where controlled work can run.
+
+They are TypeScript values rather than UI elements. The [component reference](/docs/reference/primitives/) lists each public component and links to focused examples.
+
+### When does the work actually start?
+
+Creating JSX only builds a description of the workflow. No agent starts until your application asks AML to evaluate that value—usually with `runtime.evaluate(tree)`. This makes it possible to construct and inspect a workflow before it performs outside work.
+
+The [runtime guide](/docs/runtime/) covers evaluation, limits, cancellation, and cleanup.
+
+## Agents, commands, and files
+
+### Can one workflow use more than one coding agent?
+
+Yes. One agent's result can become another agent's input, and independent agents can work concurrently with ordinary `Promise.all()`. Each `<Agent />` is still a separate session with its own explicitly granted instructions and capabilities.
+
+See the [code-review workflow](/docs/cookbook/code-review-workflow/) for both parallel review and a final synthesis step.
+
+### Where will an agent run commands?
+
+That depends on the provider and the environment you place around it. A local setup can use your machine directly. A `<Sandbox />` can instead give the work a managed directory and process lifecycle through Docker, Daytona, Modal, or another sandbox provider.
+
+Start with the [sandbox guide](/docs/providers/sandboxes/) before choosing an execution environment.
+
+### Can an agent change files on my computer?
+
+Only if you give it access to those files. A local agent or `localSandbox()` can operate on the host and should be treated as trusted code. A remote or container sandbox limits the working environment according to that provider's real isolation boundary.
+
+Use `<Workspace />` when files need to be materialized, revisioned, and saved deliberately. [Sandboxes and Workspaces](/docs/cookbook/sandboxes-and-workspaces/) explains how execution and durable files fit together.
+
+### Does a sandbox make agent-written code completely safe?
+
+No. A sandbox is one boundary, not a complete security policy. You still control credentials, network access, mounted files, images, resource limits, and which tools the agent can call. `localSandbox()` is a convenience for trusted local work and provides no isolation from the host.
+
+Review the selected [sandbox provider](/docs/providers/sandboxes/) and the [security guide](/docs/production/security/) before running model-controlled code.
+
+## Connecting AML to an application
+
+### Can an agent call my application's functions or APIs?
+
+Yes. A `<Tool />` grants one agent a schema-validated JavaScript function owned by your application. AML can also connect an agent to a separately operated Model Context Protocol (MCP) server when a capability already exists behind that standard boundary.
+
+The [Tools guide](/docs/cookbook/tools/) starts with a local function. The [Tool or MCP guide](/docs/cookbook/tool-or-mcp/) explains when an external server is worth the extra moving parts.
+
+### Can I get predictable JSON instead of a prose answer?
+
+Yes. AML can ask an agent for structured output and validate the returned value with a Standard Schema-compatible library such as Zod before your TypeScript code receives it.
+
+Validation proves that the value has the expected shape; it does not prove that the model's claims are true or authorized. See [structured output](/docs/cookbook/structured-output/) for a complete example.
+
+### Am I locked into one coding agent?
+
+Usually not. The workflow tree is provider-neutral, while provider configuration owns details such as model names, executable paths, credentials, and permissions. You can change the configured provider without rewriting the whole tree, but different agents do not have perfectly identical capabilities or behavior.
+
+Check the [compatibility guide](/docs/compatibility/) before changing a production workflow.
+
+### Can I use AML in a production service?
+
+Yes, when the surrounding service owns the operational concerns that AML deliberately leaves explicit: finite limits, cancellation, credentials, sandbox policy, durable storage, logs, and retry or idempotency behavior. AML manages the evaluation tree and its resource lifecycle; it is not itself a scheduler, secret store, or universal security boundary.
+
+Continue with [production readiness](/docs/production/) and the [production job recipe](/docs/cookbook/production-job/).
+
+<Aside type="note" title="Want the shortest path to a useful result?">
+  Run the credential-free [getting-started workflow](/docs/getting-started/), then choose one live [coding-agent
+  provider](/docs/providers/agents/). Add a sandbox or workspace only when the work actually needs controlled execution
+  or durable files.
+</Aside>

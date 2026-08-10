@@ -1,0 +1,137 @@
+---
+title: Provider engineering
+description: Understand AML's provider abstraction and choose the right extension boundary for a custom Agent, Sandbox, or Workspace.
+---
+
+import { Aside } from "@astrojs/starlight/components"
+
+AML keeps orchestration separate from vendor integration. The component tree describes the work in provider-neutral terms; a provider adapter translates one narrow responsibility into a coding agent, execution environment, or durable storage system.
+
+This guide explains the shape of that abstraction and how to approach a new integration. The exact TypeScript interfaces, `define*Provider()` helpers, and contract-shaped examples live in [Provider authoring reference](/docs/reference/provider-authoring/).
+
+## The abstraction in one picture
+
+```text
+authored AML tree
+       │
+       ▼
+AML evaluator ── scope, limits, cancellation, traces, cleanup order
+       │
+       ▼
+provider-neutral contract
+       │
+       ▼
+vendor adapter ── configuration, protocol translation, resource ownership
+       │
+       ▼
+coding agent, process environment, or durable backend
+```
+
+AML owns evaluation and composition. The adapter owns every vendor-specific resource it opens. Neither side should reach through the boundary and quietly take over the other's responsibility.
+
+## Three independent extension points
+
+| Provider      | Receives                                                                        | Produces                                        | Owns until completion                                                          |
+| ------------- | ------------------------------------------------------------------------------- | ----------------------------------------------- | ------------------------------------------------------------------------------ |
+| **Agent**     | One assembled session request and evaluation context                            | A final text or structured response             | Model/harness session, ordered turns, protocol clients, and invocation cleanup |
+| **Sandbox**   | Logical root, cwd, access, cancellation, and optional Workspace materialization | An opaque lease with a portable command runtime | Ephemeral environment, process transport, path mapping, and release            |
+| **Workspace** | Durable id, load/save policy, lock preference, and cancellation                 | A lease over one materialized directory         | Materialization, writer authority, revision publication, and release           |
+
+These boundaries compose but do not collapse into one generic provider:
+
+- an Agent can run without a Sandbox when trusted host execution is acceptable;
+- a Sandbox can run `<Script />` without any model session;
+- a Workspace can materialize and save files without launching a process;
+- an Agent inside a Sandbox receives only the effective runtime, not authority to acquire or release the environment;
+- a Sandbox can attach an active Workspace materialization, but it does not become the durable owner of that Workspace.
+
+## Factory, adapter, and lease
+
+Provider code usually has three layers:
+
+1. A **provider factory** accepts vendor configuration and validates it before external work starts.
+2. A **provider adapter** implements one AML contract and translates portable requests into vendor operations.
+3. A **session or lease** owns invocation-specific resources and exposes only the narrow capability AML needs.
+
+```ts
+import { AmlRuntime, dockerSandbox } from "@aml-jsx/sdk"
+
+const sandboxProvider = dockerSandbox({
+  image: "company/aml-opencode:2026-08-10",
+  maxOutputBytes: 8 * 1024 * 1024,
+})
+
+const runtime = new AmlRuntime({ sandboxProvider })
+```
+
+The image name and output budget belong to `dockerSandbox()`. They do not become generic `<Sandbox />` props because Daytona, Modal, Local, and future providers do not share one honest configuration surface.
+
+<Aside type="note" title="Portable policy, provider-specific mechanism">
+  Components express portable intent such as Sandbox access, Workspace save policy, Agent permissions, and model
+  selection. Factories retain vendor mechanisms such as images, snapshots, endpoints, credentials, executable paths, and
+  SDK clients.
+</Aside>
+
+## Choose the smallest honest integration
+
+### Adding a coding agent
+
+Implement an **Agent provider** when the external system owns a model or coding-harness session.
+
+- Use the direct `AgentProvider.run()` boundary for an internal service, deterministic harness, or protocol that already exposes one complete session operation.
+- Use AML's ACP profile boundary when the integration launches an ACP-compatible executable. The shared adapter owns process launch, ordered turns, MCP bridging, structured output, Sandbox execution, and cleanup; the profile owns command, arguments, environment, configuration, and capability translation.
+- Use a retained provider session only when the integration genuinely has ordered turn state and invocation-scoped cleanup that cannot be represented as one direct call.
+
+Do not label a plain chat-completions call as a coding-agent integration unless it really provides the session, tools, permissions, and execution behavior the provider claims.
+
+### Adding an execution environment
+
+Implement a **Sandbox provider** when the external system owns ephemeral processes or containers.
+
+The adapter must map AML's logical `root` and `cwd`, preserve literal command arguments, expose bounded `exec()` and streaming `spawn()`, propagate cancellation and timeouts, and release the environment even after partial failure. An image flag recorded in metadata is not read-only enforcement; a remote shell is not automatically a hostile-code boundary.
+
+Simple providers can implement `acquire()` directly. Providers with provision, initialization, reconciliation, and destruction stages can use AML's staged abstract base so each post-provision failure has a compensation path.
+
+### Adding durable files
+
+Implement a **Workspace provider** when the external system owns durable identity or revision publication.
+
+A Workspace adapter materializes one directory, prevents unsafe concurrent writers, publishes a complete save according to the requested policy, and releases locks and temporary state. Object storage, a network filesystem, and a local directory can all implement this boundary, but they should document very different durability and conflict semantics.
+
+For revision-oriented backends, AML's persistence layer can turn a narrower storage adapter into a complete Workspace provider. Use that layer when the backend is fundamentally object/index storage rather than hand-implementing the same lock, revision, retention, and conditional-publication protocol.
+
+## Scope and authority rules
+
+The provider system follows four design rules:
+
+1. **Scope flows down.** Descendants receive the effective Agent permissions, Sandbox runtime, and Workspace materialization selected above them.
+2. **Results flow up.** Provider responses and component results return through the evaluator; descendants do not mutate ancestor ownership.
+3. **Handles stay opaque.** AML carries a vendor handle where compatibility requires it but does not invent generic methods over provider-native objects.
+4. **Lifecycle authority remains provider-owned.** Descendants can use a runtime or materialized directory but cannot call provider acquisition, save, or release methods.
+
+This separation prevents an Agent adapter from widening Sandbox access, a nested Sandbox from swapping the outer provider, or application content from deciding when a durable lease is released.
+
+## Compatibility is layered
+
+Passing the structural provider contract is only the first check:
+
+| Layer                   | What it proves                                                          | What it does not prove                                                    |
+| ----------------------- | ----------------------------------------------------------------------- | ------------------------------------------------------------------------- |
+| Definition              | Required provider fields and callable methods are present and immutable | Vendor behavior, credentials, or cleanup correctness                      |
+| Conformance             | The portable lifecycle behaves correctly against deterministic requests | A real image, executable, account, or network path works                  |
+| Agent/Sandbox handshake | The Agent recognizes the effective runtime shape, root, and access      | The image contains the executable or enforces the deployment threat model |
+| Integration run         | One exact version and deployment combination worked                     | Continuous compatibility with future vendor releases                      |
+
+Document each evidence level literally. “Built-in,” “structurally compatible,” and “credentialed integration verified” are different claims.
+
+## A practical implementation sequence
+
+1. Choose exactly one provider responsibility.
+2. Write down the vendor resource that the adapter owns and the cleanup action that closes it.
+3. Map the provider-neutral request to vendor operations without adding vendor fields to AML components.
+4. Define path, access, cancellation, timeout, output, conflict, and retry semantics before implementing the happy path.
+5. Use the smallest public extension API that fits the lifecycle.
+6. Run the matching conformance helper, then exercise the exact executable, image, credentials, and failure cleanup separately.
+7. Add a consumer-facing provider page covering setup, options, lifecycle, security boundary, compatibility, and troubleshooting.
+
+Continue with the [Provider authoring reference](/docs/reference/provider-authoring/) for exact interfaces and examples, [Provider boundaries](/docs/reference/providers/) for the stable contracts, or the existing [Agent](/docs/providers/agents/), [Sandbox](/docs/providers/sandboxes/), and [Workspace](/docs/providers/workspaces/) implementations for production behavior.

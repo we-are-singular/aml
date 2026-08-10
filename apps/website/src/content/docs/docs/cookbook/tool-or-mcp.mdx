@@ -1,0 +1,217 @@
+---
+title: Tool or MCP?
+description: Choose between an application-owned JavaScript Tool and an external MCP capability with explicit scope and security boundaries.
+---
+
+import { Aside, Badge, Card, CardGrid } from "@astrojs/starlight/components"
+
+<Badge text="Capability design" /> <Badge text="Security-sensitive" variant="caution" />
+
+The short rule is:
+
+- Use a **JavaScript Tool** for an application-owned function that should run in the host process with a typed input contract.
+- Use **MCP** for a separately deployed or shared capability server whose transport, credentials, and lifecycle are managed as an external integration.
+
+Neither choice makes model input trusted. Both are granted lexically to the nearest `<Agent />` and can also be constrained by runtime allowlists.
+
+## Decision matrix
+
+| Question             | JavaScript Tool                                                       | MCP                                                                                                    |
+| -------------------- | --------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| Where does code run? | In the application host process                                       | In a stdio process or remote Streamable HTTP server owned by the integration                           |
+| Best for             | Repository/database/domain functions already owned by the application | Shared, independently deployed, or cross-language capability servers                                   |
+| Contract             | `defineTool()` input schema and JSON-compatible result                | `defineMcpServer()` transport descriptor; provider negotiates the server                               |
+| Credential owner     | Application code and its dependency injection boundary                | MCP server or transport configuration; often a token/header or process environment                     |
+| Failure boundary     | Tool executor, validation, cancellation                               | Transport, server availability, authentication, and provider relay                                     |
+| Sandbox implication  | Host-process code is not sandboxed by an Agent's Sandbox              | Remote MCP trust and egress remain deployment concerns; a Sandbox does not make the server trustworthy |
+| Choose this when     | You need direct typed access to an application-owned dependency       | You need a separately operated capability boundary                                                     |
+
+## Scope and data flow
+
+```text
+Runtime allowlists
+  allowedTools:       ["list_orders"]
+  allowedMcpServers:   ["billing"]
+          │
+          ▼
+  ┌───────────────────────────────┐
+  │ Agent                          │
+  │  ├─ <Tool use={listOrders} />  │──► host process function
+  │  └─ <Mcp use={billing} />      │──► ACP/provider relay ──► billing server
+  └───────────────────────────────┘
+          │
+          ├─ child <Agent /> does not inherit either capability
+          ├─ Sandbox controls selected execution environment, not Tool trust
+          └─ Workspace controls files and revisions, not MCP authorization
+```
+
+`allowedTools` and `allowedMcpServers` are deny-by-default constraints on the names that may be attached during evaluation. They do not replace input validation, server authentication, network policy, or application authorization.
+
+## A complete application-owned JavaScript Tool
+
+This example is deterministic and credential-free. The repository owns `SessionRepository`; the model-facing capability exposes only the narrow `list_session_orders` operation.
+
+```tsx
+import { Agent, AmlRuntime, createContext, defineTool, Tool, useContext } from "@aml-jsx/sdk"
+import { DeterministicAgentProvider } from "@aml-jsx/sdk/testing"
+import { z } from "zod"
+
+class SessionRepository {
+  async listOrders(): Promise<readonly string[]> {
+    return ["order-17", "order-29"]
+  }
+}
+
+const Repository = createContext<SessionRepository>("SessionRepository")
+
+const provider = new DeterministicAgentProvider({
+  async respond(request, context) {
+    const tool = request.tools.find(candidate => candidate.name === "list_session_orders")
+
+    if (tool?.kind !== "javascript") {
+      throw new Error("Session Tool was not granted")
+    }
+
+    const orders = await tool.execute({}, { signal: context.signal, trace: context.trace })
+    return { text: `orders:${JSON.stringify(orders)}` }
+  },
+})
+
+function OrderAgent() {
+  const repository = useContext(Repository)
+  const listOrders = defineTool({
+    description: "List orders for the active application session.",
+    execute: async (_input, context) => await repository.listOrders(),
+    input: z.object({}),
+    name: "list_session_orders",
+  })
+
+  return (
+    <Agent provider={provider}>
+      <Tool use={listOrders} />
+      Inspect the active session orders.
+    </Agent>
+  )
+}
+
+const result = await new AmlRuntime({ allowedTools: ["list_session_orders"] }).evaluate(
+  <Repository.Provider value={new SessionRepository()}>
+    <OrderAgent />
+  </Repository.Provider>
+)
+
+console.log(result)
+```
+
+<Aside type="danger" title="The Tool executes in the host process">
+  Do not pass an unrestricted filesystem path, shell command, network client, secret store, or database handle to model-
+  controlled input. Put authorization in the executor, validate identifiers against application-owned state, forward
+  `context.signal` to I/O, and return bounded JSON.
+</Aside>
+
+## A real provider-backed MCP integration
+
+This example uses the maintained OpenCode ACP provider with a real Streamable HTTP MCP server. It requires an OpenCode executable, an OpenCode model credential, network access to the MCP endpoint, and an MCP token. The endpoint below is an application placeholder, not a public demo server.
+
+```tsx
+import { Agent, AmlRuntime, Mcp, defineMcpServer, opencodeAgent } from "@aml-jsx/sdk"
+
+const model = process.env.OPENCODE_MODEL
+const openAiKey = process.env.OPENAI_API_KEY
+const mcpToken = process.env.BILLING_MCP_TOKEN
+
+if (model === undefined || openAiKey === undefined || mcpToken === undefined) {
+  throw new Error("OPENCODE_MODEL, OPENAI_API_KEY, and BILLING_MCP_TOKEN are required")
+}
+
+const billing = defineMcpServer({
+  name: "billing",
+  transport: {
+    type: "streamable-http",
+    // PLACEHOLDER: replace with the HTTPS endpoint operated by your team.
+    url: "https://billing-mcp.example.invalid/mcp",
+    headers: { Authorization: `Bearer ${mcpToken}` },
+  },
+})
+
+const result = await new AmlRuntime({
+  allowedMcpServers: ["billing"],
+  agentProvider: opencodeAgent({
+    command: "opencode",
+    env: { OPENAI_API_KEY: openAiKey },
+    model,
+  }),
+}).evaluate(
+  <Agent system="Use billing only to inspect the account and never mutate invoices.">
+    <Mcp use={billing} />
+    Inspect the account's outstanding invoices and summarize them.
+  </Agent>
+)
+
+console.log(result)
+```
+
+The OpenCode profile launches `opencode acp --pure --cwd ...` and AML's ACP engine relays configured MCP requests through an invocation-owned bridge. The MCP server still owns its authentication and authorization; the runtime allowlist only constrains the server name AML may attach.
+
+<Aside type="caution" title="Networked and credentialed means operationally real">
+  Replace the placeholder URL with a server you control, use TLS, scope the token to read-only invoice access, set
+  network egress policy, and inspect the server's tools before granting it to an Agent. Do not commit
+  `BILLING_MCP_TOKEN` or put it in a Workspace. This example is not runnable until those deployment values exist.
+</Aside>
+
+## Structured output is a separate boundary
+
+Tools and MCP return capability data to `<Agent />`. Structured output validates the **final `<Agent />` result** against a schema; it does not authorize the Tool, authenticate the MCP server, or prove that returned facts are true.
+
+```tsx
+import { Agent, evaluate, Tool, defineTool } from "@aml-jsx/sdk"
+import { z } from "zod"
+
+const InvoiceSummary = z.object({
+  invoiceIds: z.array(z.string()),
+  totalCents: z.number().int().nonnegative(),
+})
+
+const summary = await evaluate(
+  <Agent>
+    {/* Tools/MCP may provide evidence; application code still owns policy. */}
+    Summarize the evidence as invoice IDs and a total in the requested schema.
+  </Agent>,
+  InvoiceSummary
+)
+```
+
+Validate authorization and business invariants after schema validation. A correctly shaped `{ invoiceIds, totalCents }` object can still contain incomplete or incorrect model-derived claims.
+
+## Choosing and reviewing a capability
+
+<CardGrid>
+  <Card title="Use a Tool" icon="seti:typescript">
+    The operation is small, application-owned, typed, and safe to run in the host process with explicit dependency
+    injection and authorization.
+  </Card>
+  <Card title="Use MCP" icon="random">
+    The capability has an independent deployment or lifecycle, needs a standard transport, or is shared across clients
+    and languages.
+  </Card>
+  <Card title="Use neither yet" icon="warning">
+    The boundary, owner, credential scope, or failure behavior is unclear. Define those before exposing a model-facing
+    capability.
+  </Card>
+</CardGrid>
+
+## Exact contracts and source
+
+- [`defineTool`](https://github.com/we-are-singular/aml/blob/main/sdk/src/components/tool/define-tool.ts)
+- [`AgentToolExecutionContext`](https://github.com/we-are-singular/aml/blob/main/sdk/src/components/tool/agent-tool.ts)
+- [`<Tool />`](https://github.com/we-are-singular/aml/blob/main/sdk/src/components/tool/tool.tsx)
+- [`defineMcpServer`](https://github.com/we-are-singular/aml/blob/main/sdk/src/components/mcp/define-mcp-server.ts)
+- [`<Mcp />`](https://github.com/we-are-singular/aml/blob/main/sdk/src/components/mcp/mcp.tsx)
+- [`AmlMcpServer` transport types](https://github.com/we-are-singular/aml/blob/main/sdk/src/components/mcp/aml-mcp-server.ts)
+- [`AmlRuntime` allowlists and trace options](https://github.com/we-are-singular/aml/blob/main/sdk/src/core/aml-runtime.ts)
+- [`OpenCode ACP profile`](https://github.com/we-are-singular/aml/blob/main/providers/agents/opencode/src/opencode-agent.ts)
+- [`ACP MCP relay`](https://github.com/we-are-singular/aml/blob/main/sdk/src/components/agent/acp-mcp-relay.ts)
+- [Tool cookbook](/docs/cookbook/tools/)
+- [MCP transport reference](/docs/cookbook/mcp/)
+- [Structured output cookbook](/docs/cookbook/structured-output/)
+- [Model Context Protocol specification](https://modelcontextprotocol.io/specification/2025-06-18)

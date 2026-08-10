@@ -1,0 +1,87 @@
+---
+/* eslint-disable no-undef -- Astro exposes framework globals inside component frontmatter. */
+import { siteMetadata, withBase } from "../../config/site"
+import { markdownPathForDocsRoute } from "../../lib/docs-markdown"
+import FontPreloads from "../FontPreloads.astro"
+
+const { entry, head } = Astro.locals.starlightRoute
+const site = Astro.site ?? new URL("https://agent-markup-language.com")
+const isNotFound = Astro.url.pathname.replace(/\/+$/, "").endsWith("/404")
+const canonicalUrl = new URL(Astro.url.pathname, site)
+const markdownUrl = new URL(markdownPathForDocsRoute(Astro.url.pathname), site)
+const llmsUrl = new URL(withBase("docs/llms.txt"), site)
+const imageUrl = new URL(withBase(siteMetadata.image.path), site)
+const description = entry.data.description ?? "Documentation for Agent Markup Language."
+const fullTitle = `${entry.data.title} | AML Docs`
+const modifiedAt = entry.data.lastUpdated instanceof Date ? entry.data.lastUpdated.toISOString() : undefined
+const renderedHead = isNotFound
+  ? head.filter(
+      item =>
+        !(item.tag === "link" && item.attrs?.rel === "canonical") &&
+        !(item.tag === "meta" && item.attrs?.property === "og:url"),
+    )
+  : head
+const structuredData = {
+  "@context": "https://schema.org",
+  "@type": entry.id === "docs" ? "CollectionPage" : "TechArticle",
+  headline: entry.data.title,
+  name: fullTitle,
+  description,
+  url: canonicalUrl.href,
+  mainEntityOfPage: canonicalUrl.href,
+  inLanguage: "en",
+  image: imageUrl.href,
+  ...(modifiedAt ? { dateModified: modifiedAt } : {}),
+  isPartOf: {
+    "@type": "WebSite",
+    name: siteMetadata.name,
+    url: new URL(withBase(), site).href,
+  },
+  author: {
+    "@type": "Organization",
+    name: "We Are Singular",
+    url: "https://wearesingular.com",
+  },
+}
+---
+
+{
+  renderedHead.map(({ tag: Tag, attrs, content }) =>
+    Tag === "title" ? <title {...attrs}>{content}</title> : <Tag {...attrs} set:html={content} />,
+  )
+}
+<meta name="application-name" content="AML Docs" />
+<meta
+  name="robots"
+  content={isNotFound ? "noindex, nofollow" : "index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1"}
+/>
+<meta name="theme-color" content="#f8f9f6" media="(prefers-color-scheme: light)" />
+<meta name="theme-color" content="#131512" media="(prefers-color-scheme: dark)" />
+{
+  !isNotFound && (
+    <link rel="alternate" type="text/markdown" href={markdownUrl} title={`${entry.data.title} as Markdown`} />
+  )
+}
+<link rel="describedby" href={llmsUrl} type="text/plain" />
+<link rel="apple-touch-icon" sizes="180x180" href={withBase("apple-touch-icon.png")} />
+<link rel="manifest" href={withBase("site.webmanifest")} />
+<FontPreloads includeBodyFont />
+
+<meta property="og:image" content={imageUrl} />
+<meta property="og:image:secure_url" content={imageUrl} />
+<meta property="og:image:type" content={siteMetadata.image.type} />
+<meta property="og:image:width" content={String(siteMetadata.image.width)} />
+<meta property="og:image:height" content={String(siteMetadata.image.height)} />
+<meta property="og:image:alt" content={siteMetadata.image.alt} />
+{modifiedAt && <meta property="article:modified_time" content={modifiedAt} />}
+
+<meta name="twitter:title" content={fullTitle} />
+<meta name="twitter:description" content={description} />
+<meta name="twitter:image" content={imageUrl} />
+<meta name="twitter:image:alt" content={siteMetadata.image.alt} />
+{!isNotFound && <script type="application/ld+json" set:html={JSON.stringify(structuredData)} />}
+<script
+  defer
+  src="https://cloud.umami.is/script.js"
+  data-website-id="6d1d4961-e15b-44b0-ae81-36180d7aeec8"
+></script>

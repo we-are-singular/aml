@@ -1,0 +1,220 @@
+---
+title: Codex Agent
+description: Run Codex through AML's maintained Agent Client Protocol profile.
+---
+
+import { Aside, Badge, Card, CardGrid, LinkCard, Steps, TabItem, Tabs } from "@astrojs/starlight/components"
+import ProviderHero from "../../../../../components/docs/ProviderHero.astro"
+
+<ProviderHero
+  name="codex"
+  eyebrow="Built-in Agent provider"
+  title="Codex Agent"
+  factory="codexAgent()"
+  summary="A thin AML profile over the maintained Codex ACP adapter. AML owns the evaluation, session, Tool bridge, structured result, and cleanup lifecycle; Codex owns the model session and coding-agent behavior."
+  bestFor="OpenAI coding workflows that need an ACP-compatible coding Agent."
+  caution="AML does not install Codex or the ACP adapter. Shell and network containment come from the enclosing Sandbox, not from Codex's filesystem mode."
+/>
+
+<Badge text="Built-in" variant="success" /> <Badge text="ACP" /> <Badge text="Credentialed" />
+
+## What this provider launches
+
+`codexAgent()` launches the command configured by `command`, defaulting to `codex-acp`. The command is the ACP adapter entrypoint, not necessarily the native `codex` binary. The adapter receives its Codex configuration through environment variables that AML prepares for each acquired Agent session:
+
+```text
+<Agent>
+  AML normalizes model, system instructions, permissions, Tools, and MCP
+        ↓
+  codex-acp (or your configured command)
+        ↓
+  Codex model session
+```
+
+Every acquisition receives a private `CODEX_HOME`, `CODEX_SQLITE_HOME`, and log directory under AML's temporary session state. This prevents concurrent evaluations from sharing adapter state accidentally. The state directory is released when the Agent session finishes.
+
+## Prerequisites
+
+<CardGrid>
+  <Card title="Install the adapter" icon="download">
+    Install `@agentclientprotocol/codex-acp` and the native `@openai/codex` CLI, or provide equivalent executables for
+    both configured command paths. AML does not download them at runtime.
+  </Card>
+  <Card title="Provide credentials" icon="seti:lock">
+    Supply `apiKey`, `CODEX_API_KEY`, or `OPENAI_API_KEY` through the provider environment, according to the adapter and
+    model configuration you use.
+  </Card>
+  <Card title="Choose a runtime" icon="laptop">
+    Run on a trusted host or inside a Sandbox whose image contains the ACP command, its runtime, a shell, and all
+    model-provider dependencies.
+  </Card>
+</CardGrid>
+
+Install the repository baseline and verify both commands from the environment where AML will launch them:
+
+```sh title="Terminal"
+npm install --global @agentclientprotocol/codex-acp@1.1.7 @openai/codex@0.145.0
+codex-acp --help
+codex --version
+```
+
+These versions are a repeatable repository baseline, not a guarantee that every newer adapter/CLI pair is compatible. Re-run the live provider path when either changes.
+
+There is no official public Codex Sandbox image that AML currently recommends. [Recommended Sandbox images](/docs/providers/sandboxes/images/#codex-build-and-publish-your-own-image) includes a pinned Dockerfile baseline for publishing an application-owned image.
+
+<Aside type="caution" title="Read-only does not mean fully isolated">
+  AML maps filesystem access to Codex's `INITIAL_AGENT_MODE`, but the provider implementation explicitly leaves shell
+  and network restrictions to the enclosing Sandbox. Use a real Sandbox boundary when the prompt, code, or user input is
+  not trusted.
+</Aside>
+
+## Complete example
+
+This example uses the public SDK entrypoint and makes the Workspace/Sandbox boundary explicit. A real Codex ACP executable must be available in the selected environment. Local Sandbox requires `read-write` access to start any host process, including `codex-acp`; the instruction not to modify files is therefore advisory. Use an enforcing Sandbox such as a deliberately hardened Docker runtime when read-only access is a security requirement.
+
+```tsx
+import { Agent, AmlRuntime, Sandbox, Workspace, codexAgent, localSandbox, localWorkspace } from "@aml-jsx/sdk"
+
+const workspace = localWorkspace({ directory: "/absolute/path/to/repository" })
+const sandbox = localSandbox()
+const provider = codexAgent({
+  // The default is "codex-acp". Use "npx" only when your deployment policy
+  // deliberately permits package resolution at launch time.
+  command: "codex-acp",
+  model: "gpt-5.3-codex",
+  reasoningEffort: "high",
+})
+
+const result = await new AmlRuntime({
+  agentProvider: provider,
+}).evaluate(
+  <Workspace id="codex-review" provider={workspace} load={false} save={false}>
+    <Sandbox provider={sandbox} access="read-write">
+      <Agent system="Inspect files but do not modify them.">
+        Summarize the repository structure and identify the highest-risk module.
+      </Agent>
+    </Sandbox>
+  </Workspace>
+)
+
+console.log(result)
+```
+
+For a first integration, verify the executable independently:
+
+```sh
+codex-acp --help
+```
+
+If you use the repository's live ACP test pattern, the adapter can be launched through `npx` with an explicit package version and an isolated `CODEX_HOME`. That is useful for development, but preinstalling the adapter in a deployment image is more predictable.
+
+## Options and precedence
+
+| Option              | Type                                                  | Default       | Semantics                                                                                  |
+| ------------------- | ----------------------------------------------------- | ------------- | ------------------------------------------------------------------------------------------ |
+| `apiKey`            | `string`                                              | —             | Adds `CODEX_API_KEY` and selects the ACP `api-key` authentication method.                  |
+| `command`           | `string`                                              | `"codex-acp"` | ACP executable or launcher. It must be a non-empty, trimmed string without null bytes.     |
+| `args`              | `readonly string[]`                                   | `[]`          | Appended to the launch command exactly as supplied. Arguments cannot contain null bytes.   |
+| `config`            | JSON-compatible object                                | `{}`          | Base Codex configuration. It must serialize successfully before any external work begins.  |
+| `codexPathOverride` | `string`                                              | `"codex"`     | Sets `CODEX_PATH` for the ACP adapter; it does not replace `command`.                      |
+| `env`               | `Record<string, string>`                              | `{}`          | Additional launch environment. Use it for provider-specific credentials and configuration. |
+| `model`             | `string`                                              | —             | Provider-level model fallback.                                                             |
+| `reasoningEffort`   | `"minimal" \| "low" \| "medium" \| "high" \| "xhigh"` | —             | Writes `model_reasoning_effort` into Codex configuration.                                  |
+| `workingDirectory`  | `string`                                              | —             | Fallback working directory when no Sandbox supplies the effective directory.               |
+
+The effective values are resolved as follows:
+
+1. `<Agent model="..." />` overrides the factory `model`.
+2. The Agent's normalized `system` text becomes Codex `developer_instructions`.
+3. `config` is copied first; AML-owned `model`, `model_reasoning_effort`, and `developer_instructions` are written afterward and therefore win when present.
+4. An active Sandbox supplies the effective working directory. `workingDirectory` is used when the Agent is not running inside one.
+5. `apiKey` is explicit provider configuration. Otherwise `env.CODEX_API_KEY` or `env.OPENAI_API_KEY` can advertise API-key authentication to the ACP adapter.
+
+<Aside type="note" title="Environment precedence">
+  AML spreads the provider's `env`, then writes its session-owned Codex variables such as `CODEX_HOME`, `CODEX_CONFIG`,
+  `CODEX_SQLITE_HOME`, `APP_SERVER_LOGS`, `CODEX_PATH`, `INITIAL_AGENT_MODE`, and `NO_BROWSER`. Do not rely on
+  overriding those session variables through `env`; they are owned by the AML launch profile.
+</Aside>
+
+## Permissions and capabilities
+
+| AML request                | Codex launch behavior                                                     | Boundary that still matters                                                 |
+| -------------------------- | ------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| `filesystem: "read-write"` | `INITIAL_AGENT_MODE=agent-full-access`; `permissionPolicy="allow_always"` | The host or Sandbox still controls actual process and filesystem authority. |
+| `filesystem: "read-only"`  | `INITIAL_AGENT_MODE=read-only`; `permissionPolicy="allow_once"`           | Shell and network restrictions rely on the enclosing Sandbox.               |
+| `shell: false`             | No additional Codex-native mapping is claimed by this profile.            | Use a Sandbox that rejects shell execution.                                 |
+| `network: false`           | No additional Codex-native mapping is claimed by this profile.            | Use a Sandbox or deployment network policy that enforces it.                |
+
+AML JavaScript Tools are exposed through the shared ACP MCP bridge when the Agent is running with a compatible ACP session. MCP servers declared in the AML tree are passed through the shared ACP session engine after allowlist and capability checks. These are Agent capabilities, not a replacement for Sandbox isolation.
+
+## Structured output
+
+When `evaluate(value, schema)` is used, AML asks the provider session for structured output and validates the returned JSON against the supplied Standard Schema. The Codex profile contributes the Codex configuration and uses the shared ACP structured-output path; it does not perform a second schema validation itself.
+
+```tsx
+import { Agent, evaluate, codexAgent } from "@aml-jsx/sdk"
+import { z } from "zod"
+
+const Finding = z.object({
+  severity: z.enum(["low", "medium", "high"]),
+  summary: z.string(),
+})
+
+const finding = await evaluate(
+  <Agent provider={codexAgent({ model: "gpt-5.3-codex" })}>Inspect the change and return one concise finding.</Agent>,
+  Finding
+)
+```
+
+The final result must be valid JSON for the schema. A prose answer, invalid JSON, or a provider session that cannot honor structured output rejects the evaluation.
+
+## Failure modes and troubleshooting
+
+<Steps>
+
+1. **`command not found` or ACP startup failure**
+
+   Confirm that `codex-acp` exists in the same host or Sandbox where AML calls `spawn()`. If you use a custom `command`, run that exact command with its `args` outside AML first.
+
+2. **Authentication or model errors**
+
+   Check the adapter's credential requirements and the model identifier. Prefer deployment environment configuration over writing credentials into a Workspace. `apiKey` maps to `CODEX_API_KEY`; provider-specific environment variables can be passed through `env`.
+
+3. **The Agent starts but cannot edit or execute**
+
+   Inspect both layers: Codex's filesystem mode and the enclosing Sandbox's `access`, `root`, and process capabilities. AML's permission mapping cannot grant a Sandbox capability that is absent.
+
+4. **Configuration is rejected before launch**
+
+   Remove leading/trailing whitespace and null bytes from strings. Keep `config` JSON-compatible: no cycles, functions, class instances, `BigInt`, or non-finite numbers.
+
+5. **Structured output fails**
+
+   Reduce the schema and inspect the provider's raw model behavior. The schema applies to the final `<Agent />` result; invalid JSON or a missing structured response is an evaluation error.
+
+</Steps>
+
+## References
+
+<CardGrid>
+  <LinkCard
+    title="Codex ACP package"
+    href="https://github.com/agentclientprotocol/codex-acp"
+    description="ACP adapter source and installation context."
+  />
+  <LinkCard
+    title="Agent Client Protocol"
+    href="https://agentclientprotocol.com/"
+    description="The protocol boundary used by AML's shared Agent session engine."
+  />
+  <LinkCard
+    title="AML Codex profile source"
+    href="https://github.com/we-are-singular/aml/tree/main/providers/agents/codex/src"
+    description="Executable mapping, environment, and option validation."
+  />
+  <LinkCard
+    title="AML Codex tests"
+    href="https://github.com/we-are-singular/aml/tree/main/providers/agents/codex/tests"
+    description="Launch, precedence, and live integration coverage."
+  />
+</CardGrid>

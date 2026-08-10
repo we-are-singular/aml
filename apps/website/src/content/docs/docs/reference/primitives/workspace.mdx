@@ -1,0 +1,50 @@
+---
+title: "<Workspace />"
+description: Materialize one top-level durable file identity, coordinate writers, and optionally publish a revision after evaluation.
+---
+
+`<Workspace />` is AML's durable filesystem boundary. It acquires one provider materialization before descendants run, applies the save policy after the subtree settles, then releases locks and temporary state.
+
+```tsx
+import { Agent, AmlRuntime, Workspace } from "@aml-jsx/sdk"
+import { DeterministicAgentProvider, DeterministicWorkspaceProvider } from "@aml-jsx/sdk/testing"
+
+const workspace = new DeterministicWorkspaceProvider({ directory: "/workspace/review-42" })
+const runtime = new AmlRuntime({
+  agentProvider: new DeterministicAgentProvider(),
+  workspaceProvider: workspace,
+})
+
+await runtime.evaluate(
+  <Workspace id="review-42" load={false} save={{ on: "success", retention: 3 }}>
+    <Agent>Prepare the review result.</Agent>
+  </Workspace>
+)
+```
+
+Use [Local](/docs/providers/workspaces/local/) for one existing directory, [Filesystem](/docs/providers/workspaces/filesystem/) for local revision-backed staging, or [S3](/docs/providers/workspaces/s3/) for compatible object storage.
+
+## Props
+
+| Prop               | Type                              | Default                     | Meaning                                                                            |
+| ------------------ | --------------------------------- | --------------------------- | ---------------------------------------------------------------------------------- |
+| `children`         | `AmlRenderable`                   | empty                       | Values evaluated inside the materialization.                                       |
+| `provider`         | `WorkspaceProvider`               | runtime `workspaceProvider` | Provider for this `<Workspace />`.                                                 |
+| `id`               | `string`                          | generated UUID              | Logical durable identity; required in practice when revisions must be reopened.    |
+| `cwd`              | `string`                          | `"."`                       | Logical descendant cwd inside the materialization.                                 |
+| `load`             | `boolean \| WorkspaceLoadOptions` | `true`                      | Load `current` or a selected revision, with optional include/exclude globs.        |
+| `save`             | `boolean \| WorkspaceSaveOptions` | `false`                     | Publish after success by default, with filtering, retention, and gitignore policy. |
+| `lock`             | `boolean`                         | `true`                      | Ask the provider to reject a competing writer for this identity.                   |
+| `writeConcurrency` | `"serial" \| "parallel"`          | `"serial"`                  | Coordinate writable sibling Sandboxes within this evaluation.                      |
+
+Save option defaults are `on: "success"`, `retention: 1`, `gitignore: true`, and an empty exclude list. Load defaults to the current revision. Include and exclude patterns are normalized relative forward-slash globs without negation.
+
+## Placement and durability
+
+- One AML evaluation may contain at most one `<Workspace />`, and it must be the top-level resource boundary.
+- `<Workspace />` may contain multiple sibling [`<Sandbox />`](../sandbox/) components, `<Agent />` components, and [`<File />`](../file/) components.
+- Writing a materialized file is not a durable publication by itself; enable `save` when a revision must persist.
+- `lock` protects durable identity across acquisitions. `writeConcurrency` coordinates writable `<Sandbox />` components inside the same evaluation; the controls solve different races.
+- `save={{ on: "always" }}` may publish after a failed descendant, but cancellation prevents saving.
+
+See [Workspace provider selection](/docs/providers/workspaces/), [Sandbox and Workspace composition](/docs/cookbook/sandboxes-and-workspaces/), and [production operations](/docs/production/operations/).

@@ -1,97 +1,19 @@
 import { highlightLines } from "./highlight"
+import {
+  agentOptions as AGENTS,
+  composeProviderExample,
+  sandboxOptions as SANDBOXES,
+  workspaceOptions as WORKSPACES,
+  type AgentOption,
+  type SandboxOption,
+  type WorkspaceOption,
+} from "./data/provider-catalog"
 
 /**
  * Runtime packages demo: one fixed Agent tree shown against every built-in
  * Agent × Sandbox × Workspace combination. Picking any adapter re-renders the
  * configured construction while the tree stays provider-agnostic.
  */
-
-interface AgentOption {
-  id: string
-  label: string
-  fn: string
-  construction: string
-}
-
-interface SandboxOption {
-  id: string
-  label: string
-  fn: string
-  construction: string
-}
-
-interface WorkspaceOption {
-  id: string
-  label: string
-  fn: string
-  construction: string
-  props: string
-}
-
-const AGENTS: readonly AgentOption[] = [
-  {
-    id: "opencode",
-    label: "OpenCode",
-    fn: "opencodeAgent",
-    construction: `opencodeAgent({ model: "opencode-go/glm-5.1" })`,
-  },
-  {
-    id: "codex",
-    label: "Codex",
-    fn: "codexAgent",
-    construction: `codexAgent({ model: "gpt-5.3-codex" })`,
-  },
-  {
-    id: "pi",
-    label: "Pi",
-    fn: "piAgent",
-    construction: `piAgent({ model: "opencode-go/glm-5.1" })`,
-  },
-]
-
-const SANDBOXES: readonly SandboxOption[] = [
-  {
-    id: "local",
-    label: "Local",
-    fn: "localSandbox",
-    construction: `localSandbox({ workspace: "./project" })`,
-  },
-  {
-    id: "docker",
-    label: "Docker",
-    fn: "dockerSandbox",
-    construction: `dockerSandbox({ image: "node:26" })`,
-  },
-  {
-    id: "daytona",
-    label: "Daytona",
-    fn: "daytonaSandbox",
-    construction: `daytonaSandbox({ image: "node:26", workspace: "./project" })`,
-  },
-  {
-    id: "modal",
-    label: "Modal",
-    fn: "modalSandbox",
-    construction: `modalSandbox({ create: { cpu: 2  }, image: "node:26" })`,
-  },
-]
-
-const WORKSPACES: readonly WorkspaceOption[] = [
-  {
-    id: "workspace-local",
-    label: "Local folder",
-    fn: "localWorkspace",
-    construction: `localWorkspace({ directory: "./project" })`,
-    props: `id="local-project" load`,
-  },
-  {
-    id: "workspace-s3",
-    label: "S3",
-    fn: "s3Workspace",
-    construction: `s3Workspace({ bucket: "agent-workspaces" })`,
-    props: `id="thread-42" load save={{ include: ["**/*.md"] }}`,
-  },
-]
 
 /** Lines pinned as "the ones that change": provider imports, constructions, and Workspace policy. */
 const PINNED_LINES: readonly number[] = [3, 4, 5, 8, 9, 10, 14]
@@ -101,28 +23,6 @@ const AGENT_LINES: readonly number[] = [3, 8]
 const SANDBOX_LINES: readonly number[] = [4, 9]
 /** Lines touched when only the Workspace selection changes. */
 const WORKSPACE_LINES: readonly number[] = [5, 10, 14]
-
-function compose(agent: AgentOption, sandbox: SandboxOption, workspace: WorkspaceOption): string {
-  return `import {
-  Agent, AmlRuntime, Sandbox, Workspace,
-  ${agent.fn},
-  ${sandbox.fn},
-  ${workspace.fn},
-} from "@aml-jsx/sdk"
-
-const provider = ${agent.construction}
-const sandbox = ${sandbox.construction}
-const workspace = ${workspace.construction}
-const runtime = new AmlRuntime()
-
-await runtime.evaluate(
-  <Workspace ${workspace.props} provider={workspace}>
-    <Sandbox provider={sandbox}>
-      <Agent provider={provider}>Summarize this repository.</Agent>
-    </Sandbox>
-  </Workspace>,
-)`
-}
 
 export async function initProviders(): Promise<void> {
   const agentGroup = document.querySelector<HTMLElement>("#pick-agent")
@@ -145,7 +45,7 @@ export async function initProviders(): Promise<void> {
 
   async function render(changed: readonly number[]): Promise<void> {
     const token = ++renderToken
-    const html = await highlightLines(compose(agent(), sandbox(), workspace()))
+    const html = await highlightLines(composeProviderExample(agent(), sandbox(), workspace()))
     if (token !== renderToken || !name || !code) return
 
     name.textContent = `${agent().label} × ${sandbox().label} × ${workspace().label}`
@@ -224,7 +124,7 @@ export async function initProviders(): Promise<void> {
   // Copies the data model rather than the DOM so no highlight markup leaks in.
   copy?.addEventListener("click", async () => {
     if (!copy) return
-    await navigator.clipboard.writeText(compose(agent(), sandbox(), workspace()))
+    await navigator.clipboard.writeText(composeProviderExample(agent(), sandbox(), workspace()))
     copy.textContent = "copied ✓"
     window.setTimeout(() => (copy.textContent = "copy"), 1200)
   })

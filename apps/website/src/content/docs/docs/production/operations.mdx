@@ -1,0 +1,134 @@
+---
+title: Operations
+description: Run AML evaluations with explicit limits, cancellation, persistence recovery, and useful traces.
+---
+
+Production operations should treat an AML evaluation as a resource lifecycle, not just a Promise that returns text.
+
+```text
+acquire Workspace → acquire Sandbox → run Agent / Script
+       → reconcile remote changes → save revision
+       → release Sandbox → release Workspace
+```
+
+Any stage can fail. The original failure and cleanup failures may both matter, and provider-specific recovery determines whether a retry is safe.
+
+## Limits and deadlines
+
+`AmlRuntime` defaults to `maxAgentCalls: 32`, `maxConcurrentAgents: 4`, `maxDepth: 16`, `maxStateTransitions: 16`, and `maxTurnsPerAgent: 16`. Set these based on the workflow and expose the effective values in deployment configuration. A zero value disables the corresponding limit; do that only intentionally.
+
+```ts
+import { AmlRuntime } from "@aml-jsx/sdk"
+
+const runtime = new AmlRuntime({
+  maxAgentCalls: 12,
+  maxConcurrentAgents: 2,
+  maxDepth: 12,
+  maxStateTransitions: 8,
+  maxTurnsPerAgent: 6,
+})
+```
+
+Cancellation is caller-owned per evaluation. AML checks the signal before work and passes it to provider operations that accept cancellation. Cleanup and provider-owned finalization may continue after the signal, and AML cannot undo a Tool, network call, filesystem write, or model side effect that already completed.
+
+## Cancellation and cleanup
+
+Use a deadline and keep the controller alive until `runtime.evaluate()` settles so provider cleanup can finish.
+
+```ts
+const controller = new AbortController()
+const timer = setTimeout(() => controller.abort(new Error("job deadline exceeded")), 5 * 60_000)
+
+try {
+  await runtime.evaluate(workflow, { signal: controller.signal })
+} catch (error) {
+  if (controller.signal.aborted) {
+    console.warn("AML job cancelled", error)
+  } else {
+    console.error("AML job failed", error)
+  }
+  throw error
+} finally {
+  clearTimeout(timer)
+}
+```
+
+Provider cleanup differs:
+
+- Local kills tracked host process groups but cannot repair a host-level failure or isolate a child that escapes provider ownership.
+- Docker removes the disposable container when command cancellation may leave a remote command running.
+- Daytona and Modal attempt to destroy the remote Sandbox; a provider API failure can leave a remote resource that needs operator inspection.
+- Filesystem and S3 Workspaces attempt to release temporary materialization and lock state; save and release errors should be logged independently. Current S3 lock refresh/release requests are finalization operations and may complete after evaluation cancellation.
+
+Do not acknowledge a queue message merely because cancellation was requested. Wait for the evaluation to settle, then decide whether the external job can be retried.
+
+## Workspace concurrency and recovery
+
+The default `lock={true}` protects one durable Workspace identity from healthy concurrent owners. A competing healthy writer should produce `WorkspaceConflictError` with code `AML_WORKSPACE_CONFLICT`. This is not a universal strict fencing guarantee: the S3 adapter verifies ownership and deletes a lock in separate requests, so a narrow stale-owner race remains. Conditional index publication still prevents a stale revision from becoming current. `writeConcurrency="serial"` queues writable Sandbox scopes inside one evaluation; it is not a replacement for the provider’s cross-evaluation lock.
+
+```ts
+import { AmlRuntime, WorkspaceConflictError } from "@aml-jsx/sdk"
+
+try {
+  await runtime.evaluate(
+    <Workspace id="review-42" lock={true} save={{ on: "success", retention: 3 }}>
+      <Agent>Update reports/summary.md.</Agent>
+    </Workspace>,
+  )
+} catch (error) {
+  if (WorkspaceConflictError.is(error, "review-42")) {
+    throw new RetryableJobError("another writer owns review-42", { cause: error })
+  }
+  throw error
+}
+```
+
+Revision-backed Filesystem and S3 providers conditionally publish the current index. `lock={false}` skips the long-lived lock but does not turn stale publication into last-write-wins. On a conditional publication failure, reload the current revision, reconcile, and save again. Never blindly retry a stale writer.
+
+S3 lock heartbeats run every five minutes and use a twenty-minute stale boundary in the current adapter. Treat those timings as provider behavior, not a general AML promise; monitor lock loss and cleanup separately.
+
+## Observability
+
+AML trace events are immutable and contain scalar attributes, correlation ids, sequence numbers, and timestamps. Span start and end events carry lifecycle boundaries; only span-end events carry `durationMs` and `status`. Point events include `agent.turn`, `capability.tool`, `capability.mcp`, and `loop.transition`.
+
+```ts
+import { AmlRuntime, createConsoleTracer } from "@aml-jsx/sdk"
+
+const trace = createConsoleTracer({ captureContent: false })
+
+const runtime = new AmlRuntime({
+  trace,
+  onTraceError: (error, event) => console.error("AML trace sink failed", event, error),
+})
+```
+
+Trace listeners are not part of workflow completion. Their failures go through `onTraceError`; do not make provider cleanup depend on a telemetry backend. Keep content capture disabled unless prompts, Tool inputs, results, and file-derived text are approved for the destination.
+
+Useful operational dimensions include `runId`, `spanId`, `parentSpanId`, provider name, Workspace id, Sandbox id, outcome, and cleanup status. Keep customer content out of metric labels.
+
+## Retry policy
+
+Classify failures before retrying:
+
+| Failure                                        | Default response                                           |
+| ---------------------------------------------- | ---------------------------------------------------------- |
+| pre-cancelled request or deadline              | stop; retry only if the job remains valid                  |
+| `WorkspaceConflictError`                       | delay and retry the same id, or route to another id        |
+| stale conditional publication                  | reload and reconcile; do not overwrite                     |
+| Agent/model failure                            | retry only with an idempotency policy for external effects |
+| remote Sandbox cleanup failure                 | alert and inspect provider-side resources                  |
+| Tool or command completed before later failure | do not assume rollback; use workflow-level compensation    |
+
+Provider operations that create remote resources or publish revisions should be observed with enough context to recover without guessing. Preserve the provider cause when wrapping errors.
+
+## Runbook checklist
+
+- inspect active Workspace locks before declaring a job lost;
+- check Docker containers or remote Sandboxes after cancellation;
+- verify temporary disk and archive/extracted-byte limits for revision jobs;
+- distinguish model latency from Sandbox transfer and Workspace persistence latency;
+- monitor provider credentials, image pulls, object-store preconditions, and cleanup failures;
+- keep a record of the exact SDK, Agent executable, image/snapshot, and provider SDK versions;
+- rehearse cancellation during acquisition, execution, transfer, save, and release.
+
+See [Observability](/docs/observability/), [Workspace providers](/docs/providers/workspaces/), [Sandbox providers](/docs/providers/sandboxes/), and [Security](/docs/production/security/).

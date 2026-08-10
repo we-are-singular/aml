@@ -1,0 +1,54 @@
+---
+title: "<Tool />"
+description: "Grant one schema-validated JavaScript capability to its nearest containing <Agent />."
+---
+
+import { Aside } from "@astrojs/starlight/components"
+
+`<Tool />` grants an application function created by `defineTool()` to its nearest containing [`<Agent />`](../agent/). The function runs in the AML application process, not inside an active [`<Sandbox />`](../sandbox/).
+
+```tsx
+import { Agent, AmlRuntime, defineTool, Tool } from "@aml-jsx/sdk"
+import { DeterministicAgentProvider } from "@aml-jsx/sdk/testing"
+import { z } from "zod"
+
+const lookupOrder = defineTool({
+  name: "lookup_order",
+  description: "Read one order by its public identifier",
+  input: z.object({ id: z.string() }),
+  execute: async ({ id }) => ({ id, status: "paid" }),
+})
+
+const runtime = new AmlRuntime({ agentProvider: new DeterministicAgentProvider() })
+await runtime.evaluate(
+  <Agent>
+    <Tool use={lookupOrder} />
+    Summarize order A-42.
+  </Agent>
+)
+```
+
+This example uses Zod as a Standard Schema implementation; install it separately with `npm install zod`.
+
+## Props
+
+| Prop  | Type      | Required | Meaning                                         |
+| ----- | --------- | -------- | ----------------------------------------------- |
+| `use` | `AmlTool` | yes      | Exact Tool identity returned by `defineTool()`. |
+
+`<Tool />` accepts no children or `name` prop. Tool names must be unique inside one `<Agent />` and may be restricted by the runtime `allowedTools` allowlist.
+
+## Execution boundary
+
+- AML validates model input before calling `execute`.
+- Tool output must be JSON-compatible and is snapshotted before it crosses the provider boundary.
+- An optional output schema validates the function's returned value.
+- The callback receives cancellation and trace context, but it does not inherit Sandbox process execution merely because its Agent is sandboxed.
+- Sibling and parent `<Agent />` components do not receive the grant unless they declare it separately.
+
+<Aside type="caution" title="A Tool is application authority">
+  The model may invoke every granted Tool. Validate authorization and containment inside the callback; prompt
+  instructions are not an access-control boundary.
+</Aside>
+
+See [Build a JavaScript Tool](/docs/cookbook/tools/), [Tool or MCP?](/docs/cookbook/tool-or-mcp/), and [production security](/docs/production/security/).

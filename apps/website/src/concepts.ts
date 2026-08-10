@@ -10,6 +10,7 @@ export interface Concept {
   signature: string
   description: string
   note?: string
+  docsPath?: string
   file: string
   code: string
 }
@@ -21,7 +22,7 @@ export const CONCEPTS: readonly Concept[] = [
     name: "Results become prompts",
     signature: "evaluate() → JSX interpolation",
     description:
-      "An Agent's output is an ordinary value. Gather work concurrently, synthesize it, then place the result directly into another Agent's prompt.",
+      "An <Agent /> component's output is an ordinary value. Gather work concurrently, synthesize it, then place the result directly into another <Agent /> prompt.",
     note: "Data flows through JavaScript variables and JSX interpolation — AML does not hide it in a graph DSL.",
     file: "concepts/results-as-prompts.tsx",
     code: `const [linear, slack] = await Promise.all([
@@ -41,8 +42,8 @@ return <Agent>Prepare the standup from: {synthesis}</Agent>`,
     name: "Composition",
     signature: "one result → another primitive",
     description:
-      "Resolved AML can drive more than prompt text. Here one Agent authors a File, File materializes it in the Workspace, and a later sandboxed Agent reads and executes that handoff.",
-    note: "The same post-order rule powers Agent inside Agent and Agent inside System: the consumer runs only after its child result is complete.",
+      "Resolved AML can drive more than prompt text. Here one <Agent /> authors a <File />, <File /> materializes it in <Workspace />, and a later sandboxed <Agent /> reads and executes that handoff.",
+    note: "The same post-order rule powers <Agent /> inside <Agent /> and <Agent /> inside <System />: the consumer runs only after its child result is complete.",
     file: "concepts/composition.tsx",
     code: `<Workspace id="review-42" provider={Project} save>
   <File path="handoff/plan.md">
@@ -62,8 +63,8 @@ return <Agent>Prepare the standup from: {synthesis}</Agent>`,
     name: "Parallel child Agents",
     signature: "Promise.all([evaluate(…), evaluate(…)])",
     description:
-      "A parent Agent can depend on several child Agents. Start the children together with Promise.all(); AML waits for both outputs, resolves the parent's System and prompt content, and only then opens the parent session.",
-    note: "Concurrency is explicit JavaScript. The parent provider receives one complete request containing the resolved System, prompt, and both child outputs.",
+      "A parent <Agent /> can depend on several child <Agent /> components. Start the children together with Promise.all(); AML waits for both outputs, resolves the parent's <System /> and prompt content, and only then opens the parent session.",
+    note: "Concurrency is explicit JavaScript. The parent provider receives one complete request containing the resolved <System /> content, prompt, and both child outputs.",
     file: "concepts/parallel-child-agents.tsx",
     code: `async function Review() {
   const [security, performance] = await Promise.all([
@@ -85,10 +86,10 @@ return <Agent>Prepare the standup from: {synthesis}</Agent>`,
     id: "execution-and-files",
     group: "Concepts",
     name: "Execution and durable files",
-    signature: "<Workspace><Sandbox>…",
+    signature: "<Workspace /> → <Sandbox />",
     description:
-      "A Sandbox is the disposable place where an Agent executes. A Workspace materializes files before that work begins and saves them after it ends.",
-    note: "Use Sandbox for confinement and execution; use Workspace when files must survive beyond one disposable lease.",
+      "<Sandbox /> supplies the disposable place where an <Agent /> executes. <Workspace /> materializes files before that work begins and saves them after it ends.",
+    note: "Use <Sandbox /> for confinement and execution; use <Workspace /> when files must survive beyond one disposable lease.",
     file: "concepts/execution-and-files.tsx",
     code: `<Workspace id="repository" provider={Local}>
   <Sandbox provider={Docker} root="workspace">
@@ -122,10 +123,11 @@ const [codexReview, openCodeReview] = await Promise.all([
   {
     id: "agent",
     group: "Components",
-    name: "<Agent>",
+    name: "<Agent />",
+    docsPath: "docs/reference/primitives/agent/",
     signature: '<Agent provider={…} system="…">',
     description:
-      "Runs one provider-owned Agent session. AML first resolves its prompt children, System content, capabilities, and child Agent results — then hands one complete plan to the provider.",
+      "Runs one provider-owned Agent session. AML first resolves its prompt children, <System /> content, capabilities, and child <Agent /> results — then hands one complete plan to the provider.",
     note: "The provider owns the model session and its native capabilities; AML owns everything around it.",
     file: "agent.tsx",
     code: `<Agent provider={OpenCode} system="Find concrete correctness defects.">
@@ -136,10 +138,11 @@ const [codexReview, openCodeReview] = await Promise.all([
   {
     id: "system",
     group: "Components",
-    name: "<System>",
+    name: "<System />",
+    docsPath: "docs/reference/primitives/system/",
     signature: "<System>…</System>",
     description:
-      "Adds resolved content to the owning Agent's system prompt. Multiple System blocks are joined in authored order — and a child Agent can generate System content for its parent.",
+      "Adds resolved content to the owning <Agent /> system prompt. Multiple <System /> blocks are joined in authored order — and a child <Agent /> can generate system content for its parent.",
     file: "system.tsx",
     code: `<Agent provider={OpenCode}>
   <System>You are a strict, evidence-first reviewer.</System>
@@ -150,13 +153,15 @@ const [codexReview, openCodeReview] = await Promise.all([
   {
     id: "tool",
     group: "Components",
-    name: "<Tool>",
+    name: "<Tool />",
+    docsPath: "docs/reference/primitives/tool/",
     signature: "<Tool use={…} />",
     description:
-      "Grants the owning Agent a capability: a provider-native host tool by name, or a JavaScript tool created with defineTool(). Grants are scoped — sibling Agents never see each other's tools.",
+      "Grants the owning <Agent /> one schema-validated JavaScript capability created with defineTool(). Grants are scoped — sibling <Agent /> components never see each other's tools.",
     file: "tool.tsx",
     code: `const ReadSource = defineTool({
   name: "read_source",
+  description: "Read one source file from the current project",
   input: z.object({ path: z.string() }),
   execute: async ({ path }) => await readFile(path, "utf8"),
 })
@@ -169,10 +174,11 @@ const [codexReview, openCodeReview] = await Promise.all([
   {
     id: "skill",
     group: "Components",
-    name: "<Skill>",
+    name: "<Skill />",
+    docsPath: "docs/reference/primitives/skill/",
     signature: '<Skill src="./style.md" />',
     description:
-      "Adds reusable instructions to the owning Agent — inline content or a local file — without wiring another capability.",
+      "Adds reusable instructions to the owning <Agent /> — inline content or a local file — without wiring another capability.",
     file: "skill.tsx",
     code: `<Agent provider={OpenCode}>
   <Skill>Prefer small, reversible diffs.</Skill>
@@ -183,11 +189,12 @@ const [codexReview, openCodeReview] = await Promise.all([
   {
     id: "file",
     group: "Components",
-    name: "<File>",
+    name: "<File />",
+    docsPath: "docs/reference/primitives/file/",
     signature: '<File path="handoff/plan.md">…</File>',
     description:
-      "Writes resolved child text beneath the active Workspace before later siblings run. A child Agent can generate the contents, and File does not duplicate that text into the surrounding prompt.",
-    note: "File currently writes the host Workspace before Sandbox acquisition; guest-side Sandbox writes remain explicit Agent or Script work.",
+      "Writes resolved child text beneath the active <Workspace /> before later siblings run. A child <Agent /> can generate the contents, and <File /> does not duplicate that text into the surrounding prompt.",
+    note: "<File /> currently writes the host Workspace before Sandbox acquisition; guest-side writes remain explicit <Agent /> or <Script /> work.",
     file: "file.tsx",
     code: `<Workspace id="review-42" provider={Project} save>
   <File path="handoff/plan.md">
@@ -199,10 +206,11 @@ const [codexReview, openCodeReview] = await Promise.all([
   {
     id: "mcp",
     group: "Components",
-    name: "<Mcp>",
+    name: "<Mcp />",
+    docsPath: "docs/reference/primitives/mcp/",
     signature: "<Mcp use={…} />",
     description:
-      "Grants the owning Agent an MCP server — provider-native by name, or an explicit server created with defineMcpServer(). Scope and lifecycle stay bound to that Agent's session.",
+      "Grants the owning <Agent /> an MCP server — provider-native by name, or an explicit server created with defineMcpServer(). Scope and lifecycle stay bound to that Agent session.",
     file: "mcp.tsx",
     code: `const Filesystem = defineMcpServer({
   name: "filesystem",
@@ -216,10 +224,11 @@ const [codexReview, openCodeReview] = await Promise.all([
   {
     id: "follow-up",
     group: "Components",
-    name: "<FollowUp>",
+    name: "<FollowUp />",
+    docsPath: "docs/reference/primitives/follow-up/",
     signature: "<FollowUp>…</FollowUp>",
     description:
-      "Adds a later turn to the same provider-owned session. FollowUps are flat, ordered, and resolved before the session starts — the model keeps its own context between turns.",
+      "Adds a later turn to the same provider-owned session. <FollowUp /> components are flat, ordered, and resolved before the session starts — the model keeps its own context between turns.",
     file: "follow-up.tsx",
     code: `<Agent provider={OpenCode}>
   Draft the migration plan.
@@ -230,10 +239,11 @@ const [codexReview, openCodeReview] = await Promise.all([
   {
     id: "sandbox",
     group: "Components",
-    name: "<Sandbox>",
+    name: "<Sandbox />",
+    docsPath: "docs/reference/primitives/sandbox/",
     signature: '<Sandbox access="read-only" root="…">',
     description:
-      "Acquires an ephemeral execution environment and scopes a narrowed filesystem policy to descendant Agents. Nested Sandboxes narrow further while sharing the outer lease.",
+      "Acquires an ephemeral execution environment and scopes a narrowed filesystem policy to descendant <Agent /> components. Nested <Sandbox /> components narrow further while sharing the outer lease.",
     file: "sandbox.tsx",
     code: `<Sandbox access="read-write" provider={Docker} root="repository">
   <Sandbox access="read-only" root="packages/api">
@@ -246,11 +256,12 @@ const [codexReview, openCodeReview] = await Promise.all([
   {
     id: "script",
     group: "Components",
-    name: "<Script>",
+    name: "<Script />",
+    docsPath: "docs/reference/primitives/script/",
     signature: '<Script command="…" /> | <Script shell="sh">',
     description:
-      "Runs an argument vector or resolved sh, bash, or node source only through the active Sandbox runtime. Successful standard output becomes AML text for later composition.",
-    note: "Script is deliberately dangerous. The Sandbox supplies confinement; AML never falls back to a host child process.",
+      "Runs an argument vector or resolved sh, bash, or node source only through the active <Sandbox /> runtime. Successful standard output becomes AML text for later composition.",
+    note: "<Script /> is deliberately dangerous. <Sandbox /> supplies confinement; AML never falls back to a host child process.",
     file: "script.tsx",
     code: `<Sandbox access="read-write" provider={Docker}>
   <Script command="npm" args={["test"]} timeoutMs={120_000} />
@@ -263,11 +274,12 @@ const [codexReview, openCodeReview] = await Promise.all([
   {
     id: "workspace",
     group: "Components",
-    name: "<Workspace>",
+    name: "<Workspace />",
+    docsPath: "docs/reference/primitives/workspace/",
     signature: '<Workspace id="…" load save={…}>',
     description:
-      "Loads one durable filesystem snapshot, supplies its cwd to descendant Sandboxes, and optionally saves a selected, .gitignore-aware revision after execution.",
-    note: "Run locking and writable-Sandbox concurrency are separate controls: lock protects the durable identity across processes; writeConcurrency coordinates Sandboxes inside one evaluation.",
+      "Loads one durable filesystem snapshot, supplies its cwd to descendant <Sandbox /> components, and optionally saves a selected, .gitignore-aware revision after execution.",
+    note: "Run locking and write concurrency for <Sandbox /> components are separate controls: lock protects the durable identity across processes; writeConcurrency coordinates those components inside one evaluation.",
     file: "workspace.tsx",
     code: `<Workspace
   id="review-42"
@@ -284,6 +296,7 @@ const [codexReview, openCodeReview] = await Promise.all([
     id: "fragment",
     group: "Components",
     name: "<> … </>",
+    docsPath: "docs/reference/primitives/fragment/",
     signature: "<>…</>",
     description:
       "Groups AML values without adding prompt text or another runtime boundary — the plain JSX fragment, useful for composing capability bundles.",
@@ -320,7 +333,7 @@ const text = await runtime.evaluate(<Review />)`,
     name: "evaluate()",
     signature: "evaluate(tree, schema?)",
     description:
-      "Evaluates AML from inside an active component. Returns text by default — or schema-validated structured data when given a Standard Schema, the typed bridge between child and parent Agents.",
+      "Evaluates AML from inside an active component. Returns text by default — or schema-validated structured data when given a Standard Schema, the typed bridge between child and parent <Agent /> components.",
     file: "structured.tsx",
     code: `const Findings = z.object({ defects: z.array(z.string()) })
 
@@ -369,7 +382,7 @@ const findings = await evaluate(
     signature: "defineAgentProvider({ name, run })",
     description:
       "Finalizes an Agent harness adapter as an immutable AML provider. The implementation owns model sessions for a complete turn plan; AML owns resolution, capabilities scoping, and lifecycle.",
-    note: "Adapters that also implement supportsSandbox() can execute inside <Sandbox>.",
+    note: "Adapters that also implement supportsSandbox() can execute inside <Sandbox />.",
     file: "define-agent-provider.ts",
     code: `export const myAgent = defineAgentProvider({
   name: "my-harness",

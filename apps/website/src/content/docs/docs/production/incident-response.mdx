@@ -1,0 +1,206 @@
+---
+title: Incident response
+description: Diagnose AML cleanup, Workspace, publication, and trace incidents without confusing evidence with inference.
+---
+
+import { Aside, Badge, Card, CardGrid, LinkCard, Steps } from "@astrojs/starlight/components"
+
+<Badge text="Operations runbook" variant="caution" /> <Badge text="Provider-specific" />
+
+This page is a compact response guide for failures after an AML evaluation starts. First preserve the original error, evaluation id, Workspace id, provider names, and timestamps. Then classify the incident before changing locks, containers, remote Sandboxes, or revisions.
+
+## Failure decision tree
+
+```text
+Did the workflow return an application/evaluation error?
+├─ Yes → preserve the primary error and inspect AggregateError causes.
+│        Did cleanup also fail?
+│        ├─ Yes → follow the Docker or Daytona/Modal cleanup branch.
+│        └─ No  → classify Agent, Sandbox, Workspace, or cancellation.
+└─ No → did telemetry report a trace-sink error?
+         ├─ Yes → workflow succeeded; recover the telemetry path separately.
+         └─ No  → did save/publication fail?
+                  ├─ Workspace conflict → identify the active owner; do not delete a lock yet.
+                  ├─ Conditional publication conflict → reload/reconcile; preserve the newer current revision.
+                  └─ Unknown → collect provider logs and storage evidence before retrying.
+```
+
+<Aside type="danger" title="Never delete a lock on suspicion">
+  A lock is an ownership record, not a generic cache file. Delete or replace one only after the provider's ownership and
+  stale rules establish that the original owner cannot still be active. AML's local and S3 providers use renewable
+  locks; an age check without provider evidence can create two writers and corrupt the operator's mental model of the
+  Workspace.
+</Aside>
+
+## Preserve evidence first
+
+Record:
+
+- `runId`, evaluation start/finish status, cancellation reason, and the complete error cause chain;
+- `<Workspace />` `id`, provider, whether `lock` and `save` were enabled, selected revision, and outcome;
+- Sandbox provider, image or remote environment id, access mode, and whether the failure happened during acquire, execute, reconcile, or release;
+- trace sink errors separately from workflow errors;
+- provider and storage request IDs, object keys, ETags, timestamps, and HTTP status codes where available.
+
+The runtime can combine a workflow error with release errors in an `AggregateError`; do not discard secondary causes because they often identify the leaked resource.
+
+## Leftover Docker container
+
+### Evidence
+
+The Docker provider names containers as `aml-<first-12-evaluation-id>-<random-suffix>` and attempts cleanup after startup failure, timeout, cancellation, and release. A leftover container therefore indicates cleanup was attempted or the process/daemon failed before cleanup completed; it does not by itself prove AML created every similarly named container.
+
+```sh
+# Read-only inventory first.
+docker ps --all --filter 'name=aml-' --format '{{.ID}}\t{{.Names}}\t{{.Image}}\t{{.Status}}'
+
+# Inspect one candidate before any mutation.
+docker inspect CONTAINER_ID
+docker events --since 30m --filter container=CONTAINER_ID
+```
+
+Confirm the name, image, creation time, evaluation correlation, and owning deployment. If the container is verified to belong to the failed evaluation and no process should still be using it, remove it with the normal Docker control plane:
+
+```sh
+docker rm --force CONTAINER_ID
+```
+
+`docker rm --force` is a recovery action, not a first diagnostic. Preserve `docker inspect` and daemon-event output before removal. If the container is still running a useful recovery process or the evaluation may still be live, stop the application owner first and let AML's release path run.
+
+### Source-backed boundary
+
+Docker uses `--rm`; AML also explicitly removes the container when a timed-out or cancelled `docker exec` may have left a remote process alive. The adapter does not configure network policy, Linux capabilities, seccomp, user identity, resource limits, or a read-only root filesystem. A leftover container can therefore reflect daemon/runtime behavior outside AML's configured contract.
+
+## Daytona or Modal Sandbox cleanup failure
+
+### Evidence
+
+Both remote providers transfer the Workspace into a disposable remote Sandbox and reconcile read-write changes before destroying it. Their release paths preserve reconciliation and destroy failures as separate causes. Daytona's resource id is the SDK Sandbox id; Modal's is `sandboxId`.
+
+Collect the provider id from the application/provider log or error context, then use the provider's authenticated SDK or console to inspect:
+
+1. whether the remote Sandbox still exists;
+2. its state, creation time, owner/project, and last command;
+3. whether reconciliation completed or the local process stopped during transfer;
+4. whether termination/delete returned an error or timed out.
+
+The exact inventory command is provider-account and SDK-version specific. Do not invent a successful deletion from an AML `release()` call: a returned cleanup error is evidence that the provider could not confirm destruction.
+
+### Recovery
+
+- If the Sandbox is confirmed to belong to the failed evaluation and is still running, invoke the provider-native terminate/delete operation using the recorded id, then verify it is absent or terminal in the provider control plane.
+- If it is already terminal, inspect Workspace reconciliation separately. Remote termination does not prove that transferred edits reached the local materialization or durable Workspace.
+- If reconciliation failed, preserve the original Workspace revision. Re-run only after deciding whether to retry from `current`, a known revision, or an operator-created recovery copy.
+- If termination is eventually consistent, poll the provider control plane and retain the provider request id rather than repeatedly creating replacement Sandboxes.
+
+<Aside type="note" title="Evidence versus inference">
+  “AML called destroy and the provider returned an error” is source-backed evidence. “The remote Sandbox is still
+  running” is a platform-specific inference until the Daytona or Modal control plane confirms it.
+</Aside>
+
+## Local or S3 Workspace lock and publication conflict
+
+### Classify the error
+
+| Evidence                                                     | Meaning                                                        | Recovery                                                                                  |
+| ------------------------------------------------------------ | -------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| `WorkspaceConflictError`, code `AML_WORKSPACE_CONFLICT`      | A competing active writer was rejected                         | Identify the owner, wait for release, or choose another Workspace id                      |
+| Local/S3 lock compromised or lost                            | The provider's heartbeat/ownership check failed                | Stop writing, preserve the error, inspect host/storage health, and reacquire deliberately |
+| Conditional `workspace.json`/index publication failure       | A newer revision was published or the observed version changed | Reload current state, reconcile intentionally, and publish from a fresh acquisition       |
+| Access denied, missing ETag, throttling, or malformed object | Provider/storage failure, not proof of stale ownership         | Repair credentials, compatibility, or service health before retrying                      |
+
+For local and filesystem Workspaces, inspect the configured directory and the provider's lock metadata using the same host identity that runs AML. `proper-lockfile` owns the lock directory and uses a 5-minute heartbeat with a 20-minute stale boundary. For S3, inspect `<prefix>/<workspace-id>/lock.json` and `workspace.json` with the same bucket/prefix credentials; the provider refreshes locks every 5 minutes and considers them recoverable after 20 minutes without renewal.
+
+Do not manually remove a local lock directory or S3 `lock.json` merely because its timestamp is old. Establish all of the following first:
+
+- the original process is terminated or cannot regain the lease;
+- the provider's stale boundary has elapsed;
+- no replacement owner has already acquired the lock;
+- the storage version/ETag you observed is still the one you intend to replace.
+
+If those facts cannot be established, treat the incident as an active ownership conflict and escalate to the Workspace owner.
+
+### Publication recovery
+
+S3 and Filesystem Workspaces write an immutable revision before conditionally replacing the current index. If index publication fails, the previous current revision remains authoritative. Inspect revision objects/files, ETags or content hashes, and the current index before pruning anything. An uploaded but unreferenced revision is an orphan-cleanup concern, not permission to overwrite `current` manually.
+
+## Trace sink failed, workflow succeeded
+
+AML's `TraceSink` is a consumer boundary. AML does not await a sink's returned Promise; synchronous sink failures are routed to `onTraceError` and do not change the workflow result by default.
+
+```ts
+const traceErrors: Array<{ error: unknown; event: unknown }> = []
+
+const runtime = new AmlRuntime({
+  onTraceError(error, event) {
+    traceErrors.push({ error, event })
+    // Send a bounded, redacted diagnostic to a separate fallback channel.
+    console.error("AML trace sink failed", { error, sequence: event.sequence, type: event.type })
+  },
+  trace: Object.assign(
+    event => {
+      // Keep this sink non-blocking and resilient to malformed downstream data.
+      sendToTelemetryQueue(redact(event))
+    },
+    { captureContent: false }
+  ),
+})
+```
+
+If the workflow finished `ok` but `onTraceError` fired, preserve the workflow result and repair the telemetry path independently: inspect sink serialization, queue/network health, backpressure, and redaction. Do not re-run a side-effecting workflow only to recreate traces unless the application explicitly supports idempotent replay.
+
+Trace events are discriminated: `span.end` has `status` and `durationMs`; point events do not. A sink that assumes every event has duration can fail while the actual evaluation remains successful.
+
+## Recovery checklist
+
+<Steps>
+
+1. Freeze the evidence bundle: primary error, causes, ids, provider logs, storage versions, and trace-sink errors.
+2. Stop or fence the original owner before touching a live Workspace, container, or remote Sandbox.
+3. Classify cleanup, reconciliation, lock ownership, publication, and telemetry as separate outcomes.
+4. Recover provider resources through their native control plane only after verifying ownership.
+5. Reacquire a fresh Workspace revision and retry only with an explicit idempotency and conflict policy.
+6. Record whether the incident was confirmed by source/provider evidence or inferred from symptoms.
+
+</Steps>
+
+## Exact contracts and source
+
+<CardGrid>
+  <LinkCard
+    title="Production operations"
+    href="/docs/production/operations/"
+    description="Cancellation, cleanup, retries, and operator responsibilities."
+  />
+  <LinkCard
+    title="S3 Workspace"
+    href="/docs/providers/workspaces/s3/"
+    description="Lock heartbeat, stale recovery, ETags, and publication."
+  />
+  <LinkCard
+    title="Docker Sandbox"
+    href="/docs/providers/sandboxes/docker/"
+    description="Container naming, bind mounts, timeout cleanup, and security limits."
+  />
+  <LinkCard
+    title="Workspace provider boundary"
+    href="/docs/reference/providers/#workspace"
+    description="Materialization, save, retention, and publication responsibilities."
+  />
+  <LinkCard
+    title="Observability guide"
+    href="/docs/observability/"
+    description="Trace event discriminants and sink error behavior."
+  />
+</CardGrid>
+
+- [`WorkspaceConflictError`](https://github.com/we-are-singular/aml/blob/main/sdk/src/components/workspace/workspace-conflict-error.ts)
+- [`WorkspaceEvaluator`](https://github.com/we-are-singular/aml/blob/main/sdk/src/components/workspace/workspace-evaluator.ts)
+- [`DockerSandboxProvider`](https://github.com/we-are-singular/aml/blob/main/providers/sandboxes/docker/src/docker-sandbox.ts)
+- [`DaytonaSandboxProvider`](https://github.com/we-are-singular/aml/blob/main/providers/sandboxes/daytona/src/daytona-sandbox.ts)
+- [`ModalSandboxProvider`](https://github.com/we-are-singular/aml/blob/main/providers/sandboxes/modal/src/modal-sandbox.ts)
+- [`FilesystemWorkspaceStorage`](https://github.com/we-are-singular/aml/blob/main/providers/workspaces/local/src/filesystem-workspace.ts)
+- [`LocalWorkspaceProvider`](https://github.com/we-are-singular/aml/blob/main/providers/workspaces/local/src/local-workspace.ts)
+- [`S3WorkspaceLock`](https://github.com/we-are-singular/aml/blob/main/providers/workspaces/s3/src/s3-workspace-lock.ts)
+- [`TraceSink`](https://github.com/we-are-singular/aml/blob/main/sdk/src/observability/trace-sink.ts)
+- [`Trace event types`](https://github.com/we-are-singular/aml/blob/main/sdk/src/observability/trace-event.ts)

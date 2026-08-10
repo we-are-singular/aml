@@ -1,4 +1,5 @@
 import { CONCEPTS, type Concept } from "./concepts"
+import { withBase } from "./config/site"
 import { highlightTsx } from "./highlight"
 
 /**
@@ -17,6 +18,7 @@ export async function initReference(): Promise<void> {
   const note = document.querySelector<HTMLElement>("#ref-note")!
   const example = document.querySelector<HTMLElement>("#ref-example")!
   const exampleFile = document.querySelector<HTMLElement>("#ref-example-file")!
+  const docsLink = document.querySelector<HTMLAnchorElement>("#ref-docs")!
   const copy = document.querySelector<HTMLButtonElement>("#ref-copy")!
 
   const buttons = new Map<string, HTMLButtonElement>()
@@ -64,6 +66,13 @@ export async function initReference(): Promise<void> {
     }
     exampleFile.textContent = concept.file
     example.innerHTML = await highlightTsx(concept.code)
+    if (concept.docsPath) {
+      docsLink.href = withBase(concept.docsPath)
+      docsLink.textContent = `Read the ${concept.name} reference →`
+      docsLink.classList.remove("hidden")
+    } else {
+      docsLink.classList.add("hidden")
+    }
 
     for (const [id, button] of buttons) {
       const isActive = id === concept.id

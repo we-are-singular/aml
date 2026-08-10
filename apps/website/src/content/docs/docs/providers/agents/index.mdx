@@ -1,0 +1,241 @@
+---
+title: Agent providers
+description: Choose and configure AML's built-in ACP Agent providers.
+---
+
+import { Aside, Badge, Card, CardGrid, LinkCard, Steps, TabItem, Tabs } from "@astrojs/starlight/components"
+import AcpBoundary from "../../../../../components/docs/AcpBoundary.astro"
+import ProviderHero from "../../../../../components/docs/ProviderHero.astro"
+
+<ProviderHero
+  names={["codex", "opencode", "pi"]}
+  eyebrow="Built-in Agent providers"
+  title="Choose your Agent"
+  factory="codexAgent() · opencodeAgent() · piAgent()"
+  summary="AML's built-in Agents are thin profiles over a shared Agent Client Protocol session engine. Pick the coding harness that matches your model and workflow, then keep the rest of your AML tree portable."
+  bestFor="Portable orchestration across coding-agent runtimes, Tools, MCP, Sandboxes, Workspaces, and typed results."
+  caution="A provider profile does not install executables, provision credentials, or prove that a particular Sandbox image is deployable. Validate the complete Agent × Sandbox × Workspace combination."
+/>
+
+<Badge text="Three built-in profiles" variant="success" /> <Badge text="Shared lifecycle" />
+<Badge text="Provider-dependent" />
+
+## The provider boundary
+
+An AML Agent provider owns the model-session boundary. AML owns everything around it:
+
+```text
+AML JSX tree
+  → normalize Agent request
+  → resolve Workspace and Sandbox
+  → acquire provider session
+  → expose Tools and MCP capabilities
+  → stream turns and enforce budgets
+  → validate text or structured output
+  → release session and resources
+```
+
+The three built-in profiles all use the shared ACP engine. They do not create a second orchestration model, own their own scheduler, or bypass AML cleanup. Their differences are the executable launch, native configuration format, permission translation, and provider-specific capability adapters.
+
+<AcpBoundary />
+
+## Choose a profile
+
+<CardGrid>
+  <LinkCard
+    title="Codex"
+    href="/docs/providers/agents/codex/"
+    description="OpenAI's ACP coding-agent profile. Uses codex-acp, Codex configuration, and explicit API-key or environment credentials."
+  />
+  <LinkCard
+    title="OpenCode"
+    href="/docs/providers/agents/opencode/"
+    description="OpenCode's native ACP server. Translates AML permissions into OpenCode tools and permission rules."
+  />
+  <LinkCard
+    title="Pi"
+    href="/docs/providers/agents/pi/"
+    description="Pi ACP with a generated wrapper for restricted permissions and the Pi MCP extension for Tools and MCP."
+  />
+</CardGrid>
+
+| If you need…                                          | Start with                   | Why                                                                                                |
+| ----------------------------------------------------- | ---------------------------- | -------------------------------------------------------------------------------------------------- |
+| Codex-native configuration and OpenAI model workflows | `codexAgent()`               | Writes Codex ACP configuration and maps AML filesystem mode into Codex's agent mode.               |
+| OpenCode's model catalog and native tool policy       | `opencodeAgent()`            | Starts `opencode acp --pure` and translates filesystem, shell, and network permissions.            |
+| Pi's extensible tool ecosystem or Pi MCP adapter      | `piAgent()`                  | Uses Pi's generated wrapper and `pi-mcp-adapter` for AML Tools and MCP.                            |
+| No credentials while designing a workflow             | `DeterministicAgentProvider` | Use the testing entrypoint for a local fixture; it is not one of these live coding-agent profiles. |
+
+<Aside type="tip" title="Start with the harness you already operate">
+  There is no universal live default. Codex is the shortest tutorial path when you already have an OpenAI API key;
+  OpenCode is the natural choice when you rely on its model catalog and native tool policy; Pi is the better fit when
+  its extensible Tool and MCP path is the reason you chose the harness. Validate one live provider before adding a
+  remote Sandbox or durable Workspace.
+</Aside>
+
+## Shared prerequisites
+
+Every built-in profile requires all of the following:
+
+<Steps>
+
+1. **An executable in the execution environment**
+
+   The command must be present where AML calls `SandboxRuntime.spawn()`: the host for local execution, or the selected image/remote environment for a Sandbox provider. A host executable is not automatically visible inside a container or remote Sandbox.
+
+2. **A model and credentials understood by the harness**
+
+   AML forwards provider configuration and environment. It does not log in, select a provider account, or copy credentials into a Workspace. Configure secrets in the process environment or the provider's native secret mechanism.
+
+3. **A compatible Workspace/Sandbox tree**
+
+   Coding Agents normally need a Workspace-backed cwd and the ability to spawn their ACP process. A read-only request can still fail to launch on a Sandbox that rejects `spawn()` for read-only access.
+
+4. **Provider-specific runtime tools**
+
+   Images may need a shell, filesystem utilities, the native harness, an ACP adapter, and MCP adapter dependencies. The generic compatibility handshake checks the shape of the Sandbox runtime; it does not check credentials, image contents, network policy, or model availability.
+
+</Steps>
+
+## Portable Agent shape
+
+Keep the provider at the edge of the tree so the workflow remains portable:
+
+```tsx
+import { Agent, AmlRuntime, opencodeAgent } from "@aml-jsx/sdk"
+
+const provider = opencodeAgent({
+  model: process.env.AML_MODEL,
+})
+
+const runtime = new AmlRuntime({ agentProvider: provider })
+const answer = await runtime.evaluate(
+  <Agent system="Be concise and cite the files you inspected.">
+    Review the current change and report actionable findings.
+  </Agent>
+)
+```
+
+`<Agent />` also accepts a provider directly, which is useful when different specialists in one evaluation use different profiles:
+
+```tsx
+import { Agent, AmlRuntime, codexAgent, opencodeAgent } from "@aml-jsx/sdk"
+
+const codex = codexAgent({ model: "gpt-5.3-codex" })
+const opencode = opencodeAgent({ model: "opencode-go/minimax-m3" })
+
+const answer = await new AmlRuntime().evaluate(
+  <Agent provider={codex} system="Synthesize the two specialist reviews.">
+    <Agent provider={codex}>Inspect authorization changes.</Agent>
+    <Agent provider={opencode}>Inspect operational changes.</Agent>
+  </Agent>
+)
+```
+
+For independent specialist evaluations, use explicit `Promise.all([evaluate(...)])`. AML's scheduler and budgets remain in charge; JavaScript concurrency is the authored boundary.
+
+## Cross-provider capability matrix
+
+| Capability                 | Codex                              | OpenCode                                             | Pi                                        |
+| -------------------------- | ---------------------------------- | ---------------------------------------------------- | ----------------------------------------- |
+| ACP command                | `codex-acp`                        | `opencode acp --pure`                                | `pi-acp`                                  |
+| Native command option      | `codexPathOverride` → `CODEX_PATH` | `command` selects OpenCode launcher                  | `piCommand` selects native Pi command     |
+| Provider model fallback    | `model`                            | `model`, then `config.model`                         | `model`                                   |
+| Agent-level model override | Yes                                | Yes                                                  | Yes                                       |
+| System instruction mapping | Codex `developer_instructions`     | OpenCode AML profile `prompt`                        | First-turn text prefix                    |
+| Filesystem mapping         | Codex `INITIAL_AGENT_MODE`         | `edit`/`write` tool and permission rules             | Generated wrapper `--tools` list          |
+| Shell mapping              | Enclosing Sandbox                  | OpenCode `bash` tool and permission                  | Generated wrapper `bash` tool             |
+| Network mapping            | Enclosing Sandbox                  | OpenCode `webfetch`/`websearch` tools and permission | Enclosing Sandbox/network policy          |
+| AML JavaScript Tools       | Shared ACP MCP bridge              | Shared ACP MCP bridge                                | Pi MCP extension and generated wrapper    |
+| Authored MCP               | Shared ACP session                 | Shared ACP session                                   | `agent/mcp.json` through `pi-mcp-adapter` |
+| Structured output          | Shared ACP path                    | Shared ACP path                                      | `aml_submit_result` MCP call              |
+| Per-session state          | Codex home/config/sqlite/logs      | OpenCode DB and XDG directories                      | Pi HOME, agent, and session directories   |
+
+The matrix describes the profile translation, not a guarantee that every provider can run in every Sandbox. Consult the Sandbox provider page for `exec`/`spawn` behavior and the individual Agent page for launch prerequisites.
+
+## Capabilities are layered
+
+### Tools
+
+AML JavaScript Tools execute in the application process. They are validated by AML, then exposed to ACP profiles through the shared MCP bridge or provider-native extension. A Tool is not automatically sandboxed just because its owning `<Agent />` is inside `<Sandbox />`.
+
+### MCP
+
+MCP server identity, allowlists, transport configuration, and lifecycle belong to AML's normalized Agent request. The provider maps that request into its ACP or native configuration. Executable stdio servers must exist in the provider environment; remote servers still require URL, headers, network access, and credential configuration.
+
+### Structured output
+
+`evaluate(value, schema)` asks for one structured `<Agent />` result and validates the final JSON with the supplied Standard Schema. Codex and OpenCode use the shared ACP structured-output path. Pi uses an explicit `aml_submit_result` MCP call. All three reject invalid or missing structured results.
+
+### Follow-up turns
+
+`<FollowUp />` stays in the same provider session. Tools and MCP capabilities remain fixed for the session; later turns cannot widen access. A failure stops subsequent turns and rejects the evaluation.
+
+## Security checklist
+
+<CardGrid>
+  <Card title="Trust the process boundary" icon="seti:lock">
+    ACP permission mappings are provider policy. They are not a substitute for a Sandbox, container policy, network
+    egress policy, or secret manager.
+  </Card>
+  <Card title="Keep secrets out of Workspaces" icon="approve-check-circle">
+    Pass credentials through provider-native environment configuration. Do not write them into files that Agents, Tools,
+    revisions, or remote transfers can access.
+  </Card>
+  <Card title="Audit host-side Tools" icon="setting">
+    JavaScript Tools run in the host process unless your Tool implementation delegates elsewhere. Allowlist inputs and
+    avoid exposing arbitrary filesystem or process primitives.
+  </Card>
+  <Card title="Treat images as runtime contracts" icon="laptop">
+    A remote image must contain the ACP command, native Agent, shell, utilities, and credentials/configuration expected
+    by the selected profile.
+  </Card>
+</CardGrid>
+
+## Debugging a failed launch
+
+<Steps>
+
+1. Run the exact configured `command` and `args` in the same environment as AML.
+2. Confirm that a Workspace is materialized and that the effective Sandbox cwd exists.
+3. Check whether the Sandbox's `access` permits the `spawn()` needed by an ACP Agent.
+4. Verify provider credentials and model identifiers independently of AML.
+5. Enable AML tracing without content capture while diagnosing lifecycle and cleanup.
+6. Inspect the provider-specific page for session state, wrapper files, permission mapping, and structured-output behavior.
+
+</Steps>
+
+## Provider source and protocol references
+
+<CardGrid>
+  <LinkCard
+    title="Agent Client Protocol"
+    href="https://agentclientprotocol.com/"
+    description="Protocol concepts, transports, and provider expectations."
+  />
+  <LinkCard
+    title="Codex profile"
+    href="/docs/providers/agents/codex/"
+    description="Codex executable, credentials, permissions, and structured output."
+  />
+  <LinkCard
+    title="OpenCode profile"
+    href="/docs/providers/agents/opencode/"
+    description="OpenCode ACP launch and native capability mapping."
+  />
+  <LinkCard
+    title="Pi profile"
+    href="/docs/providers/agents/pi/"
+    description="Pi wrapper, MCP adapter, and session isolation."
+  />
+  <LinkCard
+    title="AML provider source"
+    href="https://github.com/we-are-singular/aml/tree/main/providers/agents"
+    description="Source of truth for built-in provider profiles."
+  />
+  <LinkCard
+    title="AML provider tests"
+    href="https://github.com/we-are-singular/aml/tree/main/providers/agents"
+    description="Launch-shape, permission, and live integration evidence."
+  />
+</CardGrid>

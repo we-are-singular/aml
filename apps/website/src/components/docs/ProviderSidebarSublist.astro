@@ -1,0 +1,221 @@
+---
+/* eslint-disable no-undef -- Astro exposes this global inside component frontmatter. */
+import { Badge, Icon } from "@astrojs/starlight/components"
+import type { StarlightRouteData } from "@astrojs/starlight/route-data"
+
+import ProviderIcon from "../ProviderIcon.astro"
+import { withBase } from "../../config/site"
+import { providerVisuals } from "../../data/provider-catalog"
+import type { ProviderVisualName } from "../../data/provider-catalog"
+
+type SidebarEntry = StarlightRouteData["sidebar"][number]
+
+interface Props {
+  sublist: SidebarEntry[]
+  nested?: boolean
+}
+
+const { sublist, nested } = Astro.props
+
+// Starlight's persister recognizes these indexed restore points, but its
+// internal restore-point component is not part of the public package API.
+const currentGroupIndexSymbol = Symbol.for("starlight-sidebar-group-index")
+const locals = Astro.locals as App.Locals & { [currentGroupIndexSymbol]: number }
+
+function nextRestorePointIndex(): number {
+  const index = locals[currentGroupIndexSymbol] ?? 0
+  locals[currentGroupIndexSymbol] = index + 1
+  return index
+}
+
+const providerByHref = new Map<string, ProviderVisualName>([
+  [withBase("docs/providers/agents/codex/"), "codex"],
+  [withBase("docs/providers/agents/opencode/"), "opencode"],
+  [withBase("docs/providers/agents/pi/"), "pi"],
+  [withBase("docs/providers/sandboxes/local/"), "local-sandbox"],
+  [withBase("docs/providers/sandboxes/docker/"), "docker"],
+  [withBase("docs/providers/sandboxes/daytona/"), "daytona"],
+  [withBase("docs/providers/sandboxes/modal/"), "modal"],
+  [withBase("docs/providers/workspaces/local/"), "local-workspace"],
+  [withBase("docs/providers/workspaces/filesystem/"), "filesystem"],
+  [withBase("docs/providers/workspaces/s3/"), "s3"],
+])
+
+function containsCurrentPage(entries: SidebarEntry[]): boolean {
+  return entries.some(entry =>
+    entry.type === "link" ? entry.isCurrent : containsCurrentPage(entry.entries),
+  )
+}
+---
+
+<ul class:list={{ "top-level": !nested }}>
+  {
+    sublist.map(entry => (
+      <li>
+        {entry.type === "link" ? (
+          <a
+            href={entry.href}
+            aria-current={entry.isCurrent ? "page" : undefined}
+            class:list={[{ large: !nested }, entry.attrs.class]}
+            {...entry.attrs}
+            data-provider={providerByHref.get(entry.href)}
+          >
+            <span class="provider-link-label">
+              {providerByHref.has(entry.href) && (
+                <ProviderIcon
+                  icon={providerVisuals[providerByHref.get(entry.href)!].icon}
+                  class="provider-sidebar-icon"
+                  loading="eager"
+                />
+              )}
+              <span>{entry.label}</span>
+            </span>
+            {entry.badge && <Badge variant={entry.badge.variant} class={entry.badge.class} text={entry.badge.text} />}
+          </a>
+        ) : (
+          <details open={containsCurrentPage(entry.entries) || !entry.collapsed}>
+            <summary>
+              <span class="group-label">
+                <span class="large">{entry.label}</span>
+                {entry.badge && (
+                  <Badge variant={entry.badge.variant} class={entry.badge.class} text={entry.badge.text} />
+                )}
+              </span>
+              <Icon name="right-caret" class="caret" size="1.25rem" />
+            </summary>
+            <sl-sidebar-restore data-index={nextRestorePointIndex()} />
+            <Astro.self sublist={entry.entries} nested />
+          </details>
+        )}
+      </li>
+    ))
+  }
+</ul>
+
+<style>
+  @layer starlight.core {
+    ul {
+      --sl-sidebar-item-padding-inline: 0.5rem;
+      list-style: none;
+      padding: 0;
+    }
+
+    li {
+      overflow-wrap: anywhere;
+    }
+
+    ul ul li {
+      border-inline-start: 1px solid var(--sl-color-hairline-light);
+      margin-inline-start: var(--sl-sidebar-item-padding-inline);
+      padding-inline-start: var(--sl-sidebar-item-padding-inline);
+    }
+
+    .large {
+      color: var(--sl-color-white);
+      font-size: var(--sl-text-lg);
+      font-weight: 600;
+    }
+
+    .top-level > li + li {
+      margin-top: 0.75rem;
+    }
+
+    summary {
+      align-items: center;
+      cursor: pointer;
+      display: flex;
+      justify-content: space-between;
+      line-height: 1.4;
+      padding: 0.2em var(--sl-sidebar-item-padding-inline);
+      user-select: none;
+    }
+
+    summary::marker,
+    summary::-webkit-details-marker {
+      display: none;
+    }
+
+    .caret {
+      flex-shrink: 0;
+      transition: transform 0.2s ease-in-out;
+    }
+
+    :global([dir="rtl"]) .caret {
+      transform: rotateZ(180deg);
+    }
+
+    [open] > summary .caret {
+      transform: rotateZ(90deg);
+    }
+
+    a {
+      border-radius: 0.25rem;
+      color: var(--sl-color-gray-2);
+      display: block;
+      line-height: 1.4;
+      padding: 0.3em var(--sl-sidebar-item-padding-inline);
+      text-decoration: none;
+    }
+
+    a:hover,
+    a:focus {
+      color: var(--sl-color-white);
+    }
+
+    [aria-current="page"],
+    [aria-current="page"]:hover,
+    [aria-current="page"]:focus {
+      background-color: var(--sl-color-text-accent);
+      color: var(--sl-color-text-invert);
+      font-weight: 600;
+    }
+
+    a > *:not(:last-child),
+    .group-label > *:not(:last-child) {
+      margin-inline-end: 0.25em;
+    }
+
+    .provider-link-label {
+      align-items: center;
+      display: inline-flex;
+      gap: 0.55rem;
+      min-width: 0;
+    }
+
+    :global(.provider-sidebar-icon) {
+      flex: none;
+      height: 1rem;
+      object-fit: contain;
+      opacity: 0.82;
+      width: 1rem;
+    }
+
+    a:hover :global(.provider-sidebar-icon),
+    a[aria-current="page"] :global(.provider-sidebar-icon) {
+      opacity: 1;
+    }
+
+    :global([data-theme="dark"]) a:is([data-provider="codex"], [data-provider="opencode"], [data-provider="pi"])
+      :global(.provider-sidebar-icon) {
+      filter: invert(1) brightness(1.08);
+    }
+
+    :global([data-theme="dark"]) a[data-provider="s3"] :global(.provider-sidebar-icon) {
+      filter: brightness(0) invert(1);
+    }
+
+    @media (min-width: 50rem) {
+      .top-level > li + li {
+        margin-top: 0.5rem;
+      }
+
+      .large {
+        font-size: var(--sl-text-base);
+      }
+
+      a {
+        font-size: var(--sl-text-sm);
+      }
+    }
+  }
+</style>

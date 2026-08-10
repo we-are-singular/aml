@@ -1,0 +1,158 @@
+---
+import { withBase } from "../../config/site"
+---
+
+<figure class="architecture-map" aria-labelledby="architecture-title">
+  <figcaption>
+    <span>Runtime architecture</span>
+    <strong id="architecture-title">One authored tree, three explicit boundaries</strong>
+  </figcaption>
+
+  <div class="architecture-map__source">
+    <code>&lt;Workspace&gt;&lt;Sandbox&gt;&lt;Agent /&gt;&lt;/Sandbox&gt;&lt;/Workspace&gt;</code>
+    <span aria-hidden="true">resolves into</span>
+  </div>
+
+  <div class="architecture-map__layers">
+    <a href={withBase("docs/providers/agents/")}>
+      <span class="architecture-map__index">01</span>
+      <strong>Agent</strong>
+      <small>Model session, turns, tools, and protocol translation</small>
+    </a>
+    <a href={withBase("docs/providers/sandboxes/")}>
+      <span class="architecture-map__index architecture-map__index--signal">02</span>
+      <strong>Sandbox</strong>
+      <small>Commands, filesystem access, process lifetime, and cleanup</small>
+    </a>
+    <a href={withBase("docs/providers/workspaces/")}>
+      <span class="architecture-map__index architecture-map__index--ok">03</span>
+      <strong>Workspace</strong>
+      <small>Materialization, durable revisions, locks, and save policy</small>
+    </a>
+  </div>
+</figure>
+
+<style>
+  .architecture-map {
+    background:
+      linear-gradient(var(--aml-grid-line) 1px, transparent 1px),
+      linear-gradient(90deg, var(--aml-grid-line) 1px, transparent 1px),
+      var(--sl-color-bg-nav);
+    background-size: 24px 24px;
+    border: 1px solid var(--sl-color-hairline-light);
+    border-radius: var(--aml-radius-lg);
+    box-shadow: var(--aml-shadow-sm);
+    margin: 2rem 0 3rem;
+    overflow: hidden;
+    padding: clamp(1.2rem, 3vw, 2rem);
+  }
+
+  figcaption {
+    display: grid;
+    gap: 0.28rem;
+    margin-bottom: 1.5rem;
+  }
+
+  figcaption span,
+  .architecture-map__source > span {
+    color: var(--sl-color-gray-2);
+    font-family: var(--sl-font-mono);
+    font-size: 0.65rem;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+
+  figcaption strong {
+    color: var(--sl-color-white);
+    font-size: clamp(1.2rem, 3vw, 1.65rem);
+    letter-spacing: -0.035em;
+  }
+
+  .architecture-map__source {
+    align-items: center;
+    display: flex;
+    gap: 0.8rem;
+    margin-bottom: 0.9rem;
+  }
+
+  .architecture-map__source code {
+    background: var(--aml-ink);
+    border-radius: 0.55rem;
+    color: var(--aml-paper);
+    font-size: 0.7rem;
+    overflow: hidden;
+    padding: 0.55rem 0.75rem;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .architecture-map__layers {
+    display: grid;
+    gap: 0.7rem;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .architecture-map__layers a {
+    background: color-mix(in srgb, var(--sl-color-bg-nav) 96%, transparent);
+    border: 1px solid var(--sl-color-hairline-light);
+    border-radius: var(--aml-radius-md);
+    color: inherit;
+    display: grid;
+    gap: 0.38rem;
+    min-height: 9rem;
+    padding: 1rem;
+    text-decoration: none;
+    transition: border-color 150ms ease, transform 150ms ease;
+  }
+
+  .architecture-map__layers a:hover {
+    border-color: var(--sl-color-accent);
+    transform: translateY(-2px);
+  }
+
+  .architecture-map__layers strong {
+    color: var(--sl-color-white);
+    font-size: 1.05rem;
+  }
+
+  .architecture-map__layers small {
+    color: var(--sl-color-gray-2);
+    font-size: 0.75rem;
+    line-height: 1.5;
+  }
+
+  .architecture-map__index {
+    color: var(--sl-color-accent);
+    font-family: var(--sl-font-mono);
+    font-size: 0.65rem;
+    font-weight: 600;
+  }
+
+  .architecture-map__index--signal {
+    color: var(--aml-orange);
+  }
+
+  .architecture-map__index--ok {
+    color: var(--aml-green);
+  }
+
+  @media (max-width: 42rem) {
+    .architecture-map__source {
+      align-items: flex-start;
+      flex-direction: column;
+    }
+
+    .architecture-map__source code {
+      max-width: 100%;
+    }
+
+    .architecture-map__layers {
+      grid-template-columns: 1fr;
+    }
+
+    .architecture-map__layers a {
+      min-height: auto;
+    }
+  }
+</style>

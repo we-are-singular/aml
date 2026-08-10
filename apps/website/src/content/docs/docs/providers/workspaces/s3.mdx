@@ -1,0 +1,212 @@
+---
+title: S3 Workspace
+description: Persist AML Workspace revisions in S3-compatible object storage.
+---
+
+import ProviderHero from "../../../../../components/docs/ProviderHero.astro"
+import S3BackendCatalog from "../../../../../components/docs/S3BackendCatalog.astro"
+import { Aside } from "@astrojs/starlight/components"
+
+<ProviderHero
+  name="s3"
+  eyebrow="Remote revision storage"
+  title="S3 Workspace"
+  factory="s3Workspace({ bucket, ...options })"
+  summary="S3 Workspace uses the shared revision protocol over object storage. Evaluations materialize into local temporary space, then publish immutable archive or folder revisions with S3 conditional writes."
+  bestFor="Distributed workers, durable review state, and deployments where Workspace revisions must outlive one host."
+  caution="An S3-compatible label is not enough. The service must preserve ETags, conditional puts, streaming bodies, and paginated listing semantics used by the lock and publication protocols."
+/>
+
+## What is stored where
+
+S3 is the durable source, not the live filesystem used by descendants. Each acquire creates a unique local materialization under `temporaryDirectory`; the provider downloads the current or selected revision into it. On save, it uploads a complete artifact and conditionally publishes the index.
+
+For a prefix of `aml/workspaces` and Workspace id `review-42`, the namespace is conceptually:
+
+```text
+aml/workspaces/review-42/
+├── lock.json
+├── workspace.json
+└── revisions/
+    ├── <revision>.tar.gz
+    └── <revision>/manifest.json + files/...
+```
+
+The provider uses the normalized Workspace id as one storage segment. It rejects unsafe bucket prefixes and object paths rather than allowing absolute paths, backslashes, empty segments, or traversal.
+
+## S3-compatible backends
+
+AML has one S3 Workspace adapter: `s3Workspace()`. The services below are storage backends for that adapter, not separate AML providers. “S3-compatible” describes the vendor's protocol surface; it does not mean AML has tested that service.
+
+<S3BackendCatalog />
+
+Cloudflare R2 has repository smoke evidence: a credentialed S3 Workspace path publishes and restores revisions through an R2 endpoint, then checks the persisted `workspace.json` and revision objects. That path is not continuous backend certification. Amazon S3 is the native protocol target because the adapter uses the AWS SDK's S3 client and command model. The remaining services are useful candidates, but should be treated as unverified until the exact deployment passes the compatibility contract below.
+
+## Options
+
+| Option               | Type                    | Default               | Notes                                                                                                         |
+| -------------------- | ----------------------- | --------------------- | ------------------------------------------------------------------------------------------------------------- |
+| `bucket`             | `string`                | Required              | Bucket name passed to every object operation.                                                                 |
+| `client`             | `S3Client`              | None                  | Inject an already configured AWS SDK client. Mutually exclusive with `config`.                                |
+| `config`             | `S3ClientConfig`        | None                  | Used to construct a client lazily. Mutually exclusive with `client`; internal clients default to `us-east-1`. |
+| `prefix`             | `string`                | `aml/workspaces`      | Object namespace prefix; no leading/trailing slash or empty/traversal segments.                               |
+| `format`             | `"archive" \| "folder"` | `"archive"`           | Archive or folder revision representation.                                                                    |
+| `maxArchiveBytes`    | `number`                | `268435456` (256 MiB) | Maximum archive bytes.                                                                                        |
+| `maxEntries`         | `number`                | `100000`              | Maximum selected entries.                                                                                     |
+| `maxExtractedBytes`  | `number`                | `1073741824` (1 GiB)  | Maximum uncompressed snapshot bytes.                                                                          |
+| `temporaryDirectory` | `string`                | `os.tmpdir()`         | Local staging parent for downloads, snapshots, and archives.                                                  |
+
+Pass exactly one of `client` or `config` when you need non-default credentials, region, endpoint, or retry behavior. The factory itself performs no network I/O; the client and object operations begin at acquisition.
+
+## AWS example with injected credentials
+
+Keep credentials in the runtime environment or workload identity. Do not write them into the Workspace.
+
+```tsx
+import { S3Client } from "@aws-sdk/client-s3"
+import { AmlRuntime, Agent, Workspace, s3Workspace } from "@aml-jsx/sdk"
+
+const client = new S3Client({
+  region: process.env.AWS_REGION ?? "us-east-1",
+})
+
+const workspace = s3Workspace({
+  bucket: process.env.AML_WORKSPACE_BUCKET!,
+  client,
+  prefix: "production/reviews",
+  format: "folder",
+})
+
+await new AmlRuntime({ workspaceProvider: workspace }).evaluate(
+  <Workspace
+    id="review-42"
+    load={{ revision: "current", exclude: ["node_modules/**"] }}
+    save={{ on: "success", gitignore: true, retention: 5 }}
+  >
+    <Agent>Update reports/summary.md with the current review findings.</Agent>
+  </Workspace>
+)
+```
+
+The example assumes the bucket exists and the process identity can perform the operations below. The non-null assertion is only configuration typing; production code should validate the environment before constructing the provider.
+
+## Protocol contract
+
+The adapter requires more than basic object upload and download support:
+
+| Operation                                  | Why it is required                                                             |
+| ------------------------------------------ | ------------------------------------------------------------------------------ |
+| `GetObject` with a streaming body and ETag | Restore revisions and read `workspace.json` while retaining the version token. |
+| `PutObject` with `If-None-Match: *`        | Create a lock or immutable revision only if it does not already exist.         |
+| `PutObject` with `If-Match: <ETag>`        | Refresh/replace a stale lock and publish a new index conditionally.            |
+| `DeleteObject`                             | Release locks and prune unreferenced revisions.                                |
+| `ListObjectsV2` with continuation tokens   | Enumerate folder revisions and delete their objects completely.                |
+| Stable ETags                               | Map object versions to AML’s opaque conditional-write versions.                |
+
+For MinIO or another S3-compatible service, inject a client with the service endpoint, credentials, region, and `forcePathStyle: true` when required by that service. AML does not infer vendor-specific endpoints or credentials.
+
+```ts
+const client = new S3Client({
+  endpoint: process.env.AML_S3_ENDPOINT,
+  forcePathStyle: true,
+  region: process.env.AML_S3_REGION ?? "us-east-1",
+  credentials: {
+    accessKeyId: process.env.AML_S3_ACCESS_KEY_ID!,
+    secretAccessKey: process.env.AML_S3_SECRET_ACCESS_KEY!,
+  },
+})
+```
+
+## Minimum IAM permissions
+
+Scope access to the configured bucket and prefix. A minimal deployment typically needs:
+
+```json
+[
+  {
+    "Effect": "Allow",
+    "Action": "s3:ListBucket",
+    "Resource": "arn:aws:s3:::YOUR_BUCKET",
+    "Condition": {
+      "StringLike": {
+        "s3:prefix": "aml/workspaces/*"
+      }
+    }
+  },
+  {
+    "Effect": "Allow",
+    "Action": ["s3:GetObject", "s3:PutObject", "s3:DeleteObject"],
+    "Resource": "arn:aws:s3:::YOUR_BUCKET/aml/workspaces/*"
+  }
+]
+```
+
+Constrain `s3:ListBucket` with a `s3:prefix` condition in a real policy. Some environments split bucket-level listing and object-level access into separate statements. Use the least-privilege policy required by your bucket layout and verify conditional requests are not stripped by a gateway.
+
+## Lock protocol
+
+With the default `lock={true}`, the adapter creates `<prefix>/<workspace-id>/lock.json` using create-if-absent semantics. The lease refreshes every 5 minutes and is considered recoverable after 20 minutes without renewal; these timings are fixed by the provider.
+
+- A competing healthy owner produces `WorkspaceConflictError` with code `AML_WORKSPACE_CONFLICT`.
+- Refresh uses `If-Match`, and release reads and checks the current token before deleting the lock object.
+- A lost lock is reported by subsequent storage operations or release.
+- `lock={false}` skips this long-lived lease but does not disable conditional index publication.
+
+<Aside type="caution" title="The S3 lock is not a strict fencing primitive">
+  Token verification and deletion are separate requests because conditional `DeleteObject` is not consistently available
+  across S3-compatible services. A stale-lock takeover in the narrow interval between those requests can let the old
+  owner delete the replacement lock. Conditional `workspace.json` publication still prevents that stale owner from
+  overwriting a newer committed revision, but workloads that require strict concurrent-writer fencing should use
+  single-writer orchestration or an external lock service.
+</Aside>
+
+`WorkspaceConflictError` should be handled as an ownership conflict only. S3 `PreconditionFailed`, missing ETags, access denials, throttling, invalid credentials, and cleanup errors are distinct operational failures and should retain their provider cause.
+
+## Revision publication and retention
+
+S3 saves follow the same shared persistence protocol as Filesystem Workspace:
+
+1. Build and validate a complete local snapshot.
+2. Upload an immutable archive or folder revision with create-if-absent semantics.
+3. Replace `workspace.json` with `If-Match` against the version read at acquire.
+4. Prune revisions outside `retention` after the index is published.
+5. Delete an uploaded revision if publication fails and it is not referenced.
+
+The archive/folder trade-off is identical to [Filesystem Workspace](/docs/providers/workspaces/filesystem/). Folder saves use paginated `ListObjectsV2` during restore and cleanup. A stale writer cannot replace a newer current index; reload and reconcile instead.
+
+## Remote lifecycle and failure recovery
+
+```text
+acquire → lock → download current revision → local materialization
+    → Agent / Sandbox work
+    → snapshot → upload revision → conditional index publish
+    → prune old revisions → remove local staging → unlock
+```
+
+Important consequences:
+
+- Remote edits are not durable until save and index publication complete.
+- A process, network, or provider failure before publication can lose local edits.
+- A failure after artifact upload but before publication should leave the old current revision authoritative; orphan cleanup may need operator attention if the process also lost connectivity.
+- Evaluation cancellation reaches normal object-transfer and filesystem operations. Lock heartbeat and release cleanup may still wait on an in-flight network request, so cancellation does not imply immediate lock removal. Do not assume an interrupted upload published a revision.
+- Temporary disk must accommodate downloaded revisions and save-time snapshot/archive staging.
+
+## Operational guidance
+
+- Use a unique `prefix` per environment and keep Workspace ids stable across retries.
+- Configure bucket lifecycle rules for orphaned artifacts and old revisions in addition to AML retention.
+- Monitor `PreconditionFailed`, lock-loss, access-denied, throttling, and cleanup errors separately.
+- Avoid enabling prompt or file-content capture in ordinary traces; Workspace files may contain secrets or customer data.
+- Test the exact S3-compatible service with conditional writes and paginated listing before calling it production-ready.
+- Treat a successful client connection as insufficient evidence: verify locks, ETags, conditional publication, streaming reads, and paginated folder operations.
+- Grant the worker identity access only to the Workspace prefix it owns.
+
+## References
+
+- [`S3WorkspaceOptions`](https://github.com/we-are-singular/aml/blob/main/providers/workspaces/s3/src/s3-workspace-options.ts)
+- [`S3WorkspaceStorage`](https://github.com/we-are-singular/aml/blob/main/providers/workspaces/s3/src/s3-workspace-storage.ts)
+- [`S3WorkspaceLock`](https://github.com/we-are-singular/aml/blob/main/providers/workspaces/s3/src/s3-workspace-lock.ts)
+- [`WorkspacePersistence`](https://github.com/we-are-singular/aml/blob/main/sdk/src/workspace-persistence/workspace-persistence.ts)
+- [`workspace-s3-chain.smoke.tsx`](https://github.com/we-are-singular/aml/blob/main/sdk/tests/smoke/workspace-s3-chain.smoke.tsx) — credentialed repository smoke path for the R2-backed Workspace chain
+- [AWS SDK for JavaScript S3 examples](https://docs.aws.amazon.com/sdk-for-javascript/v3/developer-guide/javascript_s3_code_examples.html)
+- [`SPEC.md` §14.6](https://github.com/we-are-singular/aml/blob/main/SPEC.md#146-staged-filesystem-and-s3-workspace-providers)

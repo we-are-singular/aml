@@ -1,0 +1,147 @@
+---
+title: Modal Sandbox
+description: Run AML workflows in disposable Modal Sandboxes with modalSandbox().
+---
+
+import ProviderHero from "../../../../../components/docs/ProviderHero.astro"
+
+<ProviderHero
+  name="modal"
+  eyebrow="Sandbox provider"
+  title="Modal Sandbox"
+  factory="modalSandbox(options)"
+  summary="The Modal provider creates a disposable Sandbox from a registry image, transfers the selected Workspace to /workspace, and reconciles the full tree before termination on writable release."
+  bestFor="Remote execution backed by Modal images, apps, and credentials."
+  caution="Workspace state is archived and transferred. A Sandbox or transfer failure before reconciliation can lose unsynchronized remote edits."
+/>
+
+## When to use it
+
+Choose Modal when the workflow belongs in a disposable remote environment and your deployment already manages Modal credentials, image publication, app identity, and network/resource policy. AML creates or reuses an app, creates one Sandbox from the configured registry image for each acquisition, transfers the Workspace, runs the workflow, reconciles writable changes, and terminates the Sandbox.
+
+Modal is not a shared mount provider. The local Workspace is archived with host `tar`, uploaded to `/workspace`, and downloaded as a full archive on writable release. That transfer boundary affects latency, disk usage, failure recovery, and what “save” means.
+
+## Options
+
+| Option           | Type                  | Default           | Contract                                                                                   |
+| ---------------- | --------------------- | ----------------- | ------------------------------------------------------------------------------------------ |
+| `image`          | `string`              | Required          | Registry image reference passed to `images.fromRegistry()`.                                |
+| `appName`        | `string`              | `aml-jsx`         | Modal app name used with `createIfMissing: true`.                                          |
+| `client`         | `ModalClient`         | None              | Inject an initialized Modal client. Mutually exclusive with `config`.                      |
+| `config`         | `ModalClientParams`   | None              | Configuration used to construct a Modal client lazily.                                     |
+| `create`         | `SandboxCreateParams` | None              | Provider-native Sandbox creation parameters.                                               |
+| `maxOutputBytes` | `number`              | `4 * 1024 * 1024` | Shared output/transfer budget. Must be positive.                                           |
+| `setup`          | `string`              | None              | Runs through `sh -lc` after hydration and before the lease is returned.                    |
+| `workspace`      | `string`              | None              | Fallback local Workspace path. An active `<Workspace />` materialization takes precedence. |
+
+The factory validates `image`, `appName`, `setup`, and `workspace` as non-empty strings. Inject either `client` or `config`, not both. The local host also needs `tar` and enough temporary disk for upload/download archives.
+
+## Image requirements
+
+The registry image must contain:
+
+- `sh`, `tar`, `mkdir`, and `rm`;
+- the selected ACP Agent executable and runtime, when running an Agent;
+- project dependencies and provider/model configuration;
+- a user able to read and write `/workspace` as required;
+- any native tools used by `<Script />` or the Agent.
+
+AML does not install an Agent into the image. `setup` can prepare an experimental environment after acquisition, but it runs every time and is not an image build or cache. For production, publish a versioned image with the executable and dependencies already installed.
+
+Modal's official OpenCode and Claude Code examples define custom Modal Images rather than publishing reusable registry tags. AML currently resolves registry images through `images.fromRegistry()`. [Recommended Sandbox images](/docs/providers/sandboxes/images/#modal-images) explains that distinction and the supported path for bringing those recipes into AML.
+
+## Workspace semantics
+
+Modal resolves the active Workspace or the provider-level `workspace` fallback, then selects the logical `root` subtree. The source and cwd must remain inside the Workspace/root boundary.
+
+On acquisition, AML creates a local tar archive, uploads it, and runs remote `tar` commands to replace `/workspace` with the archive contents. `root` and `cwd` become paths below `/workspace` for command and Agent execution.
+
+On writable release, AML creates a complete archive from `/workspace`, downloads it, extracts it locally, and mirrors additions, modifications, and deletions into the active materialization. Read-only release skips reconciliation. This is not continuous synchronization, and remote changes can be lost if the Sandbox terminates before release completes.
+
+## Complete safe example
+
+This example uses a temporary directory and a minimal shell command. The image reference is illustrative and must exist in your Modal registry:
+
+```tsx
+/** @jsxImportSource @aml-jsx/sdk */
+import { mkdtemp } from "node:fs/promises"
+import { join } from "node:path"
+import { tmpdir } from "node:os"
+import { AmlRuntime, Sandbox, Script, Workspace, localWorkspace, modalSandbox } from "@aml-jsx/sdk"
+
+const directory = await mkdtemp(join(tmpdir(), "aml-modal-"))
+const runtime = new AmlRuntime({
+  sandboxProvider: modalSandbox({
+    image: "registry.example.com/aml-agent:2026-08-09",
+    appName: "aml-docs-example",
+    config: { tokenId: process.env.MODAL_API_KEY, tokenSecret: process.env.MODAL_API_SECRET },
+  }),
+  workspaceProvider: localWorkspace({ directory }),
+})
+
+await runtime.evaluate(
+  <Workspace id="modal-demo" load={false} save={false}>
+    <Sandbox access="read-write">
+      <Script command="sh" args={["-lc", "printf remote > result.txt"]} />
+    </Sandbox>
+  </Workspace>
+)
+```
+
+Do not commit Modal credentials. Configure them through the deployment environment or inject a `ModalClient`. For a real Agent, use an image that contains the matching ACP command and dependencies; the registry image is part of the integration contract.
+
+## Lifecycle
+
+1. AML resolves the active/fallback Workspace source and validates the selected root/cwd.
+2. Modal obtains the named app with `createIfMissing: true`, resolves the registry image, and creates a disposable Sandbox with `create` options.
+3. The local host archives the source tree with `tar`; Modal copies it into a temporary remote path.
+4. Modal runs a remote shell command that clears `/workspace`, creates it, extracts the archive, and removes the temporary file.
+5. The optional setup hook runs through `sh -lc`. Failure rejects acquisition and terminates the Sandbox.
+6. `exec()` and `spawn()` use Modal’s process API with `/workspace/...` working directories. Output is read against a shared byte budget.
+7. On writable release, Modal archives the full `/workspace` tree, copies it to the host, and mirrors additions, changes, and deletions into the local materialization.
+8. Modal terminates the Sandbox. Reconciliation and termination failures are preserved together when both occur.
+
+Modal process cancellation does not always provide ordinary remote process signaling. AML uses process routing where available and can terminate the entire disposable Sandbox when necessary. During creation, cancellation may race the provider API; AML schedules termination if the Sandbox finishes provisioning after the evaluation has already been cancelled.
+
+## Read-only behavior
+
+Modal rejects `exec()` and `spawn()` under `access="read-only"` because the transferred Workspace is not mounted read-only. Read-only release skips the download/reconcile step, but it does not turn the remote filesystem into a complete read-only environment.
+
+Use `read-write` for an ACP Agent unless the selected Agent and image have a separate supported launch contract. If you need command execution against a read-only Workspace, Docker’s read-only bind mount has different semantics; do not assume remote transfer providers are interchangeable.
+
+## Security and production posture
+
+Review the Modal image, app identity, credentials, network egress, resource policy, user identity, and filesystem behavior as one security boundary. AML does not configure every Modal isolation or resource control through this adapter. Keep provider credentials out of the Workspace and traces. Do not place model-generated commands into `setup`.
+
+Remote state is not durable until reconciliation succeeds. Prefer a versioned image, explicit limits, a revision-backed Workspace, and an operational policy for:
+
+- lost remote edits after Sandbox failure;
+- failed archive upload/download;
+- cleanup after cancellation;
+- temporary disk pressure on the AML host;
+- provider API rate limits and authentication errors.
+
+## Failure modes and troubleshooting
+
+| Symptom                                   | Cause                                                                     | What to check                                                                                                   |
+| ----------------------------------------- | ------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| Modal authentication fails                | Credentials/configuration are unavailable or invalid.                     | Verify the deployment environment and test the same identity with the Modal client.                             |
+| Image cannot be resolved                  | Registry reference is missing, private, or inaccessible to the Modal app. | Confirm image publication, registry permissions, and the exact tag/digest.                                      |
+| App/Sandbox creation is slow or cancelled | Provider provisioning or image startup is still in progress.              | Set provider-native creation options and inspect Modal logs; cancellation may terminate a late-created Sandbox. |
+| Hydration fails                           | Image lacks `sh`, `tar`, `mkdir`, `rm`, or `/workspace` permissions.      | Run the image with those utilities and a writable `/workspace`.                                                 |
+| Agent executable not found                | The image does not contain the ACP executable.                            | Bake it into the image or use trusted setup for experiments.                                                    |
+| Local archive fails                       | Host `tar`, source path, or temporary disk is unavailable.                | Check `tar -C <source> -cf ...`, disk space, and permissions.                                                   |
+| `cannot execute under read-only access`   | Modal transfer cannot enforce read-only process execution.                | Use `read-write` or a provider with a read-only mount/runtime.                                                  |
+| Remote edits are missing                  | The Sandbox terminated before writable reconciliation.                    | Treat unsynchronized changes as lost; add durable checkpoints.                                                  |
+| Reconciliation exceeds output/disk budget | Archive or extraction exceeded configured limits or host temp space.      | Reduce Workspace size, configure a deliberate limit, and monitor temp storage.                                  |
+| Termination reports an error              | Modal cleanup failed after execution/reconciliation.                      | Inspect the aggregate error and Modal Sandbox state before retrying.                                            |
+
+## References
+
+- [Sandbox provider overview](./)
+- [Modal Sandbox documentation](https://modal.com/docs/guide/sandboxes)
+- [Modal image documentation](https://modal.com/docs/guide/images)
+- [AML Modal provider implementation](https://github.com/we-are-singular/aml/blob/main/providers/sandboxes/modal/src/modal-sandbox.ts)
+- [AML Modal provider tests](https://github.com/we-are-singular/aml/blob/main/providers/sandboxes/modal/tests/modal-sandbox.test.ts)
+- [Sandboxing architecture](https://github.com/we-are-singular/aml/blob/main/SANDBOXING.md)
+- [AML specification: Sandbox composition](https://github.com/we-are-singular/aml/blob/main/SPEC.md)

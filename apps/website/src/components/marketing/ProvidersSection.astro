@@ -1,0 +1,207 @@
+---
+import {
+  agentOptions,
+  composeProviderExample,
+  integrationGroups,
+  sandboxOptions,
+  workspaceOptions,
+} from "../../data/provider-catalog"
+import { withBase } from "../../config/site"
+import ProviderIcon from "../ProviderIcon.astro"
+
+const pickerGroups = [
+  {
+    id: "pick-agent",
+    label: "agent",
+    ariaLabel: "Agent adapter",
+    toneClass: "text-agent",
+    selectedId: "opencode",
+    options: agentOptions,
+  },
+  {
+    id: "pick-sandbox",
+    label: "sandbox",
+    ariaLabel: "Sandbox adapter",
+    toneClass: "text-signal",
+    selectedId: "local",
+    options: sandboxOptions,
+  },
+  {
+    id: "pick-workspace",
+    label: "workspace",
+    ariaLabel: "Workspace adapter",
+    toneClass: "text-ok",
+    selectedId: "workspace-s3",
+    options: workspaceOptions,
+  },
+] as const
+
+const initialCode = composeProviderExample(agentOptions[0]!, sandboxOptions[0]!, workspaceOptions[1]!)
+---
+
+<section id="providers" class="mx-auto max-w-6xl scroll-mt-20 px-5 py-24 sm:py-32">
+  <p class="reveal font-mono text-[12px] uppercase tracking-[0.2em] text-resolve">integrations</p>
+  <div class="mt-3">
+    <h2 class="reveal text-3xl font-bold tracking-tight [--reveal-delay:60ms] sm:text-5xl">
+      Bring your own agent, sandbox, or storage.
+    </h2>
+    <p class="reveal mt-5 text-[15px] leading-relaxed text-ink-soft [--reveal-delay:120ms]">
+      Built-in Agents share one structural Sandbox contract. Use OpenCode, Codex, or Pi with trusted local execution,
+      Docker, Daytona, or Modal, then keep files locally or in S3-compatible object storage without rewriting the
+      Agent tree. The selected executable, image, credentials, and deployment still determine whether a combination
+      can run.
+    </p>
+  </div>
+
+  <div
+    class="reveal mt-14 divide-y divide-line rounded-2xl border border-line bg-surface [--reveal-delay:180ms]"
+  >
+    {
+      integrationGroups.map(group => {
+        const firstFuture = group.integrations.findIndex(integration => integration.status !== undefined)
+        return (
+          <div class="grid gap-4 p-5 sm:p-6 lg:grid-cols-[170px_1fr] lg:items-center">
+            <div>
+              <p class:list={["font-mono text-[11px] uppercase tracking-wider", group.toneClass]}>{group.label}</p>
+              <p class="mt-1 text-[12.5px] text-muted">{group.description}</p>
+            </div>
+            <div class="flex flex-wrap items-center gap-3">
+              {group.integrations.map((integration, index) => {
+                const statusLabel =
+                  integration.status === "roadmap"
+                    ? "on the roadmap"
+                    : integration.status === "exploring"
+                      ? "being explored"
+                      : undefined
+                const detail = integration.detail ? ` — ${integration.detail}` : ""
+                const accessibleLabel = `${integration.label}${detail}${statusLabel ? ` — ${statusLabel}` : ""}`
+                const tooltip = `${integration.label}${integration.detail ? ` (${integration.detail})` : ""}${statusLabel ? ` · ${statusLabel}` : ""}`
+
+                return (
+                  <>
+                    {index === firstFuture && <span class="integration-roadmap-label">future →</span>}
+                    {
+                      integration.href ? (
+                        <a
+                          class="integration-logo"
+                          href={withBase(integration.href)}
+                          aria-label={`Read the ${integration.label} guide`}
+                          data-tooltip={`${tooltip} · read guide`}
+                        >
+                          <ProviderIcon icon={integration.icon} />
+                        </a>
+                      ) : (
+                        <span
+                          class:list={["integration-logo", { "is-roadmap": integration.status !== undefined }]}
+                          tabindex="0"
+                          role="img"
+                          aria-label={accessibleLabel}
+                          data-tooltip={tooltip}
+                        >
+                          <ProviderIcon icon={integration.icon} />
+                        </span>
+                      )
+                    }
+                  </>
+                )
+              })}
+            </div>
+          </div>
+        )
+      })
+    }
+  </div>
+
+  <a
+    href={withBase("docs/providers/")}
+    class="reveal mt-6 inline-flex font-mono text-[12px] font-semibold text-resolve underline-offset-4 hover:underline"
+  >
+    Compare every built-in provider →
+  </a>
+
+  <div class="reveal mt-14 flex flex-wrap items-baseline justify-between gap-2">
+    <p class="font-mono text-[11px] uppercase tracking-wider text-muted">runtime packages</p>
+    <p class="font-mono text-[12px] text-muted">all from @aml-jsx/sdk</p>
+  </div>
+  <div class="reveal mt-5 overflow-hidden rounded-2xl border border-line bg-paper [--reveal-delay:60ms]">
+    <div class="grid lg:grid-cols-[minmax(0,0.3fr)_minmax(0,0.7fr)]">
+      <div class="border-b border-line lg:border-r lg:border-b-0">
+        {
+          pickerGroups.map((group, index) => (
+            <div class:list={["px-5 py-4", { "border-b border-line": index < pickerGroups.length - 1 }]}>
+              <p class:list={["font-mono text-[11px] uppercase tracking-wider", group.toneClass]}>{group.label}</p>
+              <div id={group.id} class="mt-3 space-y-2" role="radiogroup" aria-label={group.ariaLabel}>
+                {group.options.map(option => {
+                  const isSelected = option.id === group.selectedId
+                  return (
+                    <button
+                      type="button"
+                      role="radio"
+                      aria-checked={isSelected ? "true" : "false"}
+                      data-pick={option.id}
+                      class:list={["pick-row", { "is-active": isSelected }]}
+                    >
+                      <span class="pick-row-label">
+                        <ProviderIcon icon={option.icon} class="pick-row-icon" />
+                        {option.label}
+                      </span>
+                      <span class="pick-row-fn">{option.fn}</span>
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          ))
+        }
+      </div>
+
+      <div class="flex min-w-0 flex-col">
+        <div class="border-b border-line bg-surface px-6 py-4">
+          <h3 id="combo-name" class="font-mono text-xl font-semibold" aria-live="polite">
+            OpenCode × Local × S3
+          </h3>
+          <p class="mt-0.5 font-mono text-[11px] uppercase tracking-wider text-muted">
+            one tree, explicitly configured boundaries
+          </p>
+        </div>
+        <div class="flex flex-1 flex-col">
+          <div class="flex items-center justify-between bg-[#12110d] px-4 py-2">
+            <span class="font-mono text-[11px] text-white/60">main.tsx</span>
+            <button
+              id="combo-copy"
+              class="rounded-md border border-white/15 px-2.5 py-1 font-mono text-[11px] text-white/70 transition-colors hover:border-white/40 hover:text-white"
+            >
+              copy
+            </button>
+          </div>
+          <pre
+            id="combo-code"
+            class="provider-code code-block flex-1 overflow-x-auto border-0 py-3.5 text-[12.5px] leading-[1.7]"
+          >{initialCode}</pre>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <p class="mt-3 text-[12.5px] leading-relaxed text-muted">
+    This picker shows the composition shape, not a ready-made deployment. Read each linked provider guide for
+    executables, images, credentials, storage permissions, and verified compatibility.
+  </p>
+
+  <div
+    class="reveal mt-5 flex flex-col gap-3 rounded-2xl border border-dashed border-line-strong bg-paper px-5 py-4 [--reveal-delay:300ms] sm:flex-row sm:items-center sm:justify-between"
+  >
+    <div>
+      <p class="font-mono text-[11px] uppercase tracking-wider text-muted">bring your own</p>
+      <p class="mt-1 text-[13.5px] text-ink-soft">The same contracts are open to custom providers.</p>
+    </div>
+    <a
+      href="https://github.com/we-are-singular/aml/blob/main/SPEC.md#154-definition-helpers"
+      target="_blank"
+      rel="noreferrer"
+      class="font-mono text-[12px] text-resolve link-underline"
+    >
+      defineAgentProvider() · defineSandboxProvider() · defineWorkspaceProvider() ↗
+    </a>
+  </div>
+</section>

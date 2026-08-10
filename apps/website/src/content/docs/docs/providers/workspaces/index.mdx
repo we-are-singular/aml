@@ -1,0 +1,131 @@
+---
+title: Workspace providers
+description: Materialize, lock, persist, and recover durable AML workspaces.
+---
+
+import ProviderHero from "../../../../../components/docs/ProviderHero.astro"
+
+<ProviderHero
+  names={["local-workspace", "filesystem", "s3"]}
+  eyebrow="Durable state"
+  title="Workspace providers"
+  factory="localWorkspace · filesystemWorkspace · s3Workspace"
+  summary="A Workspace is the durable side of an AML evaluation: it gives descendant Agents and Sandboxes one materialized filesystem, then optionally publishes that filesystem as a revision. Choose the provider based on where the durable source of truth belongs."
+  bestFor="Review sessions, generated files, multi-step jobs, and any workflow that must hand files from one evaluation to the next."
+  caution="A Workspace is not a security boundary. It provides durable storage and lifecycle coordination; the Sandbox, if present, owns execution confinement."
+/>
+
+## The mental model
+
+AML separates three concerns that are easy to conflate:
+
+| Concern             | Owner              | Meaning                                                                    |
+| ------------------- | ------------------ | -------------------------------------------------------------------------- |
+| Materialization     | Workspace provider | The directory descendants see during one evaluation.                       |
+| Durability          | Workspace provider | The directory or revision store that survives the evaluation.              |
+| Execution isolation | Sandbox provider   | The process, filesystem, and network boundary used by commands and Agents. |
+
+`<Workspace />` acquires one materialization at the top of an evaluation. Descendants work beneath its directory. On release, AML removes temporary materializations and asks the provider to release its lock or remote lease. `<Workspace />` may contain multiple sibling `<Sandbox />` components, but it cannot be nested inside another `<Workspace />` or placed inside `<Sandbox />`.
+
+```text
+durable source
+      │ acquire + optional lock
+      ▼
+materialized directory ──► Agent / Tool / File / Sandbox
+      │
+      ├── save: snapshot + publish revision
+      └── release: remove temporary state + release ownership
+```
+
+The provider receives a logical `id` from `<Workspace id="..." />`. For revision-backed providers, that id selects the revision namespace. For `localWorkspace`, the configured physical directory is the durable identity; two providers aimed at the same directory contend even if their authored ids differ.
+
+## Choose a provider
+
+| Provider                                 | Materialization                 | Durable source                    | Revisions | Best fit                                                             |
+| ---------------------------------------- | ------------------------------- | --------------------------------- | --------- | -------------------------------------------------------------------- |
+| [`localWorkspace()`](./local/)           | The configured directory itself | Existing local directory          | No        | Trusted, same-host development and direct file workflows.            |
+| [`filesystemWorkspace()`](./filesystem/) | A unique temporary directory    | Local archive or folder artifacts | Yes       | Local jobs that need load, retention, rollback, or revision history. |
+| [`s3Workspace()`](./s3/)                 | A unique temporary directory    | S3 object storage                 | Yes       | Distributed workers and durable remote state shared across hosts.    |
+
+### A complete revision-backed tree
+
+The public package exports the provider factories from `@aml-jsx/sdk`; repository provider workspaces are implementation packages, not consumer installation targets.
+
+```tsx
+import { AmlRuntime, Agent, Workspace, filesystemWorkspace } from "@aml-jsx/sdk"
+
+const workspace = filesystemWorkspace({
+  directory: ".aml/workspaces",
+  format: "folder",
+})
+
+const runtime = new AmlRuntime({ workspaceProvider: workspace })
+
+await runtime.evaluate(
+  <Workspace
+    id="review-42"
+    load={{ revision: "current", include: ["src/**", "package.json"] }}
+    save={{ on: "success", retention: 3, gitignore: true }}
+  >
+    <Agent>Inspect the materialized files and write a concise report to reports/review.md.</Agent>
+  </Workspace>
+)
+```
+
+`load` defaults to `true`, `lock` defaults to `true`, `writeConcurrency` defaults to `"serial"`, and `save` defaults to `false`. `save={true}` means save on successful completion with `gitignore: true` and `retention: 1`. `save={{ on: "always" }}` is opt-in for publishing partial work after descendant failure; cancellation skips saving.
+
+## Loading, saving, and revisions
+
+The durable backend stores an index containing the current revision and retained revision records. A revision is immutable. A save follows this order:
+
+1. Snapshot the selected materialization, applying `include`, `exclude`, and optional `.gitignore` filtering.
+2. Validate entry count, extracted bytes, and archive limits.
+3. Upload or write a complete new artifact.
+4. Publish a new `workspace.json` index with a conditional write against the version observed at acquisition.
+5. Prune revisions beyond `retention` only after publication succeeds.
+6. Remove an unreferenced upload if publication fails.
+
+Publication failure leaves the previous current revision authoritative. This is why unlocked concurrent runs can both materialize, but a stale writer must still fail rather than overwrite a newer revision.
+
+`load={false}` creates an empty materialization. `load={{ revision: "current" }}` restores the current revision. A named revision restores that exact id. `include` and `exclude` select files during restore and save; explicit excludes win. Missing referenced state is an error, not an invitation to silently start from an empty tree.
+
+## Locking and conflicts
+
+With the default `lock={true}`, a provider rejects a competing active writer for the same durable Workspace identity. That intentional ownership failure is represented by `WorkspaceConflictError`, with code `AML_WORKSPACE_CONFLICT` and the conflicting `workspaceId`.
+
+Do not catch every save or conditional-write error as `WorkspaceConflictError`. A stale revision publication, missing object, invalid archive, S3 precondition failure, or cleanup failure may be a provider-specific error with a different cause. Handle active-writer conflicts separately from persistence failures.
+
+`lock={false}` skips the long-lived writer lease. It does not make publication last-write-wins: revision-backed providers still conditionally publish `workspace.json`, so stale saves fail safely. `writeConcurrency="serial"` controls writable Sandbox scheduling inside one evaluation; it is separate from the provider lock.
+
+## Safe file writes
+
+`<File />` writes into the active materialization and therefore requires `<Workspace />`. It is not a durable save by itself; enable the `<Workspace />` save policy if the file must become a revision.
+
+```tsx
+import { File, Workspace, filesystemWorkspace } from "@aml-jsx/sdk"
+
+;<Workspace
+  id="report"
+  provider={filesystemWorkspace({ directory: ".aml/workspaces" })}
+  load={false}
+  save={{ on: "success", include: ["reports/**"], retention: 2 }}
+>
+  <File path="reports/summary.md">Generated report content</File>
+</Workspace>
+```
+
+Use a temporary or dedicated fixture directory for tutorials. `localWorkspace({ directory: "." })` points at the caller’s real checkout and direct writes are immediately visible there.
+
+## Provider lifecycle and failure recovery
+
+All providers must clean up their lease when acquisition, evaluation, save, or cancellation fails. Your application should still treat cleanup as observable work: preserve the original error, log cleanup failures, and avoid retrying a non-idempotent Tool or external side effect without a workflow-level idempotency key.
+
+| Situation                               | What to do                                                                                                              |
+| --------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| `WorkspaceConflictError` during acquire | Wait for the active owner, choose another id, or intentionally disable locking.                                         |
+| Conditional publication failure         | Reload the current revision, reconcile the user’s changes, and save again; do not overwrite blindly.                    |
+| Invalid/missing referenced revision     | Repair or restore the durable store; do not silently initialize a new Workspace.                                        |
+| Cancellation before acquire             | Retry only if the request is still valid. No materialization should be assumed.                                         |
+| Failure during release                  | Record it as an operational failure; the provider may have left a lock, remote lease, or temporary resource to recover. |
+
+For provider authors, the stable contracts are [`WorkspaceProvider`](https://github.com/we-are-singular/aml/blob/main/sdk/src/components/workspace/workspace-provider.ts), [`WorkspacePersistence`](https://github.com/we-are-singular/aml/blob/main/sdk/src/workspace-persistence/workspace-persistence.ts), and the Workspace section of [`SPEC.md`](https://github.com/we-are-singular/aml/blob/main/SPEC.md#14-workspace). Provider-specific behavior is summarized in [`PROVIDERS.md`](https://github.com/we-are-singular/aml/blob/main/PROVIDERS.md).

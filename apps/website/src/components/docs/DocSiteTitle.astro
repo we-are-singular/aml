@@ -1,0 +1,27 @@
+---
+/* eslint-disable no-undef -- Astro exposes this global inside component frontmatter. */
+import { withBase } from "../../config/site"
+
+const { siteTitleHref } = Astro.locals.starlightRoute
+---
+
+<span class="inline-flex items-center gap-[0.7rem] whitespace-nowrap">
+  <a
+    href={withBase()}
+    class="group inline-flex items-center gap-[0.08rem] font-mono text-[0.92rem] tracking-[-0.05em] no-underline"
+    aria-label="AML website home"
+  >
+    <span class="text-[var(--sl-color-gray-2)]" aria-hidden="true">&lt;</span><strong
+      class="font-bold text-[var(--sl-color-white)] transition-colors group-hover:text-[var(--sl-color-accent)]"
+      >aml</strong
+    ><em class="font-bold not-italic text-[var(--sl-color-accent)]">/</em><span
+      class="text-[var(--sl-color-gray-2)]"
+      aria-hidden="true">&gt;</span
+    >
+  </a>
+  <a
+    href={siteTitleHref}
+    class="border-l border-[var(--sl-color-gray-4)] pl-[0.7rem] text-[0.78rem] font-semibold tracking-[0.04em] text-[var(--sl-color-gray-2)] uppercase no-underline transition-colors hover:text-[var(--sl-color-accent)]"
+    >Docs</a
+  >
+</span>

@@ -1,0 +1,55 @@
+---
+import { withBase } from "../../config/site"
+import { footerGroups } from "../../data/marketing"
+---
+
+<footer class="border-t border-white/10 bg-ink pb-10 pt-14 text-paper">
+  <div class="mx-auto max-w-6xl px-5">
+    <div class="flex flex-wrap items-start justify-between gap-10">
+      <div class="max-w-sm">
+        <p class="select-none font-mono text-lg font-semibold" aria-label="AML">
+          <span class="text-white/60">&lt;</span>aml<span class="text-resolve"> /</span
+          ><span class="text-white/60">&gt;</span>
+        </p>
+
+        <p class="mt-3 text-[13.5px] leading-relaxed text-white/50">
+          Agent Markup Language — an asynchronous TypeScript and JSX runtime for composing provider-agnostic agent
+          workflows. AML is under active development, and its API is still taking shape.
+        </p>
+      </div>
+      <nav class="flex gap-16 font-mono text-[13px]" aria-label="Footer">
+        {
+          footerGroups.map(group => (
+            <div class="space-y-2.5">
+              <p class="text-[11px] uppercase tracking-wider text-white/60">{group.label}</p>
+              {group.links.map(link => (
+                <a
+                  class="block text-white/60 transition-colors hover:text-white"
+                  href={link.isBaseRelative ? withBase(link.href) : link.href}
+                  target={link.isExternal ? "_blank" : undefined}
+                  rel={link.isExternal ? "noreferrer" : undefined}
+                >
+                  {link.label}
+                </a>
+              ))}
+            </div>
+          ))
+        }
+      </nav>
+    </div>
+    <div
+      class="mt-12 flex flex-wrap items-center justify-between gap-4 border-t border-white/10 pt-6 font-mono text-[11.5px] text-white/60"
+    >
+      <p>
+        Made with <span class="text-[#ff7a59]">♥</span> by
+        <a
+          class="transition-colors hover:text-white"
+          href="https://wearesingular.com"
+          target="_blank"
+          rel="noreferrer">we are singular</a
+        >
+      </p>
+      <p>MIT License</p>
+    </div>
+  </div>
+</footer>

@@ -1,0 +1,62 @@
+---
+title: "<Sandbox />"
+description: Acquire an ephemeral execution lease and scope a filesystem policy and logical working directory to descendants.
+---
+
+import { Aside } from "@astrojs/starlight/components"
+
+`<Sandbox />` enters a provider-owned execution environment before evaluating its descendants and releases the lease after the subtree settles. Choose a [Sandbox provider](/docs/providers/sandboxes/) whose isolation and deployment model match the work.
+
+```tsx
+import { Agent, AmlRuntime, Sandbox } from "@aml-jsx/sdk"
+import { DeterministicAgentProvider, DeterministicSandboxProvider } from "@aml-jsx/sdk/testing"
+
+const agent = new DeterministicAgentProvider({ supportsSandbox: () => true })
+const sandbox = new DeterministicSandboxProvider()
+const runtime = new AmlRuntime({ agentProvider: agent, sandboxProvider: sandbox })
+
+await runtime.evaluate(
+  <Sandbox access="read-only" root="repository">
+    <Agent cwd="src">Inspect the project without modifying files.</Agent>
+  </Sandbox>
+)
+```
+
+The deterministic providers make this example credential-free. For actual process execution, use [Local](/docs/providers/sandboxes/local/), [Docker](/docs/providers/sandboxes/docker/), [Daytona](/docs/providers/sandboxes/daytona/), or [Modal](/docs/providers/sandboxes/modal/).
+
+## Props
+
+| Prop       | Type                          | Default                       | Meaning                                                    |
+| ---------- | ----------------------------- | ----------------------------- | ---------------------------------------------------------- |
+| `children` | `AmlRenderable`               | empty                         | Values evaluated inside the active lease.                  |
+| `provider` | `SandboxProvider`             | runtime `sandboxProvider`     | Provider for the outermost Sandbox.                        |
+| `access`   | `"read-only" \| "read-write"` | `"read-only"`                 | Portable filesystem authority requested from the provider. |
+| `root`     | `string`                      | `"."`                         | Logical root visible to descendants.                       |
+| `cwd`      | `string`                      | Workspace cwd, root, or `"."` | Logical default working directory within `root`.           |
+
+## Nesting
+
+A nested `<Sandbox />` reuses the outer lease. It may narrow `root`, change `cwd` within that root, or narrow `read-write` to `read-only`. It cannot select another provider, acquire another lease, escape the parent root, or widen read-only access.
+
+```tsx
+<Sandbox provider={sandbox} access="read-write" root="repository">
+  <Sandbox access="read-only" root="packages/api">
+    <Agent cwd="src">Inspect this package.</Agent>
+  </Sandbox>
+</Sandbox>
+```
+
+## Descendant behavior
+
+- [`<Script />`](../script/) executes only through the active Sandbox runtime.
+- A compatible [`<Agent />`](../agent/) receives the effective Sandbox session; its native permissions cannot widen it.
+- An enclosing [`<Workspace />`](../workspace/) supplies the materialized directory. The Sandbox provider maps logical paths into its host, container, or remote environment.
+- [`<File />`](../file/) is deliberately invalid inside `<Sandbox />` because it writes through the host Workspace materialization rather than the guest runtime.
+
+<Aside type="caution" title="Provider names do not prove isolation">
+  `localSandbox()` is trusted host execution. Docker, Daytona, and Modal have different containment, identity, network,
+  image, and resource controls. Read the selected provider guide and validate your deployment before running untrusted
+  work.
+</Aside>
+
+See [Sandbox and Workspace composition](/docs/cookbook/sandboxes-and-workspaces/), [compatibility](/docs/compatibility/), and [production security](/docs/production/security/).

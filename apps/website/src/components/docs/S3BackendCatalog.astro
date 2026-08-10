@@ -1,0 +1,140 @@
+---
+/* eslint-disable no-undef -- Astro exposes this global inside component frontmatter. */
+import ProviderIcon from "../ProviderIcon.astro"
+import { s3Backends } from "../../data/provider-catalog"
+---
+
+<div class="s3-backend-catalog">
+  {
+    s3Backends.map(backend => (
+      <article class="s3-backend">
+        <div class="s3-backend__header">
+          <span class="s3-backend__mark" aria-hidden="true">
+            <ProviderIcon icon={backend.icon} class="s3-backend__icon" loading="lazy" />
+          </span>
+          <div>
+            <h3>{backend.label}</h3>
+            <span class:list={["s3-backend__status", `s3-backend__status--${backend.status}`]}>
+              {backend.statusLabel}
+            </span>
+          </div>
+        </div>
+        <p>{backend.summary}</p>
+        <a href={backend.href} target="_blank" rel="noopener noreferrer">
+          Official S3 documentation <span aria-hidden="true">↗</span>
+          <span class="sr-only"> (opens in a new tab)</span>
+        </a>
+      </article>
+    ))
+  }
+</div>
+
+<style>
+  .s3-backend-catalog {
+    display: grid;
+    gap: 0.8rem;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    margin: 1.5rem 0 2rem;
+  }
+
+  .s3-backend {
+    background: var(--sl-color-bg-nav);
+    border: 1px solid var(--sl-color-hairline-light);
+    border-radius: 0.9rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.7rem;
+    min-width: 0;
+    padding: 1rem;
+  }
+
+  .s3-backend__header {
+    align-items: center;
+    display: flex;
+    gap: 0.75rem;
+  }
+
+  .s3-backend__mark {
+    align-items: center;
+    background: var(--sl-color-bg);
+    border: 1px solid var(--sl-color-hairline-light);
+    border-radius: 0.65rem;
+    display: inline-flex;
+    flex: 0 0 2.4rem;
+    height: 2.4rem;
+    justify-content: center;
+    width: 2.4rem;
+  }
+
+  .s3-backend__icon {
+    color: var(--sl-color-white);
+    height: 1.35rem;
+    object-fit: contain;
+    width: 1.35rem;
+  }
+
+  .s3-backend h3 {
+    color: var(--sl-color-white);
+    font-size: 0.95rem;
+    line-height: 1.25;
+    margin: 0;
+  }
+
+  .s3-backend__status {
+    display: inline-block;
+    font-family: var(--sl-font-mono);
+    font-size: 0.62rem;
+    letter-spacing: 0.025em;
+    line-height: 1.35;
+    margin-top: 0.25rem;
+    text-transform: uppercase;
+  }
+
+  .s3-backend__status--verified {
+    color: var(--sl-color-green-high);
+  }
+
+  .s3-backend__status--native {
+    color: var(--sl-color-accent-high);
+  }
+
+  .s3-backend__status--compatible {
+    color: var(--sl-color-gray-2);
+  }
+
+  .s3-backend p {
+    color: var(--sl-color-gray-2);
+    font-size: 0.83rem;
+    line-height: 1.55;
+    margin: 0;
+  }
+
+  .s3-backend a {
+    color: var(--sl-color-accent-high);
+    font-size: 0.78rem;
+    line-height: 1.4;
+    margin-top: auto;
+    text-decoration: none;
+  }
+
+  .s3-backend a:hover {
+    text-decoration: underline;
+    text-underline-offset: 0.18em;
+  }
+
+  .sr-only {
+    clip: rect(0 0 0 0);
+    clip-path: inset(50%);
+    height: 1px;
+    overflow: hidden;
+    position: absolute;
+    white-space: nowrap;
+    width: 1px;
+  }
+
+  @media (max-width: 42rem) {
+    .s3-backend-catalog {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>

@@ -1,0 +1,114 @@
+---
+title: Errors and recovery
+description: Classify AML failures, preserve their causes, and choose safe recovery boundaries.
+---
+
+import { Aside, Card, CardGrid } from "@astrojs/starlight/components"
+
+AML rejects invalid placement, invalid data, policy violations, provider failures, cancellation, limits, and resource conflicts. The runtime does not widen permissions or fall back to host execution to make a workflow appear successful.
+
+## Public AML error classes
+
+| Class                    | Stable identity                     | Typical cause                                                                                   | Retry guidance                                                                      |
+| ------------------------ | ----------------------------------- | ----------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| `EvaluationError`        | `name === "EvaluationError"`        | Invalid AML value/placement, missing scope, cycle, policy, limit, or structured-output contract | Fix the workflow or configuration; do not blindly retry                             |
+| `ToolInputError`         | `name === "ToolInputError"`         | Model-supplied Tool input fails JSON or input-schema validation                                 | Usually ask the Agent to correct its call; retry only with a bounded policy         |
+| `ToolOutputError`        | `name === "ToolOutputError"`        | Tool output cannot cross the provider boundary or fails output validation                       | Fix the Tool output/schema; a network retry may be appropriate only inside the Tool |
+| `WorkspaceConflictError` | `code === "AML_WORKSPACE_CONFLICT"` | Another writer owns the same Workspace identity                                                 | Serialize, choose another identity, or retry acquisition with backoff               |
+
+Only `WorkspaceConflictError` defines an AML-specific `code`. Do not invent a code for `EvaluationError`, `ToolInputError`, or `ToolOutputError`; preserve the class/name and `cause` instead.
+
+```ts
+import { WorkspaceConflictError } from "@aml-jsx/sdk"
+
+try {
+  await runtime.evaluate(<Workflow />)
+} catch (error) {
+  if (WorkspaceConflictError.is(error)) {
+    return queueForLater(error.workspaceId)
+  }
+
+  if (error instanceof Error) {
+    logger.error({ name: error.name, message: error.message, cause: error.cause }, "AML failed")
+  }
+  throw error
+}
+```
+
+The static `WorkspaceConflictError.is()` check is useful across duplicated physical SDK copies and does not require relying on `instanceof`.
+
+## Common `EvaluationError` categories
+
+The class is intentionally broad because the error message identifies the invalid contract. Common messages include:
+
+- `evaluate() is only available while an AML component is active` — move the call into an async AML component.
+- `<Tool> is only valid inside <Agent>` or `<Mcp> is only valid inside <Agent>` — move the capability under its owning `<Agent />`.
+- `<Script> requires an enclosing <Sandbox>` — configure an outer `<Sandbox />`; `<Script />` never falls back to `child_process` on the host.
+- `<File> requires an enclosing <Workspace>` — write through `<Workspace />`.
+- `A nested <Sandbox> cannot widen read-only access to read-write` — narrow the child policy or change the parent policy.
+- `AML evaluation exceeded maxAgentCalls ...`, `maxDepth ...`, or `maxStateTransitions ...` — increase a deliberate budget or reduce workflow breadth/depth.
+- `Structured evaluate() must resolve to exactly one <Agent>` — make the schema-bearing evaluation target one `<Agent />` result.
+- `... schema validation failed` — inspect the schema and the provider's structured response.
+
+Path validation also rejects absolute paths, parent traversal, and paths that escape the active resource root. Treat these failures as authoring or policy defects, not transient provider errors.
+
+## Tool validation boundaries
+
+`defineTool()` validates the Tool definition when it is created and validates inputs/outputs at the provider boundary. A Tool input failure means application code did not run for that invalid input. An output failure means the Tool may already have performed its external effect; correcting the schema does not undo it.
+
+```tsx
+const ReadOrder = defineTool({
+  name: "read_order",
+  description: "Read one order",
+  input: z.object({ id: z.string().min(1) }),
+  output: z.object({ total: z.number() }),
+  execute: async ({ id }) => await orders.read(id),
+})
+```
+
+Keep Tool implementations idempotent where possible, validate authorization inside the Tool, and avoid returning secrets or arbitrary non-JSON values.
+
+## Provider and transport failures
+
+Provider errors are wrapped at AML boundaries while preserving the original `cause` where the adapter supplies one. The underlying error may be a process launch error, ACP/session error, Sandbox acquisition/release error, network error, or Workspace storage error. Log the provider name, run ID, span ID, class/name, message, and cause without logging prompt content by default.
+
+Retry only when all of these are true:
+
+- the failure is classified as transient;
+- the operation has not committed an irreversible external effect, or is idempotent;
+- the retry remains inside the caller's deadline and AML budgets;
+- Workspace lock and revision semantics are respected.
+
+Do not retry invalid placement, schema, path, allowlist, read-only policy, or exceeded-limit failures without changing the input/configuration.
+
+## Cancellation and cleanup
+
+Cancellation rejects the evaluation after propagating the signal to active work. It does not roll back files, Tool calls, provider mutations, or network requests that already completed. `finish` remains the request-level place to record `status: "error"`; trace `span.end` events expose the closing span status and duration.
+
+<Aside type="caution" title="A failed run can still have side effects">
+  Design Tools and Scripts as real operations. If a workflow needs transactional behavior, implement that transaction in
+  the application or provider layer; AML only coordinates lifecycle and cleanup.
+</Aside>
+
+## A recovery envelope
+
+```ts
+async function runWithRecovery(workflow: AmlRenderable): Promise<string> {
+  try {
+    return await runtime.evaluate(workflow)
+  } catch (error) {
+    if (WorkspaceConflictError.is(error)) {
+      await sleepWithJitter()
+      return await runtime.evaluate(workflow)
+    }
+
+    if (isTransientProviderError(error)) {
+      return await retryOnce(workflow)
+    }
+
+    throw error
+  }
+}
+```
+
+The predicates in this example are application policy, not AML exports. Keep them narrow and observable; a generic `catch`/retry loop can duplicate Agent calls or overwrite newer Workspace revisions.

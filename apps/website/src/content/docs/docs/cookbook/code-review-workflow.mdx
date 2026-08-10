@@ -1,0 +1,189 @@
+---
+title: Build a code-review workflow
+description: "Compose parallel specialist <Agent /> components, <Tool />, and final synthesis into one review workflow."
+---
+
+import { Aside, Badge, Steps } from "@astrojs/starlight/components"
+
+<Badge text="Recommended first workflow" variant="success" />
+
+This recipe builds a small review pipeline that is useful even without credentials:
+
+```text
+fixture → correctness reviewer ┐
+                               ├→ synthesis Agent → review
+fixture → maintainability reviewer ┘
+```
+
+The repository's [`review.tsx`](https://github.com/we-are-singular/aml/blob/main/examples/src/integrations/review.tsx) is the canonical version. It selects a deterministic provider by default and can opt into OpenCode or Codex through `AML_REVIEW_PROVIDER`.
+
+## Goal
+
+By the end, you will have one AML tree that:
+
+- exposes the same source fixture through a schema-defined JavaScript Tool;
+- evaluates two independent specialists with `Promise.all`;
+- passes their text into a final synthesis Agent;
+- keeps provider selection outside the workflow shape.
+
+## Prerequisites
+
+- Node.js `>=26`, because the SDK package declares that engine requirement;
+- repository dependencies installed with `npm install`;
+- TypeScript/TSX execution through the repository's examples runner;
+- no credentials for the default deterministic path.
+
+To use a real provider, also install and configure the provider executable and model credentials. The workflow does not install OpenCode or Codex for you.
+
+## Complete source
+
+This standalone version uses the same public APIs as the repository example and keeps the deterministic response logic visible:
+
+```tsx
+import { Agent, AmlRuntime, defineTool, evaluate, Tool } from "@aml-jsx/sdk"
+import { DeterministicAgentProvider } from "@aml-jsx/sdk/testing"
+import { z } from "zod"
+
+const source = `
+export interface InvoiceLine {
+  price: number
+}
+
+export function calculateInvoiceTotal(lines: InvoiceLine[]): number {
+  return lines.reduce((total, line) => total + line.price, 0) / lines.length
+}
+`.trim()
+
+const provider = new DeterministicAgentProvider({
+  async respond(request, context) {
+    const tool = request.tools.find(candidate => candidate.name === "read_review_fixture")
+
+    if (tool?.kind === "javascript") {
+      const fixture = await tool.execute({}, { signal: context.signal, trace: context.trace })
+
+      if (request.system.includes("correctness")) {
+        return {
+          text: `calculateInvoiceTotal returns an average instead of a total. Evidence: ` + String(fixture),
+        }
+      }
+
+      return {
+        text: "The function name and implementation disagree; express either total or average directly.",
+      }
+    }
+
+    return {
+      text: "calculateInvoiceTotal divides the sum by the line count, so callers receive an average. Remove the division or rename the API to match. AML_REVIEW_COMPLETE",
+    }
+  },
+})
+
+const readFixture = defineTool({
+  description: "Read the complete TypeScript review fixture",
+  input: z.object({}),
+  name: "read_review_fixture",
+  async execute() {
+    return source
+  },
+})
+
+async function ReviewWorkflow() {
+  const [correctness, maintainability] = await Promise.all([
+    evaluate(
+      <Agent
+        provider={provider}
+        system="You are a correctness reviewer. Report only concrete defects supported by the supplied code."
+      >
+        <Tool use={readFixture} />
+        Call read_review_fixture, inspect its complete result, and report the highest-confidence correctness problem.
+      </Agent>
+    ),
+    evaluate(
+      <Agent
+        provider={provider}
+        system="You are a maintainability reviewer. Prefer direct, proportionate improvements over speculative abstraction."
+      >
+        <Tool use={readFixture} />
+        Call read_review_fixture, inspect its complete result, and report the most useful maintainability observation.
+      </Agent>
+    ),
+  ])
+
+  return (
+    <Agent provider={provider} system="You synthesize code-review evidence without inventing findings.">
+      Correctness reviewer:
+      {correctness}
+      Maintainability reviewer:
+      {maintainability}
+      Return one concise final review. End with the exact marker AML_REVIEW_COMPLETE.
+    </Agent>
+  )
+}
+
+const result = await new AmlRuntime().evaluate(<ReviewWorkflow />)
+console.log(result)
+```
+
+## Run it
+
+Save the complete source as `recipe.tsx` in a project configured as shown in [Getting started](/docs/getting-started/), then run that exact workflow:
+
+```sh title="Terminal"
+npx vite-node recipe.tsx
+```
+
+From an AML repository checkout, run the maintained version with:
+
+```sh title="Terminal"
+npm run example -- review
+```
+
+The example defaults to the deterministic provider. The maintained selector also supports:
+
+```sh
+AML_REVIEW_PROVIDER=opencode npm run example -- review
+AML_REVIEW_PROVIDER=codex npm run example -- review
+```
+
+Those modes require the corresponding executable, credentials, and model configuration. They are not equivalent to the deterministic fixture.
+
+## Expected output
+
+The deterministic run ends with a synthesis containing the defect and this marker:
+
+```text
+calculateInvoiceTotal divides the sum by the line count, so callers receive an average. Remove the division or rename the API to match. AML_REVIEW_COMPLETE
+```
+
+The specialist text is intentionally visible in the final prompt. A production workflow would normally use structured findings instead of concatenated prose; see [structured output](/docs/cookbook/structured-output/).
+
+## How it works
+
+<Steps>
+
+1. `defineTool()` creates an immutable, schema-backed capability. `<Tool use={readFixture} />` grants it only to the containing `<Agent />`.
+2. Each `evaluate(<Agent />)` runs one specialist inside the current AML evaluation domain. `Promise.all` is the explicit concurrency boundary.
+3. The parent `<Agent />` receives both resolved strings as prompt content. It is authored only after the specialists complete.
+4. `AmlRuntime` owns the root evaluation, budgets, cancellation, provider calls, and cleanup.
+
+</Steps>
+
+## Failure and security notes
+
+<Aside type="caution" title="Tools execute in the host process">
+  AML JavaScript Tools are not automatically placed inside a Sandbox. Keep inputs allowlisted, validate both input and
+  output, and do not expose arbitrary filesystem or process access to model-authored arguments.
+</Aside>
+
+- A specialist failure rejects the `Promise.all`; the synthesis does not run with partial evidence.
+- A Tool input or output that violates its schema fails closed.
+- A real provider can hallucinate or misread evidence. Treat the final review as an input to a human or policy gate, not as proof.
+- For untrusted workflows, set finite runtime budgets such as `maxAgentCalls`, `maxConcurrentAgents`, and `maxTurnsPerAgent`.
+
+## API and source links
+
+- [`<Agent />`](https://github.com/we-are-singular/aml/blob/main/sdk/src/components/agent/agent.tsx)
+- [`evaluate`](https://github.com/we-are-singular/aml/blob/main/sdk/src/core/evaluate.ts)
+- [`defineTool`](https://github.com/we-are-singular/aml/blob/main/sdk/src/components/tool/define-tool.ts)
+- [`AmlRuntime`](https://github.com/we-are-singular/aml/blob/main/sdk/src/core/aml-runtime.ts)
+- [Maintained source example](https://github.com/we-are-singular/aml/blob/main/examples/src/integrations/review.tsx)

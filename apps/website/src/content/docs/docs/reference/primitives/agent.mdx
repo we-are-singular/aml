@@ -1,0 +1,58 @@
+---
+title: "<Agent />"
+description: Run one provider-owned Agent session after AML resolves its prompt, system content, capabilities, and follow-up turns.
+---
+
+import { Aside } from "@astrojs/starlight/components"
+
+`<Agent />` is AML's model-session boundary. AML resolves the complete authored plan first, then asks the selected [Agent provider](/docs/providers/agents/) to run one session.
+
+```tsx
+import { Agent, AmlRuntime, System } from "@aml-jsx/sdk"
+import { DeterministicAgentProvider } from "@aml-jsx/sdk/testing"
+
+const provider = new DeterministicAgentProvider({
+  respond: request => ({ text: `${request.system}\n${request.prompt}` }),
+})
+
+const runtime = new AmlRuntime({ agentProvider: provider })
+const result = await runtime.evaluate(
+  <Agent model="reviewer">
+    <System>Use only evidence supplied in the prompt.</System>
+    Review the authorization change.
+  </Agent>
+)
+```
+
+For a live session, replace the deterministic provider with [Codex](/docs/providers/agents/codex/), [OpenCode](/docs/providers/agents/opencode/), or [Pi](/docs/providers/agents/pi/).
+
+## Props
+
+| Prop          | Type                | Default                                          | Meaning                                                                                   |
+| ------------- | ------------------- | ------------------------------------------------ | ----------------------------------------------------------------------------------------- |
+| `children`    | `AmlRenderable`     | empty                                            | Initial prompt text plus Agent-scoped descriptors.                                        |
+| `provider`    | `AgentProvider`     | runtime `agentProvider`                          | Provider for this session.                                                                |
+| `model`       | `string`            | provider default                                 | Provider-owned model identifier passed through by AML.                                    |
+| `system`      | `string`            | empty                                            | Fixed system text, placed after runtime system text and before child `<System />` blocks. |
+| `permissions` | partial permissions | read-write filesystem, network and shell enabled | Requested native harness controls; an active Sandbox may narrow them.                     |
+| `cwd`         | `string`            | active Sandbox cwd                               | Agent-local logical cwd. Requires an enclosing [`<Sandbox />`](../sandbox/).              |
+
+## Resolution and result
+
+AML resolves child `<Agent />` components, text, [`<System />`](../system/), [`<Skill />`](../skill/), [`<Tool />`](../tool/), [`<Mcp />`](../mcp/), and [`<FollowUp />`](../follow-up/) descriptors before the provider session begins. Prompt and system fragments are trimmed at the session boundary; ordinary child text is otherwise concatenated without inserted separators.
+
+The provider returns an `AgentResponse`. Normal evaluation contributes its `text` to the surrounding AML value. Component-local [`evaluate()`](/docs/reference/runtime/#component-local-evaluation) can additionally validate a single `<Agent />` result against a Standard Schema.
+
+## Placement and scope
+
+- `<Agent />` may be the root value, a child of another `<Agent />`, or a descendant of [`<Sandbox />`](../sandbox/) or [`<Workspace />`](../workspace/).
+- `<Agent />` capabilities belong only to their nearest containing `<Agent />`. Siblings do not inherit them.
+- Child `<Agent />` results become parent input at their authored position; they are separate provider sessions.
+- `cwd` does not create a Sandbox. It only narrows the cwd of an already active Sandbox session.
+
+<Aside type="caution" title="Agent permissions are not confinement">
+  Native provider permissions are best-effort harness controls. Use a Sandbox provider with an appropriate isolation
+  model when model-controlled commands or filesystem access require an enforcing boundary.
+</Aside>
+
+See [Agent provider selection](/docs/providers/agents/), [Sandbox compatibility](/docs/compatibility/), and the [code-review workflow](/docs/cookbook/code-review-workflow/) for complete compositions.

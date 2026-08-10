@@ -1,0 +1,137 @@
+---
+title: Runtime lifecycle
+description: Configure AML evaluation domains, limits, cancellation, events, and cleanup.
+---
+
+import { Aside, Card, CardGrid, Steps } from "@astrojs/starlight/components"
+
+`AmlRuntime` is the owner of one evaluation domain. A domain contains the run identity, cancellation signal, Agent scheduler, context registry, resource scopes, limits, lifecycle events, and trace correlation.
+
+This page explains lifecycle choices and production behavior. For the concise constructor options, exact defaults, and per-evaluation decisions, use the [runtime reference](/docs/reference/runtime/).
+
+```tsx
+import { AmlRuntime } from "@aml-jsx/sdk"
+
+const runtime = new AmlRuntime({
+  agentProvider,
+  maxAgentCalls: 24,
+  maxConcurrentAgents: 4,
+})
+
+const result = await runtime.evaluate(<Workflow />)
+```
+
+Nested `evaluate()` calls stay in the root domain. Concurrent calls to `runtime.evaluate()` get independent domains even when they share one runtime instance.
+
+## Runtime options
+
+| Option              |         Default | Scope      | What it bounds or configures                                              |
+| ------------------- | --------------: | ---------- | ------------------------------------------------------------------------- |
+| `agentProvider`     |            none | runtime    | Default Agent provider for `<Agent />` components without `provider`      |
+| `sandboxProvider`   |            none | runtime    | Default provider for outer `<Sandbox />` components                       |
+| `workspaceProvider` |            none | evaluation | Default provider for the one top-level `<Workspace />`                    |
+| `system`            |            none | runtime    | First system fragment supplied to every `<Agent />`                       |
+| `cwd`               | `process.cwd()` | runtime    | Base directory for local `<Skill />` files                                |
+| `allowedTools`      |    unrestricted | runtime    | Exact names of JavaScript Tools that may be granted                       |
+| `allowedMcpServers` |    unrestricted | runtime    | Exact names of MCP servers that may be granted                            |
+| `trace`             |            none | runtime    | Trace sink captured when the runtime is constructed                       |
+| `onTraceError`      |            none | runtime    | Receives trace-consumer failures without joining them to workflow failure |
+
+Provider options remain on provider factories. Runtime defaults do not install executables, credentials, Docker images, or remote resources.
+
+## Finite safety limits
+
+The runtime defaults are finite and apply per evaluation domain:
+
+| Limit                 | Default | Counts                                                                          |
+| --------------------- | ------: | ------------------------------------------------------------------------------- |
+| `maxAgentCalls`       |    `32` | Provider-backed Agent sessions                                                  |
+| `maxConcurrentAgents` |     `4` | Active Agent provider calls                                                     |
+| `maxDepth`            |    `16` | Nested component/primitive depth; arrays and promises do not add semantic depth |
+| `maxStateTransitions` |    `16` | Committed `<Loop />` transitions                                                |
+| `maxTurnsPerAgent`    |    `16` | Authored initial and `<FollowUp />` inputs in one session                       |
+
+Every limit must be a non-negative safe integer. `0` disables that limit, which is an explicit choice rather than an unlimited default. Prefer finite values when workflows can be user-authored or provider-controlled.
+
+```tsx
+const runtime = new AmlRuntime({
+  maxAgentCalls: 12,
+  maxConcurrentAgents: 3,
+  maxDepth: 12,
+  maxStateTransitions: 8,
+  maxTurnsPerAgent: 6,
+})
+```
+
+`maxConcurrentAgents` is a scheduler bound, not a promise cancellation mechanism. If one concurrent branch fails, application code should decide whether to abort sibling work.
+
+## Cancellation
+
+Pass a caller-owned `AbortSignal` per evaluation:
+
+```tsx
+const controller = new AbortController()
+const timer = setTimeout(() => controller.abort(), 60_000)
+
+try {
+  return await runtime.evaluate(<Workflow />, { signal: controller.signal })
+} finally {
+  clearTimeout(timer)
+}
+```
+
+An already-aborted signal rejects before the tree starts. During execution AML propagates the signal to active provider calls and Sandbox operations and stops advancing to later frames. Cancellation does not roll back a Tool, Script, provider, or network side effect that already completed.
+
+## Lifecycle events
+
+`start` and `finish` are runtime lifecycle events. They are dispatched to lifecycle listeners as part of evaluation control flow:
+
+```tsx
+const runtime = new AmlRuntime()
+
+runtime.on("start", ({ runId }) => {
+  logger.info({ runId }, "AML evaluation started")
+})
+
+runtime.on("finish", ({ runId, status, error }) => {
+  logger.info({ runId, status, error }, "AML evaluation finished")
+})
+```
+
+`finish` is emitted after cleanup. Its `status` is `"ok"` or `"error"`; on error, inspect `error` and correlate it with the run ID. Unsubscribe with the function returned by `on()` when a listener is temporary.
+
+Trace events are a separate stream and are intentionally dispatched without blocking workflow completion. See [Observability](/docs/observability/) for their discriminated shapes.
+
+## Cleanup is part of the result
+
+AML releases lexical scopes in reverse nesting order. Workspace save and lock release belong to the Workspace contract; Agent sessions and Sandbox leases belong to their providers. If cleanup fails, the run remains observable as failed rather than being presented as successful with hidden resource leaks.
+
+<Steps>
+  1. Resolve the root and enter any top-level `<Workspace />
+  `. 2. Acquire each `<Sandbox />` before descendants use it. 3. Resolve capabilities and execute Agent sessions in
+  dependency order. 4. Save Workspace state according to its policy. 5. Release Sandbox and Workspace resources,
+  preserving cleanup errors.
+</Steps>
+
+<Aside type="caution" title="Do not reuse a live evaluation domain">
+  A runtime instance may be reused, but each `evaluate()` call owns fresh mutable state. Do not retain `evaluate()` or
+  `useContext()` calls after the component that created them has returned; AML rejects detached component-local calls.
+</Aside>
+
+## A production baseline
+
+```tsx
+const runtime = new AmlRuntime({
+  agentProvider,
+  sandboxProvider,
+  workspaceProvider,
+  allowedTools: ["read_review_fixture"],
+  allowedMcpServers: ["project"],
+  maxAgentCalls: 20,
+  maxConcurrentAgents: 4,
+  maxDepth: 16,
+  maxTurnsPerAgent: 8,
+})
+```
+
+Pair finite limits with provider-specific timeouts, cancellation, structured logging, and a Sandbox appropriate to the threat model. The runtime limits protect orchestration; they do not make a host-process Sandbox secure.

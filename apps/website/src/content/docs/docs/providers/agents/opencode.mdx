@@ -1,0 +1,242 @@
+---
+title: OpenCode Agent
+description: Run OpenCode through AML's native ACP profile with portable AML capabilities.
+---
+
+import { Aside, Badge, Card, CardGrid, LinkCard, Steps, TabItem, Tabs } from "@astrojs/starlight/components"
+import ProviderHero from "../../../../../components/docs/ProviderHero.astro"
+
+<ProviderHero
+  name="opencode"
+  eyebrow="Built-in Agent provider"
+  title="OpenCode Agent"
+  factory="opencodeAgent()"
+  summary="A native OpenCode ACP profile that translates AML's model, system, Tool, MCP, filesystem, shell, and network capabilities into private per-evaluation OpenCode state."
+  bestFor="OpenCode deployments that need AML orchestration and OpenCode's coding tools."
+  caution="The executable and model-provider credentials are external prerequisites. OpenCode permissions are useful policy controls, but the enclosing Sandbox remains the hard boundary."
+/>
+
+<Badge text="Built-in" variant="success" /> <Badge text="ACP" /> <Badge text="MCP bridge" />
+
+## What this provider launches
+
+The profile starts OpenCode with an ACP server command equivalent to:
+
+```text
+opencode acp --pure --cwd <effective-sandbox-cwd> <your args>
+```
+
+`command` changes the executable; AML always supplies the ACP arguments before your additional `args`. The profile injects `OPENCODE_CONFIG_CONTENT` with an AML-owned `aml` primary agent, then gives every acquired session private database, cache, config, data, and state directories.
+
+<Aside type="note" title="Native OpenCode configuration">
+  The `config` option is OpenCode's typed `Config` object from `@opencode-ai/sdk/v2`, not an AML-specific arbitrary bag.
+  AML preserves your configuration and then overlays the `aml` agent profile, `default_agent`, and effective model
+  needed for the session.
+</Aside>
+
+## Prerequisites
+
+<CardGrid>
+  <Card title="OpenCode executable" icon="download">
+    Install the `opencode` executable or provide an equivalent ACP-capable launcher with `command`. AML does not install
+    it.
+  </Card>
+  <Card title="Model provider" icon="star">
+    Configure the model provider and credentials that OpenCode expects. Pass environment values with `env` or use the
+    host/Sandbox environment.
+  </Card>
+  <Card title="Working directory" icon="seti:folder">
+    Use an existing Workspace or a trusted `directory`. When a Sandbox is active, its effective guest cwd wins over the
+    factory directory.
+  </Card>
+</CardGrid>
+
+## Install and verify
+
+Install OpenCode through its published CLI package, verify the executable, and configure at least one model provider:
+
+```sh title="Terminal"
+npm install --global opencode-ai@1.18.9
+opencode --version
+opencode auth login
+opencode auth list
+```
+
+`opencode auth login` stores provider credentials in OpenCode's own data directory. `opencode auth list` also reports provider credentials discovered through environment variables. AML does not copy those credentials into a Workspace or infer which model provider you intended.
+
+The AML repository currently pins `opencode-ai@1.18.9` for its integration toolchain and `@opencode-ai/sdk@1.18.5` for the typed provider configuration. These versions are the repository's verification baseline, not a claim that every newer OpenCode release is compatible. Re-run the provider integration path when changing either side.
+
+For container execution, [Recommended Sandbox images](/docs/providers/sandboxes/images/#opencode-cloudflare-sandbox) documents the official Cloudflare OpenCode image we inspected and the narrower compatibility it proves.
+
+<Aside type="caution" title="Install it where the Agent process runs">
+  A host-global installation is available to `localSandbox()`. Docker, Daytona, Modal, or another remote Sandbox needs
+  the executable in its own image or environment. Run `opencode --version` through that same execution path before
+  debugging AML configuration.
+</Aside>
+
+## Complete example
+
+The example below chooses the explicit environment path for the `opencode-go` model provider; it does not depend on `opencode auth login` state. If you use native login instead, omit the key guard and `env` mapping and select a model attached to that account.
+
+```tsx
+import { Agent, AmlRuntime, Sandbox, Workspace, localSandbox, localWorkspace, opencodeAgent } from "@aml-jsx/sdk"
+
+const apiKey = process.env.OPENCODE_API_KEY
+if (!apiKey) throw new Error("OPENCODE_API_KEY is required")
+
+const provider = opencodeAgent({
+  model: "opencode-go/minimax-m3",
+  // Provider-native variables are forwarded to the OpenCode process.
+  env: { OPENCODE_API_KEY: apiKey },
+})
+
+const result = await new AmlRuntime({ agentProvider: provider }).evaluate(
+  <Workspace
+    id="opencode-review"
+    provider={localWorkspace({ directory: "/absolute/path/to/repository" })}
+    load={false}
+    save={false}
+  >
+    <Sandbox provider={localSandbox()} access="read-write">
+      <Agent system="Keep changes scoped to the requested review.">
+        Review the repository and explain the three most important risks.
+      </Agent>
+    </Sandbox>
+  </Workspace>
+)
+
+console.log(result)
+```
+
+Do not use an empty credential value as a production configuration. The example keeps the environment shape visible; your deployment should fail early or inject a real provider credential according to OpenCode's documentation.
+
+## Options and precedence
+
+| Option      | Type                     | Default      | Semantics                                                                            |
+| ----------- | ------------------------ | ------------ | ------------------------------------------------------------------------------------ |
+| `command`   | `string`                 | `"opencode"` | OpenCode executable or launcher. Must be non-empty, trimmed, and free of null bytes. |
+| `args`      | `readonly string[]`      | `[]`         | Appended after AML's `acp --pure --cwd <cwd>` arguments.                             |
+| `config`    | `OpenCodeConfig`         | `{}`         | JSON-compatible OpenCode configuration captured before process acquisition.          |
+| `directory` | `string`                 | —            | Fallback launch directory when no Sandbox supplies one.                              |
+| `env`       | `Record<string, string>` | `{}`         | Provider credentials and environment configuration.                                  |
+| `model`     | `string`                 | —            | Factory-level model fallback.                                                        |
+
+Model precedence is:
+
+1. `<Agent model="..." />`
+2. `opencodeAgent({ model: "..." })`
+3. `opencodeAgent({ config: { model: "..." } })`
+
+The effective system text becomes the `prompt` on the AML OpenCode agent profile. AML sets `default_agent` to `aml` and merges the existing `config.agent` table, replacing the `aml` profile with the session-specific profile. This profile is `mode: "primary"`, receives the effective prompt, and exposes only the tools allowed by AML's normalized permission request.
+
+## Permission mapping
+
+| AML permission            | OpenCode tools                      | OpenCode permissions                |
+| ------------------------- | ----------------------------------- | ----------------------------------- |
+| `filesystem: "read-only"` | Disables `edit` and `write`         | Denies `edit` and `write`           |
+| `shell: false`            | Disables `bash`                     | Denies `bash`                       |
+| `network: false`          | Disables `webfetch` and `websearch` | Denies both network tools           |
+| Default permission        | Keeps tools enabled                 | Uses the AML profile's allow policy |
+
+These mappings are provider-native controls. They do not grant access beyond the enclosing Sandbox, and an OpenCode policy cannot make a read-only Sandbox writable. Conversely, a writable host Sandbox is not made safe merely because an Agent prompt asks it to be careful.
+
+## Tools and MCP
+
+AML JavaScript Tools are exposed to ACP providers through AML's MCP bridge. A Tool runs in the application host process; it is not automatically moved into the OpenCode Sandbox. Restrict tool inputs, outputs, and `AmlRuntime` capability allowlists accordingly.
+
+```tsx
+import { Agent, AmlRuntime, Tool, defineTool, opencodeAgent } from "@aml-jsx/sdk"
+import { z } from "zod"
+
+const readRelease = defineTool({
+  name: "read_release_name",
+  description: "Return the release name from application configuration.",
+  input: z.object({}),
+  output: z.string(),
+  async execute() {
+    return process.env.RELEASE_NAME ?? "development"
+  },
+})
+
+const provider = opencodeAgent({ model: "opencode-go/minimax-m3" })
+
+const answer = await new AmlRuntime({ agentProvider: provider }).evaluate(
+  <Agent>
+    <Tool use={readRelease} />
+    Call read_release_name and return only its exact result.
+  </Agent>
+)
+```
+
+For authored MCP servers, use `<Mcp />` and the `allowedMcpServers` runtime policy. OpenCode receives the resulting server configuration through the shared ACP session. The server's transport, headers, environment, and executable still need to be available in the environment where the provider runs.
+
+## Structured output and follow-ups
+
+`evaluate(value, schema)` uses the shared ACP structured-output path. OpenCode receives the provider session's output request and AML validates the final JSON against the supplied Standard Schema. A structured evaluation must resolve to one `<Agent />` and cannot be satisfied by ordinary prose.
+
+`<FollowUp />` stays in the same OpenCode session. It cannot change the Agent's Tools or MCP set between turns; later turns stop when an earlier turn fails. This makes follow-ups useful for clarification, not for dynamically widening capabilities.
+
+## State isolation and lifecycle
+
+For each acquired session AML sets:
+
+```text
+OPENCODE_DB       <state>/opencode.db
+XDG_CACHE_HOME    <state>/cache
+XDG_CONFIG_HOME   <state>/config
+XDG_DATA_HOME     <state>/data
+XDG_STATE_HOME    <state>/state
+```
+
+The profile creates the launch configuration after AML has resolved the effective Sandbox cwd and capabilities. AML then starts the ACP session, bridges Tools/MCP, streams turns, validates the response, and releases provider-owned state through the shared lifecycle. Do not persist these temporary directories as a Workspace artifact unless you intentionally want OpenCode session state in your application.
+
+## Failure modes and troubleshooting
+
+<Steps>
+
+1. **`opencode` is missing**
+
+   Run `opencode --version` in the same host, container, or remote image that AML uses. A host installation is invisible to a remote Sandbox unless the image contains the executable.
+
+2. **OpenCode starts but cannot select a model**
+
+   Check the effective model identifier and the model provider's credentials. Remember the precedence order: `<Agent />` prop, factory option, then `config.model`.
+
+3. **A Tool is not visible**
+
+   Confirm that `<Tool />` is inside `<Agent />`, its name is unique, its input schema is valid JSON Schema, and the runtime `allowedTools` policy does not exclude it. Tool execution remains host-side.
+
+4. **Network, shell, or edit operations still fail**
+
+   Inspect both OpenCode's translated policy and the Sandbox's access. AML does not claim that the compatibility handshake verifies credentials, image utilities, model availability, network policy, or hostile-code isolation.
+
+5. **Configuration validation fails before launch**
+
+   `command`, `directory`, and `model` must be normalized strings. `args` must contain strings without null bytes. `config` must contain finite JSON values without cycles.
+
+</Steps>
+
+## References
+
+<CardGrid>
+  <LinkCard
+    title="OpenCode documentation"
+    href="https://opencode.ai/docs/"
+    description="Install OpenCode, configure model providers, and manage native settings."
+  />
+  <LinkCard
+    title="OpenCode ACP"
+    href="https://opencode.ai/docs/acp/"
+    description="OpenCode's Agent Client Protocol server mode."
+  />
+  <LinkCard
+    title="AML OpenCode profile source"
+    href="https://github.com/we-are-singular/aml/tree/main/providers/agents/opencode/src"
+    description="Launch arguments, config overlay, and permission translation."
+  />
+  <LinkCard
+    title="AML OpenCode tests"
+    href="https://github.com/we-are-singular/aml/tree/main/providers/agents/opencode/tests"
+    description="Launch shape, permissions, precedence, and live session coverage."
+  />
+</CardGrid>

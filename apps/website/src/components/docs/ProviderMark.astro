@@ -1,0 +1,49 @@
+---
+/* eslint-disable no-undef -- Astro exposes this global inside component frontmatter. */
+import ProviderIcon from "../ProviderIcon.astro"
+import { providerVisuals } from "../../data/provider-catalog"
+import type { ProviderIcon as ProviderIconDefinition, ProviderVisualName } from "../../data/provider-catalog"
+
+interface Props {
+  name: ProviderVisualName
+  size?: "sm" | "md" | "lg"
+}
+
+const { name, size = "md" } = Astro.props
+
+const providers = providerVisuals satisfies Record<
+  ProviderVisualName,
+  { label: string; icon: ProviderIconDefinition }
+>
+
+const provider = providers[name]
+const title = provider.icon.type === "asset" ? `${provider.label} logo` : `${provider.label} provider mark`
+const sizeClasses = {
+  sm: "size-8",
+  md: "size-[2.8rem]",
+  lg: "size-[4.25rem]",
+} as const
+---
+
+<span
+  class:list={[
+    "provider-mark inline-flex flex-none items-center justify-center overflow-hidden leading-none text-[var(--aml-text-muted)]",
+    sizeClasses[size],
+  ]}
+  data-provider={name}
+  aria-hidden="true"
+  title={title}
+>
+  <ProviderIcon icon={provider.icon} class="provider-mark__icon h-[72%] w-[72%] object-contain" loading="eager" />
+</span>
+
+<style>
+  :global([data-theme="dark"]) .provider-mark:is([data-provider="codex"], [data-provider="opencode"], [data-provider="pi"])
+    :global(.provider-mark__icon) {
+    filter: invert(1) brightness(1.08);
+  }
+
+  :global([data-theme="dark"]) .provider-mark[data-provider="s3"] :global(.provider-mark__icon) {
+    filter: brightness(0) invert(1);
+  }
+</style>

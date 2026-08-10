@@ -1,0 +1,295 @@
+---
+title: Provider authoring
+description: Exact public APIs and implementation contracts for custom Agent, Sandbox, and Workspace providers.
+---
+
+import { Aside } from "@astrojs/starlight/components"
+
+This page is the implementation reference for extending AML. Read [Provider engineering](/docs/provider-authoring/) first when you are deciding which boundary to implement; stay here when you need the exact helper, request, lease, runtime, or conformance contract.
+
+## Public extension surface
+
+| Goal                                         | Start with                                          | Supporting public APIs                                                                         |
+| -------------------------------------------- | --------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| Implement one complete Agent call directly   | `defineAgentProvider()` and `AgentProvider`         | `AgentRequest`, `AgentExecutionContext`, `AgentResponse`                                       |
+| Wrap an ACP-compatible coding agent          | `defineAcpAgentProvider()` and `AcpAgentProfile`    | `AcpAgentLaunch`, `AcpAgentLaunchContext`, `AcpAgentLaunchFile`                                |
+| Own a retained Agent session                 | `AbstractAgentProvider`                             | `AgentProviderSession`, `AgentProviderTurn`                                                    |
+| Implement Sandbox acquisition directly       | `defineSandboxProvider()` and `SandboxProvider`     | `SandboxAcquireRequest`, `SandboxLease`, `SandboxRuntime`                                      |
+| Implement a staged Sandbox lifecycle         | `AbstractSandboxProvider`                           | `ProvisionedSandbox`, `SandboxRuntime`                                                         |
+| Implement Workspace materialization directly | `defineWorkspaceProvider()` and `WorkspaceProvider` | `WorkspaceAcquireRequest`, `WorkspaceLease`, `WorkspaceSaveRequest`                            |
+| Build a revision-backed Workspace            | `createPersistentWorkspaceProvider()`               | `WorkspaceStorageAdapter`, `WorkspacePersistenceOptions`                                       |
+| Exercise a portable contract                 | `@aml-jsx/sdk/testing`                              | `agentProviderConformance()`, `sandboxProviderConformance()`, `workspaceProviderConformance()` |
+
+All production contracts above are exported from `@aml-jsx/sdk`. Conformance helpers and deterministic fixtures are deliberately isolated under `@aml-jsx/sdk/testing`.
+
+## Definition helpers
+
+The three structural helpers have the same narrow job:
+
+```ts
+defineAgentProvider(implementation)
+defineSandboxProvider(implementation)
+defineWorkspaceProvider(implementation)
+```
+
+Each helper validates the required provider shape and normalized name, then shallow-freezes the provider object. The Agent and Sandbox helpers preserve the concrete provider type; the Workspace helper preserves its handle type through the public `WorkspaceProvider` shape. Definition does **not** contact a vendor, install an executable, build an image, acquire a lease, or prove that the implementation honors its lifecycle.
+
+AML intentionally has no generic `defineProvider()`. Agent, Sandbox, and Workspace providers receive different requests and own different resources. A single lowest-common-denominator interface would erase the constraints that make the boundaries useful.
+
+## `defineAgentProvider()`
+
+```ts
+function defineAgentProvider<const Provider extends AgentProvider>(implementation: Provider): Readonly<Provider>
+```
+
+The minimal provider has a normalized `name`, a `run()` method, and an optional Sandbox compatibility handshake:
+
+```ts
+interface AgentProvider {
+  readonly name: string
+  run(request: AgentRequest, context: AgentExecutionContext): Promise<AgentResponse>
+  supportsSandbox?(sandbox: SandboxSession): boolean
+}
+```
+
+### Direct Agent example
+
+```ts
+import { defineAgentProvider, type AgentProvider } from "@aml-jsx/sdk"
+
+const internalReviewer: AgentProvider = {
+  name: "internal-reviewer",
+  async run(request, context) {
+    context.signal.throwIfAborted()
+
+    const result = await reviewService(
+      {
+        model: request.model,
+        prompt: request.prompt,
+        system: request.system,
+      },
+      { signal: context.signal }
+    )
+
+    context.signal.throwIfAborted()
+    return { text: result.text, structured: result.structured }
+  },
+}
+
+export const agentProvider = defineAgentProvider(internalReviewer)
+```
+
+`AgentRequest` contains the assembled initial prompt, ordered `followUps`, system text, model override, portable permissions, Tools, MCP servers, trace identity, and optional structured-output request. One `run()` call represents one authored `<Agent />` session. If a later turn fails, the provider fails the complete call rather than substituting an earlier response.
+
+`AgentExecutionContext` supplies the evaluation signal, events, trace identity, and optional effective `SandboxSession`. A provider must reject a pre-aborted signal with its reason, observe cancellation during external work, and release invocation-owned clients, processes, streams, bridges, and temporary files before `run()` settles.
+
+If `supportsSandbox()` returns `true`, `run()` must actually launch model-controlled work through `context.sandbox.lease.runtime` and honor the effective root and access. The handshake cannot widen a nested Sandbox policy.
+
+### ACP profile extension
+
+Use `defineAcpAgentProvider()` when the vendor already exposes an Agent Client Protocol executable. AML's shared ACP adapter owns process launch, one-session turn order, JavaScript Tool and structured-output bridging, MCP descriptors, temporary state, local versus Sandbox execution, abort, and cleanup.
+
+```ts
+import { defineAcpAgentProvider, type AcpAgentProfile } from "@aml-jsx/sdk"
+
+const profile: AcpAgentProfile<"company-agent"> = {
+  name: "company-agent",
+  workingDirectory: undefined,
+  createLaunch({ cwd, request, stateDirectory }) {
+    return {
+      command: "company-agent-acp",
+      args: ["--cwd", cwd],
+      env: {
+        COMPANY_AGENT_STATE: stateDirectory,
+        ...(request.model === undefined ? {} : { COMPANY_AGENT_MODEL: request.model }),
+      },
+      permissionPolicy: "allow_always",
+    }
+  },
+}
+
+export const companyAgent = defineAcpAgentProvider(profile)
+```
+
+An ACP profile owns vendor configuration and translation: command, literal arguments, environment, model/configuration mapping, permission policy, optional launch files, named-MCP support, and response transformation. Launch files must use normalized relative paths below AML's invocation-private state directory.
+
+### Retained sessions
+
+`AbstractAgentProvider<Name>` is the advanced template for an adapter that opens one `AgentProviderSession` per AML Agent. The base creates ordered turns, propagates cancellation, selects the final response, requests provider abort, and closes the session after success or failure. Subclasses implement `openSession()` and explicitly opt into compatible Sandboxes.
+
+Use the direct `run()` boundary unless retained turn state and cleanup are real provider concepts. Do not reuse a session across unrelated AML evaluations.
+
+## `defineSandboxProvider()`
+
+```ts
+function defineSandboxProvider<const Provider extends SandboxProvider>(implementation: Provider): Readonly<Provider>
+```
+
+```ts
+interface SandboxProvider<Handle = unknown> {
+  readonly name: string
+  acquire(request: SandboxAcquireRequest): Promise<SandboxLease<Handle>>
+}
+```
+
+`SandboxAcquireRequest` contains the effective `access`, logical `root` and `cwd`, evaluation id, cancellation signal, and optional active Workspace materialization. The returned lease contains an opaque provider handle, stable lease id, portable runtime, and `release()`.
+
+### Direct Sandbox example
+
+```ts
+import { defineSandboxProvider, type SandboxProvider } from "@aml-jsx/sdk"
+
+const internalSandbox: SandboxProvider<{ environmentId: string }> = {
+  name: "internal-sandbox",
+  async acquire(request) {
+    request.signal.throwIfAborted()
+    const environment = await provisionEnvironment(request, request.signal)
+    let releasePromise: Promise<void> | undefined
+
+    const runtime = {
+      access: request.access,
+      cwd: request.cwd,
+      root: request.root,
+      exec: (command, args, options) => environment.exec(command, args, options),
+      spawn: (command, args, options) => environment.spawn(command, args, options),
+    }
+
+    return {
+      handle: { environmentId: environment.id },
+      id: environment.id,
+      runtime,
+      release: () => (releasePromise ??= environment.destroy()),
+    }
+  },
+}
+
+export const sandboxProvider = defineSandboxProvider(internalSandbox)
+```
+
+The runtime must preserve the acquired access, root, and cwd. `exec()` receives one executable plus literal arguments and returns bounded stdout, stderr, and exit code. `spawn()` exposes standard Web streams, repeat-safe `kill()`, and repeat-safe `wait()`. Provider shell quoting is an implementation detail; do not silently merge arbitrary arguments into one shell string.
+
+The implementation owns path translation, timeouts, signal propagation, combined output limits, process-tree cleanup, access enforcement, and release after partial failure. If the backend cannot enforce read-only execution, reject command/process work under `access="read-only"` rather than recording a flag and continuing.
+
+### Staged Sandbox base
+
+`AbstractSandboxProvider<Name, Handle, Resource>` owns the common acquisition barrier:
+
+1. `provision()` creates an acknowledged provider resource.
+2. `createRuntime()` translates it into AML's portable command runtime.
+3. `initialize()` performs optional hydration or trusted setup.
+4. any failure after provisioning calls `cleanupProvisioned()`;
+5. the exposed lease memoizes `releaseResource()` so release is idempotent.
+
+Use `ProvisionedSandbox<Handle, Resource>` to keep the descendant-facing opaque handle separate from the internal resource needed for reconciliation and destruction.
+
+`defineSandboxProvider()` validates shape and freezes the adapter. It does not prove the environment is isolated. Provider documentation must state the actual host/container/platform, image, user, network, credentials, resource controls, filesystem behavior, and cleanup boundary.
+
+## `defineWorkspaceProvider()`
+
+```ts
+function defineWorkspaceProvider<Handle>(provider: WorkspaceProvider<Handle>): Readonly<WorkspaceProvider<Handle>>
+```
+
+```ts
+interface WorkspaceProvider<Handle = unknown> {
+  readonly name: string
+  acquire(request: WorkspaceAcquireRequest): Promise<WorkspaceLease<Handle>>
+}
+```
+
+### Direct Workspace example
+
+```ts
+import { defineWorkspaceProvider, type WorkspaceProvider } from "@aml-jsx/sdk"
+
+const internalWorkspace: WorkspaceProvider<{ directory: string }> = {
+  name: "internal-workspaces",
+  async acquire(request) {
+    // This helper throws WorkspaceConflictError only for a healthy competing writer.
+    const lock = request.lock === false ? undefined : await acquireWriterLock(request.id, request.signal)
+
+    let directory: string
+    try {
+      directory = await materialize(request.id, request.load, request.signal)
+    } catch (error) {
+      await lock?.release().catch(() => undefined)
+      throw error
+    }
+
+    let released = false
+    return {
+      directory,
+      handle: { directory },
+      id: request.id,
+      save: async saveRequest =>
+        publishRevision(request.id, directory, saveRequest, saveRequest?.signal ?? request.signal),
+      async release() {
+        if (released) return
+        released = true
+        try {
+          await removeMaterialization(directory)
+        } finally {
+          await lock?.release()
+        }
+      },
+    }
+  },
+}
+
+export const workspaceProvider = defineWorkspaceProvider(internalWorkspace)
+```
+
+The storage functions above are application placeholders, not AML APIs. A real provider acquires healthy writer authority before expensive materialization, removes partial state when materialization fails, publishes only complete validated saves, and relinquishes locks and temporary files even if saving fails.
+
+Use `WorkspaceConflictError` only for a healthy competing writer of the same durable id. Stale conditional publication, invalid archives, missing objects, access denial, and cleanup failure remain ordinary provider errors with their original causes.
+
+`WorkspaceSaveRequest` carries outcome, retention, include/exclude, gitignore, and cancellation policy. Retention includes the newly published revision. Document whether the provider directly exposes a durable directory, stages a temporary copy, publishes folder/archive revisions, or requires a provider-native volume.
+
+### Revision-backed storage shortcut
+
+If the backend is object storage, implement `WorkspaceStorageAdapter` and pass it to `createPersistentWorkspaceProvider()`. AML's persistence layer owns revision indexes, conditional publication, locks, retention, and materialization over that narrower storage contract. This is the extension seam used by revision-oriented providers; it avoids reimplementing the persistence protocol in every S3-compatible adapter.
+
+## Conformance helpers
+
+```ts
+import {
+  agentProviderConformance,
+  sandboxProviderConformance,
+  workspaceProviderConformance,
+} from "@aml-jsx/sdk/testing"
+
+await agentProviderConformance(agentProvider)
+await sandboxProviderConformance(sandboxProvider)
+await workspaceProviderConformance(workspaceProvider)
+```
+
+The helpers are ordinary async functions and do not require a particular test runner. They check the portable boundary, including pre-cancelled Agent execution, Sandbox lease shape and release, and Workspace conflict/save/release/restoration behavior.
+
+<Aside type="caution" title="Conformance is not certification">
+  Add provider-specific evidence for executable and protocol versions, credentials, image startup, output overflow,
+  timeout, cancellation, remote cleanup, lock renewal, conditional writes, transfer/reconciliation, and provider
+  outages.
+</Aside>
+
+## Public versus internal APIs
+
+Import extension contracts only from `@aml-jsx/sdk` and testing helpers only from `@aml-jsx/sdk/testing`. Paths below `sdk/src/**` are implementation details even when these docs link to them as readable source.
+
+Public advanced helpers such as `AbstractAgentProvider`, `defineAcpAgentProvider`, `AbstractSandboxProvider`, and `createPersistentWorkspaceProvider` are supported extension seams. Internal validators, evaluator state, ACP transport classes, provider package construction seams, and direct source paths are not public imports.
+
+## Provider documentation checklist
+
+Every custom provider should document:
+
+- maturity and exact versions exercised;
+- required executable, image, snapshot, SDK, credentials, and external service;
+- supported Agent/Sandbox/Workspace combinations;
+- path, cwd, access mode, and what “read-only” actually enforces;
+- session, process, materialization, revision, and retention semantics;
+- cancellation, timeout, output bounds, cleanup, and possible remote leftovers;
+- conflict identity versus persistence/provider failures;
+- content or credential fields that can reach provider-native logs and AML traces.
+
+Common contract failures include starting work on a pre-aborted signal, releasing only on success, claiming an unenforced access mode, leaking lifecycle authority through a handle, publishing a partial Workspace snapshot, and describing an image as Agent-ready without verifying its ACP executable.
+
+The normative architecture remains in [`SPEC.md`](https://github.com/we-are-singular/aml/blob/main/SPEC.md#15-provider-contract), while [`PROVIDERS.md`](https://github.com/we-are-singular/aml/blob/main/PROVIDERS.md) tracks built-in implementation status.

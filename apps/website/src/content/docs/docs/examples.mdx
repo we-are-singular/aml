@@ -1,0 +1,92 @@
+---
+title: Examples
+description: Choose a maintained AML example by learning goal, then let the repository runner show the current catalog.
+---
+
+import { Card, CardGrid } from "@astrojs/starlight/components"
+
+The examples package is the executable companion to these docs. Each example exports an AML tree; the shared runner creates an `AmlRuntime`, attaches the console tracer, and evaluates the selected workflow.
+
+:::tip[Start with a useful workflow]
+Run `review` for parallel specialists and synthesis, or `structured` for schema-validated output. Both default to deterministic providers and need no credentials.
+:::
+
+## Run an example
+
+From the repository root:
+
+```sh title="Terminal"
+npm run example --
+npm run example -- review
+npm run example -- structured
+```
+
+The first command prints the current filename-derived catalog. Treat that output and [`examples/run.ts`](https://github.com/we-are-singular/aml/blob/main/examples/run.ts) as the source of truth; this page deliberately recommends paths instead of duplicating every filename.
+
+## Choose by goal
+
+<CardGrid>
+  <Card title="Learn JSX evaluation" icon="puzzle">
+    Run `basic` for deterministic bottom-up evaluation with no model, network, or filesystem effect.
+
+    [`core/basic.tsx`](https://github.com/we-are-singular/aml/blob/main/examples/src/core/basic.tsx)
+
+    [Read the mental model](/docs/concepts/)
+
+  </Card>
+  <Card title="Run specialists in parallel" icon="random">
+    Run `concurrency` to see `Promise.all` create explicit concurrency while preserving result order.
+
+    [`core/concurrency.tsx`](https://github.com/we-are-singular/aml/blob/main/examples/src/core/concurrency.tsx)
+
+    [Build the complete review workflow](/docs/cookbook/code-review-workflow/)
+
+  </Card>
+  <Card title="Validate typed results" icon="approve-check">
+    Run `structured` to validate one deterministic `<Agent />` result with a Standard Schema before using it later.
+
+    [`core/structured.tsx`](https://github.com/we-are-singular/aml/blob/main/examples/src/core/structured.tsx)
+
+    [Read the structured output recipe](/docs/cookbook/structured-output/)
+
+  </Card>
+  <Card title="Build a useful review" icon="pencil">
+    Run `review` for parallel reviewers, a typed Tool, and synthesis. Live Agent providers are an explicit opt-in.
+
+    [`integrations/review.tsx`](https://github.com/we-are-singular/aml/blob/main/examples/src/integrations/review.tsx)
+
+    [Build the complete review workflow](/docs/cookbook/code-review-workflow/)
+
+  </Card>
+  <Card title="Use disposable execution" icon="seti:docker">
+    Run `docker` to cross a real container boundary. It uses the Docker daemon and may pull an image; its `<Agent />` is deterministic.
+
+    [`integrations/docker.tsx`](https://github.com/we-are-singular/aml/blob/main/examples/src/integrations/docker.tsx)
+
+    [Read the generated diagnostic recipe](/docs/cookbook/generated-diagnostic/)
+
+  </Card>
+  <Card title="Persist local work" icon="open-book">
+    Run `workspace-local` to write one named file under an OS temporary directory and reuse `<Workspace />`.
+
+    [`integrations/workspace-local.tsx`](https://github.com/we-are-singular/aml/blob/main/examples/src/integrations/workspace-local.tsx)
+
+    [Compose Sandboxes and Workspaces](/docs/cookbook/sandboxes-and-workspaces/)
+
+  </Card>
+</CardGrid>
+
+## When an example needs infrastructure
+
+The runner also discovers credentialed Agent examples and resource-backed Sandbox or Workspace examples. List the catalog first, then inspect the selected source before running it.
+
+- **Deterministic** examples use fixtures from `@aml-jsx/sdk/testing`. They demonstrate AML contracts without claiming that a live model behaves identically.
+- **Credentialed** examples start a real Agent adapter and can require an executable, model account, network access, and provider-specific environment variables.
+- **Resource-backed** examples use a local directory, Docker daemon, or remote Sandbox. Their source owns the mutation and cleanup notes for that exact workflow.
+- **Fixture** examples model a boundary without contacting the described service. The MCP example, for example, carries descriptor metadata but does not connect to its placeholder URL.
+
+:::caution[Read effects before running]
+A real Agent can inspect or mutate its effective working directory when its Sandbox and Workspace allow it. A prompt that says “read only” is not a filesystem security boundary.
+:::
+
+For copyable, task-oriented walkthroughs with prerequisites and expected output, continue to the [Cookbook](/docs/cookbook/).

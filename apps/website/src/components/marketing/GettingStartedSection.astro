@@ -1,0 +1,115 @@
+---
+import { withBase } from "../../config/site"
+---
+
+<section id="start" class="scroll-mt-20 border-t border-line bg-ink text-paper">
+  <div class="mx-auto max-w-6xl px-5 py-24 sm:py-32">
+    <p class="reveal font-mono text-[12px] uppercase tracking-[0.2em] text-[#8aa2ff]">get started</p>
+    <div class="mt-3">
+      <h2 class="reveal text-3xl font-bold tracking-tight [--reveal-delay:60ms] sm:text-5xl">
+        From install to first run in three small steps
+      </h2>
+      <p class="reveal mt-5 text-[15px] leading-relaxed text-white/60 [--reveal-delay:120ms]">
+        Install the published SDK on Node.js 26 or newer, point TypeScript's JSX transform at AML, and evaluate the
+        resulting workflow from your application.
+      </p>
+    </div>
+
+    <div class="mt-14 grid gap-5 lg:grid-cols-3">
+      <div class="magnetic-card reveal rounded-2xl border border-white/10 bg-white/[0.04] p-6">
+        <div class="flex items-center justify-between">
+          <p class="font-mono text-[12px] text-[#8aa2ff]">step 1</p>
+          <button
+            data-copy="npm install @aml-jsx/sdk"
+            class="copy-btn rounded-md border border-white/15 px-2 py-0.5 font-mono text-[10.5px] text-white/60 transition-colors hover:border-white/40 hover:text-white"
+          >
+            copy
+          </button>
+        </div>
+        <h3 class="mt-3 font-semibold">Install the runtime</h3>
+        <pre
+          class="mt-4 overflow-x-auto rounded-lg bg-black/40 px-4 py-3 font-mono text-[12.5px] text-[#e8e6df]"
+        ><code>$ npm install <span class="text-[#7ee0b8]">@aml-jsx/sdk</span></code></pre>
+        <div class="mt-5 border-t border-white/10 pt-5">
+          <div class="flex items-center justify-between gap-3">
+            <p class="text-[12.5px] font-medium text-white/65">Coding with an agent?</p>
+            <button
+              data-copy="npx skills add we-are-singular/aml --skill aml-jsx"
+              class="copy-btn rounded-md border border-white/15 px-2 py-0.5 font-mono text-[10.5px] text-white/60 transition-colors hover:border-white/40 hover:text-white"
+            >
+              copy
+            </button>
+          </div>
+          <pre
+            class="mt-3 overflow-x-auto rounded-lg bg-black/40 px-4 py-3 font-mono text-[11.5px] text-[#e8e6df]"
+          ><code>$ npx skills add <span class="text-[#7ee0b8]">we-are-singular/aml</span> --skill aml-jsx</code></pre>
+        </div>
+      </div>
+
+      <div
+        class="magnetic-card reveal rounded-2xl border border-white/10 bg-white/[0.04] p-6 [--reveal-delay:80ms]"
+      >
+        <div class="flex items-center justify-between">
+          <p class="font-mono text-[12px] text-[#8aa2ff]">step 2</p>
+          <button
+            data-copy-target="start-tsconfig"
+            class="copy-btn rounded-md border border-white/15 px-2 py-0.5 font-mono text-[10.5px] text-white/60 transition-colors hover:border-white/40 hover:text-white"
+          >
+            copy
+          </button>
+        </div>
+        <h3 class="mt-3 font-semibold">Point JSX at AML</h3>
+        <pre
+          id="start-tsconfig"
+          class="mt-4 overflow-x-auto rounded-lg bg-black/40 px-4 py-3 font-mono text-[12.5px] leading-relaxed text-[#e8e6df]"
+        ><code>&#123;
+  <span class="text-[#9dd6ff]">"compilerOptions"</span>: &#123;
+    <span class="text-[#9dd6ff]">"jsx"</span>: <span class="text-[#ffc093]">"react-jsx"</span>,
+    <span class="text-[#9dd6ff]">"jsxImportSource"</span>: <span class="text-[#ffc093]">"@aml-jsx/sdk"</span>
+  &#125;
+&#125;</code></pre>
+      </div>
+
+      <div
+        class="magnetic-card reveal rounded-2xl border border-white/10 bg-white/[0.04] p-6 [--reveal-delay:160ms]"
+      >
+        <div class="flex items-center justify-between">
+          <p class="font-mono text-[12px] text-[#8aa2ff]">step 3</p>
+          <button
+            data-copy-target="start-agent"
+            class="copy-btn rounded-md border border-white/15 px-2 py-0.5 font-mono text-[10.5px] text-white/60 transition-colors hover:border-white/40 hover:text-white"
+          >
+            copy
+          </button>
+        </div>
+        <h3 class="mt-3 font-semibold">Evaluate a tree</h3>
+        <pre
+          id="start-agent"
+          class="mt-4 overflow-x-auto rounded-lg bg-[#1e1e1e] px-4 py-3 font-mono text-[12.5px] leading-relaxed text-[#d4d4d4]"
+        ><code>import &#123; Agent, AmlRuntime &#125; from "@aml-jsx/sdk"
+import &#123; DeterministicAgentProvider &#125; from "@aml-jsx/sdk/testing"
+
+const provider = new DeterministicAgentProvider()
+const runtime = new AmlRuntime(&#123; agentProvider: provider &#125;)
+await runtime.evaluate(
+  &lt;Agent&gt;Summarize this repository.&lt;/Agent&gt;,
+)</code></pre>
+      </div>
+    </div>
+
+    <div class="reveal mt-8 flex flex-wrap gap-x-6 gap-y-3 [--reveal-delay:220ms]">
+      <a
+        href={withBase("docs/getting-started/")}
+        class="font-mono text-[12px] font-semibold text-[#8aa2ff] underline-offset-4 hover:underline"
+      >
+        Follow the complete setup guide →
+      </a>
+      <a
+        href={withBase("docs/ast/")}
+        class="font-mono text-[12px] font-semibold text-white/65 underline-offset-4 hover:text-white hover:underline"
+      >
+        Understand the JSX transform →
+      </a>
+    </div>
+  </div>
+</section>

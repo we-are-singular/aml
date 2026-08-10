@@ -1,0 +1,123 @@
+---
+title: Security model
+description: Understand AML’s trust boundaries, capability scopes, credentials, and provider-specific limitations.
+---
+
+AML composes capabilities; it does not turn arbitrary model output into a trusted program. Security comes from the boundary around the application, the selected Sandbox platform, the Workspace contents, provider credentials, and the effects exposed through Tools and MCP.
+
+## Threat boundaries
+
+| Boundary          | What AML guarantees                                                                                                             | What it does not guarantee                                                                                                                                                              |
+| ----------------- | ------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Agent permissions | Maps portable filesystem, network, and shell requests to a provider profile; an enclosing Sandbox can narrow filesystem access. | Agent permissions are not a host or container security boundary and cannot widen a Sandbox.                                                                                             |
+| Local Sandbox     | Validates logical paths and runs literal commands in the host process environment.                                              | It does not isolate host files, environment variables, network, CPU, memory, syscalls, or child processes.                                                                              |
+| Docker Sandbox    | Starts a named image, mounts the Workspace, and can enforce a read-only bind mount.                                             | The adapter does not configure daemon isolation, capabilities, seccomp, user identity, network, CPU, memory, or a hardened root filesystem. It is not a complete hostile-code boundary. |
+| Daytona / Modal   | Creates a disposable remote environment and transfers the Workspace.                                                            | Provider account, image, network, identity, remote platform, and transfer durability remain deployment responsibilities.                                                                |
+| JavaScript Tool   | Validates JSON input and executes the exact application-registered function.                                                    | Tools run in the AML host process; a Sandbox does not automatically confine arbitrary JavaScript.                                                                                       |
+| MCP               | Grants a named server to one Agent session.                                                                                     | A model can use every capability granted to that session; prompting it not to use a capability is not access control.                                                                   |
+
+For hostile or untrusted code, choose and harden an execution platform independently. Review the [Sandbox overview](/docs/providers/sandboxes/), then validate the selected provider’s daemon, image, network, identity, resource, and syscall policy.
+
+## Credentials and secrets
+
+Keep credentials outside authored AML trees and Workspaces. Provider constructors may receive an injected SDK client or provider configuration, but secret values should come from workload identity, environment injection, or a secret manager.
+
+```ts
+import { S3Client } from "@aws-sdk/client-s3"
+import { s3Workspace } from "@aml-jsx/sdk"
+
+const client = new S3Client({
+  region: process.env.AWS_REGION ?? "us-east-1",
+})
+
+const workspace = s3Workspace({
+  bucket: requireEnv("AML_WORKSPACE_BUCKET"),
+  client,
+  prefix: "production/workspaces",
+})
+
+function requireEnv(name: string): string {
+  const value = process.env[name]
+  if (value === undefined || value.trim() === "") {
+    throw new Error(`${name} is required`)
+  }
+  return value
+}
+```
+
+Do not put API keys in `system`, Agent prompts, `<File />` contents, `setup`, command arguments, or the durable Workspace. Do not assume an Agent will keep a credential private after it is exposed to the process environment or model context. Scope the identity to the exact bucket prefix, image registry, remote Sandbox project, or executable permissions required.
+
+## Capability scope
+
+`allowedTools` and `allowedMcpServers` on `AmlRuntime` are exact-name allowlists. A Tool is trusted application code, not a shell alias, and its input is validated against the generated JSON Schema before the function executes. `<Tool />` components are scoped to the `<Agent />` where they are declared; they are not inherited by child `<Agent />` components.
+
+```tsx
+import { Agent, AmlRuntime, Tool, createConsoleTracer, defineTool } from "@aml-jsx/sdk"
+
+const lookupTicket = defineTool({
+  name: "lookup_ticket",
+  description: "Read one support ticket from the approved service.",
+  input: {
+    type: "object",
+    properties: { id: { type: "string" } },
+    required: ["id"],
+    additionalProperties: false,
+  },
+  execute: async ({ id }) => ({ id, status: "open" }),
+})
+
+const runtime = new AmlRuntime({ allowedTools: ["lookup_ticket"] })
+await runtime.evaluate(
+  <Agent>
+    <Tool use={lookupTicket} />
+    Summarize ticket ABC-123.
+  </Agent>
+)
+```
+
+The example’s implementation is intentionally illustrative: production code must validate the ticket identifier and authenticate the service call. The important boundary is that the Tool is registered by the application and its capability is explicit.
+
+## Filesystem and Workspace safety
+
+`<File />` and Agent filesystem actions require an active Workspace. A Workspace’s `id` selects the durable identity; `lock` rejects healthy competing writers, while `writeConcurrency="serial"` controls writable Sandbox scheduling within one evaluation. They are separate controls. The S3 lock is not a strict fencing primitive because ownership verification and deletion are separate requests; rely on conditional index publication to reject stale revision publication and use external fencing when the workload requires it.
+
+Revision-backed providers publish a new artifact and then conditionally publish the current index. A stale writer must fail rather than silently overwrite a newer revision. Handle `WorkspaceConflictError` as an ownership conflict; do not classify every S3 precondition or save error as a lock conflict.
+
+Use `include`, `exclude`, `.gitignore`, archive limits, and extracted-byte limits to prevent accidental ingestion or oversized snapshots. Treat restored Workspace files as untrusted input if they originated from another user or tenant. Use separate Workspace identities and storage prefixes for tenants where isolation matters.
+
+## Provider-specific deployment posture
+
+### Local
+
+Local processes inherit the application user’s host privileges and environment. Use Local only for trusted workflows, development, or conformance. A logical path check and symlink rejection prevent path escapes through AML’s configured root; they do not create host isolation.
+
+### Docker
+
+Docker’s read-only mode is a bind-mount property. The container can still execute programs, read image contents, access whatever network and credentials the daemon grants, and potentially affect the host according to daemon configuration. Set the container user, capabilities, network, CPU, memory, filesystem, and syscall policy in the image/launcher that owns those decisions; AML does not infer them.
+
+### Daytona and Modal
+
+Remote providers transfer Workspace files into a disposable environment and reconcile changes during release. Local edits can be lost if the process fails before reconciliation. Provider credentials and remote environment policy must be managed by the deployment. Cancellation attempts to destroy remote resources, but operators should monitor provider-side leftovers and treat cleanup errors as actionable.
+
+## Tracing without leakage
+
+AML trace sinks receive redacted events by default. A sink must explicitly set `captureContent` to receive sensitive prompt, Tool, and result fields. Keep it false for normal production telemetry and send only scalar attributes to an approved sink.
+
+```ts
+const trace = createConsoleTracer({ captureContent: false })
+```
+
+Trace consumers are not awaited by workflow execution. Configure `onTraceError` to report a broken telemetry sink without turning telemetry backpressure into an application capability.
+
+## Security review checklist
+
+- identify whether model output, user input, or Workspace files are trusted;
+- use a real execution boundary for untrusted code and verify it independently;
+- inject credentials and scope them to the provider namespace;
+- keep content capture disabled unless retention and access are approved;
+- separate tenants and durable Workspace ids/prefixes;
+- set resource, timeout, Agent-call, concurrency, and output limits;
+- test cancellation, cleanup, lock loss, stale publication, and provider outage;
+- document every Tool and MCP server as an explicit capability.
+
+References: [Tools in the AML specification](https://github.com/we-are-singular/aml/blob/main/SPEC.md#8-tools), [Sandboxes](https://github.com/we-are-singular/aml/blob/main/SPEC.md#13-sandbox), [Workspaces](https://github.com/we-are-singular/aml/blob/main/SPEC.md#14-workspace), and [provider guidance](https://github.com/we-are-singular/aml/blob/main/PROVIDERS.md).

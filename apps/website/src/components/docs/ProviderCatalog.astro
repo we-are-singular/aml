@@ -1,0 +1,153 @@
+---
+import { withBase } from "../../config/site"
+import ProviderMark from "./ProviderMark.astro"
+
+const groups = [
+  {
+    label: "Agent providers",
+    description: "Own model sessions, native capabilities, and the Agent Client Protocol lifecycle.",
+    providers: [
+      { name: "codex", title: "Codex", href: "/docs/providers/agents/codex/", meta: "ACP · codex-acp", bestFor: "Codex coding workflows" },
+      { name: "opencode", title: "OpenCode", href: "/docs/providers/agents/opencode/", meta: "ACP · opencode", bestFor: "Open source model access" },
+      { name: "pi", title: "Pi", href: "/docs/providers/agents/pi/", meta: "ACP · pi-acp + pi", bestFor: "Extensible agent harnesses" },
+    ],
+  },
+  {
+    label: "Sandbox providers",
+    description: "Own process execution, filesystem isolation, and ephemeral environment cleanup.",
+    providers: [
+      { name: "local-sandbox", title: "Local", href: "/docs/providers/sandboxes/local/", meta: "Host process · no isolation", bestFor: "Trusted development" },
+      { name: "docker", title: "Docker", href: "/docs/providers/sandboxes/docker/", meta: "Docker CLI + daemon", bestFor: "Disposable container work" },
+      { name: "daytona", title: "Daytona", href: "/docs/providers/sandboxes/daytona/", meta: "Daytona credentials", bestFor: "Remote dev environments" },
+      { name: "modal", title: "Modal", href: "/docs/providers/sandboxes/modal/", meta: "Modal credentials", bestFor: "Serverless remote work" },
+    ],
+  },
+  {
+    label: "Workspace providers",
+    description: "Own durable files, revision storage, locking, and materialization into a runtime.",
+    providers: [
+      { name: "local-workspace", title: "Local", href: "/docs/providers/workspaces/local/", meta: "Existing directory · direct writes", bestFor: "Trusted local state" },
+      { name: "filesystem", title: "Filesystem", href: "/docs/providers/workspaces/filesystem/", meta: "Archive or folder revisions", bestFor: "Local durable history" },
+      { name: "s3", title: "S3", href: "/docs/providers/workspaces/s3/", meta: "S3-compatible object storage", bestFor: "Shared durable history" },
+    ],
+  },
+] as const
+---
+
+<div class="provider-catalog">
+  {
+    groups.map(group => (
+      <section class="provider-group">
+        <div class="provider-group__intro">
+          <p>{group.label}</p>
+          <span>{group.description}</span>
+        </div>
+        <div class="provider-group__grid">
+          {group.providers.map(provider => (
+            <a href={withBase(provider.href)} class="provider-card">
+              <ProviderMark name={provider.name} size="md" />
+              <span>
+                <strong>{provider.title}</strong>
+                <small>{provider.meta}</small>
+                <b>{provider.bestFor}</b>
+              </span>
+              <i aria-hidden="true">↗</i>
+            </a>
+          ))}
+        </div>
+      </section>
+    ))
+  }
+</div>
+
+<style>
+  .provider-catalog {
+    display: grid;
+    gap: 2.4rem;
+    margin: 2rem 0 3rem;
+  }
+
+  .provider-group {
+    display: grid;
+    gap: 1rem;
+  }
+
+  .provider-group__intro p {
+    color: var(--sl-color-white);
+    font-size: 1rem;
+    font-weight: 650;
+    margin: 0 0 0.2rem;
+  }
+
+  .provider-group__intro span {
+    color: var(--sl-color-gray-2);
+    font-size: 0.84rem;
+  }
+
+  .provider-group__grid {
+    display: grid;
+    gap: 0.72rem;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .provider-card {
+    align-items: center;
+    background: var(--sl-color-bg-nav);
+    border: 1px solid var(--sl-color-hairline-light);
+    border-radius: 0.95rem;
+    color: inherit;
+    display: grid;
+    gap: 0.85rem;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    padding: 0.9rem;
+    text-decoration: none;
+    transition:
+      border-color 160ms ease,
+      box-shadow 160ms ease,
+      transform 160ms ease;
+  }
+
+  .provider-card:hover {
+    border-color: color-mix(in srgb, var(--sl-color-accent) 40%, var(--sl-color-hairline-light));
+    box-shadow: var(--aml-shadow-md);
+    transform: translateY(-2px);
+  }
+
+  .provider-card strong,
+  .provider-card small,
+  .provider-card b {
+    display: block;
+  }
+
+  .provider-card strong {
+    color: var(--sl-color-white);
+    font-size: 0.92rem;
+    margin-bottom: 0.22rem;
+  }
+
+  .provider-card small {
+    color: var(--sl-color-gray-2);
+    font-size: 0.74rem;
+    line-height: 1.35;
+  }
+
+  .provider-card b {
+    color: var(--sl-color-gray-1);
+    font-family: var(--sl-font-mono);
+    font-size: 0.64rem;
+    font-weight: 500;
+    margin-top: 0.45rem;
+    text-transform: uppercase;
+  }
+
+  .provider-card i {
+    color: var(--sl-color-gray-3);
+    font-style: normal;
+  }
+
+  @media (max-width: 42rem) {
+    .provider-group__grid {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>

@@ -10,6 +10,7 @@
   "type": "module",
   "scripts": {
     "build": "turbo build",
+    "dev": "npm run dev --workspace=@aml-jsx/website --",
     "example": "turbo run example --filter=@aml-jsx/examples --",
     "format": "oxfmt",
     "format:check": "oxfmt --check",

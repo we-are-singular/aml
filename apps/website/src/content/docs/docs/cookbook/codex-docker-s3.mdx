@@ -1,0 +1,222 @@
+---
+title: Codex + Docker + S3 Workspace
+description: Compose a credentialed Codex Agent, application-owned Docker image, and durable S3 Workspace in one AML evaluation.
+---
+
+import { Aside, Badge, Card, CardGrid, LinkCard, Steps } from "@astrojs/starlight/components"
+
+<Badge text="Production skeleton" variant="caution" /> <Badge text="Credentials required" />
+<Badge text="Docker + S3" />
+
+This is the canonical three-provider composition: Codex supplies the Agent session, Docker supplies disposable execution, and S3 supplies durable Workspace revisions.
+
+```text
+application
+  ├─ codexAgent()       → codex-acp → Codex model session
+  ├─ dockerSandbox()    → named image → disposable container
+  └─ s3Workspace()      → local staging ↔ S3 revisions
+
+data:  S3 revision → local materialization → /workspace bind mount
+auth:  process environment / workload identity → Codex and S3 clients
+```
+
+<Aside type="caution" title="This is a deployment contract, not a copy-paste environment">
+  The image name, bucket, region, credentials, and model are application-owned values. They are deliberately marked as
+  placeholders below. AML does not build the image, install `codex-acp`, create the bucket, or provision credentials.
+</Aside>
+
+## Complete composition
+
+The example is complete at the AML boundary. It assumes that your application has already built and published an image containing `codex-acp`, Codex's runtime dependencies, a shell, Node, and the repository tools your Agent is expected to use.
+
+```tsx
+import { S3Client } from "@aws-sdk/client-s3"
+import { Agent, AmlRuntime, Sandbox, Workspace, codexAgent, dockerSandbox, s3Workspace } from "@aml-jsx/sdk"
+
+const bucket = process.env.AML_WORKSPACE_BUCKET
+const region = process.env.AWS_REGION ?? "us-east-1"
+const codexApiKey = process.env.CODEX_API_KEY ?? process.env.OPENAI_API_KEY
+
+if (bucket === undefined || bucket.length === 0) {
+  throw new Error("AML_WORKSPACE_BUCKET is required")
+}
+
+if (codexApiKey === undefined || codexApiKey.length === 0) {
+  throw new Error("CODEX_API_KEY or OPENAI_API_KEY is required")
+}
+
+// Application-owned client. In production, prefer workload identity or the
+// AWS SDK's default credential chain over static keys in environment files.
+const workspaceClient = new S3Client({ region })
+
+const runtime = new AmlRuntime({
+  agentProvider: codexAgent({
+    apiKey: codexApiKey,
+    command: "codex-acp",
+    model: "gpt-5.3-codex",
+    reasoningEffort: "high",
+  }),
+  sandboxProvider: dockerSandbox({
+    // PLACEHOLDER: publish and pin an image containing codex-acp, Codex's
+    // runtime, Node, sh, and the repository tools this workflow needs.
+    image: "REGISTRY.example/aml-codex-runtime@sha256:IMAGE_DIGEST",
+  }),
+  workspaceProvider: s3Workspace({
+    bucket,
+    client: workspaceClient,
+    format: "archive",
+    prefix: "production/aml-workspaces",
+  }),
+})
+
+const result = await runtime.evaluate(
+  <Workspace
+    id="review-42"
+    load={{ revision: "current", exclude: ["node_modules/**", ".git/**"] }}
+    save={{ on: "success", gitignore: true, retention: 5 }}
+  >
+    <Sandbox access="read-write">
+      <Agent system="Review the repository and write reports/summary.md with evidence and actionable findings.">
+        Inspect the checked-out project, run only the approved repository tools, and produce a concise review report.
+      </Agent>
+    </Sandbox>
+  </Workspace>
+)
+
+console.log(result)
+```
+
+<Aside type="note" title="Credential flow">
+  `apiKey` is captured by `codexAgent()` and mapped to `CODEX_API_KEY` for the ACP launch. If `apiKey` is omitted, the
+  Codex profile detects `env.CODEX_API_KEY` or `env.OPENAI_API_KEY`. The S3 client uses the AWS SDK credential chain.
+  Neither credential belongs in the Workspace, image, prompt, or trace content.
+</Aside>
+
+## Build the application-owned image
+
+AML invokes the configured `command` inside the effective Sandbox. For this composition, the command must be present in the image, not merely installed on the host running the Node process.
+
+```dockerfile
+# PLACEHOLDER: choose and audit your own base image and package versions.
+FROM node:26-bookworm
+
+RUN apt-get update \
+  && apt-get install --yes --no-install-recommends ca-certificates git openssh-client \
+  && rm -rf /var/lib/apt/lists/*
+
+# Install the exact ACP adapter and native Codex versions approved by your deployment.
+RUN npm install --global \
+  @agentclientprotocol/codex-acp@1.1.7 \
+  @openai/codex@0.145.0
+
+# Add the repository-specific compilers, linters, and scripts here.
+WORKDIR /workspace
+ENTRYPOINT ["sh"]
+```
+
+The Docker provider starts a detached container with `--rm`, bind-mounts the materialized Workspace at `/workspace`, sets the logical working directory, and starts a keepalive shell. It does not install the Agent during acquisition. A `node:26` image by itself is therefore not a Codex image.
+
+Build and smoke-test the image before publishing it. Replace the registry and tag with application-owned values:
+
+```sh
+docker build --pull --tag registry.example/aml-codex-runtime:reviewed .
+docker run --rm --entrypoint sh registry.example/aml-codex-runtime:reviewed -lc \
+  'command -v codex-acp && command -v codex && command -v node && command -v git'
+docker push registry.example/aml-codex-runtime:reviewed
+docker inspect --format '{{index .RepoDigests 0}}' registry.example/aml-codex-runtime:reviewed
+```
+
+Use the resulting repository digest in `dockerSandbox({ image })`. The smoke test proves only that required executables resolve; run a credentialed ACP smoke evaluation in the deployed network and identity environment before production traffic.
+
+## What happens to the files
+
+The three providers have different ownership boundaries:
+
+| Boundary         | Codex                                           | Docker                                            | S3 Workspace                                                         |
+| ---------------- | ----------------------------------------------- | ------------------------------------------------- | -------------------------------------------------------------------- |
+| Owns             | ACP process, model session, Agent configuration | Container, process transport, image execution     | Revisions, lock, materialization, publication                        |
+| File view        | Uses the Sandbox cwd                            | Same-host bind mount at `/workspace`              | Downloads current revision to local temporary space                  |
+| Write durability | None                                            | Writes reach the host materialization immediately | Durable only after successful save and conditional index publication |
+| Remote transfer  | No                                              | No; bind mount                                    | Yes, during load and save                                            |
+
+Docker is not an archive-transfer provider in this composition. The S3 provider first materializes a revision locally; Docker then mounts that local directory. On successful completion, S3 snapshots the local directory, uploads an immutable revision, conditionally publishes `workspace.json`, and prunes beyond `retention`.
+
+## Expected lifecycle
+
+<Steps>
+
+1. The runtime acquires `review-42` from S3. With the default `lock={true}`, S3 creates or renews `production/aml-workspaces/review-42/lock.json`.
+2. S3 downloads the selected revision into a unique local staging directory. Missing `current` state is an application decision; initialize a new Workspace explicitly when appropriate.
+3. Docker starts the pinned image and bind-mounts that staging directory at `/workspace`.
+4. AML launches `codex-acp` in the container. The Codex profile supplies isolated `CODEX_HOME`, model configuration, filesystem mode, and the API-key authentication method.
+5. The Agent reads and writes below `/workspace`. The Agent's permission mode does not add Docker network, capability, user, or resource isolation.
+6. On success, AML saves before releasing the Workspace. S3 uploads the revision and conditionally publishes the current index; only then are the new files durable in S3.
+7. AML releases the Docker container and S3 lock. A timeout or cancellation can trigger container cleanup and skips Workspace saving.
+
+</Steps>
+
+## Production hardening checklist
+
+<CardGrid>
+  <Card title="Pin and audit the image" icon="seti:lock">
+    Pin an image digest, scan it, use a non-root user where possible, and keep the ACP executable and repository tools
+    at reviewed versions.
+  </Card>
+  <Card title="Harden Docker outside AML" icon="approve-check">
+    Configure network egress, capabilities, seccomp/AppArmor, CPU/memory/PID/disk limits, daemon access, and secret
+    delivery in the deployment platform. `dockerSandbox()` does not configure these controls.
+  </Card>
+  <Card title="Constrain S3" icon="seti:db">
+    Scope `GetObject`, `PutObject`, `DeleteObject`, and `ListBucket` to the environment prefix. Verify conditional
+    writes, stable ETags, streaming bodies, and pagination with the exact S3-compatible service. Start from the provider
+    guide's [minimum IAM policy](/docs/providers/workspaces/s3/#minimum-iam-permissions).
+  </Card>
+  <Card title="Treat model output as data" icon="warning">
+    Validate paths, commands, structured results, and generated files in application code. A prompt or Codex read-only
+    mode is not a hostile-code boundary.
+  </Card>
+</CardGrid>
+
+Do not use `save={{ on: "always" }}` as crash-safe checkpointing. It can publish a partial snapshot after descendant failure, but cancellation skips saving and a process failure can still lose edits that were not published.
+
+## Troubleshooting the composition
+
+| Symptom                                             | Evidence to collect                                                                                                                                      | Likely boundary                              |
+| --------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------- |
+| `codex-acp` cannot start                            | Run the exact command in the image; inspect image `PATH`, architecture, and runtime dependencies                                                         | Docker image or ACP installation             |
+| Codex authenticates locally but not in Docker       | Confirm the credential is injected into the container launch environment and is not only present on the host                                             | Application secret delivery / image boundary |
+| Files are visible during the run but absent from S3 | Check whether evaluation reached save, whether publication returned a conditional conflict, and whether release also failed                              | Workspace save/publication                   |
+| A second run receives `AML_WORKSPACE_CONFLICT`      | Identify the active owner and wait for it to release; do not delete a lock based only on age unless the provider's stale policy proves it                | S3 writer lease                              |
+| Docker remains after cancellation                   | Inspect the named `aml-<evaluation-prefix>-<uuid>` container and daemon events, then remove only a container verified to belong to the failed evaluation | Docker cleanup                               |
+
+## Exact contracts and source
+
+<CardGrid>
+  <LinkCard
+    title="Codex provider"
+    href="/docs/providers/agents/codex/"
+    description="Executable, credential, permission, and structured-output behavior."
+  />
+  <LinkCard
+    title="Docker provider"
+    href="/docs/providers/sandboxes/docker/"
+    description="Bind mount, lifecycle, cleanup, image, and hardening contract."
+  />
+  <LinkCard
+    title="S3 provider"
+    href="/docs/providers/workspaces/s3/"
+    description="Materialization, lock, conditional publication, and retention contract."
+  />
+  <LinkCard
+    title="Workspace provider boundary"
+    href="/docs/reference/providers/#workspace"
+    description="Shared materialization, save, revision, and release responsibilities."
+  />
+</CardGrid>
+
+- [`codex-agent.ts`](https://github.com/we-are-singular/aml/blob/main/providers/agents/codex/src/codex-agent.ts)
+- [`docker-sandbox.ts`](https://github.com/we-are-singular/aml/blob/main/providers/sandboxes/docker/src/docker-sandbox.ts)
+- [`s3-workspace.ts`](https://github.com/we-are-singular/aml/blob/main/providers/workspaces/s3/src/s3-workspace.ts)
+- [`s3-workspace-lock.ts`](https://github.com/we-are-singular/aml/blob/main/providers/workspaces/s3/src/s3-workspace-lock.ts)
+- [`workspace-persistence.ts`](https://github.com/we-are-singular/aml/blob/main/sdk/src/workspace-persistence/workspace-persistence.ts)
+- [AWS SDK credential provider chain](https://docs.aws.amazon.com/sdk-for-javascript/v3/developer-guide/setting-credentials-node.html)

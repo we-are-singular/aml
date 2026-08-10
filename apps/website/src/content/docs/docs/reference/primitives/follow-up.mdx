@@ -1,0 +1,42 @@
+---
+title: "<FollowUp />"
+description: Stage an ordered later input in the same provider-owned Agent session.
+---
+
+`<FollowUp />` adds one later turn to its nearest containing [`<Agent />`](../agent/). AML resolves every follow-up before opening the provider session, then the provider sends the initial prompt and follow-ups through one shared session history.
+
+```tsx
+import { Agent, AmlRuntime, FollowUp } from "@aml-jsx/sdk"
+import { DeterministicAgentProvider } from "@aml-jsx/sdk/testing"
+
+const provider = new DeterministicAgentProvider({
+  respond: request => ({ text: [request.prompt, ...(request.followUps ?? [])].join(" | ") }),
+})
+
+const runtime = new AmlRuntime({ agentProvider: provider })
+const result = await runtime.evaluate(
+  <Agent>
+    Draft the migration plan.
+    <FollowUp>Estimate the risk of each step.</FollowUp>
+    <FollowUp>Finish with a three-bullet executive summary.</FollowUp>
+  </Agent>
+)
+```
+
+## Props
+
+| Prop       | Type            | Default | Meaning                                                         |
+| ---------- | --------------- | ------- | --------------------------------------------------------------- |
+| `children` | `AmlRenderable` | empty   | Content for one later input; it must resolve to non-empty text. |
+
+## Session semantics
+
+- `<FollowUp />` components are flat. One `<FollowUp />` cannot contain another.
+- Authored order is preserved.
+- Every turn counts toward `maxTurnsPerAgent`; the default budget is 16 turns including the initial prompt.
+- The same Agent-scoped Tools, MCP servers, model, permissions, Sandbox view, and provider session apply to every turn.
+- When structured output is requested, the schema applies to the final turn.
+
+`<FollowUp />` is appropriate when later instructions depend on the model's own session history. Use separate `<Agent />` components and ordinary TypeScript data flow when work needs independent providers, models, capabilities, failure handling, or concurrency.
+
+See the [editorial passes recipe](/docs/cookbook/follow-up-editorial-passes/) for a complete session and [Runtime and evaluation](/docs/reference/runtime/) for turn budgets.

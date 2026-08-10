@@ -1,0 +1,294 @@
+---
+title: Pi Agent
+description: Run Pi through AML's ACP profile with optional MCP and tool bridging.
+---
+
+import { Aside, Badge, Card, CardGrid, LinkCard, Steps, TabItem, Tabs } from "@astrojs/starlight/components"
+import ProviderHero from "../../../../../components/docs/ProviderHero.astro"
+
+<ProviderHero
+  name="pi"
+  eyebrow="Built-in Agent provider"
+  title="Pi Agent"
+  factory="piAgent()"
+  summary="An ACP profile for Pi that isolates adapter state per evaluation, translates AML permissions into Pi's tool list, and uses the Pi MCP extension for AML Tools and MCP servers."
+  bestFor="Extensible Pi workflows that need AML's typed orchestration and capability model."
+  caution="Pi has no ACP system-instruction field in this integration, so AML prefixes system instructions into the first turn. MCP and restricted permissions require a generated wrapper."
+/>
+
+<Badge text="Built-in" variant="success" /> <Badge text="ACP" /> <Badge text="MCP extension" />
+
+## Two executables, two responsibilities
+
+Pi's provider options deliberately separate the ACP adapter from the native Pi process:
+
+| Option      | Default  | Role                                                                              |
+| ----------- | -------- | --------------------------------------------------------------------------------- |
+| `command`   | `pi-acp` | The outer ACP executable AML spawns and communicates with.                        |
+| `piCommand` | `pi`     | The underlying Pi executable invoked directly or through AML's generated wrapper. |
+
+AML launches `command`. When MCP is enabled or permissions differ from Pi's default, the ACP adapter is instructed to run a generated `pi-for-aml` wrapper. The wrapper invokes `piCommand` with a restricted `--tools` list and, when needed, `-e <adapter path>`.
+
+<Aside type="caution" title="Install the whole chain">
+  A real Pi integration needs `pi-acp`, the native `pi` executable, and `pi-mcp-adapter` when MCP or AML JavaScript
+  Tools are used. AML validates paths and configuration but never installs runtime software implicitly.
+</Aside>
+
+## Prerequisites
+
+<CardGrid>
+  <Card title="ACP adapter" icon="download">
+    Make `pi-acp` available in the host or selected Sandbox, or change `command` to your ACP launcher.
+  </Card>
+  <Card title="Native Pi" icon="seti:shell">
+    Make the executable named by `piCommand` available in the same environment. The default is `pi`.
+  </Card>
+  <Card title="MCP adapter" icon="seti:default">
+    Install `pi-mcp-adapter` when the Agent uses AML Tools or MCP. Supply `mcpAdapterPath` for deterministic resolution,
+    especially in packaged deployments.
+  </Card>
+  <Card title="Model credentials" icon="seti:lock">
+    Forward the environment expected by your Pi model provider with `env`. Pi itself owns provider authentication; AML
+    does not infer or store credentials.
+  </Card>
+</CardGrid>
+
+## Install and verify
+
+Install the ACP bridge and native Pi executable in the environment where AML will start the Agent:
+
+```sh title="Terminal"
+npm install --global \
+  pi-acp@0.0.33 \
+  @earendil-works/pi-coding-agent@0.82.1
+
+pi --version
+command -v pi-acp
+```
+
+For AML JavaScript Tools, authored MCP servers, or structured output, install the MCP adapter in the application so `import.meta.resolve()` can produce a stable path:
+
+```sh title="Terminal"
+npm install pi-mcp-adapter
+npx pi-mcp-adapter --help
+```
+
+Then pass that path explicitly:
+
+```ts
+import { fileURLToPath } from "node:url"
+
+const mcpAdapterPath = fileURLToPath(import.meta.resolve("pi-mcp-adapter"))
+const provider = piAgent({ mcpAdapterPath })
+```
+
+The AML repository currently exercises `pi-acp@0.0.33`, `@earendil-works/pi-coding-agent@0.82.1`, and `pi-mcp-adapter@2.16.x`. Treat that set as a reproducible verification baseline, not an open-ended compatibility promise.
+
+No official public Pi image has passed AML's complete Agent/Sandbox path yet. See [Recommended Sandbox images](/docs/providers/sandboxes/images/#pi-no-recommended-public-image-yet) before building an application-owned image from these versions.
+
+<Aside type="caution" title="All three programs must share the execution environment">
+  Installing Pi on the host does not make it visible inside Docker or a remote Sandbox. Verify `pi`, `pi-acp`, and the
+  resolved adapter path through the same image or remote environment AML will use.
+</Aside>
+
+## Complete basic example
+
+This uses Pi without MCP and therefore can use the native `piCommand` directly when AML permissions are the default.
+It deliberately selects the `opencode-go` model path, whose credential is `OPENCODE_API_KEY`. For the repository's OpenAI-backed smoke path, use `model: "openai/gpt-5.3-codex"` and forward `OPENAI_API_KEY` instead.
+
+```tsx
+import { Agent, AmlRuntime, piAgent } from "@aml-jsx/sdk"
+
+const apiKey = process.env.OPENCODE_API_KEY
+if (!apiKey) throw new Error("OPENCODE_API_KEY is required")
+
+const provider = piAgent({
+  command: "pi-acp",
+  piCommand: "pi",
+  model: "opencode-go/glm-5.1",
+  thinkingLevel: "medium",
+  env: {
+    OPENCODE_API_KEY: apiKey,
+  },
+})
+
+const result = await new AmlRuntime({ agentProvider: provider }).evaluate(
+  <Agent>Summarize the repository in five bullet points.</Agent>
+)
+
+console.log(result)
+```
+
+In production, inject a valid credential or fail the process before starting the evaluation. Do not commit API keys or write them into a Workspace.
+
+## Tool and MCP example
+
+Pi's MCP extension carries both AML JavaScript Tools and authored MCP servers. The explicit adapter path is the most reproducible setup:
+
+```tsx
+import { fileURLToPath } from "node:url"
+import { Agent, AmlRuntime, Tool, defineTool, piAgent } from "@aml-jsx/sdk"
+import { z } from "zod"
+
+const releaseName = defineTool({
+  name: "read_release_name",
+  description: "Return the application release name.",
+  input: z.object({}),
+  output: z.string(),
+  async execute() {
+    return process.env.RELEASE_NAME ?? "development"
+  },
+})
+
+const provider = piAgent({
+  mcpAdapterPath: fileURLToPath(import.meta.resolve("pi-mcp-adapter")),
+  model: "opencode-go/glm-5.1",
+})
+
+const result = await new AmlRuntime({ agentProvider: provider }).evaluate(
+  <Agent provider={provider}>
+    <Tool use={releaseName} />
+    Call read_release_name and return only its exact result.
+  </Agent>
+)
+```
+
+The wrapper adds `mcp` to Pi's allowed tool list and writes an `agent/mcp.json` configuration. MCP servers are lazy and use exact server names. The adapter path may also be discovered from the `pi-mcp-adapter` executable, but an explicit path avoids differences between development and deployment layouts.
+
+## Options and precedence
+
+| Option             | Type                                                                    | Default                       | Semantics                                                         |
+| ------------------ | ----------------------------------------------------------------------- | ----------------------------- | ----------------------------------------------------------------- |
+| `command`          | `string`                                                                | `"pi-acp"`                    | Outer ACP executable.                                             |
+| `args`             | `readonly string[]`                                                     | `[]`                          | Extra ACP arguments, passed exactly as supplied.                  |
+| `env`              | `Record<string, string>`                                                | `{}`                          | Provider credentials and native environment configuration.        |
+| `mcpAdapterPath`   | `string`                                                                | auto-discovered when possible | Path to the installed `pi-mcp-adapter` entrypoint.                |
+| `model`            | `string`                                                                | —                             | Provider-level model fallback. `<Agent model="..." />` wins.      |
+| `piCommand`        | `string`                                                                | `"pi"`                        | Native Pi command used by the direct or generated wrapper launch. |
+| `thinkingLevel`    | `"off" \| "minimal" \| "low" \| "medium" \| "high" \| "xhigh" \| "max"` | —                             | Adds Pi's `thought_level` configuration value.                    |
+| `workingDirectory` | `string`                                                                | —                             | Fallback directory when no Sandbox supplies the effective cwd.    |
+
+Precedence and launch behavior:
+
+1. `<Agent model="..." />` overrides `piAgent({ model })`.
+2. `thinkingLevel` is captured at factory creation and applies to the Pi session configuration.
+3. The active Sandbox cwd overrides `workingDirectory`.
+4. `env` is copied into the launch environment, while AML-owned `HOME`, `PI_ACP_PI_COMMAND`, `PI_CODING_AGENT_DIR`, `PI_CODING_AGENT_SESSION_DIR`, and `PI_SKIP_VERSION_CHECK` are set for session isolation.
+5. If MCP is present or permissions are narrowed, AML uses `pi-for-aml`; otherwise the native `piCommand` may be used directly.
+
+## Permissions
+
+The generated wrapper translates AML permissions into Pi's native tool list:
+
+| AML request                | Pi wrapper tools                  |
+| -------------------------- | --------------------------------- |
+| `filesystem: "read-only"`  | `read`, `grep`, `find`, `ls`      |
+| `filesystem: "read-write"` | Adds `edit`, `write`              |
+| `shell: true`              | Adds `bash`                       |
+| MCP or AML Tools present   | Adds `mcp` and starts the adapter |
+
+The wrapper is a policy mapping, not a host security boundary. Use a Sandbox to constrain the process, filesystem root, network, and credentials. A read-only Sandbox can also reject the `spawn()` required to start Pi, depending on the Sandbox provider.
+
+## System instructions and structured output
+
+Pi ACP does not expose a native system-instruction field in this profile. AML therefore prefixes the first turn with:
+
+```text
+System instructions for this AML session:
+<your system text>
+```
+
+When MCP is enabled, AML also explains that Tools and MCP use Pi's `mcp` proxy. This is intentionally different from providers with native system fields; treat the first-turn prefix as part of the authored prompt budget.
+
+For `evaluate(value, schema)`, Pi receives an explicit instruction to call the MCP tool `aml_submit_result` exactly once with the final value in `args.result`. Returning substitute JSON only as message text is not sufficient. AML then validates the submitted JSON against the Standard Schema and rejects invalid results.
+
+```tsx
+import { Agent, evaluate, piAgent } from "@aml-jsx/sdk"
+import { z } from "zod"
+
+const Result = z.object({
+  count: z.number().int(),
+  proof: z.string(),
+})
+
+const result = await evaluate(
+  <Agent provider={piAgent({ mcpAdapterPath: "/app/node_modules/pi-mcp-adapter/index.ts" })}>
+    Return count 7 and the proof string "aml" as structured output.
+  </Agent>,
+  Result
+)
+```
+
+## State isolation and lifecycle
+
+Each session receives a private state directory and the following environment:
+
+```text
+HOME                       <state>
+PI_ACP_PI_COMMAND          <native pi command or generated wrapper>
+PI_CODING_AGENT_DIR        <state>/agent
+PI_CODING_AGENT_SESSION_DIR <state>/sessions
+PI_SKIP_VERSION_CHECK      1
+```
+
+AML materializes wrapper files, Pi settings, and lazy MCP configuration into that state directory. It then acquires the ACP session, starts the provider, handles turns and Tool/MCP calls, strips Pi ACP startup information from returned text, validates the final response, and releases the session. Reusing a factory does not reuse Pi's per-evaluation HOME or session map.
+
+## Failure modes and troubleshooting
+
+<Steps>
+
+1. **`pi-acp` or `pi` is missing**
+
+   Check both executables in the actual runtime environment. Installing Pi on the host does not install it into a Docker, Daytona, or Modal image.
+
+2. **MCP or AML Tools are unavailable**
+
+   Install `pi-mcp-adapter`, set `mcpAdapterPath` to its entrypoint, and verify that the generated wrapper can execute `piCommand` and the adapter. Confirm `<Tool />` is nested under `<Agent />`.
+
+3. **Structured output rejects**
+
+   Inspect whether Pi called `aml_submit_result` exactly once and passed a JSON-compatible value under `args.result`. Message text that resembles JSON is not the structured result.
+
+4. **The system instruction appears in the answer**
+
+   Pi receives it as first-turn text because ACP has no native system field here. Make the instruction explicit and ask Pi to follow it without repeating it.
+
+5. **Permission behavior is surprising**
+
+   Check whether the generated wrapper was required, then inspect the Sandbox's access and root. Pi's `--tools` list and the Sandbox runtime are separate enforcement layers.
+
+6. **Configuration fails before launch**
+
+   Commands, paths, model names, and args must be normalized strings. `thinkingLevel` must be one of the documented values, and args cannot contain null bytes.
+
+</Steps>
+
+## References
+
+<CardGrid>
+  <LinkCard
+    title="Pi coding agent"
+    href="https://github.com/earendil-works/pi"
+    description="Pi's native coding-agent project and configuration context."
+  />
+  <LinkCard
+    title="Pi ACP adapter"
+    href="https://www.npmjs.com/package/pi-acp"
+    description="The ACP executable launched by the default profile."
+  />
+  <LinkCard
+    title="Pi MCP adapter"
+    href="https://www.npmjs.com/package/pi-mcp-adapter"
+    description="The extension used for AML Tools and MCP servers."
+  />
+  <LinkCard
+    title="AML Pi profile source"
+    href="https://github.com/we-are-singular/aml/tree/main/providers/agents/pi/src"
+    description="Wrapper, state isolation, permissions, and structured output behavior."
+  />
+  <LinkCard
+    title="AML Pi tests"
+    href="https://github.com/we-are-singular/aml/tree/main/providers/agents/pi/tests"
+    description="Launch, wrapper configuration, and live Tool/structured-output coverage."
+  />
+</CardGrid>

@@ -1,0 +1,91 @@
+---
+title: Provider boundaries
+description: Decide what belongs in an Agent, Sandbox, or Workspace provider and how compatibility is established.
+---
+
+Providers are ordinary TypeScript objects validated at the AML boundary. A provider owns its vendor-specific resources; AML owns evaluation ordering, lexical scope, cancellation propagation, capability policy, and cleanup orchestration.
+
+## Choose the boundary
+
+| Boundary  | Owns                                                                                                                 | Does not own                                                         | Detailed guides                                                                                                                                                                  |
+| --------- | -------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Agent     | A model or coding-harness session, its turns, model configuration, and provider response.                            | Process isolation, durable files, or application-wide scheduling.    | [Codex](/docs/providers/agents/codex/), [OpenCode](/docs/providers/agents/opencode/), [Pi](/docs/providers/agents/pi/)                                                           |
+| Sandbox   | Ephemeral execution authority: commands, processes, filesystem root, access mode, and provider-specific environment. | Model behavior, durable revision history, or business-level retries. | [Local](/docs/providers/sandboxes/local/), [Docker](/docs/providers/sandboxes/docker/), [Daytona](/docs/providers/sandboxes/daytona/), [Modal](/docs/providers/sandboxes/modal/) |
+| Workspace | Durable identity, materialization, locks, loading, saving, and revision publication.                                 | Command execution or model-session policy.                           | [Local](/docs/providers/workspaces/local/), [Filesystem](/docs/providers/workspaces/filesystem/), [S3](/docs/providers/workspaces/s3/)                                           |
+
+The usual production composition is an Agent inside a Sandbox, optionally attached to a Workspace. The Agent receives a non-authoritative view of compatible resources; it does not receive their acquisition or release authority.
+
+```text
+durable Workspace
+      ↓ materialized directory
+Sandbox execution boundary
+      ↓ effective runtime
+Agent provider session
+```
+
+## Stable provider responsibilities
+
+### Agent
+
+An Agent provider implements `run(request, context)` and returns the provider response. It must preserve the authored session semantics: the initial prompt and follow-ups share provider history and session-wide capabilities. If it supports `<Sandbox />`, its `supportsSandbox` handshake confirms structural compatibility with the effective runtime: the runtime shape, root, and access mode. The built-in ACP providers use the shared `supportsSandboxRuntime` check; it does not prove that the deployment actually enforces isolation, contains the required executable, or has working credentials and network access.
+
+Agent providers own executable launch, model configuration, permission translation, and vendor protocol details. They do not install credentials or prove that a particular executable, model, image, or account is available.
+
+Source: [`AgentProvider`](https://github.com/we-are-singular/aml/blob/main/sdk/src/components/agent/agent-provider.ts), [`ACP provider`](https://github.com/we-are-singular/aml/blob/main/sdk/src/components/agent/acp-agent-provider.ts), and the [Agent provider guides](/docs/providers/agents/).
+
+### Sandbox
+
+The Sandbox contract acquires a lease for a validated portable policy: `access`, logical `cwd`, `root`, evaluation identity, cancellation signal, and optional Workspace materialization. The lease exposes a provider-neutral runtime:
+
+- `exec(command, args, options)` runs one executable with literal arguments and returns stdout, stderr, and an exit code.
+- `spawn(command, args, options)` exposes Web Streams for a long-lived process.
+- `kill()` is safe to repeat, and `wait()` returns the same captured exit result.
+- `release()` relinquishes every resource owned by the lease.
+
+Providers map AML's logical paths to host, container, or remote paths. They must preserve literal command/argument semantics and safely encode any provider-specific shell or transport representation. Local is explicitly trusted host execution; Docker, Daytona, and Modal provide different execution environments whose isolation still depends on image, daemon/platform, identity, network, and resource configuration. Read the provider guide before treating any Sandbox as an enforcing security boundary.
+
+Source: [`SandboxProvider`](https://github.com/we-are-singular/aml/blob/main/sdk/src/components/sandbox/sandbox-provider.ts), [`SandboxRuntime`](https://github.com/we-are-singular/aml/blob/main/sdk/src/components/sandbox/sandbox-runtime.ts), and [`supportsSandboxRuntime`](https://github.com/we-are-singular/aml/blob/main/sdk/src/components/sandbox/sandbox-runtime.ts).
+
+### Workspace
+
+The Workspace contract acquires a durable identity and returns a materialized directory. It may load a selected revision, hold a writer lock, save a successful or failed outcome, and release temporary state. `save` publishes through the provider’s durability protocol; writing a file inside the materialization is not a durable save by itself.
+
+An active writer for the same identity must be rejected with `WorkspaceConflictError`. A stale revision publication, missing object, invalid archive, access denial, or cleanup failure is a different provider failure and should not be treated as an active-writer conflict.
+
+Workspace references passed to descendants expose identity, effective policy, and opaque handles. They do not expose `acquire`, `save`, or `release` authority. A Sandbox provider may use the materialization reference to attach the Workspace to its execution environment.
+
+Source: [`WorkspaceProvider`](https://github.com/we-are-singular/aml/blob/main/sdk/src/components/workspace/workspace-provider.ts), [`WorkspaceConflictError`](https://github.com/we-are-singular/aml/blob/main/sdk/src/components/workspace/workspace-conflict-error.ts), and [`WorkspacePersistence`](https://github.com/we-are-singular/aml/blob/main/sdk/src/workspace-persistence/workspace-persistence.ts).
+
+## Compatibility is a layered decision
+
+AML compatibility is not the same as “the vendor has an SDK” or “the service speaks S3.” Check each layer:
+
+| Layer           | Question                                                               | Evidence                                                      |
+| --------------- | ---------------------------------------------------------------------- | ------------------------------------------------------------- |
+| AML contract    | Does the provider implement the required acquire/run/release behavior? | Provider source and conformance checks.                       |
+| Runtime shape   | Can the Agent use the effective Sandbox runtime?                       | `supportsSandboxRuntime` and provider handshake.              |
+| Deployment      | Are the executable, image, credentials, endpoint, and model available? | Your deployment configuration and smoke run.                  |
+| Vendor behavior | Does the upstream service preserve the operations AML needs?           | Upstream provider documentation and a real compatibility run. |
+
+The [compatibility guide](/docs/compatibility/) explains the application-level matrix. The [provider catalog](/docs/providers/) owns the current built-in list and operational prerequisites.
+
+## S3-compatible Workspaces
+
+S3-compatible products are backends for the single `s3Workspace()` adapter, not separate AML providers. The adapter requires streaming object reads, stable ETags, conditional `PutObject` with `If-None-Match` and `If-Match`, deletes, and paginated `ListObjectsV2` behavior for locks, revisions, and cleanup.
+
+The [S3 Workspace guide](/docs/providers/workspaces/s3/) owns the current backend catalog, configuration, and compatibility checklist. The repository has an R2-backed credentialed smoke path, while AWS S3 is the native AWS SDK target. Every other listed service remains a protocol candidate until the exact AML lock and publication contract has been exercised in your deployment.
+
+## Implementing a provider
+
+Use the public provider contract and keep vendor details behind it. A provider should:
+
+1. Validate configuration before acquiring external resources.
+2. Propagate the evaluation signal to every asynchronous operation.
+3. Preserve logical paths, access policy, and literal command arguments.
+4. Return opaque handles and non-authoritative references to descendants.
+5. Make release and repeated process cleanup safe when possible.
+6. Preserve the original failure when cleanup also fails.
+
+Use the deterministic fixtures and conformance helpers in `@aml-jsx/sdk/testing` while developing a provider, then validate the actual executable, image, credentials, and vendor service separately. The testing helpers do not prove deployment compatibility.
+
+Further reading: [`PROVIDERS.md`](https://github.com/we-are-singular/aml/blob/main/PROVIDERS.md), [`SPEC.md` provider sections](https://github.com/we-are-singular/aml/blob/main/SPEC.md), the conceptual [Provider engineering guide](/docs/provider-authoring/), and the exact [Provider authoring reference](/docs/reference/provider-authoring/).

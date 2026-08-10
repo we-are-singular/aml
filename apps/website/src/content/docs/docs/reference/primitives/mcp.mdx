@@ -1,0 +1,49 @@
+---
+title: "<Mcp />"
+description: Grant a provider-native or explicitly configured MCP server to one Agent session.
+---
+
+`<Mcp />` grants one Model Context Protocol server to its nearest containing [`<Agent />`](../agent/). Select exactly one form: a provider-native server name or a transport descriptor returned by `defineMcpServer()`.
+
+```tsx
+import { Agent, AmlRuntime, defineMcpServer, Mcp } from "@aml-jsx/sdk"
+import { DeterministicAgentProvider } from "@aml-jsx/sdk/testing"
+
+const documentation = defineMcpServer({
+  name: "documentation",
+  transport: {
+    type: "streamable-http",
+    url: "https://mcp.example.com/docs",
+  },
+})
+
+const runtime = new AmlRuntime({ agentProvider: new DeterministicAgentProvider() })
+await runtime.evaluate(
+  <Agent>
+    <Mcp use={documentation} />
+    Find the relevant API contract.
+  </Agent>
+)
+```
+
+The deterministic provider verifies AML's descriptor composition without opening the example URL. A live MCP check requires a provider that supports the selected transport and a reachable server; use the provider guides and cookbook below for that path.
+
+For a provider-native server configured outside AML, use `<Mcp name="server-name" />` instead.
+
+## Props
+
+| Form       | Required prop       | Meaning                                                                               |
+| ---------- | ------------------- | ------------------------------------------------------------------------------------- |
+| Named      | `name: string`      | Ask the Agent provider for a provider-native server with that normalized name.        |
+| Configured | `use: AmlMcpServer` | Attach the exact stdio or Streamable HTTP descriptor returned by `defineMcpServer()`. |
+
+`<Mcp />` accepts no children. Names must be unique inside one `<Agent />` and may be restricted by `AmlRuntime({ allowedMcpServers })`.
+
+## Ownership and compatibility
+
+- AML captures and validates the descriptor; the selected Agent provider owns connection and session lifecycle.
+- A stdio server runs where that provider launches it. Do not assume this is the AML host or the active Sandbox without checking the provider guide.
+- Streamable HTTP headers are privileged deployment configuration. Avoid persisting secrets in workflow source, traces, or Workspace files.
+- Provider MCP support differs. Check [Codex](/docs/providers/agents/codex/), [OpenCode](/docs/providers/agents/opencode/), or [Pi](/docs/providers/agents/pi/) before choosing a form.
+
+See [Connect an MCP server](/docs/cookbook/mcp/) and [Tool or MCP?](/docs/cookbook/tool-or-mcp/) for complete examples and trade-offs.

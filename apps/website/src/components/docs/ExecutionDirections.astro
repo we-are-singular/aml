@@ -1,0 +1,164 @@
+<figure class="directions" aria-labelledby="directions-title">
+  <figcaption id="directions-title">Read an AML tree in two directions</figcaption>
+  <div class="directions__grid">
+    <section>
+      <p><span class="directions__arrow directions__arrow--down">↓</span> Scope flows down</p>
+      <ol>
+        <li><strong>&lt;Workspace /&gt;</strong><small>durable files</small></li>
+        <li><strong>&lt;Sandbox /&gt;</strong><small>process authority</small></li>
+        <li><strong>&lt;Agent /&gt;</strong><small>&lt;Tool /&gt; · &lt;Mcp /&gt; · prompt</small></li>
+      </ol>
+      <em>Descendants inherit only the capabilities declared around them.</em>
+    </section>
+    <section>
+      <p><span class="directions__arrow directions__arrow--up">↑</span> Results flow up</p>
+      <div class="directions__fanout">
+        <span>Specialist A</span><span>Specialist B</span>
+        <i aria-hidden="true">↘ &nbsp; ↙</i>
+        <strong>Coordinator</strong>
+        <i aria-hidden="true">↓</i>
+        <b>Root result</b>
+      </div>
+      <em>Consumers run after the child values used to assemble their input.</em>
+    </section>
+  </div>
+</figure>
+
+<style>
+  .directions {
+    background: var(--sl-color-bg-nav);
+    border: 1px solid var(--sl-color-hairline-light);
+    border-radius: var(--aml-radius-lg);
+    box-shadow: var(--aml-shadow-sm);
+    margin: 1.8rem 0 2.5rem;
+    overflow: hidden;
+  }
+
+  figcaption {
+    border-bottom: 1px solid var(--sl-color-hairline-light);
+    color: var(--sl-color-white);
+    font-size: 1rem;
+    font-weight: 650;
+    padding: 1rem 1.15rem;
+  }
+
+  .directions__grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  section {
+    min-width: 0;
+    padding: 1.2rem;
+  }
+
+  section + section {
+    border-inline-start: 1px solid var(--sl-color-hairline-light);
+  }
+
+  p {
+    color: var(--sl-color-white);
+    font-size: 0.84rem;
+    font-weight: 650;
+    margin: 0 0 1rem;
+  }
+
+  .directions__arrow {
+    color: var(--aml-orange);
+    font-family: var(--sl-font-mono);
+    margin-right: 0.35rem;
+  }
+
+  .directions__arrow--up {
+    color: var(--aml-green);
+  }
+
+  ol {
+    display: grid;
+    gap: 0.45rem;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+
+  li {
+    align-items: center;
+    background: var(--sl-color-bg-sidebar);
+    border: 1px solid var(--sl-color-hairline-light);
+    border-radius: 0.65rem;
+    display: flex;
+    justify-content: space-between;
+    padding: 0.65rem 0.75rem;
+  }
+
+  li strong,
+  .directions__fanout strong,
+  .directions__fanout b {
+    color: var(--sl-color-white);
+    font-size: 0.76rem;
+  }
+
+  li small {
+    color: var(--sl-color-gray-2);
+    font-family: var(--sl-font-mono);
+    font-size: 0.58rem;
+  }
+
+  .directions__fanout {
+    display: grid;
+    gap: 0.35rem;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    text-align: center;
+  }
+
+  .directions__fanout span,
+  .directions__fanout strong,
+  .directions__fanout b {
+    background: var(--sl-color-bg-sidebar);
+    border: 1px solid var(--sl-color-hairline-light);
+    border-radius: 0.65rem;
+    padding: 0.65rem 0.45rem;
+  }
+
+  .directions__fanout span {
+    color: var(--sl-color-gray-1);
+    font-size: 0.68rem;
+  }
+
+  .directions__fanout i,
+  .directions__fanout strong,
+  .directions__fanout b {
+    grid-column: 1 / -1;
+  }
+
+  .directions__fanout i {
+    color: var(--sl-color-gray-3);
+    font-style: normal;
+    line-height: 1;
+  }
+
+  .directions__fanout b {
+    border-color: color-mix(in srgb, var(--aml-green) 38%, var(--sl-color-hairline-light));
+    color: var(--aml-green);
+  }
+
+  em {
+    color: var(--sl-color-gray-2);
+    display: block;
+    font-size: 0.7rem;
+    font-style: normal;
+    line-height: 1.5;
+    margin-top: 0.9rem;
+  }
+
+  @media (max-width: 42rem) {
+    .directions__grid {
+      grid-template-columns: 1fr;
+    }
+
+    section + section {
+      border-inline-start: 0;
+      border-top: 1px solid var(--sl-color-hairline-light);
+    }
+  }
+</style>

@@ -22,9 +22,9 @@ const highlighter = createHighlighter({
 })
 
 function codeContents(html: string): string {
-  const template = document.createElement("template")
-  template.innerHTML = html
-  return template.content.querySelector("code")?.innerHTML ?? ""
+  const start = html.indexOf("<code>")
+  const end = html.lastIndexOf("</code>")
+  return start === -1 || end === -1 ? "" : html.slice(start + "<code>".length, end)
 }
 
 /** Highlights a TSX sample for insertion inside an existing code block. */

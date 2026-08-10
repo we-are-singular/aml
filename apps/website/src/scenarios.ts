@@ -81,10 +81,10 @@ const review: Scenario = {
   file: "examples/src/core/concurrency.tsx",
   code: REVIEW_CODE,
   nodes: [
-    { id: "tool", label: "<Tool> read_source", x: 150, y: 30 },
-    { id: "spec-a", label: "<Agent> correctness", x: 150, y: 100 },
-    { id: "spec-b", label: "<Agent> maintainability", x: 420, y: 100 },
-    { id: "synth", label: "<Agent> synthesize", x: 280, y: 185 },
+    { id: "tool", label: "<Tool /> read_source", x: 150, y: 30 },
+    { id: "spec-a", label: "<Agent /> correctness", x: 150, y: 100 },
+    { id: "spec-b", label: "<Agent /> maintainability", x: 420, y: 100 },
+    { id: "synth", label: "<Agent /> synthesize", x: 280, y: 185 },
     { id: "root", label: "<Review />", x: 280, y: 258 },
   ],
   edges: [
@@ -169,10 +169,10 @@ const _loop: Scenario = {
   file: "examples/src/core/loop.tsx",
   code: LOOP_CODE,
   nodes: [
-    { id: "s1", label: "<Agent> session 1", x: 120, y: 40 },
+    { id: "s1", label: "<Agent /> session 1", x: 120, y: 40 },
     { id: "state", label: "state · schema-validated", x: 425, y: 40 },
-    { id: "s2", label: "<Agent> session 2", x: 280, y: 140 },
-    { id: "loop", label: "<Loop> research", x: 280, y: 248 },
+    { id: "s2", label: "<Agent /> session 2", x: 280, y: 140 },
+    { id: "loop", label: "<Loop /> research", x: 280, y: 248 },
   ],
   edges: [
     { id: "e-s1", from: "loop", to: "s1" },
@@ -244,10 +244,10 @@ const sandbox: Scenario = {
   file: "examples/src/resources/sandbox.tsx",
   code: SANDBOX_CODE,
   nodes: [
-    { id: "agent", label: "<Agent> opencode", x: 145, y: 40 },
-    { id: "inner", label: "<Sandbox> read-only", x: 145, y: 130 },
+    { id: "agent", label: "<Agent /> opencode", x: 145, y: 40 },
+    { id: "inner", label: "<Sandbox /> read-only", x: 145, y: 130 },
     { id: "lease", label: "lease-1 · shared container", x: 425, y: 130 },
-    { id: "outer", label: "<Sandbox> read-write", x: 280, y: 245 },
+    { id: "outer", label: "<Sandbox /> read-write", x: 280, y: 245 },
   ],
   edges: [
     { id: "e-inner", from: "outer", to: "inner" },
@@ -318,11 +318,11 @@ const agent: Scenario = {
   file: "your-first-agent.tsx",
   code: AGENT_CODE,
   nodes: [
-    { id: "system", label: "<System>", x: 80, y: 56 },
-    { id: "skill", label: "<Skill>", x: 215, y: 56 },
-    { id: "tool-a", label: "<Tool> changelog", x: 345, y: 56 },
-    { id: "tool-b", label: "<Tool> create_tag", x: 480, y: 56 },
-    { id: "agent", label: "<Agent> release notes", x: 280, y: 196 },
+    { id: "system", label: "<System />", x: 80, y: 56 },
+    { id: "skill", label: "<Skill />", x: 215, y: 56 },
+    { id: "tool-a", label: "<Tool /> changelog", x: 345, y: 56 },
+    { id: "tool-b", label: "<Tool /> create_tag", x: 480, y: 56 },
+    { id: "agent", label: "<Agent /> release notes", x: 280, y: 196 },
   ],
   edges: [
     { id: "e-system", from: "agent", to: "system" },

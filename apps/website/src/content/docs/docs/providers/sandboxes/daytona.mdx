@@ -1,0 +1,139 @@
+---
+title: Daytona Sandbox
+description: Run AML workflows in disposable Daytona environments with daytonaSandbox().
+---
+
+import ProviderHero from "../../../../../components/docs/ProviderHero.astro"
+
+<ProviderHero
+  name="daytona"
+  eyebrow="Sandbox provider"
+  title="Daytona Sandbox"
+  factory="daytonaSandbox(options?)"
+  summary="The Daytona provider creates a disposable remote Sandbox, uploads the selected Workspace into the provider’s relative workspace directory, and reconciles the full tree on writable release."
+  bestFor="Remote development environments where Daytona owns provisioning and lifecycle."
+  caution="The Workspace is transferred, not mounted. Remote edits can be lost if acquisition, execution, or reconciliation fails before the tree is downloaded."
+/>
+
+## When to use it
+
+Choose Daytona when you want Daytona-managed remote environments and are prepared to provide its credentials/client, image or snapshot configuration, and a compatible image runtime. It is a transfer-based provider: AML archives the local Workspace, uploads it, runs the workflow remotely, downloads the complete remote tree on writable release, and then destroys the Sandbox.
+
+Daytona starts commands in the Sandbox user’s writable home. AML therefore uses the relative guest root `workspace`, not `/workspace`. The absolute location of that relative directory is provider/runtime dependent; do not hard-code filesystem-root assumptions into Agent prompts.
+
+## Options
+
+| Option           | Type                                  | Default           | Contract                                                                                            |
+| ---------------- | ------------------------------------- | ----------------- | --------------------------------------------------------------------------------------------------- |
+| `image`          | Daytona image reference               | None              | Selects image-based creation. Mutually exclusive with `snapshot`; may be omitted.                   |
+| `snapshot`       | Daytona snapshot reference            | None              | Selects snapshot-based creation. Mutually exclusive with `image`; may be omitted.                   |
+| `client`         | `Daytona`                             | None              | Inject an initialized Daytona client. Mutually exclusive with `config`.                             |
+| `config`         | `DaytonaConfig`                       | None              | Configuration used to construct a Daytona client lazily.                                            |
+| `create`         | Provider-native create fields         | None              | Additional creation parameters. Must not contain `image` or `snapshot`; those are AML root options. |
+| `createOptions`  | `{ timeout?, onSnapshotCreateLogs? }` | None              | Daytona creation timeout and optional snapshot-create log callback.                                 |
+| `maxOutputBytes` | `number`                              | `4 * 1024 * 1024` | Shared output/transfer budget. Must be a positive safe integer.                                     |
+| `setup`          | `string`                              | None              | Runs through `sh -lc` after hydration and before the lease is returned.                             |
+| `workspace`      | `string`                              | None              | Fallback local Workspace path. An active `<Workspace />` materialization takes precedence.          |
+
+`image` and `snapshot` are mutually exclusive, but both may be omitted. With neither root option, the Daytona client uses its default creation behavior. Do not put either field inside `create`; the provider rejects that configuration to keep environment identity explicit.
+
+## Remote image and environment requirements
+
+The selected image or default environment must provide:
+
+- a shell capable of running AML’s quoted setup/transfer commands;
+- `tar`, `mkdir`, and `rm` for Workspace hydration and reconciliation;
+- the selected ACP Agent executable and its runtime, if an Agent runs inside Daytona;
+- project dependencies and model/provider configuration;
+- a writable home/workspace area for the selected user.
+
+The host running AML also needs the local `tar` command because upload and download archives are created/extracted locally. The Daytona client/config must have permissions to create, inspect, upload to, download from, and delete the disposable Sandbox.
+
+## Workspace semantics
+
+Daytona resolves the active Workspace directory or `workspace` fallback, then uses the logical Sandbox `root` as the source subtree. The source must be an existing directory. `cwd` must resolve inside that root.
+
+The provider uploads an archive and extracts it into the guest directory `workspace`. At release, writable access causes a full archive of that guest tree to be downloaded and mirrored into the local materialization, including additions, modifications, and deletions. Read-only access skips reconciliation.
+
+This is full-tree synchronization, not continuous sync. If the remote Sandbox dies before reconciliation, unsynchronized edits are not recoverable through AML. Use a durable Workspace provider or an explicit checkpoint strategy when that loss is unacceptable.
+
+## Complete safe example
+
+This deterministic example uses a temporary Workspace and a Daytona image that only needs shell utilities. A real Agent image must additionally contain its ACP executable and credentials:
+
+```tsx
+/** @jsxImportSource @aml-jsx/sdk */
+import { mkdtemp } from "node:fs/promises"
+import { join } from "node:path"
+import { tmpdir } from "node:os"
+import { AmlRuntime, Sandbox, Script, Workspace, daytonaSandbox, localWorkspace } from "@aml-jsx/sdk"
+
+const directory = await mkdtemp(join(tmpdir(), "aml-daytona-"))
+const runtime = new AmlRuntime({
+  sandboxProvider: daytonaSandbox({
+    image: "daytona/image-with-shell-and-tar",
+    // Or use snapshot: "my-agent-snapshot"; never set both.
+    config: { apiKey: process.env.DAYTONA_API_KEY },
+  }),
+  workspaceProvider: localWorkspace({ directory }),
+})
+
+await runtime.evaluate(
+  <Workspace id="daytona-demo" load={false} save={false}>
+    <Sandbox access="read-write">
+      <Script command="sh" args={["-lc", "printf remote > result.txt"]} />
+    </Sandbox>
+  </Workspace>
+)
+```
+
+The image name above is illustrative: select an image or snapshot that exists in your Daytona account. Never commit `DAYTONA_API_KEY`; configure it through the deployment environment or an injected Daytona client.
+
+## Lifecycle
+
+1. AML resolves the active/fallback Workspace source and validates root/cwd boundaries.
+2. Daytona creates a Sandbox using `image`, `snapshot`, or its default creation behavior. `createOptions.timeout` applies to creation; `onSnapshotCreateLogs` receives provider-native snapshot creation logs.
+3. AML creates a local tar archive of the selected Workspace tree and uploads it to a temporary remote path.
+4. Daytona runs a remote command that clears `workspace`, creates it, extracts the archive, and removes the temporary archive.
+5. The optional setup hook runs through `sh -lc`. Failure rejects acquisition and destroys the Sandbox.
+6. `exec()` and `spawn()` operate below the relative `workspace` root. Process timeouts are converted to provider-native seconds; output is bounded.
+7. On writable release, Daytona archives the complete remote `workspace` tree, downloads it, and mirrors additions, changes, and deletions into the local source.
+8. Daytona destroys the Sandbox. Reconciliation and cleanup errors are both retained when both fail.
+
+Cancellation during creation or hydration can trigger asynchronous provider cleanup. Cancellation or output overflow during a remote command can destroy the disposable Sandbox because Daytona does not provide equivalent per-command cancellation for every operation.
+
+## Read-only behavior
+
+Daytona rejects `exec()` and `spawn()` under `access="read-only"`. The Workspace is transferred into a writable remote directory; it is not a read-only mount. This is an intentional limitation, not a promise that commands execute safely without changing the remote tree.
+
+Use `read-write` for a Daytona ACP Agent unless the complete Agent/Sandbox contract you selected provides another supported launch path. A read-only Daytona Sandbox is suitable for structural composition or an operation that never invokes the runtime, not for ordinary `<Script />` components or ACP sessions.
+
+## Failure modes and troubleshooting
+
+| Symptom                                                | Cause                                                                                     | What to check                                                                   |
+| ------------------------------------------------------ | ----------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| `image` and `snapshot` rejected together               | Environment identity is ambiguous.                                                        | Choose exactly one, or omit both for Daytona’s default creation behavior.       |
+| `image`/`snapshot` inside `create` rejected            | AML keeps root identity separate from native creation fields.                             | Move the field to the factory root.                                             |
+| `requires an active Workspace or configured workspace` | No source tree was provided.                                                              | Add `<Workspace />` or a `workspace` fallback.                                  |
+| `tar` transfer fails locally                           | Host `tar` is missing, the source is inaccessible, or archive output exceeded the budget. | Run `tar -C <source> -cf /tmp/check.tar .` as the AML user.                     |
+| Hydration fails remotely                               | Image lacks `sh`, `tar`, `mkdir`, `rm`, or a writable home.                               | Open a Daytona shell with the same image/user and verify utilities.             |
+| Agent command not found                                | The image/snapshot does not contain the ACP executable.                                   | Install and pin it in the image/snapshot; AML does not install it.              |
+| `cannot execute under read-only access`                | Transferred Workspaces cannot enforce read-only process execution.                        | Use `read-write` or a different provider.                                       |
+| Remote changes disappear                               | The Sandbox failed before writable reconciliation completed.                              | Use checkpoints/durable persistence and inspect Daytona lifecycle logs.         |
+| Reconciliation fails                                   | Remote archive creation/download or local extraction failed.                              | Check remote `tar`, local disk space, output limits, and Workspace permissions. |
+| Cleanup fails after another error                      | Provider failure and destruction failure occurred together.                               | Inspect the aggregate error and Daytona account/Sandbox state.                  |
+
+## Security and production posture
+
+Daytona provides a remote execution environment, but AML’s adapter does not define your complete threat model. Review the selected image, user identity, network egress, secrets, account permissions, and provider isolation. Keep credentials in Daytona/provider configuration rather than Workspace files. Treat `setup` as trusted configuration and prefer a reproducible image or snapshot for repeated production workloads.
+
+Because transfer is full-tree and release-time, a provider outage can lose remote changes not yet reconciled. For important work, pair the Sandbox with a revision-backed Workspace provider and define what should happen when reconciliation or cleanup fails.
+
+## References
+
+- [Sandbox provider overview](./)
+- [Daytona documentation](https://www.daytona.io/docs/)
+- [AML Daytona provider implementation](https://github.com/we-are-singular/aml/blob/main/providers/sandboxes/daytona/src/daytona-sandbox.ts)
+- [AML Daytona provider tests](https://github.com/we-are-singular/aml/blob/main/providers/sandboxes/daytona/tests/daytona-sandbox.test.ts)
+- [Sandboxing architecture](https://github.com/we-are-singular/aml/blob/main/SANDBOXING.md)
+- [AML specification: Sandbox composition](https://github.com/we-are-singular/aml/blob/main/SPEC.md)

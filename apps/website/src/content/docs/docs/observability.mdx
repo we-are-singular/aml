@@ -1,0 +1,108 @@
+---
+title: Observability
+description: Trace AML evaluations with stable correlation fields and an explicit content policy.
+---
+
+import { Aside, Card, CardGrid, Tabs, TabItem } from "@astrojs/starlight/components"
+
+AML exposes two observability layers:
+
+1. Runtime lifecycle events: `start` and `finish`, useful for request-level status and run identity.
+2. Trace events: immutable spans and point events for the evaluation tree, Agent turns, capabilities, and `<Loop />` transitions.
+
+This page is the operational guide to consuming those signals. For runtime listener behavior and evaluation lifecycle decisions, use the [runtime reference](/docs/reference/runtime/#errors-and-lifecycle-events).
+
+## Console tracing
+
+```tsx
+import { AmlRuntime, createConsoleTracer } from "@aml-jsx/sdk"
+
+const runtime = new AmlRuntime()
+runtime.on("trace", createConsoleTracer({ captureContent: false }))
+```
+
+The tracer writes a compact tree to `console.log` by default. Supply `write` to route lines to a logger or file:
+
+```tsx
+const trace = createConsoleTracer({
+  captureContent: false,
+  write: line => process.stderr.write(`${line}\n`),
+})
+
+runtime.on("trace", trace)
+```
+
+Trace sinks are captured when the runtime is constructed. Trace-consumer errors go to `onTraceError` when configured and do not become workflow failures merely because a logger rejected a line.
+
+## The discriminated event union
+
+Every trace event contains immutable correlation data: `runId`, `spanId`, optional `parentSpanId`, `sequence`, `timestamp`, and scalar `attributes`.
+
+| `type`       | Shape-specific fields                  | Meaning                                              |
+| ------------ | -------------------------------------- | ---------------------------------------------------- |
+| `span.start` | `kind`, `name`                         | Opens an execution boundary                          |
+| `span.end`   | `kind`, `name`, `status`, `durationMs` | Closes the matching span                             |
+| `event`      | `name`                                 | Records a point-in-time fact inside an existing span |
+
+Do not read `status` or `durationMs` from a point event. They are not part of `AmlTracePointEvent`. TypeScript narrowing is the safest way to consume traces:
+
+```ts
+runtime.on("trace", event => {
+  if (event.type === "span.end") {
+    metrics.observe(`aml.${event.kind}`, event.durationMs, { status: event.status })
+    return
+  }
+
+  if (event.type === "event") {
+    metrics.increment(`aml.event.${event.name}`)
+  }
+})
+```
+
+The current point-event names are `agent.turn`, `capability.mcp`, `capability.tool`, and `loop.transition`. Span kinds include `evaluation`, `component`, `agent`, `file`, `system`, `skill`, `tool`, `loop`, `sandbox`, `script`, and `workspace`.
+
+## Content capture is opt-in
+
+AML trace attributes are scalar by design and do not expose live workflow, provider, Tool, or resource objects. Content such as prompts and outputs is sensitive and is omitted by the console tracer unless `captureContent: true` is selected by the sink:
+
+```tsx
+// Development-only diagnostic choice. Review data handling before enabling it.
+runtime.on("trace", createConsoleTracer({ captureContent: true }))
+```
+
+Treat captured prompts, Tool arguments, MCP data, file paths, and Agent output as customer data. Redaction belongs in the sink or downstream logger; turning capture on is not a redaction policy.
+
+<Aside type="caution" title="Trace metadata is not an audit log">
+  Trace events describe AML execution. They do not guarantee that external provider effects, network requests, or
+  host-side Tool effects can be reconstructed. Record business-level audit events separately.
+</Aside>
+
+## Correlation and ordering
+
+Use `runId` to correlate one root evaluation, `spanId`/`parentSpanId` to reconstruct nesting, and `sequence` for event ordering within a run. `timestamp` is an epoch-millisecond timestamp. A point event belongs to the active span but does not open or close one.
+
+```ts
+type SpanEnd = Extract<AmlTraceEvent, { type: "span.end" }>
+
+function recordSpan(event: SpanEnd) {
+  return {
+    runId: event.runId,
+    spanId: event.spanId,
+    parentSpanId: event.parentSpanId,
+    durationMs: event.durationMs,
+    status: event.status,
+  }
+}
+```
+
+## Operational questions traces can answer
+
+| Question                              | Useful fields                                       |
+| ------------------------------------- | --------------------------------------------------- |
+| Which run failed?                     | `runId`, `spanId`, `status` on `span.end`           |
+| Which provider boundary was slow?     | `kind`, `name`, `durationMs` on `span.end`          |
+| Did a Tool or MCP capability execute? | `type: "event"`, `name`, scalar `attributes`        |
+| Where did a nested operation sit?     | `parentSpanId`, `sequence`                          |
+| Did cleanup finish?                   | closing `span.end` for Sandbox/Workspace/evaluation |
+
+For request-level success and failure, also subscribe to `start`/`finish`; for sensitive content, keep tracing metadata-only and emit a separate approved audit record when needed.

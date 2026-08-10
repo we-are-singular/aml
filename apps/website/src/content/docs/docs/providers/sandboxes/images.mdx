@@ -1,0 +1,144 @@
+---
+title: Recommended Sandbox images
+description: Verified public container images and build guidance for running AML Agent providers inside Docker and Modal Sandboxes.
+---
+
+import { Aside } from "@astrojs/starlight/components"
+
+AML does not publish or silently select a universal Agent image. The image is part of the Agent–Sandbox compatibility contract: it must contain the exact ACP executable, runtime, shell utilities, project toolchain, and writable state locations required by the selected provider.
+
+This page distinguishes images we have actually inspected from useful upstream recipes and unverified possibilities. Pin a version or digest and repeat the checks in your own deployment before treating any image as production-ready.
+
+## Recommended public images
+
+### OpenCode: Cloudflare Sandbox
+
+Cloudflare publishes an official OpenCode variant on Docker Hub:
+
+```text
+cloudflare/sandbox:0.12.5-opencode
+```
+
+For an immutable production input, the image inspected for this guide is:
+
+```text
+cloudflare/sandbox@sha256:c34f783dcf456a135d8e5a1fdfd060001a133f304f9a3f556a4afac5f63a4c4a
+```
+
+AML verification on 2026-08-10 confirmed that the `linux/amd64` image starts with an overridden shell entrypoint and contains `sh`, `tar`, `mkdir`, `rm`, Git, Node.js, and `/usr/local/bin/opencode`. The installed OpenCode version was `1.18.15`, and `opencode acp --help` completed successfully.
+
+That makes it the current recommended **starting image for `opencodeAgent()` with `dockerSandbox()`**. It proves executable-level compatibility, not model credentials, network policy, project dependencies, Docker hardening, or a successful live model session.
+
+```tsx
+import { AmlRuntime, dockerSandbox, localWorkspace, opencodeAgent } from "@aml-jsx/sdk"
+
+const runtime = new AmlRuntime({
+  agentProvider: opencodeAgent({
+    env: {
+      // Supply the model/provider credentials required by your OpenCode config.
+    },
+  }),
+  sandboxProvider: dockerSandbox({
+    image: "cloudflare/sandbox:0.12.5-opencode",
+  }),
+  workspaceProvider: localWorkspace({ directory: "/absolute/path/to/project" }),
+})
+```
+
+AML's Docker provider overrides the image entrypoint with its own keepalive shell and launches OpenCode later through `docker exec`. The image's Cloudflare container server is therefore not used by this combination.
+
+Sources: [Cloudflare image variants](https://github.com/cloudflare/sandbox-sdk/blob/main/DOCKER_README.md) and [Docker Hub tags](https://hub.docker.com/r/cloudflare/sandbox/tags).
+
+### Cloudflare base variants
+
+Cloudflare also publishes versioned base images:
+
+| Image                              | Included upstream                                            | AML recommendation                                                                        |
+| ---------------------------------- | ------------------------------------------------------------ | ----------------------------------------------------------------------------------------- |
+| `cloudflare/sandbox:0.12.5`        | Ubuntu, Node.js 24, Bun, Git, curl, jq, and common utilities | Good public base for a custom Agent image; not Agent-ready by itself.                     |
+| `cloudflare/sandbox:0.12.5-python` | Base image plus Python 3.11 and common data packages         | Good for `<Script />` and code-interpreter workloads; not Agent-ready by itself.          |
+| `cloudflare/sandbox:0.12.5-musl`   | Minimal Alpine/musl environment                              | Use only after checking native binary and libc compatibility; not our default Agent base. |
+
+The base images use Node.js 24. AML itself requires Node.js 26 on the host application, but the container only needs the runtime required by the Agent and commands launched inside it. Do not assume the base image is suitable for running the AML application process itself.
+
+## Codex: build and publish your own image
+
+We do not currently recommend an official public Codex Sandbox image. The AML Codex provider needs both the native `codex` executable and the `codex-acp` adapter. A small reproducible image can extend the Cloudflare base:
+
+```dockerfile
+FROM cloudflare/sandbox:0.12.5
+
+RUN npm install --global \
+    @agentclientprotocol/codex-acp@1.1.7 \
+    @openai/codex@0.145.0 \
+    && codex-acp --help >/dev/null \
+    && codex --version
+```
+
+Build this in your own registry, add the project toolchain and non-root/security policy your deployment needs, then pass the pinned tag or digest to `dockerSandbox()` or `modalSandbox()`. The versions above match AML's current Codex provider verification baseline; changing them requires another compatibility pass.
+
+Do not bake `OPENAI_API_KEY`, Codex home state, or repository credentials into an image layer. Inject credentials when the Sandbox starts and keep Codex's invocation state in the writable directory AML prepares for the session.
+
+## Pi: no recommended public image yet
+
+AML's Pi integration requires `pi-acp`, the Pi coding-agent executable, and `pi-mcp-adapter` when the workflow grants MCP or JavaScript Tools. We have a pinned [host installation baseline](/docs/providers/agents/pi/#install-and-verify), but no official public container image has been verified against the complete AML Agent/Sandbox path.
+
+Until an image passes that path, build and publish an application-owned image from the exact versions in the [Pi provider guide](/docs/providers/agents/pi/). Check all three commands inside the final image rather than assuming a generic Node image is sufficient.
+
+## Modal images
+
+Modal publishes official examples for [OpenCode in a Modal Sandbox](https://modal.com/docs/examples/opencode_server) and [Claude Code in a Modal Sandbox](https://modal.com/docs/examples/sandbox_agent). These are **image recipes**, not public prebuilt Docker image names:
+
+- the OpenCode example starts from `modal.Image.debian_slim()`, installs Git and `gh`, and runs OpenCode's installer;
+- the Claude Code example starts from `modal.Image.debian_slim()`, installs curl and Git, and runs Claude's installer;
+- Modal recommends building and publishing [named Images](https://modal.com/docs/guide/named-images) separately when Sandbox startup is latency-sensitive.
+
+AML's current `modalSandbox()` adapter accepts a registry string and resolves it through Modal's `images.fromRegistry()`. It does not accept an inline `modal.Image` definition or a Modal named Image. To use the official recipes with AML today:
+
+1. translate the required installation steps into a `linux/amd64` Dockerfile;
+2. publish the resulting image to Docker Hub, GHCR, or another registry Modal can read;
+3. verify its entrypoint compatibility and required shell utilities;
+4. pass the immutable registry reference to `modalSandbox({ image })`.
+
+```ts
+import { modalSandbox } from "@aml-jsx/sdk"
+
+const sandboxProvider = modalSandbox({
+  image: "ghcr.io/your-organization/aml-opencode:2026-08-10",
+  appName: "aml-production",
+})
+```
+
+Modal documents support for [loading existing public registry images](https://modal.com/docs/guide/existing-images). The image must be `linux/amd64` and have a compatible entrypoint. AML additionally requires `sh`, `tar`, `mkdir`, and `rm` for Workspace hydration and reconciliation.
+
+<Aside type="note" title="Claude Code is upstream guidance, not current AML support">
+  AML does not currently ship a Claude Agent provider. Modal's official Claude Code recipe is useful input for future
+  image work, but an image alone does not create an AML provider or prove ACP compatibility.
+</Aside>
+
+## Verify an image before recommending it
+
+Check the exact tag or digest, not `latest`:
+
+```bash
+docker run --rm --entrypoint sh cloudflare/sandbox:0.12.5-opencode -lc '
+  command -v sh
+  command -v tar
+  command -v git
+  command -v opencode
+  opencode acp --help
+'
+```
+
+Then verify the complete stack:
+
+1. the image architecture matches the Sandbox platform;
+2. `sh`, transfer utilities, the ACP command, and its native Agent executable exist on `PATH`;
+3. `/workspace` is readable and writable according to the requested access;
+4. AML can create writable invocation state outside a read-only Workspace;
+5. credentials arrive at runtime without entering image layers, prompts, or Workspace revisions;
+6. the Agent can start one real session, use the requested model, and exit cleanly;
+7. cancellation and output overflow reclaim the Agent process and disposable Sandbox;
+8. image user, network, capabilities, resources, package provenance, and vulnerability policy match the deployment threat model.
+
+Continue with [Docker Sandbox](/docs/providers/sandboxes/docker/), [Modal Sandbox](/docs/providers/sandboxes/modal/), and [Agent/Sandbox compatibility](/docs/compatibility/) for provider-specific behavior.

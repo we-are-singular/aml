@@ -1,0 +1,102 @@
+---
+title: Local Workspace
+description: Use an existing local directory as a directly materialized Workspace.
+---
+
+import ProviderHero from "../../../../../components/docs/ProviderHero.astro"
+
+<ProviderHero
+  name="local-workspace"
+  eyebrow="Direct materialization"
+  title="Local Workspace"
+  factory="localWorkspace({ directory })"
+  summary="The local provider points AML at one existing directory. Descendants work in that directory directly, so writes are durable as ordinary filesystem mutations happen."
+  bestFor="Trusted development, local automation, and workflows where the application already owns the host directory."
+  caution="This provider makes no sandboxing claim and has no revision history. Never point model-generated or untrusted work at a sensitive host directory."
+/>
+
+## When to use it
+
+`localWorkspace()` is the simplest Workspace provider. It is deliberately not a snapshot store:
+
+- the configured directory is the materialization and the durable source;
+- acquisition resolves symlinks and requires an existing directory;
+- writes are visible immediately in that directory;
+- `save()` does not copy, archive, or publish anything;
+- use `filesystemWorkspace()` or `s3Workspace()` for revisions and restore-by-id.
+
+The logical `<Workspace />` `id` labels the evaluation. It does not select a child directory. Two local providers targeting the same physical directory compete for the same lock.
+
+## Options
+
+| Option      | Type     | Default  | Notes                                                                                          |
+| ----------- | -------- | -------- | ---------------------------------------------------------------------------------------------- |
+| `directory` | `string` | Required | Resolved at factory construction; the directory must exist and be a directory at acquire time. |
+
+The factory is lazy with respect to filesystem I/O: configuration is validated and resolved when the factory is created, but the directory is inspected and locked only when AML acquires the Workspace.
+
+## Complete example
+
+Use an explicit fixture directory rather than `"."` when building a tutorial or service.
+
+```tsx
+import { AmlRuntime, File, Workspace, localWorkspace } from "@aml-jsx/sdk"
+
+const repository = localWorkspace({ directory: "/srv/aml/review-fixture" })
+
+await new AmlRuntime().evaluate(
+  <Workspace id="review-42" provider={repository} load={false} save={{ on: "success", include: ["reports/**"] }}>
+    <File path="reports/summary.md">The review completed successfully.</File>
+  </Workspace>
+)
+```
+
+The `save` option is accepted by the generic Workspace lifecycle, but with this provider it only verifies that the renewable lock remains healthy. It does not create a revision or filter which already-written files remain on disk.
+
+## Lock behavior
+
+Locking defaults to enabled at the `<Workspace />` layer. The implementation uses a renewable `proper-lockfile` lease:
+
+- stale boundary: 20 minutes;
+- heartbeat/update interval: 5 minutes;
+- acquisition retries: none;
+- the lock is created beside the resolved directory, so its parent must permit lock creation.
+
+If another healthy evaluation owns the same physical directory, acquisition rejects with `WorkspaceConflictError`. That class means an intentional active-writer conflict and has code `AML_WORKSPACE_CONFLICT`; it is not a general wrapper for filesystem errors or save failures.
+
+```tsx
+await runtime.evaluate(
+  <Workspace id="shared-review" provider={repository} lock>
+    Work with exclusive writer access.
+  </Workspace>
+)
+```
+
+`lock={false}` deliberately skips the cross-process lock and exposes ordinary concurrent filesystem behavior. It should be reserved for workflows that have their own coordination strategy.
+
+If the background heartbeat detects that the lock was compromised, `save()` or `release()` reports that compromise. The provider cannot claim unconditional fencing across process suspension or a broken filesystem lease.
+
+## Paths and safety
+
+The configured `directory` is the complete Workspace root. `<Workspace />` `cwd`, `<Sandbox />` `root`, and `<File />` `path` are logical paths beneath that root. The provider resolves symlinks once before locking; descendant providers must still enforce their own boundaries.
+
+`localWorkspace()` does not isolate:
+
+- host processes;
+- host filesystem access outside AML’s logical paths;
+- network access;
+- credentials inherited by child processes.
+
+Use it only where the application trusts the workflow and the directory. For untrusted code, pair a Workspace with a deliberately configured Sandbox provider and document the remaining trust boundary.
+
+## Failure recovery
+
+| Failure                              | Recovery                                                                                                      |
+| ------------------------------------ | ------------------------------------------------------------------------------------------------------------- |
+| Directory missing or not a directory | Create/validate it before evaluation; acquisition does not create the configured Workspace.                   |
+| Active writer                        | Wait, use a different id/directory, or choose an explicit unlocked strategy.                                  |
+| Lock compromised                     | Treat the materialization as suspect; stop writing, inspect the directory, and retry from a known-good state. |
+| Process cancellation                 | Preserve the cancellation reason and verify whether direct writes already reached disk.                       |
+| Release failure                      | Alert and inspect the lock directory before allowing another writer.                                          |
+
+For revision-backed persistence, see [Filesystem Workspace](/docs/providers/workspaces/filesystem/). For the provider contract and fixed lock policy, see [`SPEC.md` §14.4](https://github.com/we-are-singular/aml/blob/main/SPEC.md#144-local-workspace-provider).

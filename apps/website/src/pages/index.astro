@@ -1,0 +1,73 @@
+---
+/* eslint-disable no-undef -- Astro exposes framework globals inside page frontmatter. */
+import packageJson from "../../../../sdk/package.json"
+import AcpRuntimeSection from "../components/marketing/AcpRuntimeSection.astro"
+import ContributingSection from "../components/marketing/ContributingSection.astro"
+import GettingStartedSection from "../components/marketing/GettingStartedSection.astro"
+import HeroSection from "../components/marketing/HeroSection.astro"
+import HowItWorksSection from "../components/marketing/HowItWorksSection.astro"
+import ProvidersSection from "../components/marketing/ProvidersSection.astro"
+import ReferenceSection from "../components/marketing/ReferenceSection.astro"
+import SiteFooter from "../components/marketing/SiteFooter.astro"
+import SiteHeader from "../components/marketing/SiteHeader.astro"
+import WhySection from "../components/marketing/WhySection.astro"
+import { siteMetadata, withBase } from "../config/site"
+import MarketingLayout from "../layouts/MarketingLayout.astro"
+
+const site = Astro.site ?? new URL("https://agent-markup-language.com")
+const homeUrl = new URL(withBase(), site).href
+const sdkVersion = packageJson.version
+const structuredData = {
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "Organization",
+      "@id": `${homeUrl}#organization`,
+      name: "We Are Singular",
+      url: "https://wearesingular.com",
+      logo: new URL(withBase("logo.svg"), site).href,
+      sameAs: [siteMetadata.repository],
+    },
+    {
+      "@type": "WebSite",
+      "@id": `${homeUrl}#website`,
+      name: siteMetadata.name,
+      alternateName: siteMetadata.shortName,
+      url: homeUrl,
+      description: siteMetadata.description,
+      inLanguage: "en",
+      publisher: { "@id": `${homeUrl}#organization` },
+    },
+    {
+      "@type": "SoftwareSourceCode",
+      "@id": `${homeUrl}#software`,
+      name: "Agent Markup Language",
+      alternateName: "AML",
+      url: homeUrl,
+      description: siteMetadata.description,
+      codeRepository: siteMetadata.repository,
+      programmingLanguage: "TypeScript",
+      runtimePlatform: "Node.js",
+      version: sdkVersion,
+      license: `${siteMetadata.repository}/blob/main/LICENSE`,
+      isAccessibleForFree: true,
+      author: { "@id": `${homeUrl}#organization` },
+    },
+  ],
+}
+---
+
+<MarketingLayout structuredData={structuredData}>
+  <SiteHeader {sdkVersion} />
+  <main id="top">
+    <HeroSection />
+    <WhySection />
+    <HowItWorksSection />
+    <AcpRuntimeSection />
+    <ProvidersSection />
+    <ReferenceSection />
+    <GettingStartedSection />
+    <ContributingSection />
+  </main>
+  <SiteFooter />
+</MarketingLayout>

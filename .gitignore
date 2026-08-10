@@ -1,11 +1,13 @@
 node_modules/
 dist/
+apps/website/.astro/
 coverage/
 .turbo/
 *.log
 *.tgz
 poc/
 .env
+!apps/cli/tests/env/fixtures/.env
 
 # agents
 .codex/

@@ -1,0 +1,125 @@
+---
+title: Give an Agent a JavaScript Tool
+description: Define a typed, capability-scoped application Tool with validated input and safe JSON output.
+---
+
+import { Aside, Badge, Steps } from "@astrojs/starlight/components"
+
+<Badge text="Host-process capability" variant="caution" />
+
+## Goal
+
+Attach one application-owned function to an Agent without turning its return value into prompt text. The workflow below adapts the repository's [`context.tsx`](https://github.com/we-are-singular/aml/blob/main/examples/src/core/context.tsx), where a Tool reads session-owned data through a scoped dependency.
+
+## Prerequisites
+
+- Node.js `>=26`;
+- `@aml-jsx/sdk`, `@aml-jsx/sdk/testing`, and `zod`;
+- no credentials or network for this deterministic workflow.
+
+## Complete source
+
+```tsx
+import { Agent, AmlRuntime, createContext, defineTool, Tool, useContext } from "@aml-jsx/sdk"
+import { DeterministicAgentProvider } from "@aml-jsx/sdk/testing"
+import { z } from "zod"
+
+class SessionRepository {
+  async listOrders(): Promise<readonly string[]> {
+    return ["order-17", "order-29"]
+  }
+}
+
+const Repository = createContext<SessionRepository>("SessionRepository")
+
+const provider = new DeterministicAgentProvider({
+  async respond(request, context) {
+    const tool = request.tools.find(candidate => candidate.name === "list_session_orders")
+
+    if (tool?.kind !== "javascript") {
+      throw new Error("Session Tool was not granted")
+    }
+
+    const orders = await tool.execute({}, { signal: context.signal, trace: context.trace })
+
+    return { text: `orders:` + JSON.stringify(orders) }
+  },
+})
+
+function OrderAgent() {
+  const repository = useContext(Repository)
+  const listOrders = defineTool({
+    description: "List orders for the active application session.",
+    execute: async () => await repository.listOrders(),
+    input: z.object({}),
+    name: "list_session_orders",
+  })
+
+  return (
+    <Agent provider={provider}>
+      <Tool use={listOrders} />
+      Inspect the active session orders.
+    </Agent>
+  )
+}
+
+const result = await new AmlRuntime().evaluate(
+  <Repository.Provider value={new SessionRepository()}>
+    <OrderAgent />
+  </Repository.Provider>
+)
+
+console.log(result)
+```
+
+## Run it
+
+Save the complete source as `recipe.tsx` in a project configured as shown in [Getting started](/docs/getting-started/), then run it directly:
+
+```sh title="Terminal"
+npx vite-node recipe.tsx
+```
+
+From an AML repository checkout, the maintained context example exercises the same Tool and dependency boundary:
+
+```sh title="Terminal"
+npm run example -- context
+```
+
+## Expected output
+
+```text
+orders:["order-17","order-29"]
+```
+
+## How it works
+
+<Steps>
+
+1. `createContext()` creates an immutable dependency identity. `useContext()` reads the nearest value during AML evaluation.
+2. `defineTool()` captures a name, description, input schema, and executor. The executor receives validated input and an `AgentToolExecutionContext` containing cancellation and trace state.
+3. `<Tool use={listOrders} />` grants the Tool only to its containing `<Agent />`. A sibling `<Agent />` does not receive it.
+4. The deterministic provider invokes the Tool explicitly and returns its JSON result as text. A real Agent provider may expose the same Tool through its native capability bridge.
+
+</Steps>
+
+## Failure and security notes
+
+<Aside type="danger" title="Tool code is application code">
+  Tools execute in the host process. A Tool is not sandboxed just because its owning `<Agent />` is inside an AML tree.
+  Do not pass unrestricted paths, shell commands, network clients, secrets, or database handles to model-controlled
+  input.
+</Aside>
+
+- Input is validated before execution; output must be stable JSON. Cyclic values, `BigInt`, class instances, `Map`, `Set`, symbols, non-finite numbers, and `undefined` are not portable Tool results.
+- Duplicate Tool names and runtime `allowedTools` policy violations fail closed.
+- Forward `context.signal` into I/O so cancellation can stop work that supports it.
+- Keep capability descriptions narrow and auditable. The model should not receive a Tool merely because the application happens to have the function available.
+
+## API and source links
+
+- [`defineTool`](https://github.com/we-are-singular/aml/blob/main/sdk/src/components/tool/define-tool.ts)
+- [`<Tool />`](https://github.com/we-are-singular/aml/blob/main/sdk/src/components/tool/tool.tsx)
+- [`AgentToolExecutionContext`](https://github.com/we-are-singular/aml/blob/main/sdk/src/components/tool/agent-tool.ts)
+- [`createContext`](https://github.com/we-are-singular/aml/blob/main/sdk/src/components/context/create-context.ts)
+- [Maintained source example](https://github.com/we-are-singular/aml/blob/main/examples/src/core/context.tsx)

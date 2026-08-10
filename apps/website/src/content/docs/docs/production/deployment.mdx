@@ -1,0 +1,161 @@
+---
+title: Deployment
+description: Package AML workflows with the executables, credentials, images, and durable state they actually require.
+---
+
+Deployment is the act of reproducing the complete AML provider graph in a controlled runtime. Installing `@aml-jsx/sdk` is not enough: built-in coding Agents require an ACP executable, Sandboxes require their host or remote environment, and revision-backed Workspaces require storage permissions and temporary disk.
+
+## Runtime requirements
+
+AML publishes as an ESM package and requires Node.js `>=26`. The public package exports the runtime and built-in providers from `@aml-jsx/sdk`; deterministic fixtures and provider conformance helpers are behind `@aml-jsx/sdk/testing`.
+
+```json
+{
+  "type": "module",
+  "engines": { "node": ">=26" },
+  "dependencies": { "@aml-jsx/sdk": "^0.4.1" }
+}
+```
+
+Use the same Node major version in development, CI, the service image, and any Sandbox image that runs a Node-based Agent. Pin the SDK and provider-adjacent tool versions as part of the deployment artifact.
+
+## Compile TSX for plain Node.js
+
+Use a TSX-aware runner during development, but deploy emitted ESM JavaScript when your service uses plain Node.js. Given an application entrypoint at `src/main.tsx`, add a build configuration:
+
+```json title="tsconfig.build.json"
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "outDir": "dist",
+    "rootDir": "src",
+    "sourceMap": true
+  },
+  "include": ["src/**/*.ts", "src/**/*.tsx"]
+}
+```
+
+Add repeatable application commands:
+
+```json title="package.json"
+{
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "start": "node dist/main.js"
+  }
+}
+```
+
+Then build and execute the same artifact your service image will run:
+
+```sh title="Terminal"
+npm run build
+npm start
+```
+
+TypeScript emits the automatic AML JSX runtime imports selected by `jsxImportSource`; the production install must keep `@aml-jsx/sdk` as a runtime dependency. In a multi-stage image, copy `dist`, `package.json`, and the lockfile into the runtime stage, then install and run the production artifact explicitly:
+
+```sh title="Runtime image"
+npm ci --omit=dev
+npm start
+```
+
+Node executes the emitted `.js`, not the original `.tsx`. If this is a workspace application, use the repository's workspace-aware install/prune command rather than copying an incomplete child lock context.
+
+## Build the provider graph
+
+An AML workflow needs an Agent provider only when an `<Agent />` is evaluated, a Sandbox provider when a `<Sandbox />` is evaluated, and a Workspace provider when a `<Workspace />` is evaluated. Configure defaults at the runtime and use explicit component props when a tree intentionally mixes providers.
+
+```tsx
+import { AmlRuntime, Agent, Sandbox, Workspace, codexAgent, dockerSandbox, s3Workspace } from "@aml-jsx/sdk"
+
+const runtime = new AmlRuntime({
+  agentProvider: codexAgent(),
+  sandboxProvider: dockerSandbox({
+    image: requireEnv("AML_AGENT_IMAGE"),
+  }),
+  workspaceProvider: s3Workspace({
+    bucket: requireEnv("AML_WORKSPACE_BUCKET"),
+    prefix: "production/workspaces",
+  }),
+})
+
+const workflow = (
+  <Workspace
+    id="review-42"
+    load={{ revision: "current", exclude: ["node_modules/**"] }}
+    save={{ on: "success", gitignore: true, retention: 5 }}
+  >
+    <Sandbox access="read-write">
+      <Agent>Review the repository and update reports/summary.md.</Agent>
+    </Sandbox>
+  </Workspace>
+)
+
+function requireEnv(name: string): string {
+  const value = process.env[name]
+  if (!value) throw new Error(`${name} is required`)
+  return value
+}
+```
+
+The example expects the image to contain the selected Agent executable and all project dependencies. `dockerSandbox()` starts a named image; it does not build it or install an ACP executable.
+
+## Image and host responsibilities
+
+For Docker, publish a deliberate image that includes `sh`, the utilities used by Workspace transfer and cleanup, the ACP executable, its runtime, and project dependencies. The daemon and deployment layer own the container user, capabilities, network, CPU, memory, storage, and syscall policy. Read the [Docker Sandbox page](/docs/providers/sandboxes/docker/) before treating the adapter as part of a security design.
+
+For Daytona, select either an image or a snapshot. AML transfers the Workspace into the relative guest directory `workspace`, then reconciles it when the Sandbox is released. For Modal, select a registry image; AML transfers the Workspace into `/workspace`. Both providers need credentials and provider-native environment configuration in the deployment, and both can lose unsynchronized edits after an interruption.
+
+For Local, the host must already contain the executable and dependencies, and the application user must have access to the intended directory. Local is a trusted host-process adapter, not a production isolation mechanism for hostile code.
+
+## Secrets and identity
+
+Prefer workload identity or the platform’s secret injection. Keep provider configuration in environment variables or injected clients and validate required values at startup. Do not serialize secrets into a Workspace revision or pass them as model-visible prompt text.
+
+For S3 Workspace, the identity needs bucket-level listing constrained to the configured prefix and object Get/Put/Delete access for that prefix. Conditional writes and stable ETags are part of the adapter contract; an S3-compatible endpoint must be tested for those semantics before deployment. See [S3 Workspace](/docs/providers/workspaces/s3/).
+
+For Agent providers, the executable and credentials are provider-specific. See [Codex](/docs/providers/agents/codex/), [OpenCode](/docs/providers/agents/opencode/), and [Pi](/docs/providers/agents/pi/) for executable names, environment variables, and MCP caveats.
+
+## Service lifecycle
+
+Create one configured `AmlRuntime` for the process when its defaults and trace policy are shared. Pass an `AbortSignal` for each request and enforce a deadline at the request boundary.
+
+```ts
+export async function runWithDeadline(runtime: AmlRuntime, tree: JSX.Element, ms: number): Promise<string> {
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(new Error("AML evaluation deadline exceeded")), ms)
+
+  try {
+    return await runtime.evaluate(tree, { signal: controller.signal })
+  } finally {
+    clearTimeout(timer)
+  }
+}
+```
+
+The application remains responsible for the outer request, queue, and process lifecycle. AML closes its evaluation-owned providers in `finally`, but an external effect already performed by a Tool, Agent, or command is not automatically rolled back.
+
+## CI and release gate
+
+The useful deployment checks are provider-specific:
+
+- build the ESM application and load the same entry point used in production;
+- verify the image contains the exact ACP executable and shell utilities;
+- verify credentials using a least-privilege identity;
+- execute a load → Agent/Script → save → release path against the real Workspace backend;
+- cancel during acquisition, Agent execution, transfer, and save, then inspect for leftovers;
+- run the public provider conformance helpers for custom adapters;
+- record the deployed Node, SDK, Agent executable, image/snapshot, and provider SDK versions.
+
+Do not treat a successful type check as evidence that an external executable, provider account, image, object store, or network policy is usable.
+
+## Related references
+
+- [Experimental CLI](/docs/cli/)
+- [Operations](/docs/production/operations/)
+- [Security model](/docs/production/security/)
+- [Sandbox compatibility](/docs/compatibility/)
+- [Provider wishlist and support matrix](https://github.com/we-are-singular/aml/blob/main/PROVIDERS.md)

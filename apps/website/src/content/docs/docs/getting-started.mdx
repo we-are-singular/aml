@@ -1,0 +1,306 @@
+---
+title: Getting started
+description: Install AML and resolve a credential-free workflow before connecting a real Agent provider.
+---
+
+import { Aside, Card, CardGrid, Steps, TabItem, Tabs } from "@astrojs/starlight/components"
+
+This guide gives you a deterministic first success: no API key, ACP executable, Docker daemon, or remote account required. You will then swap in a real Agent provider without changing the authored AML tree.
+
+## Prerequisites
+
+- Node.js **26 or newer**
+- an ESM project (`"type": "module"` in `package.json`)
+- TypeScript if you author `.tsx`
+
+<Aside type="caution" title="AML is ESM-only">
+  CommonJS `require()` is not a supported package entrypoint. Use ESM imports and a TSX-capable runner or compile the
+  project before running it.
+</Aside>
+
+If a coding agent will author or review the workflow, optionally install the [AML authoring skill](/docs/agent-skill/). The skill teaches the agent the current public API and safety boundaries; it does not replace the SDK installation below.
+
+## 1. Create a project
+
+<Tabs>
+  <TabItem label="npm">
+
+```sh title="Terminal"
+mkdir aml-first-workflow
+cd aml-first-workflow
+npm init -y
+npm pkg set type=module
+npm install @aml-jsx/sdk
+npm install --save-dev typescript vite-node
+```
+
+  </TabItem>
+  <TabItem label="pnpm">
+
+```sh title="Terminal"
+mkdir aml-first-workflow
+cd aml-first-workflow
+pnpm init
+pnpm add @aml-jsx/sdk
+pnpm add --save-dev typescript vite-node
+```
+
+Add `"type": "module"` to `package.json`.
+
+  </TabItem>
+</Tabs>
+
+<Aside type="note" title="pnpm may require build-script approval">
+  pnpm 11 can stop the install with `ERR_PNPM_IGNORED_BUILDS` when it blocks transitive native build scripts. Run `pnpm
+  approve-builds`, approve the dependencies named by pnpm, then run `pnpm install` again. This is pnpm's installation
+  policy; AML does not execute those scripts at runtime.
+</Aside>
+
+Create `tsconfig.json`:
+
+```json title="tsconfig.json"
+{
+  "compilerOptions": {
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "target": "ES2024",
+    "strict": true,
+    "skipLibCheck": true,
+    "jsx": "react-jsx",
+    "jsxImportSource": "@aml-jsx/sdk"
+  }
+}
+```
+
+The automatic JSX runtime turns AML elements into AML nodes. React is not installed or involved. `skipLibCheck` skips
+checking upstream declaration files loaded by the bundled provider adapters while preserving strict checks for your
+project source.
+
+Add one repeatable command to the generated `package.json`:
+
+```json title="package.json"
+{
+  "type": "module",
+  "scripts": {
+    "aml": "vite-node src/first-workflow.tsx"
+  }
+}
+```
+
+Keep the dependencies added by your package manager when you merge this snippet into the generated file.
+
+## 2. Evaluate your first tree
+
+Create `src/first-workflow.tsx`:
+
+```tsx title="src/first-workflow.tsx"
+import { Agent, AmlRuntime } from "@aml-jsx/sdk"
+import { DeterministicAgentProvider } from "@aml-jsx/sdk/testing"
+
+const agentProvider = new DeterministicAgentProvider({
+  name: "first-workflow",
+  respond: request => ({ text: `Resolved: ${request.prompt}` }),
+})
+
+const runtime = new AmlRuntime({ agentProvider })
+
+const result = await runtime.evaluate(<Agent system="Answer in one sentence.">Explain what AML evaluates.</Agent>)
+
+console.log(result)
+```
+
+Run it with the script you just added:
+
+```sh title="Terminal"
+npm run aml
+# or: pnpm aml
+```
+
+Expected output:
+
+```text title="Output"
+Resolved: Explain what AML evaluates.
+```
+
+<Steps>
+
+1. JSX creates an AML node tree; it does not run `<Agent />` during rendering.
+2. `AmlRuntime.evaluate()` validates and resolves the tree.
+3. `<Agent />` builds a normalized request from its system text, prompt, capabilities, and effective scopes.
+4. The selected provider returns an `AgentResponse`; the runtime returns its text from the root.
+5. The runtime releases acquired resources in reverse order.
+
+</Steps>
+
+The deterministic provider deliberately echoes a known result and records calls. It is part of the public testing entrypoint, making it useful for tutorials, examples, and workflow tests—not just AML's own test suite.
+
+## 3. Connect a real Agent
+
+The authored node remains the same. Replace the contents of `src/first-workflow.tsx` with one complete tab below, then run the same `aml` script.
+
+<Aside type="note" title="There is no universal default provider">
+  Start with the coding harness and model account you already operate. The Codex tab is the shortest path when you have
+  an OpenAI API key; choose OpenCode for its model catalog and native tool policy, or Pi for its extensible Tool and MCP
+  path. The provider comparison explains the trade-offs in detail.
+</Aside>
+
+<Tabs>
+  <TabItem label="Codex">
+
+```tsx title="src/first-workflow.tsx"
+import { Agent, AmlRuntime, codexAgent } from "@aml-jsx/sdk"
+
+const apiKey = process.env.OPENAI_API_KEY
+if (!apiKey) throw new Error("OPENAI_API_KEY is required")
+
+const runtime = new AmlRuntime({
+  agentProvider: codexAgent({
+    apiKey,
+    model: "gpt-5.3-codex",
+  }),
+})
+const result = await runtime.evaluate(<Agent>Describe this project in three bullets.</Agent>)
+
+console.log(result)
+```
+
+Install and verify the ACP adapter version exercised by this repository, then supply a credential through your shell or secret manager:
+
+```sh
+npm install --global @agentclientprotocol/codex-acp@1.1.7 @openai/codex@0.145.0
+codex-acp --help
+codex --version
+export OPENAI_API_KEY="your-development-key"
+npm run aml
+```
+
+Do not commit the key or place it in a Workspace. See the [Codex guide](/docs/providers/agents/codex/) for executable overrides, `CODEX_API_KEY`, model precedence, permissions, and Sandbox compatibility.
+
+  </TabItem>
+  <TabItem label="OpenCode">
+
+```tsx title="src/first-workflow.tsx"
+import { Agent, AmlRuntime, opencodeAgent } from "@aml-jsx/sdk"
+
+const apiKey = process.env.OPENAI_API_KEY
+if (!apiKey) throw new Error("OPENAI_API_KEY is required")
+
+const runtime = new AmlRuntime({
+  agentProvider: opencodeAgent({
+    env: { OPENAI_API_KEY: apiKey },
+    model: "openai/gpt-5.3-codex",
+  }),
+})
+const result = await runtime.evaluate(<Agent>Describe this project in three bullets.</Agent>)
+
+console.log(result)
+```
+
+Install and verify the OpenCode executable, then configure a model provider:
+
+```sh
+npm install --global opencode-ai@1.18.9
+opencode --version
+export OPENAI_API_KEY="your-development-key"
+npm run aml
+```
+
+This tab deliberately uses an environment credential so the complete path is visible. OpenCode also supports native `opencode auth login`; if you use that path, remove the explicit key guard and environment mapping and select a model configured for the logged-in account. The [OpenCode guide](/docs/providers/agents/opencode/) documents both approaches, its generated profile, permission mapping, and state isolation.
+
+  </TabItem>
+  <TabItem label="Pi">
+
+```tsx title="src/first-workflow.tsx"
+import { Agent, AmlRuntime, piAgent } from "@aml-jsx/sdk"
+
+const apiKey = process.env.OPENAI_API_KEY
+if (!apiKey) throw new Error("OPENAI_API_KEY is required")
+
+const runtime = new AmlRuntime({
+  agentProvider: piAgent({
+    command: "pi-acp",
+    env: { OPENAI_API_KEY: apiKey },
+    model: "openai/gpt-5.3-codex",
+    piCommand: "pi",
+  }),
+})
+const result = await runtime.evaluate(<Agent>Describe this project in three bullets.</Agent>)
+
+console.log(result)
+```
+
+Install and verify the ACP bridge and Pi CLI:
+
+```sh
+npm install --global pi-acp@0.0.33 @earendil-works/pi-coding-agent@0.82.1
+pi --version
+command -v pi-acp
+export OPENAI_API_KEY="your-development-key"
+npm run aml
+```
+
+This follows the repository smoke path with an OpenAI-backed model. If you select another Pi model provider, change the model identifier and forward that provider's credential instead. The [Pi guide](/docs/providers/agents/pi/) explains when AML generates a wrapper and how to install `pi-mcp-adapter` for Tools, authored MCP servers, or structured output.
+
+  </TabItem>
+</Tabs>
+
+<Aside type="tip" title="Provider selection is lexical too">
+  Set a default on `AmlRuntime`, or pass `provider` directly to an `<Agent />` when one subtree needs a different model
+  harness. A direct prop wins over the runtime default. Compare the built-in profiles in [Choose an
+  Agent](/docs/providers/agents/).
+</Aside>
+
+## 4. Add files and command execution
+
+`<File />` requires `<Workspace />`, and `<Script />` requires `<Sandbox />`. This example creates a fresh temporary directory so it cannot overwrite your repository.
+
+```tsx title="src/resources.tsx"
+import { mkdtemp } from "node:fs/promises"
+import { tmpdir } from "node:os"
+import { join } from "node:path"
+import { AmlRuntime, File, Sandbox, Script, Workspace, localSandbox, localWorkspace } from "@aml-jsx/sdk"
+
+const directory = await mkdtemp(join(tmpdir(), "aml-guide-"))
+const runtime = new AmlRuntime({
+  sandboxProvider: localSandbox(),
+  workspaceProvider: localWorkspace({ directory }),
+})
+
+const output = await runtime.evaluate(
+  <Workspace id="guide" load={false} save={false}>
+    <File path="brief.txt">Inspect this isolated guide directory.</File>
+    <Sandbox access="read-write">
+      <Script command="node" args={["-e", "console.log('workspace ready')"]} />
+    </Sandbox>
+  </Workspace>
+)
+
+console.log(output)
+```
+
+<Aside type="danger" title="Local Sandbox is trusted host execution">
+  `localSandbox()` starts ordinary host processes with your application's privileges. AML validates logical Workspace
+  paths, but it does not isolate the process, environment, network, or host filesystem. Use only trusted commands and
+  read the [Sandbox security guidance](/docs/production/security/).
+</Aside>
+
+## Where to go next
+
+<CardGrid>
+  <Card title="Understand evaluation" icon="random">
+    Learn post-order resolution, lexical scopes, concurrency, and cleanup in [Core concepts](/docs/concepts/).
+  </Card>
+  <Card title="Build from a recipe" icon="puzzle">
+    Copy a complete workflow from the [Cookbook](/docs/cookbook/), with expected output and provider requirements.
+  </Card>
+  <Card title="Choose infrastructure" icon="cloud-download">
+    Compare the complete [provider catalog](/docs/providers/) across Agent, Sandbox, and Workspace responsibilities.
+  </Card>
+  <Card title="Prepare production" icon="approve-check-circle">
+    Review isolation, secrets, persistence, cancellation, and telemetry in [Production](/docs/production/).
+  </Card>
+  <Card title="Work with a coding agent" icon="pencil">
+    Install and verify the [AML authoring skill](/docs/agent-skill/) before asking an agent to generate or review AML
+    code.
+  </Card>
+</CardGrid>

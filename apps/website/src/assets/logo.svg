@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="112" fill="#1a1914"/>
+  <g font-family="monospace" font-size="88" font-weight="700">
+    <text x="56" y="288" fill="#757163">&lt;</text>
+    <text x="112" y="288" fill="#fafaf7">aml</text>
+    <text x="324" y="288" fill="#2e4bff">/</text>
+    <text x="382" y="288" fill="#757163">&gt;</text>
+  </g>
+</svg>

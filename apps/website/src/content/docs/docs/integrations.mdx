@@ -1,0 +1,124 @@
+---
+title: Integrations
+description: Assemble Agent, Sandbox, and Workspace providers into complete AML stacks.
+---
+
+import { Aside, Card, CardGrid, Tabs, TabItem } from "@astrojs/starlight/components"
+
+AML integrations are deliberately compositional. Choose one provider for each responsibility, then check the compatibility and prerequisite contract of the resulting stack.
+
+## Start with a complete stack
+
+<Tabs>
+  <TabItem label="Local development">
+
+```tsx
+import { AmlRuntime, localSandbox, localWorkspace, opencodeAgent } from "@aml-jsx/sdk"
+
+const runtime = new AmlRuntime({
+  agentProvider: opencodeAgent({}),
+  sandboxProvider: localSandbox(),
+  workspaceProvider: localWorkspace({ directory: "/absolute/path/to/project" }),
+})
+```
+
+`localSandbox()` runs trusted host processes. It is appropriate for a developer-owned checkout, not a hostile-code boundary.
+
+  </TabItem>
+  <TabItem label="Docker execution">
+
+```tsx
+import { AmlRuntime, codexAgent, dockerSandbox, localWorkspace } from "@aml-jsx/sdk"
+
+const runtime = new AmlRuntime({
+  agentProvider: codexAgent({}),
+  sandboxProvider: dockerSandbox({ image: "aml-codex:latest" }),
+  workspaceProvider: localWorkspace({ directory: "/absolute/path/to/project" }),
+})
+```
+
+The image must already contain the compatible ACP executable, Node/runtime dependencies, project dependencies, credentials strategy, and any command-line tools the workflow needs. AML does not build the image or install an Agent.
+
+  </TabItem>
+  <TabItem label="Durable revisions">
+
+```tsx
+import { AmlRuntime, localSandbox, opencodeAgent, s3Workspace } from "@aml-jsx/sdk"
+
+const runtime = new AmlRuntime({
+  agentProvider: opencodeAgent({}),
+  sandboxProvider: localSandbox(),
+  workspaceProvider: s3Workspace({
+    bucket: "aml-workspaces",
+    prefix: "reviews/",
+    config: { region: "us-east-1" },
+  }),
+})
+```
+
+The S3 provider needs an S3-compatible client/configuration and storage permissions for its index, revision objects, lock, and cleanup operations. See the [S3 Workspace guide](/docs/providers/workspaces/s3/).
+
+  </TabItem>
+</Tabs>
+
+## The integration boundary
+
+```text
+Application request
+        │
+        ▼
+AML Runtime ── limits, cancellation, traces, scopes
+   │       │       │
+   ▼       ▼       ▼
+ Agent   Sandbox  Workspace
+ ACP     lease    materialization/revision
+```
+
+The Agent provider does not own durable files. The Sandbox provider does not publish revisions. The Workspace provider does not decide which model or ACP executable runs. Keeping those responsibilities separate makes failure and replacement boundaries explicit.
+
+## Provider prerequisites
+
+| Stack part | Verify before running                                                                                                          |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| Agent      | Executable/ACP adapter, credentials, model configuration, provider-specific permissions, and `supportsSandbox()` compatibility |
+| Sandbox    | Provider CLI/SDK, image or snapshot, process APIs, working-directory behavior, output/timeouts, and cleanup permissions        |
+| Workspace  | Identity, materialization format, lock/revision semantics, storage credentials, save policy, and cleanup permissions           |
+| Runtime    | Finite limits, allowed Tools/MCP names, cancellation deadline, trace sink, and content handling policy                         |
+
+<Aside type="caution" title="Credential scope matters">
+  Put credentials in the selected execution environment where possible. A provider factory can carry vendor
+  configuration, but the Sandbox boundary determines which process can read environment variables and files.
+</Aside>
+
+## A workflow that uses all three
+
+```tsx
+import { Agent, File, Sandbox, Workspace } from "@aml-jsx/sdk"
+
+export function Review() {
+  return (
+    <Workspace id="review-42" save={{ on: "success" }}>
+      <File path="artifacts/review.md">The review is ready.</File>
+      <Sandbox access="read-write">
+        <Agent system="Return a concise review and a recommended patch plan.">
+          Inspect the repository and write the final review.
+        </Agent>
+      </Sandbox>
+    </Workspace>
+  )
+}
+```
+
+In a real application supply the providers through the runtime or explicit props. `<File />` is shown at the `<Workspace />` boundary because it persists text through the Workspace provider; use `<Agent />` or `<Script />` inside `<Sandbox />` for process writes.
+
+## Integration checklist
+
+1. Start with a deterministic provider stack to validate tree shape and placement.
+2. Select the Agent provider and confirm its executable and credentials in the target environment.
+3. Select a Sandbox whose process/filesystem boundary matches the threat model.
+4. Add a Workspace only when persistence, sharing, or revision publication is required.
+5. Set finite runtime limits and exact Tool/MCP allowlists.
+6. Exercise cancellation, provider failure, cleanup, Workspace conflict, and revision recovery.
+7. Enable metadata-only tracing by default and review content capture separately.
+
+See the [compatibility guide](/docs/compatibility/) for the supported matrix and [provider guides](/docs/providers/) for provider-specific setup.

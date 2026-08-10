@@ -1,0 +1,21 @@
+---
+import { CONCEPTS } from "../../concepts"
+import { withBase } from "../../config/site"
+
+const primitives = CONCEPTS.filter(concept => concept.group === "Components" && concept.docsPath !== undefined)
+---
+
+<div class="primitive-reference-grid">
+  {
+    primitives.map(primitive => (
+      <a class="primitive-reference-card" href={withBase(primitive.docsPath)}>
+        <div>
+          <code>{primitive.name}</code>
+          <span>{primitive.signature}</span>
+        </div>
+        <p>{primitive.description}</p>
+        <strong>Read reference <span aria-hidden="true">→</span></strong>
+      </a>
+    ))
+  }
+</div>

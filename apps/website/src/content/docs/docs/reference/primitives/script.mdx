@@ -1,0 +1,51 @@
+---
+title: "<Script />"
+description: Execute one literal command or resolved shell source through the active Sandbox runtime.
+---
+
+`<Script />` runs authored execution through its enclosing [`<Sandbox />`](../sandbox/). AML never falls back to a host child process when no `<Sandbox />` exists.
+
+```tsx
+import { AmlRuntime, Sandbox, Script } from "@aml-jsx/sdk"
+import { DeterministicSandboxProvider } from "@aml-jsx/sdk/testing"
+
+const sandbox = new DeterministicSandboxProvider({
+  exec: (command, args) => ({
+    exitCode: 0,
+    stderr: "",
+    stdout: [command, ...args].join(" "),
+  }),
+})
+
+const runtime = new AmlRuntime({ sandboxProvider: sandbox })
+const output = await runtime.evaluate(
+  <Sandbox>
+    <Script command="node" args={["--version"]} timeoutMs={10_000} />
+  </Sandbox>
+)
+```
+
+## Two forms
+
+| Form               | Required props                   | Child content               | Runtime call                                      |
+| ------------------ | -------------------------------- | --------------------------- | ------------------------------------------------- |
+| Literal command    | `command`, optional `args`       | not allowed                 | `exec(command, args)` without shell interpolation |
+| Interpreted source | `shell="sh" \| "bash" \| "node"` | required non-empty AML text | `exec(shell, interpreter arguments)`              |
+
+Both forms accept `timeoutMs`, which must be a positive safe integer. `args` is valid only with `command`; command form accepts no children.
+
+```tsx
+<Sandbox provider={sandbox} access="read-write">
+  <Script shell="node" timeoutMs={30_000}>
+    {`console.log(JSON.stringify({ ok: true }))`}
+  </Script>
+</Sandbox>
+```
+
+## Result and failures
+
+Successful standard output becomes AML text for later composition. A non-zero exit code rejects with `EvaluationError` and includes trimmed stderr detail when available. The provider owns output bounds, process termination, and the exact meaning of timeout and cancellation.
+
+Generated source is still executable authority. If [`<Agent />`](../agent/) produces the children of `<Script />`, treat that output as untrusted and select an enforcing Sandbox with tight credentials, filesystem access, network policy, and resource limits.
+
+See the [generated diagnostic recipe](/docs/cookbook/generated-diagnostic/) and the [Sandbox provider guides](/docs/providers/sandboxes/).

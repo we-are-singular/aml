@@ -1,0 +1,178 @@
+---
+title: Route typed data into an authorized Workspace
+description: "Validate a structured route, enforce application-owned path containment, and only then construct <Workspace />."
+---
+
+import { Aside, Badge, Steps } from "@astrojs/starlight/components"
+
+<Badge text="Deterministic" variant="success" />
+
+## Goal
+
+Turn a model-shaped routing proposal into bounded local work without allowing the proposal to select an arbitrary directory:
+
+1. an Agent returns a schema-validated route record;
+2. ordinary application code validates category, resolves the approved root and candidate, and enforces canonical containment;
+3. only after those checks does the application construct `localWorkspace()` and run a handoff `<Agent />` inside `<Workspace />`.
+
+The example uses deterministic Agent providers, so it needs no credentials or network access. It does require an existing playbook directory with an `account-access` subdirectory. The route record is deliberately a proposal, not an authorization decision.
+
+## Prerequisites and status
+
+- Node.js `>=26`, ESM TypeScript/TSX execution, `@aml-jsx/sdk`, and `zod`;
+- `AML_SUPPORT_PLAYBOOKS` set to an existing application-owned directory;
+- an existing `account-access` subdirectory beneath that root;
+- no model credentials are required for this deterministic walkthrough.
+
+For a live provider, replace the router and handoff fixtures with `codexAgent({ workingDirectory })` or another supported Agent provider, then configure its executable and credentials. That variation is credentialed and does not change the host-owned authorization check.
+
+## Complete source
+
+```tsx
+import { realpath } from "node:fs/promises"
+import { isAbsolute, relative, resolve, sep } from "node:path"
+
+import { Agent, AmlRuntime, localWorkspace, Workspace } from "@aml-jsx/sdk"
+import { DeterministicAgentProvider } from "@aml-jsx/sdk/testing"
+import { z } from "zod"
+
+const root = process.env.AML_SUPPORT_PLAYBOOKS
+if (root === undefined) {
+  throw new Error("Set AML_SUPPORT_PLAYBOOKS to an existing playbook directory")
+}
+
+const Route = z.object({
+  category: z.enum(["account-access", "billing", "delivery"]),
+  directory: z.string(),
+  normalizedRequest: z.string(),
+  uncertainties: z.array(z.string()),
+})
+
+const router = new DeterministicAgentProvider({
+  name: "support-router",
+  respond(request) {
+    if (request.output?.type === "json") {
+      return {
+        structured: {
+          category: "account-access",
+          directory: "account-access",
+          normalizedRequest: "The user cannot sign in after changing identity providers.",
+          uncertainties: ["The identity-provider change may need an administrator to confirm it."],
+        },
+        text: "",
+      }
+    }
+
+    return { text: request.prompt }
+  },
+})
+
+const handoff = new DeterministicAgentProvider({
+  name: "support-handoff",
+  respond(request) {
+    return { text: `Internal handoff: ${request.prompt}` }
+  },
+})
+
+async function RouteSupportRequest(request: string) {
+  const route = await new AmlRuntime({ agentProvider: router }).evaluate(
+    <Agent>
+      Choose an existing playbook subdirectory for this request and preserve uncertainty.
+      {request}
+    </Agent>,
+    Route
+  )
+
+  const canonicalRoot = await realpath(root)
+  const candidateDirectory = await realpath(resolve(canonicalRoot, route.directory))
+  const relativeDirectory = relative(canonicalRoot, candidateDirectory)
+
+  // The model proposes a path; host code decides whether it is in the approved root.
+  if (
+    relativeDirectory === "" ||
+    relativeDirectory === ".." ||
+    relativeDirectory.startsWith(`..${sep}`) ||
+    isAbsolute(relativeDirectory)
+  ) {
+    throw new TypeError("Selected playbook must be a subdirectory of AML_SUPPORT_PLAYBOOKS")
+  }
+
+  const Playbook = localWorkspace({ directory: candidateDirectory })
+  return await new AmlRuntime({ agentProvider: handoff }).evaluate(
+    <Workspace id={`support-playbook-${route.category}`} provider={Playbook}>
+      <Agent>
+        Draft an internal handoff from the selected playbook and this validated route record:
+        {JSON.stringify(route)}
+        Do not take external action; preserve any uncertainty.
+      </Agent>
+    </Workspace>
+  )
+}
+
+console.log(await RouteSupportRequest("A user cannot sign in after changing their identity provider."))
+```
+
+## Run it
+
+Save the complete source as `recipe.tsx`, create an approved fixture outside the code's control path, then run that exact workflow:
+
+```sh title="Terminal"
+export AML_SUPPORT_PLAYBOOKS=/srv/aml-support-playbooks
+mkdir -p "$AML_SUPPORT_PLAYBOOKS/account-access"
+npx vite-node recipe.tsx
+```
+
+The handoff output is deterministic. It includes the route record and the selected Workspace's scoped content flow; the exact prompt text depends on the runtime's resolved Workspace content and your fixture files.
+
+## Observable result
+
+A successful run prints an internal handoff containing a record shaped like:
+
+```text
+{"category":"account-access","directory":"account-access","normalizedRequest":"The user cannot sign in after changing identity providers.","uncertainties":[...]}
+```
+
+If the route points outside the canonical root, resolves to the root itself, or uses a symlink that escapes the root, the application throws before constructing `localWorkspace()`.
+
+## How the boundaries work
+
+<Steps>
+
+1. `evaluate(tree, Route)` requests structured output from exactly one `<Agent />` and validates the result with Zod's Standard Schema contract. It validates shape, not truth or permission.
+2. `realpath()` canonicalizes the application-owned root and the selected existing directory. `relative()` then proves the candidate is a proper descendant; this is ordinary application authorization logic, not an AML primitive.
+3. `localWorkspace({ directory: candidateDirectory })` is created only after the containment check. `<Workspace />` owns its materialization and lock lifecycle for the handoff Agent.
+4. The later `<Agent />` receives the route as data and operates within the selected `<Workspace />`. It does not inherit authorization from the model's suggestion; the application chose the directory.
+
+</Steps>
+
+<Aside type="caution" title="Shape is not authorization">
+  A valid enum and string do not prove that the classifier is correct, that the request is safe, or that a caller may
+  access the selected playbook. Keep category policy, caller authorization, canonical path checks, human escalation, and
+  consequential actions in application code.
+</Aside>
+
+## Failure, security, and cancellation notes
+
+- `realpath()` fails when the configured root or selected directory does not exist. The example intentionally does not create model-selected directories.
+- Reject empty strings and any category-to-directory mapping your application does not explicitly approve. A production router should usually map the category to a host-owned directory rather than trusting a free-form model path.
+- `localWorkspace()` directly materializes an existing host directory. It is not a Sandbox and does not isolate processes, network access, credentials, or host filesystem access.
+- A local Workspace uses a renewable lock by default. Another healthy writer can cause `WorkspaceConflictError`; do not treat it as permission to bypass coordination.
+- Pass an `AbortSignal` to the runtime in request-driven code. Cancellation stops future work but cannot roll back direct filesystem writes or external effects already completed.
+- Treat playbook files and route text as untrusted data. Do not execute scripts from the selected `<Workspace />` unless an explicit, appropriately configured `<Sandbox />` owns that execution boundary.
+
+## Variations
+
+- Replace the deterministic router with `codexAgent({ workingDirectory: canonicalRoot })` after configuring `codex-acp` and credentials. Keep the `realpath`/containment check unchanged.
+- Prefer a host-owned map such as `const directories = { "account-access": ... }` when categories are known. The model can choose a category, but never needs to choose a filesystem path.
+- Use `filesystemWorkspace()` or `s3Workspace()` when the handoff needs revision history or remote persistence; read their lock, retention, and conditional-publication contracts first.
+- Add `<Sandbox />` around the later `<Agent />` when playbook work involves commands. The Workspace boundary persists files; it does not make execution safe.
+
+## References
+
+- [Structured output recipe](/docs/cookbook/structured-output/)
+- [Local Workspace provider](/docs/providers/workspaces/local/)
+- [Workspace provider contracts](/docs/providers/workspaces/)
+- [Workspace provider boundary](/docs/reference/providers/#workspace)
+- [`evaluate` implementation](https://github.com/we-are-singular/aml/blob/main/sdk/src/core/evaluate.ts)
+- [Maintained routing example](https://github.com/we-are-singular/aml/blob/main/examples/src/integrations/workspace-routing.tsx)
+- Adapted from the local editorial source `marketing/examples/007-structured-routing.md`; the public contract is verified against the maintained routing example and provider references above.

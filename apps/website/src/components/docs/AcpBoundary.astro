@@ -1,0 +1,121 @@
+<figure class="acp-boundary" aria-labelledby="acp-title">
+  <figcaption>
+    <span>One session boundary</span>
+    <strong id="acp-title">AML runs the Agent where the files and commands are</strong>
+  </figcaption>
+  <div class="acp-boundary__flow">
+    <div><b>Application</b><small>authors tree · sets policy</small></div>
+    <i aria-hidden="true">→</i>
+    <div><b>AML runtime</b><small>scopes · budgets · cleanup</small></div>
+    <i aria-hidden="true">→</i>
+    <div class="acp-boundary__sandbox">
+      <span>Selected Sandbox</span>
+      <b>ACP process</b>
+      <small>cwd · tools · native harness</small>
+    </div>
+    <i aria-hidden="true">⇄</i>
+    <div><b>Agent session</b><small>turns · updates · result</small></div>
+  </div>
+  <p><strong>ACP standardizes the session.</strong> It does not install the executable, create the Sandbox, provide credentials, or enforce isolation.</p>
+</figure>
+
+<style>
+  .acp-boundary {
+    background:
+      linear-gradient(135deg, color-mix(in srgb, var(--sl-color-accent) 7%, transparent), transparent 48%),
+      var(--sl-color-bg-nav);
+    border: 1px solid var(--sl-color-hairline-light);
+    border-radius: var(--aml-radius-lg);
+    box-shadow: var(--aml-shadow-sm);
+    margin: 1.8rem 0 2.5rem;
+    overflow: hidden;
+    padding: clamp(1rem, 2.5vw, 1.5rem);
+  }
+
+  figcaption {
+    display: grid;
+    gap: 0.25rem;
+    margin-bottom: 1.2rem;
+  }
+
+  figcaption span,
+  .acp-boundary__sandbox span {
+    color: var(--sl-color-accent);
+    font-family: var(--sl-font-mono);
+    font-size: 0.6rem;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  figcaption strong {
+    color: var(--sl-color-white);
+    font-size: clamp(1.05rem, 2.5vw, 1.4rem);
+    letter-spacing: -0.03em;
+  }
+
+  .acp-boundary__flow {
+    align-items: stretch;
+    display: grid;
+    gap: 0.4rem;
+    grid-template-columns: 1fr auto 1fr auto 1.15fr auto 1fr;
+  }
+
+  .acp-boundary__flow > div {
+    background: var(--sl-color-bg-sidebar);
+    border: 1px solid var(--sl-color-hairline-light);
+    border-radius: 0.7rem;
+    display: grid;
+    gap: 0.25rem;
+    padding: 0.75rem;
+  }
+
+  .acp-boundary__flow > i {
+    align-self: center;
+    color: var(--sl-color-gray-3);
+    font-style: normal;
+  }
+
+  .acp-boundary__flow b {
+    color: var(--sl-color-white);
+    font-size: 0.72rem;
+  }
+
+  .acp-boundary__flow small {
+    color: var(--sl-color-gray-2);
+    font-size: 0.58rem;
+    line-height: 1.4;
+  }
+
+  .acp-boundary__sandbox {
+    border-color: color-mix(in srgb, var(--aml-orange) 38%, var(--sl-color-hairline-light)) !important;
+  }
+
+  .acp-boundary__sandbox span {
+    color: var(--aml-orange);
+  }
+
+  p {
+    border-top: 1px solid var(--sl-color-hairline-light);
+    color: var(--sl-color-gray-2);
+    font-size: 0.7rem;
+    line-height: 1.5;
+    margin: 1rem 0 0;
+    padding-top: 0.85rem;
+  }
+
+  p strong {
+    color: var(--sl-color-gray-1);
+  }
+
+  @media (max-width: 55rem) {
+    .acp-boundary__flow {
+      grid-template-columns: 1fr;
+    }
+
+    .acp-boundary__flow > i {
+      justify-self: center;
+      transform: rotate(90deg);
+    }
+  }
+</style>
