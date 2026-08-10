@@ -5,6 +5,7 @@ import process from "node:process"
 
 import {
   Agent,
+  FollowUp,
   Sandbox,
   Script,
   System,
@@ -133,6 +134,11 @@ export function WriteChangelog({
       Write a short title without the version, a summary, and a small set of explanatory highlights. Markdown and inline
       HTML such as &lt;code&gt; are allowed in the authored text. Put links only in the structured links arrays, and
       only when an existing AML docs page materially helps the reader.
+      <FollowUp>
+        Review the complete draft before returning it. Fix malformed Markdown or MDX, turn component-like angle-bracket
+        text into code spans or safe &lt;code&gt; markup, and remove source extensions from public documentation links.
+        Return the corrected structured changelog draft.
+      </FollowUp>
     </Agent>
   )
 }
