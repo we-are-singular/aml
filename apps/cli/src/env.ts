@@ -1,75 +1,39 @@
 import { access, readFile } from "node:fs/promises"
 import { dirname, resolve } from "node:path"
 import { cwd, env as processEnv } from "node:process"
+import { parseEnv } from "node:util"
 
 import { loadEnv } from "vite"
 
-export function parseEnvFile(contents: string): Record<string, string> {
-  const parsed: Record<string, string> = {}
+async function resolveEnvFile(filePath: string, workflowDirectory: string): Promise<string> {
+  const fromCwd = resolve(cwd(), filePath)
 
-  for (const line of contents.split(/\r?\n/)) {
-    const trimmed = line.trim()
-    if (trimmed === "" || trimmed.startsWith("#")) {
-      continue
-    }
-
-    const match = trimmed.match(/^(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)$/)
-    if (match === null) {
-      continue
-    }
-
-    const key = match[1] ?? ""
-    if (key === "") {
-      continue
-    }
-
-    const raw = match[2] ?? ""
-
-    if (raw.startsWith('"') && raw.endsWith('"')) {
-      try {
-        parsed[key] = JSON.parse(raw)
-      } catch {
-        parsed[key] = raw.slice(1, -1)
-      }
-      continue
-    }
-
-    if (raw.startsWith("'") && raw.endsWith("'")) {
-      parsed[key] = raw.slice(1, -1).replace(/\\'/g, "'")
-      continue
-    }
-
-    const unquoted = raw.replace(/\s*#.*$/, "")
-    parsed[key] = unquoted
+  try {
+    await access(fromCwd)
+    return fromCwd
+  } catch {
+    return resolve(workflowDirectory, filePath)
   }
-
-  return parsed
 }
 
+/** Applies workflow-local Vite env files, then an optional explicit override file. */
 export async function applyWorkflowEnv(filePath: string, envFilePath?: string): Promise<void> {
+  const workflowDirectory = dirname(filePath)
   const environment = processEnv.NODE_ENV ?? "development"
-  const workflowEnv = loadEnv(environment, dirname(filePath), "")
+  const workflowEnv = loadEnv(environment, workflowDirectory, "")
 
   for (const [key, value] of Object.entries(workflowEnv)) {
-    if (processEnv[key] === undefined) {
-      processEnv[key] = value
-    }
+    processEnv[key] ??= value
   }
 
-  if (envFilePath !== undefined) {
-    const envFileFromCwd = resolve(cwd(), envFilePath)
-    const envFileFromWorkflow = resolve(dirname(filePath), envFilePath)
-    let normalizedEnvFile = envFileFromCwd
+  if (envFilePath === undefined) {
+    return
+  }
 
-    try {
-      await access(envFileFromCwd)
-    } catch {
-      normalizedEnvFile = envFileFromWorkflow
-    }
+  const resolvedEnvFile = await resolveEnvFile(envFilePath, workflowDirectory)
+  const overrideEnv = parseEnv(await readFile(resolvedEnvFile, "utf8"))
 
-    const raw = await readFile(normalizedEnvFile, "utf8")
-    for (const [key, value] of Object.entries(parseEnvFile(raw))) {
-      processEnv[key] = value
-    }
+  for (const [key, value] of Object.entries(overrideEnv)) {
+    processEnv[key] = value
   }
 }

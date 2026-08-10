@@ -1,8 +1,7 @@
 {
   "extends": "../../tsconfig.json",
-  "include": ["src/**/*.ts", "vitest.config.ts"],
+  "include": ["scripts/**/*.ts", "src/**/*.ts", "tests/**/*.ts", "tests/**/*.tsx"],
   "compilerOptions": {
-    "rootDir": "src",
     "module": "ESNext"
   }
 }

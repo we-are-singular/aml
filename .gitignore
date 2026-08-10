@@ -7,7 +7,7 @@ coverage/
 *.tgz
 poc/
 .env
-!apps/cli/tests/env/fixtures/.env
+!apps/cli/tests/fixtures/env/.env
 
 # agents
 .codex/

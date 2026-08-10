@@ -352,22 +352,25 @@ contract enforced by GitHub Actions.
 
 ## Releasing
 
-Releases are manual and publish only `@aml-jsx/sdk`. Authenticate with npm and GitHub, then run the interactive
-release:
+SDK and CLI releases are manual and independent. Authenticate with npm and GitHub, then run the interactive release for
+the intended package:
 
 ```sh
 npm login
-GITHUB_TOKEN="$(gh auth token)" npm run release
+GITHUB_TOKEN="$(gh auth token)" npm run release:sdk
+GITHUB_TOKEN="$(gh auth token)" npm run release:cli
 ```
 
-Release It runs the full release checks, prompts for the next version, updates `sdk/package.json` and the lockfile,
-creates a `release: vX.Y.Z` commit and `vX.Y.Z` tag, publishes the SDK to npm, pushes the release, and creates the
-matching GitHub release. npm prompts for OTP or passkey approval when required.
+`npm run release` remains an alias for `release:sdk`. Release It runs the full release checks, prompts for the next
+version, updates the selected package and lockfile, publishes it to npm, pushes the release, and creates the matching
+GitHub release. SDK releases use `vX.Y.Z`; CLI releases use the non-colliding `cli-vX.Y.Z` tag. npm prompts for OTP or
+passkey approval when required.
 
 Preview the flow without changing Git, npm, or GitHub:
 
 ```sh
-GITHUB_TOKEN="$(gh auth token)" npm run release -- --dry-run
+GITHUB_TOKEN="$(gh auth token)" npm run release:sdk -- --dry-run
+GITHUB_TOKEN="$(gh auth token)" npm run release:cli -- --dry-run
 ```
 
 The Astro website and Starlight documentation run locally at `http://localhost:4321/` from the repository root:

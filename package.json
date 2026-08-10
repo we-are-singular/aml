@@ -18,8 +18,10 @@
     "lint:fix": "oxlint --fix .",
     "pack:check": "turbo run package:check",
     "prepare": "husky",
-    "release": "npm run release --workspace=@aml-jsx/sdk --",
+    "release": "npm run release:sdk --",
+    "release:cli": "npm run release --workspace=@aml-jsx/cli --",
     "release:check": "npm run format:check && npm run lint && npm run test && npm run build && npm run pack:check",
+    "release:sdk": "npm run release --workspace=@aml-jsx/sdk --",
     "smoke": "vite-node sdk/tests/smoke/run-smoke.ts",
     "test": "turbo test"
   },

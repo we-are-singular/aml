@@ -1,44 +1,107 @@
 # @aml-jsx/cli
 
-`aml` executes an AML workflow file with a live runtime and emits structured or plain output.
+`aml` executes trusted Agent Markup Language TypeScript, TSX, and JavaScript workflow files without application glue.
+The package is experimental: its command and module-export contracts may change before they are declared stable.
 
-## Install/build
+## Install
 
-- `npm run build --workspace=@aml-jsx/cli`
-- `node apps/cli/dist/index.js ...`
+Install the CLI beside the SDK used by your workflow:
 
-## Usage
+```sh
+npm install @aml-jsx/sdk
+npm install --save-dev @aml-jsx/cli
+```
 
-- `aml run ./path/to/workflow.tsx`
-- `aml run ./path/to/workflow.tsx --entry main`
-- `aml run ./path/to/workflow.tsx --trace`
-- `aml run ./path/to/workflow.tsx --trace --capture-content`
-- `aml run ./path/to/workflow.tsx --json`
-- `aml run ./path/to/workflow.tsx --runtime-env-file .env.custom`
+Configure AML as the JSX runtime in `tsconfig.json`:
+
+```json
+{
+  "compilerOptions": {
+    "jsx": "react-jsx",
+    "jsxImportSource": "@aml-jsx/sdk"
+  }
+}
+```
+
+Node.js 26 and npm 11 are the supported minimums.
+
+## Run a workflow
+
+```sh
+npx aml run ./workflow.tsx
+```
+
+```tsx
+import { Agent } from "@aml-jsx/sdk"
+import { DeterministicAgentProvider } from "@aml-jsx/sdk/testing"
+
+const provider = new DeterministicAgentProvider({
+  name: "cli-example",
+  respond: request => ({ text: `Reviewed: ${request.prompt}` }),
+})
+
+export default <Agent provider={provider}>README.md</Agent>
+```
+
+This credential-free workflow prints `Reviewed: README.md`. Replace the deterministic provider with a supported live
+Agent provider when the workflow is ready to call a model.
+
+The workflow owns providers, models, credentials, Sandboxes, and Workspaces. The CLI stays provider-neutral and owns
+source loading, environment loading, runtime execution, diagnostics, and output formatting.
+
+Export the AML tree itself. Creating and evaluating another `AmlRuntime` inside the exported function starts a nested
+run outside the CLI's tracing, cancellation, and runtime ownership.
 
 ## Export contract
 
-The command loads the file through Vite/Vite-node transforms and resolves the workflow as:
+`aml run` resolves one exported AML value:
 
-1. `default` export (preferred)
-2. `main` named export if it is a function
+1. the export selected by `--entry`;
+2. otherwise the default export;
+3. otherwise an exported `main()` function.
 
-If a named export is passed with `--entry`, that export is resolved and executed.
+The selected value may be an AML renderable or a zero-argument function or promise resolving to one.
+
+## Command reference
+
+```text
+aml run <workflowFile> [options]
+
+-e, --entry <name>          Select a named export
+--runtime-env-file <file>   Apply an explicit env file last
+--trace                     Write metadata-only trace events to stderr
+--capture-content           Include sensitive content in trace output; implies --trace
+--json                      Write a JSON success envelope to stdout
+-h, --help                  Show command help
+-v, --version               Show CLI, platform, and Node versions
+```
+
+Workflow results are the only content written to stdout. Lifecycle logs, traces, and errors go to stderr, so ordinary
+output remains safe to pipe.
 
 ## Environment loading
 
-The CLI loads Vite-style environment files from the workflow directory before execution.
+Before importing the workflow, the CLI loads these files from its directory using `NODE_ENV`, or `development` when it
+is absent:
 
-Defaults:
+```text
+.env
+.env.local
+.env.<mode>
+.env.<mode>.local
+```
 
-- environment mode: `NODE_ENV` (or `development`)
-- env files: `.env`, `.env.local`, `.env.${mode}`, `.env.${mode}.local`
-- prefix: all variables (so `process.env` gets values from files)
-- `--runtime-env-file`: optional additional file loaded after the Vite env files (for explicit overrides)
-  - Note: `--env-file` is reserved by `node`, so we keep `--runtime-env-file` for CLI usage.
+Existing process variables win. `--runtime-env-file` is parsed last and explicitly overrides both process and Vite env
+values. Relative override paths are resolved from the current working directory first, then from the workflow directory.
 
-Current behavior is to only set missing process variables, so externally provided
-env values are preserved.
+## Source execution
 
-If `NODE_ENV=dev`, the CLI follows Vite behavior and loads `.env` plus `.env.dev`
-(plus `.env.local` and `.env.dev.local` when present).
+The CLI has one source-execution path: Vite and `vite-node`. It starts a one-shot Vite transform environment, runs
+the trusted module, and closes the environment before evaluating the selected AML value. There is intentionally no
+compiler-selection flag.
+
+Workflow modules execute as trusted code in the CLI process. An AML `<Sandbox />` constrains its descendants; it does
+not sandbox top-level JavaScript in the workflow module.
+
+Read the [complete CLI guide](https://agent-markup-language.com/docs/cli/) for named exports, environment precedence,
+JSON output, tracing, and the runtime ownership boundary.
