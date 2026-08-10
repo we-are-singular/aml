@@ -41,18 +41,6 @@ The recipe status tells you what the source actually does:
 - <Badge text="Resource-backed" variant="note" /> exercises a local, container, or remote filesystem/execution boundary.
   Read its mutation and isolation notes before running it.
 
-## Test before connecting providers
-
-<CardGrid>
-  <LinkCard
-    title="Testing AML workflows"
-    href="/docs/cookbook/testing/"
-    description="Assert normalized Agent requests, Tool behavior, resource lifecycle, and provider contracts with deterministic fixtures and Vitest spies."
-  />
-</CardGrid>
-
-[Testing AML workflows](/docs/cookbook/testing/) explains what credential-free workflow tests prove, how to inspect deterministic provider calls, and when a live provider or resource-backed smoke test is still required.
-
 ## Learn the workflow shape
 
 <CardGrid>
@@ -83,6 +71,11 @@ The recipe status tells you what the source actually does:
 
 <CardGrid>
   <LinkCard
+    title="Test capabilities and resources"
+    href="/docs/cookbook/testing/"
+    description="Run a complete workflow with runtime-level testing providers, inspect normalized calls, and spy on resource lifecycle hooks."
+  />
+  <LinkCard
     title="Model Context Protocol capabilities"
     href="/docs/cookbook/mcp/"
     description="Learn MCP descriptor validation and Agent scoping. The included example URL is fixture metadata; this recipe makes no connection."
@@ -99,12 +92,13 @@ The recipe status tells you what the source actually does:
   />
 </CardGrid>
 
-| Recipe                                                               | Status                                        | Needs                                                                            | Best for                                                          |
-| -------------------------------------------------------------------- | --------------------------------------------- | -------------------------------------------------------------------------------- | ----------------------------------------------------------------- |
-| [MCP capabilities](/docs/cookbook/mcp/)                              | Deterministic fixture                         | Node, SDK/testing; no MCP server or credentials                                  | Capability isolation without pretending to run an external server |
-| [Tool or MCP?](/docs/cookbook/tool-or-mcp/)                          | Deterministic Tool + credentialed MCP example | Node and SDK; OpenCode, credentials, and an operated MCP server for the MCP path | Choosing the correct capability boundary                          |
-| [Sandboxes and Workspaces](/docs/cookbook/sandboxes-and-workspaces/) | Deterministic + resource-backed               | Node, SDK/testing, writable temp directory                                       | Local file materialization and execution-scope composition        |
-| [Generated diagnostics](/docs/cookbook/generated-diagnostic/)        | Deterministic Agent + resource-backed         | Node, SDK/testing, Docker, and the selected interpreter image                    | Treating generated code as data before explicit execution         |
+| Recipe                                                               | Status                                        | Needs                                                                            | Best for                                                              |
+| -------------------------------------------------------------------- | --------------------------------------------- | -------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
+| [Testing AML workflows](/docs/cookbook/testing/)                     | Deterministic                                 | Node, SDK/testing, Vitest                                                        | Replacing runtime defaults and asserting capability/resource behavior |
+| [MCP capabilities](/docs/cookbook/mcp/)                              | Deterministic fixture                         | Node, SDK/testing; no MCP server or credentials                                  | Capability isolation without pretending to run an external server     |
+| [Tool or MCP?](/docs/cookbook/tool-or-mcp/)                          | Deterministic Tool + credentialed MCP example | Node and SDK; OpenCode, credentials, and an operated MCP server for the MCP path | Choosing the correct capability boundary                              |
+| [Sandboxes and Workspaces](/docs/cookbook/sandboxes-and-workspaces/) | Deterministic + resource-backed               | Node, SDK/testing, writable temp directory                                       | Local file materialization and execution-scope composition            |
+| [Generated diagnostics](/docs/cookbook/generated-diagnostic/)        | Deterministic Agent + resource-backed         | Node, SDK/testing, Docker, and the selected interpreter image                    | Treating generated code as data before explicit execution             |
 
 <Aside type="caution" title="Resource-backed is not the same as isolated">
   [`localSandbox()`](/docs/providers/sandboxes/local/) executes trusted host processes. The Sandbox/Workspace recipe

@@ -16,9 +16,110 @@ AML workflows can be tested without model credentials or real infrastructure. Us
 | Provider conformance test     | Provider-neutral lifecycle requirements checked by AML.                | Credentials, vendor availability, or every provider-specific feature. |
 | Credentialed integration test | The selected executable, credentials, image, and service work now.     | Every model, environment, or future vendor release.                   |
 
+## Run a complete workflow with testing defaults
+
+Keep provider selection at the runtime boundary when you want to run the same AML tree in production and tests. An [`AmlRuntime`](/docs/reference/runtime/) supplies defaults to every [`<Agent />`](/docs/reference/primitives/agent/), [`<Sandbox />`](/docs/reference/primitives/sandbox/), and [`<Workspace />`](/docs/reference/primitives/workspace/) that does not set its own `provider` prop.
+
+This workflow contains no test-specific branches and no component-level providers:
+
+```tsx title="src/review-workflow.tsx"
+import { Agent, Sandbox, Workspace } from "@aml-jsx/sdk"
+
+export function ReviewWorkflow() {
+  return (
+    <Workspace id="release-review" save>
+      <Sandbox access="read-only">
+        <Agent>Review the release candidate.</Agent>
+      </Sandbox>
+    </Workspace>
+  )
+}
+```
+
+The test creates another runtime whose defaults come entirely from `@aml-jsx/sdk/testing`:
+
+```tsx title="src/review-workflow.test.tsx"
+import { expect, it } from "vitest"
+import { AmlRuntime } from "@aml-jsx/sdk"
+import {
+  DeterministicAgentProvider,
+  DeterministicSandboxProvider,
+  DeterministicWorkspaceProvider,
+} from "@aml-jsx/sdk/testing"
+import { ReviewWorkflow } from "./review-workflow.js"
+
+it("runs the complete review without live resources", async () => {
+  const agentProvider = new DeterministicAgentProvider({
+    respond: request => ({ text: `fixture:${request.prompt}` }),
+    supportsSandbox: () => true,
+  })
+  const sandboxProvider = new DeterministicSandboxProvider()
+  const workspaceProvider = new DeterministicWorkspaceProvider()
+  const runtime = new AmlRuntime({
+    agentProvider,
+    sandboxProvider,
+    workspaceProvider,
+  })
+
+  await expect(runtime.evaluate(<ReviewWorkflow />)).resolves.toBe("fixture:Review the release candidate.")
+  expect(agentProvider.calls).toHaveLength(1)
+  expect(sandboxProvider.acquisitions).toHaveLength(1)
+  expect(sandboxProvider.releases).toHaveLength(1)
+  expect(workspaceProvider.saves).toHaveLength(1)
+  expect(workspaceProvider.releases).toHaveLength(1)
+})
+```
+
+[`DeterministicAgentProvider`](/docs/reference/testing/#deterministicagentprovider) records normalized Agent requests and returns the response selected by `respond`. Because this `<Agent />` runs inside a `<Sandbox />`, `supportsSandbox` explicitly tells AML that the fixture accepts the effective Sandbox session. [`DeterministicSandboxProvider`](/docs/reference/testing/#deterministicsandboxprovider) records acquisition and release and exposes controllable `exec` and `spawn` hooks. [`DeterministicWorkspaceProvider`](/docs/reference/testing/#deterministicworkspaceprovider) records acquisition, save, and release while enforcing its in-memory writer-conflict rules.
+
+Runtime defaults only replace omitted providers. If the workflow writes `<Agent provider={liveProvider}>`, that local provider still wins. Keeping environment-specific providers out of reusable workflow components makes whole-workflow substitution predictable.
+
+## Select testing providers with `NODE_ENV`
+
+Applications that own a shared runtime factory can select the testing entrypoint at their composition root. Make the production options lazy so a test run does not construct live providers before the environment check:
+
+```ts title="src/runtime.ts"
+import { AmlRuntime, type AmlRuntimeOptions } from "@aml-jsx/sdk"
+
+export async function createApplicationRuntime(production: () => AmlRuntimeOptions): Promise<AmlRuntime> {
+  if (process.env.NODE_ENV !== "test") {
+    return new AmlRuntime(production())
+  }
+
+  const { DeterministicAgentProvider, DeterministicSandboxProvider, DeterministicWorkspaceProvider } =
+    await import("@aml-jsx/sdk/testing")
+
+  return new AmlRuntime({
+    agentProvider: new DeterministicAgentProvider({
+      supportsSandbox: () => true,
+    }),
+    sandboxProvider: new DeterministicSandboxProvider(),
+    workspaceProvider: new DeterministicWorkspaceProvider(),
+  })
+}
+```
+
+```tsx title="src/review-workflow.test.tsx"
+import { expect, it } from "vitest"
+import { createApplicationRuntime } from "./runtime.js"
+import { ReviewWorkflow } from "./review-workflow.js"
+
+it("uses testing providers in the test environment", async () => {
+  const runtime = await createApplicationRuntime(() => {
+    throw new Error("production providers must not be constructed in this test")
+  })
+
+  await expect(runtime.evaluate(<ReviewWorkflow />)).resolves.toBe("Review the release candidate.")
+})
+```
+
+`NODE_ENV` is an application-level selection policy, not hidden AML behavior: `AmlRuntime` uses exactly the providers passed to its constructor. Set `NODE_ENV=test` in the test command or Vitest environment rather than mutating it inside individual tests. Prefer the explicit runtime from the first example when a test needs custom responses or direct access to recorded calls; use the shared factory when the application should exercise its normal runtime wiring with deterministic defaults.
+
+These patterns follow AML's maintained tests for [runtime Agent defaults](https://github.com/we-are-singular/aml/blob/main/sdk/tests/agent-runtime.test.tsx), [Sandbox defaults and lifecycle](https://github.com/we-are-singular/aml/blob/main/sdk/tests/sandbox-runtime.test.tsx), [Workspace defaults and lifecycle](https://github.com/we-are-singular/aml/blob/main/sdk/tests/workspace-runtime.test.tsx), and [combined Agent, Sandbox, Workspace, and Script behavior](https://github.com/we-are-singular/aml/blob/main/sdk/tests/script-runtime.test.tsx).
+
 ## Assert normalized Agent requests
 
-`DeterministicAgentProvider` records every request in execution order. This makes workflow tests assert behavior at AML's provider boundary rather than snapshotting internal JSX nodes.
+The deterministic Agent provider records every request in execution order. This makes workflow tests assert behavior at AML's provider boundary rather than snapshotting internal JSX nodes.
 
 ```tsx
 import { describe, expect, it } from "vitest"

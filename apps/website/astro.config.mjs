@@ -11,6 +11,7 @@ const site = (process.env.SITE_URL ?? "https://agent-markup-language.com").repla
 export default defineConfig({
   base,
   site,
+  server: { port: 5321 },
   output: "static",
   trailingSlash: "always",
   markdown: {
@@ -154,7 +155,6 @@ export default defineConfig({
             {
               label: "Core workflows",
               items: [
-                { slug: "docs/cookbook/testing" },
                 { slug: "docs/cookbook/code-review-workflow" },
                 { slug: "docs/cookbook/structured-output" },
                 { slug: "docs/cookbook/follow-up-editorial-passes" },
@@ -164,6 +164,7 @@ export default defineConfig({
               label: "Capabilities and resources",
               collapsed: true,
               items: [
+                { slug: "docs/cookbook/testing" },
                 { slug: "docs/cookbook/tools" },
                 { slug: "docs/cookbook/mcp" },
                 { slug: "docs/cookbook/tool-or-mcp" },

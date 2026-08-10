@@ -381,7 +381,7 @@ GITHUB_TOKEN="$(gh auth token)" npm run release:sdk -- --dry-run
 GITHUB_TOKEN="$(gh auth token)" npm run release:cli -- --dry-run
 ```
 
-The Astro website and Starlight documentation run locally at `http://localhost:4321/` from the repository root:
+The Astro website and Starlight documentation run locally at `http://localhost:5321/` from the repository root:
 
 ```sh
 npm run dev
