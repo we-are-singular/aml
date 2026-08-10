@@ -41,7 +41,8 @@ export async function loadWorkflowModule(filePath: string): Promise<WorkflowModu
       root: server.config.root,
     })
 
-    await runner.executeId("/@vite/env")
+    // ViteNodeRunner already proxies import.meta.env to process.env. Its client-only
+    // /@vite/env bootstrap resolves as a filesystem module in packed Windows installs.
     return (await runner.executeFile(filePath)) as WorkflowModule
   } finally {
     await server.close()
