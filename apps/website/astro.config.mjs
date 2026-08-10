@@ -155,6 +155,7 @@ export default defineConfig({
             {
               label: "Core workflows",
               items: [
+                { slug: "docs/cookbook/changelog-maintainer" },
                 { slug: "docs/cookbook/code-review-workflow" },
                 { slug: "docs/cookbook/structured-output" },
                 { slug: "docs/cookbook/follow-up-editorial-passes" },
@@ -212,6 +213,14 @@ export default defineConfig({
                 { slug: "docs/reference/testing" },
                 { slug: "docs/reference/providers" },
                 { slug: "docs/reference/provider-authoring" },
+              ],
+            },
+            {
+              label: "Changelog",
+              items: [
+                { label: "Changelog overview", slug: "docs/reference/changelog" },
+                { label: "SDK releases", slug: "docs/reference/changelog/sdk" },
+                { label: "CLI releases", slug: "docs/reference/changelog/cli" },
               ],
             },
           ],

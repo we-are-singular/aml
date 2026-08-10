@@ -45,6 +45,11 @@ The recipe status tells you what the source actually does:
 
 <CardGrid>
   <LinkCard
+    title="Auto-author a changelog with AML"
+    href="/docs/cookbook/changelog-maintainer/"
+    description="Compose deterministic commit collection, repository investigation, editorial writing, and a validated document update."
+  />
+  <LinkCard
     title="Build a code-review workflow"
     href="/docs/cookbook/code-review-workflow/"
     description="Compose two parallel specialist Agents, a typed fixture Tool, and final synthesis. Deterministic by default; OpenCode and Codex are opt-in."
@@ -61,11 +66,12 @@ The recipe status tells you what the source actually does:
   />
 </CardGrid>
 
-| Recipe                                                       | Status                                           | Needs                                                                               | Best for                                           |
-| ------------------------------------------------------------ | ------------------------------------------------ | ----------------------------------------------------------------------------------- | -------------------------------------------------- |
-| [Code-review workflow](/docs/cookbook/code-review-workflow/) | Deterministic by default; credentialed by opt-in | Node, SDK, `zod`; provider executable and credentials only for OpenCode/Codex modes | A first useful multi-Agent workflow                |
-| [Structured output](/docs/cookbook/structured-output/)       | Deterministic                                    | Node, SDK, `zod`                                                                    | Typed findings and validation boundaries           |
-| [Tools](/docs/cookbook/tools/)                               | Deterministic                                    | Node, SDK/testing, `zod`                                                            | Application-owned functions and capability scoping |
+| Recipe                                                          | Status                                           | Needs                                                                               | Best for                                            |
+| --------------------------------------------------------------- | ------------------------------------------------ | ----------------------------------------------------------------------------------- | --------------------------------------------------- |
+| [Auto-authored changelog](/docs/cookbook/changelog-maintainer/) | Credentialed + repository-backed                 | Script collector, Agent provider, schemas, and a document writer                    | Composable Agents around deterministic release work |
+| [Code-review workflow](/docs/cookbook/code-review-workflow/)    | Deterministic by default; credentialed by opt-in | Node, SDK, `zod`; provider executable and credentials only for OpenCode/Codex modes | A first useful multi-Agent workflow                 |
+| [Structured output](/docs/cookbook/structured-output/)          | Deterministic                                    | Node, SDK, `zod`                                                                    | Typed findings and validation boundaries            |
+| [Tools](/docs/cookbook/tools/)                                  | Deterministic                                    | Node, SDK/testing, `zod`                                                            | Application-owned functions and capability scoping  |
 
 ## Add capabilities and resources
 

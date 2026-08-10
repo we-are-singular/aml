@@ -1,0 +1,29 @@
+---
+title: Changelog
+description: Human-readable release histories for the AML SDK and CLI.
+---
+
+import { LinkCard, CardGrid } from "@astrojs/starlight/components"
+
+The changelog explains what changed and why. GitHub Releases remains the exhaustive release artifact and source-commit record; these pages turn that history into a shorter guide with links back into the documentation.
+
+AML publishes the SDK and CLI independently, so each package keeps its own version history.
+
+<CardGrid>
+  <LinkCard
+    title="SDK changelog"
+    href="/docs/reference/changelog/sdk/"
+    description="Runtime, primitives, providers, Sandboxes, and Workspaces."
+  />
+  <LinkCard
+    title="CLI changelog"
+    href="/docs/reference/changelog/cli/"
+    description="Direct TypeScript and TSX workflow execution through the aml command."
+  />
+</CardGrid>
+
+## How entries are maintained
+
+AML authors its own changelog. The workflow gathers the authoritative commits with [`<Script />`](/docs/reference/primitives/script/), asks one [`<Agent />`](/docs/reference/primitives/agent/) to investigate the changes, and gives that structured analysis to a second [`<Agent />`](/docs/reference/primitives/agent/) for the reader-facing summary. Deterministic TypeScript validates the result and owns the final document update.
+
+[See the complete auto-authored changelog workflow →](/docs/cookbook/changelog-maintainer/)

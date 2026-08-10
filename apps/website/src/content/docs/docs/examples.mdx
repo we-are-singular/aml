@@ -3,13 +3,20 @@ title: Examples
 description: Choose a maintained AML example by learning goal, then let the repository runner show the current catalog.
 ---
 
-import { Card, CardGrid } from "@astrojs/starlight/components"
+import { Aside, Card, CardGrid } from "@astrojs/starlight/components"
 
 The examples package is the executable companion to these docs. Each example exports an AML tree; the shared runner creates an [`AmlRuntime`](/docs/reference/runtime/), attaches the console tracer, and evaluates the selected workflow.
 
-:::tip[Start with a useful workflow]
-Run `review` for parallel specialists and synthesis, or `structured` for schema-validated output. Both default to deterministic providers and need no credentials.
-:::
+<Aside type="tip" title="AML builds AML">
+  **Auto-author a changelog with AML**
+
+AML's own changelogs are written by a real AML workflow: a [`<Script />`](/docs/reference/primitives/script/) gathers
+the commits, two structured [`<Agent />`](/docs/reference/primitives/agent/) passes investigate and write, and
+deterministic code validates the final document.
+
+[Explore the auto-authored changelog workflow →](/docs/cookbook/changelog-maintainer/)
+
+</Aside>
 
 ## Run an example
 
