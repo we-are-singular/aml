@@ -11,8 +11,8 @@
   "scripts": {
     "aml": "vite-node apps/cli/src/index.ts",
     "build": "turbo build",
-    "changelog:cli": "npm run aml -- run ./scripts/changelog.aml.tsx --entry cli",
-    "changelog:sdk": "npm run aml -- run ./scripts/changelog.aml.tsx --entry sdk",
+    "changelog:cli": "npm run aml -- run ./scripts/changelog.aml.tsx --entry cli --trace",
+    "changelog:sdk": "npm run aml -- run ./scripts/changelog.aml.tsx --entry sdk --trace",
     "dev": "npm run dev --workspace=@aml-jsx/website --",
     "example": "turbo run example --filter=@aml-jsx/examples --",
     "format": "oxfmt",

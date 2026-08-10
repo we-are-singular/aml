@@ -101,7 +101,8 @@ export function AnalyzeRelease({
       Git range: {release.previousTag}..HEAD Authoritative included commits:
       {release.commitList}
       Use read-only repository inspection to understand the actual diff and public impact. Separate user-visible
-      behavior from internal maintenance. Suggest only existing /docs/ routes in relevantDocs.
+      behavior from internal maintenance. Suggest only existing public /docs/ routes in relevantDocs. Public routes do
+      not include source extensions such as .mdx.
     </Agent>
   )
 }
