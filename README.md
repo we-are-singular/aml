@@ -117,20 +117,19 @@ workflows with `@aml-jsx/sdk`.
 
 ## Primitives
 
-| Primitive            | Purpose                                                                                                              |
-| -------------------- | -------------------------------------------------------------------------------------------------------------------- |
-| `<Agent>`            | Runs one Agent session after its prompt, System content, capabilities, and child Agent results have resolved.        |
-| `<System>`           | Adds resolved content to the owning Agent's system prompt. Multiple System blocks are joined in authored order.      |
-| `<Tool>`             | Grants the owning Agent a JavaScript Tool created with `defineTool()`.                                               |
-| `<Skill>`            | Adds reusable inline or local-file instructions to the owning Agent.                                                 |
-| `<File>`             | Writes resolved text, including Agent output, beneath the active Workspace before later siblings run.                |
-| `<Mcp>`              | Grants the owning Agent a provider-native MCP server by name or an explicit server created with `defineMcpServer()`. |
-| `<FollowUp>`         | Adds a later turn to the same Agent session. FollowUps are flat, ordered, and resolved before the session starts.    |
-| `<Sandbox>`          | Acquires an ephemeral execution environment and scopes a narrowed filesystem policy to descendant Agents.            |
-| `<Script>`           | Executes resolved source or one literal command through the enclosing Sandbox runtime and returns standard output.   |
-| `<Workspace>`        | Materializes durable files that can survive and be shared across disposable Sandbox leases.                          |
-| `<Context.Provider>` | Provides an immutable application dependency to descendant components without rendering it into Agent prompts.       |
-| `<>...</>`           | Groups AML values without adding prompt text or another runtime boundary.                                            |
+| Primitive     | Purpose                                                                                                              |
+| ------------- | -------------------------------------------------------------------------------------------------------------------- |
+| `<Agent>`     | Runs one Agent session after its prompt, System content, capabilities, and child Agent results have resolved.        |
+| `<System>`    | Adds resolved content to the owning Agent's system prompt. Multiple System blocks are joined in authored order.      |
+| `<Tool>`      | Grants the owning Agent a JavaScript Tool created with `defineTool()`.                                               |
+| `<Skill>`     | Adds reusable inline or local-file instructions to the owning Agent.                                                 |
+| `<File>`      | Writes resolved text, including Agent output, beneath the active Workspace before later siblings run.                |
+| `<Mcp>`       | Grants the owning Agent a provider-native MCP server by name or an explicit server created with `defineMcpServer()`. |
+| `<FollowUp>`  | Adds a later turn to the same Agent session. FollowUps are flat, ordered, and resolved before the session starts.    |
+| `<Sandbox>`   | Acquires an ephemeral execution environment and scopes a narrowed filesystem policy to descendant Agents.            |
+| `<Script>`    | Executes resolved source or one literal command through the enclosing Sandbox runtime and returns standard output.   |
+| `<Workspace>` | Materializes durable files that can survive and be shared across disposable Sandbox leases.                          |
+| `<>...</>`    | Groups AML values without adding prompt text or another runtime boundary.                                            |
 
 ## Core APIs
 
@@ -140,7 +139,6 @@ workflows with `@aml-jsx/sdk`.
 | `evaluate()`                          | Evaluates AML from inside an active component and returns text or schema-validated structured data.              |
 | `defineTool()`                        | Turns a JavaScript function into a model-callable capability with validated input and optional validated output. |
 | `defineMcpServer()`                   | Creates an immutable provider-neutral MCP descriptor for a local stdio process or remote Streamable HTTP server. |
-| `createContext()` / `useContext()`    | Defines and reads immutable dependencies scoped through the AML tree.                                            |
 | `defineAgentProvider()`               | Defines an Agent harness adapter implementing AML's provider contract.                                           |
 | `AbstractAgentProvider`               | Optional lifecycle template for custom structural providers outside the built-in ACP path.                       |
 | `AgentProviderSession`                | Narrow invocation session available to custom providers using that lifecycle template.                           |
@@ -154,23 +152,27 @@ workflows with `@aml-jsx/sdk`.
 | `createPersistentWorkspaceProvider()` | Builds revision persistence over a user-defined `WorkspaceStorageAdapter`.                                       |
 | `runtime.on()` / `runtime.once()`     | Subscribes to evaluation lifecycle and trace events.                                                             |
 
+### Experimental APIs
+
+`<Loop>`, `<Context.Provider>`, `createContext()`, and `useContext()` are implemented and exported for evaluation, but they are not yet stable release-ready contracts. They may change while their semantics are being evaluated.
+
 ## Providers
 
 The public SDK includes the runtime, built-in integrations, and testing utilities under one package.
 
-| Role      | Source                                           | Public export           | Notes                                                                                                                                             |
-| --------- | ------------------------------------------------ | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Agent     | [OpenCode adapter](./providers/agents/opencode)  | `opencodeAgent()`       | OpenCode ACP profile with model/system mapping and native capability metadata.                                                                    |
-| Agent     | [Codex adapter](./providers/agents/codex)        | `codexAgent()`          | Codex ACP profile using the maintained Codex ACP adapter.                                                                                         |
-| Agent     | [Pi adapter](./providers/agents/pi)              | `piAgent()`             | Pi ACP profile using the maintained Pi ACP adapter.                                                                                               |
-| Sandbox   | [Local adapter](./providers/sandboxes/local)     | `localSandbox()`        | Runs the common Sandbox runtime as trusted host processes for development; it is explicitly non-isolating.                                        |
-| Sandbox   | [Docker adapter](./providers/sandboxes/docker)   | `dockerSandbox()`       | Starts a user-selected image, mounts the Workspace, and exposes the common bounded command runtime without building or provisioning the image.    |
-| Sandbox   | [Daytona adapter](./providers/sandboxes/daytona) | `daytonaSandbox()`      | Creates a Daytona image or snapshot, transfers the Workspace, runs bounded commands, reconciles writable changes, and deletes the remote Sandbox. |
-| Sandbox   | [Modal adapter](./providers/sandboxes/modal)     | `modalSandbox()`        | Creates a Modal Sandbox from a registry image, transfers the Workspace, runs bounded commands, reconciles writable changes, and terminates it.    |
-| Workspace | [Local adapter](./providers/workspaces/local)    | `localWorkspace()`      | Uses an existing local directory as a durable Workspace with cross-process writer locking.                                                        |
-| Workspace | [Local adapter](./providers/workspaces/local)    | `filesystemWorkspace()` | Stages archive or folder revisions from a durable local filesystem store into a safe temporary materialization.                                   |
-| Workspace | [S3 adapter](./providers/workspaces/s3)          | `s3Workspace()`         | Restores and publishes immutable archive or folder revisions through S3-compatible storage, including R2 and MinIO.                               |
-| Testing   | [Testing entry](./sdk/src/testing.ts)            | `@aml-jsx/sdk/testing`  | Supplies deterministic Agent, Sandbox, and Workspace providers plus reusable conformance suites.                                                  |
+| Role      | Source                                           | Public export           | Notes                                                                                                                                                                                                |
+| --------- | ------------------------------------------------ | ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Agent     | [OpenCode adapter](./providers/agents/opencode)  | `opencodeAgent()`       | OpenCode ACP profile with model/system mapping and native capability metadata.                                                                                                                       |
+| Agent     | [Codex adapter](./providers/agents/codex)        | `codexAgent()`          | Codex ACP profile using the maintained Codex ACP adapter.                                                                                                                                            |
+| Agent     | [Pi adapter](./providers/agents/pi)              | `piAgent()`             | Pi ACP profile using the maintained Pi ACP adapter.                                                                                                                                                  |
+| Sandbox   | [Local adapter](./providers/sandboxes/local)     | `localSandbox()`        | Runs the common Sandbox runtime as trusted host processes for development; it is explicitly non-isolating.                                                                                           |
+| Sandbox   | [Docker adapter](./providers/sandboxes/docker)   | `dockerSandbox()`       | Starts a user-selected image, mounts the Workspace, and exposes the common bounded command runtime without building or provisioning the image.                                                       |
+| Sandbox   | [Daytona adapter](./providers/sandboxes/daytona) | `daytonaSandbox()`      | Creates a Daytona image or snapshot, transfers the Workspace, runs bounded commands, reconciles writable changes, and deletes the remote Sandbox.                                                    |
+| Sandbox   | [Modal adapter](./providers/sandboxes/modal)     | `modalSandbox()`        | Creates a Modal Sandbox from a registry image, transfers the Workspace, runs bounded commands, reconciles writable changes, and terminates it.                                                       |
+| Workspace | [Local adapter](./providers/workspaces/local)    | `localWorkspace()`      | Uses an existing local directory as a durable Workspace with cross-process writer locking.                                                                                                           |
+| Workspace | [Local adapter](./providers/workspaces/local)    | `filesystemWorkspace()` | Stages archive or folder revisions from a durable local filesystem store into a safe temporary materialization.                                                                                      |
+| Workspace | [S3 adapter](./providers/workspaces/s3)          | `s3Workspace()`         | Restores and publishes immutable archive or folder revisions through S3-compatible storage. R2 has repository smoke evidence; other backends require deployment-specific compatibility verification. |
+| Testing   | [Testing entry](./sdk/src/testing.ts)            | `@aml-jsx/sdk/testing`  | Supplies deterministic Agent, Sandbox, and Workspace providers plus reusable conformance suites.                                                                                                     |
 
 The credentialed smoke runner exercises the complete built-in Agent × Sandbox matrix:
 
@@ -368,11 +370,46 @@ Preview the flow without changing Git, npm, or GitHub:
 GITHUB_TOKEN="$(gh auth token)" npm run release -- --dry-run
 ```
 
-The website runs locally at `http://localhost:5173/` with:
+The Astro website and Starlight documentation run locally at `http://localhost:4321/` from the repository root:
 
 ```sh
-npm run dev --workspace=@aml-jsx/website
+npm run dev
 ```
+
+Run the command from the repository root. An `uv_cwd` or `process.cwd` `ENOENT` means the shell is still attached to a
+directory that was moved or removed; open a new shell or `cd /path/to/agent-markup-language` before invoking npm.
+
+The project site and documentation are one static Astro application:
+
+```text
+apps/website/src/
+  pages/index.astro             marketing route composition
+  layouts/MarketingLayout.astro
+  components/marketing/        reusable homepage sections
+  data/                        typed navigation, provider, and homepage content
+  content/docs/                Starlight documentation source
+  components/docs/             shared Starlight layout, provider, and page-action UI
+  pages/docs/[...path].md.ts    per-page Markdown alternatives
+  pages/docs/llms.txt.ts        complete concatenated documentation
+  styles/                      global Starlight layout and content rhythm
+```
+
+The public routes are intentionally available to both people and agents:
+
+| Route                       | Purpose                                                         |
+| --------------------------- | --------------------------------------------------------------- |
+| `/`                         | Marketing and project overview.                                 |
+| `/docs/` and `/docs/**`     | Navigable Starlight documentation.                              |
+| `/docs.md`                  | Markdown alternative for the documentation homepage.            |
+| `/docs/<page>.md`           | Markdown alternative linked from every documentation page.      |
+| `/llms.txt`                 | Concise project and editorial overview.                         |
+| `/docs/llms.txt`            | Complete documentation in one text response.                    |
+| `/robots.txt`, `/sitemap-*` | Search crawler discovery; Markdown alternatives stay canonical. |
+
+Marketing metadata is centralized in `src/config/site.ts`. Starlight extends its generated metadata through
+`components/docs/DocHead.astro`, which adds the share image, Markdown alternate, complete-docs discovery link, and
+structured data. Keep layout or typography changes in the shared layouts and global styles rather than individual
+content pages.
 
 Pushes to `main` deploy `apps/website/dist` to GitHub Pages at
 [`agent-markup-language.com`](https://agent-markup-language.com/). The generated directory is ignored and uploaded directly

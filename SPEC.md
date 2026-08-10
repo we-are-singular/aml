@@ -86,7 +86,7 @@ AML is developed as an npm workspace monorepo and distributed as one public pack
 @aml-jsx/sdk
 ```
 
-`@aml-jsx/sdk` owns the JSX runtime, evaluator, primitives, public provider interfaces, provider definition helpers, conformance contracts, and the concrete integrations included in the current release. The package root exports the built-in Agent factories `opencodeAgent()`, `codexAgent()`, and `piAgent()`; the Sandbox factories `localSandbox()`, `dockerSandbox()`, and `daytonaSandbox()`; and the durable `localWorkspace()`, `filesystemWorkspace()`, and `s3Workspace()` factories.
+`@aml-jsx/sdk` owns the JSX runtime, evaluator, primitives, public provider interfaces, provider definition helpers, conformance contracts, and the concrete integrations included in the current release. The package root exports the built-in Agent factories `opencodeAgent()`, `codexAgent()`, and `piAgent()`; the Sandbox factories `localSandbox()`, `dockerSandbox()`, `daytonaSandbox()`, and `modalSandbox()`; and the durable `localWorkspace()`, `filesystemWorkspace()`, and `s3Workspace()` factories.
 
 The SDK exports both `@aml-jsx/sdk/jsx-runtime` and `@aml-jsx/sdk/jsx-dev-runtime` for TypeScript and Vite's automatic production and development JSX transforms.
 
