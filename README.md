@@ -352,8 +352,8 @@ contract enforced by GitHub Actions.
 
 ## Releasing
 
-SDK and CLI releases are manual and independent. Authenticate with npm and GitHub, then run the interactive release for
-the intended package:
+SDK and CLI releases are manual and independent. Start from a clean `main` that matches `origin/main`, authenticate with
+npm and GitHub, then run the interactive release for the intended package:
 
 ```sh
 npm login
@@ -365,6 +365,14 @@ GITHUB_TOKEN="$(gh auth token)" npm run release:cli
 version, updates the selected package and lockfile, publishes it to npm, pushes the release, and creates the matching
 GitHub release. SDK releases use `vX.Y.Z`; CLI releases use the non-colliding `cli-vX.Y.Z` tag. npm prompts for OTP or
 passkey approval when required.
+
+Release notes follow those package lanes instead of including every repository commit. CLI notes include commits scoped
+to `cli`. SDK notes include commits scoped to `sdk` or an SDK-owned runtime, primitive, Agent, Sandbox, Workspace, or
+provider area. Website, examples, root maintenance, and unscoped commits stay out of package release notes.
+
+The release gate fetches and verifies the upstream branch before versioning. After the version and lockfile are bumped,
+it runs the complete release checks again before npm publishing. Push and verify source commits first; the release flow
+then owns only its version commit, package tag, npm publication, and GitHub release.
 
 Preview the flow without changing Git, npm, or GitHub:
 

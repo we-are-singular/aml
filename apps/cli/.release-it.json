@@ -1,13 +1,16 @@
 {
   "$schema": "https://unpkg.com/release-it@21/schema/release-it.json",
   "hooks": {
-    "before:init": "npm run release:check --prefix ../..",
-    "after:bump": "npm install --package-lock-only --ignore-scripts --prefix ../.. && git add ../../package-lock.json"
+    "after:git:init": "node ../../scripts/check-release-branch.ts",
+    "after:bump": "npm install --package-lock-only --ignore-scripts --prefix ../.. && git add ../../package-lock.json",
+    "before:release": "npm run release:check --prefix ../.."
   },
   "git": {
+    "changelog": "node ../../scripts/release-notes.ts cli ${from} ${to}",
     "commitMessage": "release(cli): v${version}",
     "requireBranch": "main",
     "tagAnnotation": "Release @aml-jsx/cli v${version}",
+    "tagMatch": "cli-v*",
     "tagName": "cli-v${version}"
   },
   "github": {
