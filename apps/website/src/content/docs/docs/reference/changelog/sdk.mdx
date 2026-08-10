@@ -1,0 +1,199 @@
+---
+title: SDK changelog
+description: Human-readable release history for @aml-jsx/sdk.
+---
+
+This page tracks `@aml-jsx/sdk`. Entries are newest first. See [GitHub Releases](https://github.com/we-are-singular/aml/releases) for tags and complete release artifacts.
+
+{/* changelog:entries */}
+
+{/* changelog:sdk:v0.4.2:start */}
+
+## SDK v0.4.2 — Independent package release lanes
+
+Released 2026-08-10.
+
+SDK and CLI publishing gained independent release lanes, allowing each package to advance on its own version and tag history without conflating their changes.
+
+### Highlights
+
+- **Package-specific releases.** Release tooling now distinguishes SDK tags from CLI tags and keeps their generated notes scoped to the package being published. [CLI reference](/docs/cli/)
+
+### Commits
+
+- tools: isolate package release lanes (21bca45)
+  {/* changelog:sdk:v0.4.2:end */}
+
+{/* changelog:sdk:v0.4.1:start */}
+
+## SDK v0.4.1 — Unified workspace builds
+
+Released 2026-07-31.
+
+The repository consolidated its Turbo task graph so SDK builds and package checks run consistently from both package and root workflows.
+
+### Highlights
+
+- **Consistent build ownership.** Workspace tasks now share the same root orchestration instead of maintaining overlapping build paths. [Deployment](/docs/production/deployment/)
+
+### Commits
+
+- build: unify turbo workspace tasks (4522d7a)
+  {/* changelog:sdk:v0.4.1:end */}
+
+{/* changelog:sdk:v0.4.0:start */}
+
+## SDK v0.4.0 — A sharper ACP execution boundary
+
+Released 2026-07-31.
+
+Agent execution was standardized around Agent Client Protocol sessions, with clearer process ownership, capability translation, cleanup, and failure handling across built-in providers.
+
+### Highlights
+
+- **Shared ACP lifecycle.** Agent providers now use one execution architecture for session startup, turns, Tools, MCP, structured output, and teardown. [Agent providers](/docs/providers/agents/)
+- **Closed process gaps.** Failure and cleanup behavior was tightened around the provider process boundary. [Runtime reference](/docs/reference/runtime/)
+- **More reliable Workspaces.** Local Sandbox resolution and cross-process lock startup gained focused fixes and regression coverage. [Workspace providers](/docs/providers/workspaces/)
+
+### Commits
+
+- fix(sdk): close acp process boundary gaps (2f4d42d)
+- refactor(sdk): sharpen acp process architecture (4f8185e)
+- refactor(sdk): standardize agent execution on acp (6b2c758)
+- test(workspace): allow cross-process lock startup (6b235ec)
+- fix(workspace): resolve local sandbox in clean tests (9290668)
+  {/* changelog:sdk:v0.4.0:end */}
+
+{/* changelog:sdk:v0.3.1:start */}
+
+## SDK v0.3.1 — S3 Workspace type resolution
+
+Released 2026-07-30.
+
+This patch corrected how the SDK resolves the S3 Workspace implementation during clean typechecking.
+
+### Highlights
+
+- **Clean-checkout type safety.** Consumers and CI can resolve the S3-backed Workspace without relying on stale build output. [S3 Workspace](/docs/providers/workspaces/s3/)
+
+### Commits
+
+- fix(sdk): resolve s3 workspace during typecheck (2d81fdd)
+  {/* changelog:sdk:v0.3.1:end */}
+
+{/* changelog:sdk:v0.3.0:start */}
+
+## SDK v0.3.0 — S3-compatible durable Workspaces
+
+Released 2026-07-30.
+
+AML added durable Workspace persistence backed by S3-compatible object storage, including revision data, ownership locks, and cleanup behavior.
+
+### Highlights
+
+- **Remote persistence.** Workflows can materialize and publish durable state through an S3-compatible provider. [S3 Workspace](/docs/providers/workspaces/s3/)
+
+### Commits
+
+- feature(workspace): add s3-compatible persistence (29f6426)
+  {/* changelog:sdk:v0.3.0:end */}
+
+{/* changelog:sdk:v0.2.0:start */}
+
+## SDK v0.2.0 — Portable provider lifecycles
+
+Released 2026-07-29.
+
+Provider lifecycle contracts were standardized and the Sandbox catalog expanded with Modal, while Daytona configuration moved to the shared root boundary.
+
+### Highlights
+
+- **Modal Sandboxes.** AML can provision remote Modal execution environments through the built-in provider. [Modal Sandbox](/docs/providers/sandboxes/modal/)
+- **Consistent lifecycle contracts.** Providers now share clearer startup, acquisition, release, and failure expectations. [Provider authoring](/docs/reference/provider-authoring/)
+- **Simpler Daytona configuration.** Environment selection moved out of nested implementation details. [Daytona Sandbox](/docs/providers/sandboxes/daytona/)
+
+### Commits
+
+- refactor(sandbox-daytona): move environment selection to root (2bf27cb)
+- feature(sandbox-modal): add modal sandbox provider (d0fe6c8)
+- refactor(sdk): standardize provider lifecycle contracts (6f2882a)
+  {/* changelog:sdk:v0.2.0:end */}
+
+{/* changelog:sdk:v0.1.3:start */}
+
+## SDK v0.1.3 — Pi and the portable Sandbox matrix
+
+Released 2026-07-29.
+
+The Agent catalog gained Pi support and AML established a portable Sandbox runtime exercised across every built-in Agent provider.
+
+### Highlights
+
+- **Pi Agent support.** Workflows can select Pi and its extensible MCP/tooling path. [Pi Agent](/docs/providers/agents/pi/)
+- **Cross-provider confidence.** The Sandbox smoke matrix now exercises Agent and Sandbox combinations through the same portable contracts. [Compatibility](/docs/compatibility/)
+
+### Commits
+
+- feature(sandbox): run all agents across sandbox providers (a7353de)
+- feature(sandbox): add portable runtime and smoke matrix (e3383ca)
+- feature(sdk): add pi agent integration (47fadd2)
+  {/* changelog:sdk:v0.1.3:end */}
+
+{/* changelog:sdk:v0.1.2:start */}
+
+## SDK v0.1.2 — Reliable OpenCode process output
+
+Released 2026-07-28.
+
+OpenCode process streams are now piped through the provider boundary correctly, and SDK releases keep the root lockfile synchronized.
+
+### Highlights
+
+- **Visible OpenCode output.** Provider process stdout and stderr now follow the expected ACP execution path. [OpenCode Agent](/docs/providers/agents/opencode/)
+- **Reproducible publishing.** Release bumps update the shared package lock before the release commit is created.
+
+### Commits
+
+- fix(agent-opencode): pipe opencode process output (00cd62f)
+- fix(sdk): keep release lockfile synchronized (6712a41)
+  {/* changelog:sdk:v0.1.2:end */}
+
+{/* changelog:sdk:v0.1.1:start */}
+
+## SDK v0.1.1 — The first public AML SDK
+
+Released 2026-07-28.
+
+The first public package established AML's asynchronous JSX runtime and its core Agent, Tool, MCP, Sandbox, Workspace, Skill, FollowUp, Loop, context, evaluation, and observability boundaries.
+
+### Highlights
+
+- **Composable Agent workflows.** JSX became an executable dependency tree with bounded Agent concurrency and structured component evaluation. [Concepts](/docs/concepts/)
+- **Scoped capabilities.** Tools, MCP servers, Skills, and same-session FollowUps gained explicit ownership inside an Agent. [Primitives](/docs/reference/primitives/)
+- **Execution and durability.** Docker Sandboxes and local Workspaces established separate command and persistence boundaries. [Provider contracts](/docs/reference/providers/)
+- **Built-in coding Agents.** The initial package included Codex and OpenCode provider adapters. [Agent providers](/docs/providers/agents/)
+
+### Commits
+
+- release(sdk): prepare unified public package (7efe97d)
+- refactor(agent-opencode): separate option capture (d87da81)
+- fix(runtime): isolate evaluation event subscribers (3999a92)
+- feature(runtime): add evaluation lifecycle events (917894a)
+- feature(context): add immutable dependency scope (71e64db)
+- feature(observability): add evaluation traces (936ad3b)
+- feature(agent-codex): add Codex provider adapter (36a66d6)
+- feature(loop): add transactional Agent state (4f1e876)
+- feature(follow-up): add same-session Agent turns (6dc0cf9)
+- feature(runtime): bound Agent concurrency (91649bb)
+- feature(evaluate): add structured component data (4323f1d)
+- feature(mcp): add scoped server capabilities (069be42)
+- feature(workspace-local): add durable local provider (4902aa4)
+- feature(sandbox-docker): attach Workspace materializations (5c78719)
+- feature(sdk): add durable Workspace boundary (6559c4c)
+- feature(sandbox-docker): add Docker confinement provider (f0bea60)
+- feature(sandbox): add provider-neutral execution scope (8ff8840)
+- feature(skill): add local and inline instructions (6edc831)
+- feature(tool): add scoped JavaScript capabilities (f0c96e6)
+- feature(agent-opencode): add OpenCode provider adapter (5be0e73)
+- feature(sdk): establish AML evaluation and Agent boundaries (1e5bbfd)
+  {/* changelog:sdk:v0.1.1:end */}

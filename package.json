@@ -9,7 +9,10 @@
   ],
   "type": "module",
   "scripts": {
+    "aml": "vite-node apps/cli/src/index.ts",
     "build": "turbo build",
+    "changelog:cli": "npm run aml -- run ./scripts/changelog.aml.tsx --entry cli",
+    "changelog:sdk": "npm run aml -- run ./scripts/changelog.aml.tsx --entry sdk",
     "dev": "npm run dev --workspace=@aml-jsx/website --",
     "example": "turbo run example --filter=@aml-jsx/examples --",
     "format": "oxfmt",
@@ -44,7 +47,8 @@
     "typescript": "^7.0.2",
     "vite": "^8.1.5",
     "vite-node": "^6.0.0",
-    "vitest": "^4.1.10"
+    "vitest": "^4.1.10",
+    "zod": "^4.4.3"
   },
   "overrides": {
     "@hono/node-server": "2.0.12"

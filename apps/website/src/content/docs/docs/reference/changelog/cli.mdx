@@ -1,0 +1,46 @@
+---
+title: CLI changelog
+description: Human-readable release history for @aml-jsx/cli.
+---
+
+This page tracks `@aml-jsx/cli`. Entries are newest first. See [GitHub Releases](https://github.com/we-are-singular/aml/releases) for tags and complete release artifacts.
+
+{/* changelog:entries */}
+
+{/* changelog:cli:v0.1.2:start */}
+
+## CLI v0.1.2 — Version-aware integration checks
+
+Released 2026-08-10.
+
+CLI integration checks now follow the package version instead of embedding stale release expectations, and the package participates in AML's independent release lanes.
+
+### Highlights
+
+- **Portable version checks.** Clean package verification reads the current CLI version directly from package metadata. [CLI reference](/docs/cli/)
+- **Independent publishing.** CLI releases now use `cli-v*` tags and package-scoped generated notes.
+
+### Commits
+
+- release(cli): v0.1.2 (554e164)
+- fix(cli): follow package version in integration tests (5230cb9)
+  {/* changelog:cli:v0.1.2:end */}
+
+{/* changelog:cli:v0.1.1:start */}
+
+## CLI v0.1.1 — Direct AML workflow execution
+
+Released 2026-08-10.
+
+The first CLI release made trusted TypeScript, TSX, and JavaScript AML workflow files directly executable without a separate application entrypoint.
+
+### Highlights
+
+- **Source-first execution.** `aml run` evaluates workflow modules through Vite and `vite-node` without requiring a bundle step. [CLI reference](/docs/cli/)
+- **Operational output.** Workflow results stay on stdout while lifecycle and trace diagnostics use stderr.
+- **Environment loading.** Workflow-local Vite environment files and explicit runtime overrides are applied before module evaluation.
+
+### Commits
+
+- release(cli): v0.1.1 (1060b43)
+  {/* changelog:cli:v0.1.1:end */}
