@@ -31,7 +31,7 @@ AML providers are adapters around three independent responsibilities. Select one
 2. Add a **Sandbox** when that Agent or a Script must execute processes in a deliberate host, container, or remote boundary.
 3. Add a **Workspace** when files need durable identity, sharing, revision publication, or conflict control across evaluations.
 
-For a first workflow, begin with `DeterministicAgentProvider`. Move to one live Agent, then add a Sandbox, and add durable Workspace storage last. Each step introduces a separate credential, failure, and cleanup surface that should earn its place.
+For a first workflow, begin with [`DeterministicAgentProvider`](/docs/reference/testing/#deterministicagentprovider). Move to one live Agent, then add a Sandbox, and add durable Workspace storage last. Each step introduces a separate credential, failure, and cleanup surface that should earn its place.
 
 ## Current built-ins
 
@@ -43,11 +43,12 @@ All factories above are exported from `@aml-jsx/sdk` and installed with the SDK.
 
 <CardGrid>
   <Card title="Credential-free learning" icon="approve-check">
-    Use `DeterministicAgentProvider` from `@aml-jsx/sdk/testing`. It records normalized calls and avoids network or
-    executable setup.
+    Use [`DeterministicAgentProvider`](/docs/reference/testing/#deterministicagentprovider) from `@aml-jsx/sdk/testing`.
+    It records normalized calls and avoids network or executable setup.
   </Card>
   <Card title="Trusted local automation" icon="laptop">
-    Pair an Agent with `localSandbox()` and `localWorkspace()` only when the workflow and every generated command are
+    Pair an Agent with [`localSandbox()`](/docs/providers/sandboxes/local/) and
+    [`localWorkspace()`](/docs/providers/workspaces/local/) only when the workflow and every generated command are
     trusted on the host.
   </Card>
   <Card title="Disposable container work" icon="seti:docker">
@@ -55,8 +56,9 @@ All factories above are exported from `@aml-jsx/sdk` and installed with the SDK.
     users, capabilities, resources, and daemon exposure.
   </Card>
   <Card title="Durable remote workflows" icon="cloud-download">
-    Combine Daytona or Modal with `filesystemWorkspace()` or `s3Workspace()` when disposable execution must load and
-    publish revision-backed state.
+    Combine Daytona or Modal with [`filesystemWorkspace()`](/docs/providers/workspaces/filesystem/) or
+    [`s3Workspace()`](/docs/providers/workspaces/s3/) when disposable execution must load and publish revision-backed
+    state.
   </Card>
 </CardGrid>
 

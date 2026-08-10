@@ -1,0 +1,81 @@
+---
+title: Testing APIs
+description: Reference for deterministic providers, in-memory storage, and provider conformance helpers from @aml-jsx/sdk/testing.
+---
+
+The `@aml-jsx/sdk/testing` entrypoint contains credential-free fixtures and provider contract helpers. Keeping them in a separate entrypoint prevents production imports from pulling test utilities into application code.
+
+```ts
+import {
+  DeterministicAgentProvider,
+  DeterministicSandboxProvider,
+  DeterministicWorkspaceProvider,
+} from "@aml-jsx/sdk/testing"
+```
+
+## `DeterministicAgentProvider`
+
+Records immutable Agent requests and returns responses from an application-owned strategy without starting a model, executable, network connection, or other resource.
+
+```ts
+const provider = new DeterministicAgentProvider({
+  name: "review-fixture",
+  respond: (request, context, callIndex) => ({
+    text: `${callIndex}:${request.prompt}:${context.trace.runId}`,
+  }),
+  supportsSandbox: sandbox => sandbox.access === "read-only",
+})
+```
+
+| Member or option  | Contract                                                                              |
+| ----------------- | ------------------------------------------------------------------------------------- |
+| `name`            | Provider name; defaults to `deterministic` and must be non-empty and normalized.      |
+| `respond`         | Receives the normalized request, execution context, and zero-based call index.        |
+| `supportsSandbox` | Declares fixture compatibility with an effective Sandbox session.                     |
+| `calls`           | Recorded `{ request, context }` values in provider execution order.                   |
+| `run()`           | Rejects a pre-aborted signal, records the call, then invokes the configured response. |
+
+## `DeterministicSandboxProvider`
+
+Records acquisition and release without creating infrastructure. Its default runtime returns successful deterministic command output; constructor hooks can replace handle creation, `exec`, `spawn`, and release behavior.
+
+| Member         | Contract                                                       |
+| -------------- | -------------------------------------------------------------- |
+| `acquisitions` | Recorded `SandboxAcquireRequest` values in acquisition order.  |
+| `releases`     | Released lease IDs in release order.                           |
+| `exec` hook    | Controls deterministic command results.                        |
+| `spawn` hook   | Controls deterministic process streams, completion, and kill.  |
+| `release` hook | Observes or fails cleanup without provisioning a real Sandbox. |
+
+## `DeterministicWorkspaceProvider`
+
+Records Workspace acquisition, save, and release. It supplies a deterministic directory and enforces one active writer per Workspace ID, making conflict and cleanup behavior testable without durable storage.
+
+| Member or option | Contract                                                       |
+| ---------------- | -------------------------------------------------------------- |
+| `acquisitions`   | Recorded `WorkspaceAcquireRequest` values.                     |
+| `saves`          | Saved lease IDs in save order.                                 |
+| `releases`       | Released lease IDs in release order.                           |
+| `directory`      | Fixed directory or function of request and acquisition index.  |
+| lifecycle hooks  | Application-owned `createHandle`, `save`, and `release` hooks. |
+
+## In-memory Workspace storage
+
+`InMemoryWorkspaceStorageAdapter` is a stateful storage spy for persistence and provider tests. It implements conditional writes, locking, reads, lists, deletes, and release entirely in memory.
+
+- `operations` records ordered storage operations.
+- `keys(workspaceId)` returns sorted stored object paths.
+- `text(workspaceId, path)` reads one object as text.
+
+## Provider conformance helpers
+
+| Helper                           | Purpose                                                                   |
+| -------------------------------- | ------------------------------------------------------------------------- |
+| `agentProviderConformance()`     | Validates response shape and pre-cancelled execution behavior.            |
+| `sandboxProviderConformance()`   | Exercises the provider-neutral Sandbox lifecycle and runtime boundary.    |
+| `workspaceProviderConformance()` | Exercises acquisition, conflict, save, release, and failure behavior.     |
+| `createAgentExecutionContext()`  | Creates an immutable provider execution context for direct adapter tests. |
+
+The conformance helpers are test-runner independent and reject when a provider violates the checked contract. They do not prove vendor credentials, executable installation, remote availability, image contents, or production security.
+
+For complete Vitest examples and test-boundary guidance, see [Testing AML workflows](/docs/cookbook/testing/).

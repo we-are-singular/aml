@@ -1,0 +1,179 @@
+---
+title: Testing AML workflows
+description: Test AML trees with deterministic providers, recorded requests, lifecycle assertions, and Vitest spies.
+---
+
+import { Aside, CardGrid, LinkCard, Steps } from "@astrojs/starlight/components"
+
+AML workflows can be tested without model credentials or real infrastructure. Use deterministic providers to exercise tree evaluation and normalized contracts, then reserve credentialed smoke tests for the provider combinations your deployment actually runs.
+
+## What each test layer proves
+
+| Layer                         | Proves                                                                 | Does not prove                                                        |
+| ----------------------------- | ---------------------------------------------------------------------- | --------------------------------------------------------------------- |
+| Workflow test                 | Authored order, prompts, capabilities, results, limits, and placement. | Live model quality, executable installation, or remote compatibility. |
+| Deterministic resource test   | Acquisition, command, save, release, conflict, and failure handling.   | Container or remote-platform isolation and filesystem semantics.      |
+| Provider conformance test     | Provider-neutral lifecycle requirements checked by AML.                | Credentials, vendor availability, or every provider-specific feature. |
+| Credentialed integration test | The selected executable, credentials, image, and service work now.     | Every model, environment, or future vendor release.                   |
+
+## Assert normalized Agent requests
+
+`DeterministicAgentProvider` records every request in execution order. This makes workflow tests assert behavior at AML's provider boundary rather than snapshotting internal JSX nodes.
+
+```tsx
+import { describe, expect, it } from "vitest"
+import { Agent, AmlRuntime, System } from "@aml-jsx/sdk"
+import { DeterministicAgentProvider } from "@aml-jsx/sdk/testing"
+
+describe("release summary", () => {
+  it("sends the resolved prompt and system instruction", async () => {
+    const provider = new DeterministicAgentProvider({
+      respond: request => ({ text: `Reviewed: ${request.prompt}` }),
+    })
+    const runtime = new AmlRuntime({ agentProvider: provider })
+
+    await expect(
+      runtime.evaluate(
+        <Agent>
+          <System>Return one sentence.</System>
+          Review release 42.
+        </Agent>
+      )
+    ).resolves.toBe("Reviewed: Review release 42.")
+
+    expect(provider.calls).toHaveLength(1)
+    expect(provider.calls[0]?.request).toMatchObject({
+      prompt: "Review release 42.",
+      system: "Return one sentence.",
+    })
+  })
+})
+```
+
+Prefer focused assertions on the normalized request and result. Avoid broad snapshots of trace IDs or other intentionally dynamic metadata.
+
+## Spy on application-owned Tool behavior
+
+Vitest spies are useful at dependencies your application owns. The Tool remains the narrow model-facing boundary while the spy verifies the underlying operation.
+
+```tsx
+import { expect, it, vi } from "vitest"
+import { Agent, AmlRuntime, Tool, defineTool } from "@aml-jsx/sdk"
+import { DeterministicAgentProvider } from "@aml-jsx/sdk/testing"
+import { z } from "zod"
+
+it("calls the granted repository operation once", async () => {
+  const repository = {
+    async findOrder(id: string) {
+      return { id, status: "ready" }
+    },
+  }
+  const findOrder = vi.spyOn(repository, "findOrder")
+  const tool = defineTool({
+    name: "find_order",
+    description: "Find one order by ID.",
+    input: z.object({ id: z.string() }),
+    execute: async ({ id }) => await repository.findOrder(id),
+  })
+  const provider = new DeterministicAgentProvider({
+    async respond(request, context) {
+      const granted = request.tools.find(candidate => candidate.name === "find_order")
+      if (granted?.kind !== "javascript") throw new Error("find_order was not granted")
+      const order = await granted.execute({ id: "order-17" }, { signal: context.signal, trace: context.trace })
+      return { text: JSON.stringify(order) }
+    },
+  })
+
+  await new AmlRuntime({ agentProvider: provider }).evaluate(
+    <Agent>
+      <Tool use={tool} />
+      Inspect order-17.
+    </Agent>
+  )
+
+  expect(findOrder).toHaveBeenCalledOnce()
+  expect(findOrder).toHaveBeenCalledWith("order-17")
+})
+```
+
+<Aside type="danger" title="A deterministic provider can execute granted Tools">
+  The provider itself is credential-free, but a Tool is application code. Use test doubles for databases, network
+  clients, process launchers, and other side effects rather than pointing a workflow test at production dependencies.
+</Aside>
+
+## Assert Sandbox and Workspace lifecycle
+
+Constructor hooks pair naturally with `vi.fn()` when the order or presence of cleanup matters:
+
+```tsx
+import { expect, it, vi } from "vitest"
+import { AmlRuntime, Workspace } from "@aml-jsx/sdk"
+import { DeterministicWorkspaceProvider } from "@aml-jsx/sdk/testing"
+
+it("saves successful Workspace output before release", async () => {
+  const save = vi.fn(async () => {})
+  const release = vi.fn(async () => {})
+  const workspaceProvider = new DeterministicWorkspaceProvider({ save, release })
+
+  await new AmlRuntime({ workspaceProvider }).evaluate(
+    <Workspace id="review" load={false} save={{ on: "always" }}>
+      ready
+    </Workspace>
+  )
+
+  expect(save).toHaveBeenCalledOnce()
+  expect(release).toHaveBeenCalledOnce()
+  expect(workspaceProvider.saves).toHaveLength(1)
+  expect(workspaceProvider.releases).toHaveLength(1)
+})
+```
+
+Use `DeterministicSandboxProvider` the same way to control `exec`, `spawn`, and release behavior without starting a host process or remote Sandbox.
+
+## Test failure and non-execution paths
+
+<Steps>
+
+1. Make a fixture hook throw the failure the application must classify.
+2. Assert the evaluation rejects with the expected class, identity, or cause.
+3. Assert later provider calls, Tools, saves, or other effects did not run.
+4. Assert owned cleanup still ran when acquisition had completed.
+
+</Steps>
+
+Tests for validation failures should usually assert `provider.calls` remains empty. Tests for Tool validation should spy on the executor and prove invalid model input never reached application code.
+
+## Test a custom provider contract
+
+Provider authors can run AML's test-runner-independent conformance helper inside Vitest:
+
+```ts
+import { expect, it } from "vitest"
+import { agentProviderConformance } from "@aml-jsx/sdk/testing"
+
+it("implements the AML Agent provider contract", async () => {
+  await expect(agentProviderConformance(provider)).resolves.toBeUndefined()
+})
+```
+
+Run the matching Sandbox or Workspace conformance helper for those provider types. Add provider-specific tests for configuration, process transport, storage behavior, and cleanup beyond the neutral contract.
+
+## Choose the next test
+
+<CardGrid>
+  <LinkCard
+    title="Testing API reference"
+    href="/docs/reference/testing/"
+    description="Review every deterministic fixture, recorded call surface, storage spy, and conformance helper."
+  />
+  <LinkCard
+    title="Compatibility"
+    href="/docs/compatibility/"
+    description="Understand what depends on executables, images, credentials, and provider-specific runtime behavior."
+  />
+  <LinkCard
+    title="Examples"
+    href="/docs/examples/"
+    description="Run maintained deterministic and resource-backed workflows before adapting them into tests."
+  />
+</CardGrid>

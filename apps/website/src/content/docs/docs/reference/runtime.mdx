@@ -41,7 +41,6 @@ Choose the provider defaults and safety budgets at construction time. The input 
 | `maxConcurrentAgents` |             `4` | Parallel Agent work must be bounded.                                 |
 | `maxTurnsPerAgent`    |            `16` | Follow-ups and authored `<Agent />` inputs must be bounded.          |
 | `maxDepth`            |            `16` | Recursive semantic JSX needs a depth budget.                         |
-| `maxStateTransitions` |            `16` | `<Loop />` transitions need a workflow budget.                       |
 
 ## Evaluation options and cancellation
 
@@ -98,7 +97,6 @@ The finish event reports `status: "ok" | "error"`, `runId`, `signal`, and an opt
 - Keep the defaults for bounded, interactive workflows.
 - Raise `maxAgentCalls` and `maxTurnsPerAgent` only when the workflow intentionally uses repeated Agent work.
 - Set `maxConcurrentAgents` to the capacity of the provider, Sandbox, and downstream APIs—not just the host CPU.
-- Set `maxStateTransitions` for every workflow that uses `<Loop />`; an unbounded loop is not a retry policy.
 - Treat `allowedTools` and `allowedMcpServers` as application policy. Provider credentials and network policy still belong to the deployment boundary.
 
 For end-to-end lifecycle patterns, see [Runtime lifecycle](/docs/runtime/). For provider-specific defaults and credentials, see the [provider catalog](/docs/providers/).

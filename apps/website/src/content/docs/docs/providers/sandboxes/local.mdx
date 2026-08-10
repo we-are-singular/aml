@@ -33,7 +33,7 @@ The factory validates option strings as non-empty, trimmed values without NUL ch
 
 ## Workspace and path semantics
 
-Local needs either an active `<Workspace />` or `workspace` in the factory options:
+Local needs either an active [`<Workspace />`](/docs/reference/primitives/workspace/) or `workspace` in the factory options:
 
 ```tsx
 import { AmlRuntime, Sandbox, Script, Workspace, localSandbox, localWorkspace } from "@aml-jsx/sdk"
@@ -54,7 +54,7 @@ await runtime.evaluate(
 
 `root` and `cwd` are logical paths within the Workspace. The provider resolves them with real paths, requires directories, and rejects a path that escapes the configured root—including a symlink that points outside it. Command arguments are literal and are not shell-interpreted. Use the explicit `setup` option when a shell command is intentionally required.
 
-The active Workspace wins over `localSandbox({ workspace })`. The fallback is useful for a direct provider integration, but an explicit `<Workspace />` is clearer when the workflow needs load, save, locking, or revisions.
+The active Workspace wins over `localSandbox({ workspace })`. The fallback is useful for a direct provider integration, but an explicit [`<Workspace />`](/docs/reference/primitives/workspace/) is clearer when the workflow needs load, save, locking, or revisions.
 
 ## Lifecycle
 
@@ -128,7 +128,7 @@ For untrusted code, use a separately hardened environment and review the provide
 
 ## References
 
-- [Sandbox provider overview](./)
+- [Sandbox provider overview](/docs/providers/sandboxes/)
 - [Workspace providers](/docs/providers/workspaces/)
 - [AML Local provider implementation](https://github.com/we-are-singular/aml/blob/main/providers/sandboxes/local/src/local-sandbox.ts)
 - [AML Local provider tests](https://github.com/we-are-singular/aml/blob/main/providers/sandboxes/local/tests/local-sandbox.test.tsx)

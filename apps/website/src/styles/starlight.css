@@ -74,7 +74,7 @@
   --sl-font: var(--aml-font-body);
   --sl-font-mono: var(--aml-font-mono);
   --sl-content-width: 68rem;
-  --sl-sidebar-width: clamp(16.25rem, 18vw, 18rem);
+  --sl-sidebar-width: clamp(18rem, 20vw, 20rem);
   --sl-sidebar-pad-x: clamp(0.85rem, 1.25vw, 1.15rem);
   --sl-content-pad-x: clamp(1.2rem, 3vw, 3rem);
   --sl-content-gap-y: 1.25rem;
@@ -165,11 +165,8 @@ body {
 
   .sidebar-content {
     gap: 1.2rem;
+    padding-bottom: clamp(3rem, 8vh, 5rem);
     padding-top: 1.2rem;
-  }
-
-  .sidebar-content > ul {
-    padding-bottom: 2rem;
   }
 
   .sidebar-content a {

@@ -9,7 +9,7 @@ import { Aside, Badge, Steps } from "@astrojs/starlight/components"
 
 ## Goal
 
-Turn an Agent response into a typed finding instead of passing unvalidated prose between workflow stages. This recipe follows the maintained [`structured.tsx`](https://github.com/we-are-singular/aml/blob/main/examples/src/core/structured.tsx) example.
+Turn an [`<Agent />`](/docs/reference/primitives/agent/) response into a typed finding instead of passing unvalidated prose between workflow stages. This recipe follows the maintained [`structured.tsx`](https://github.com/we-are-singular/aml/blob/main/examples/src/core/structured.tsx) example.
 
 ## Prerequisites
 
@@ -106,8 +106,8 @@ The deterministic provider returns a JSON-shaped value only when AML asks for JS
 
 ## API and source links
 
-- [`evaluate`](https://github.com/we-are-singular/aml/blob/main/sdk/src/core/evaluate.ts)
-- [`AmlModelSchema`](https://github.com/we-are-singular/aml/blob/main/sdk/src/components/agent/aml-model-schema.ts)
-- [`<Agent />`](https://github.com/we-are-singular/aml/blob/main/sdk/src/components/agent/agent.tsx)
+- [`evaluate`](/docs/reference/runtime/)
+- [`AmlModelSchema` and structured evaluation](/docs/reference/runtime/#component-local-evaluation)
+- [`<Agent />`](/docs/reference/primitives/agent/)
 - [Maintained source example](https://github.com/we-are-singular/aml/blob/main/examples/src/core/structured.tsx)
 - [Zod](https://zod.dev/)

@@ -3,7 +3,7 @@ title: "<File />"
 description: Resolve AML text and atomically write it beneath the active host Workspace materialization.
 ---
 
-`<File />` writes resolved child text into its enclosing [`<Workspace />`](../workspace/) and contributes no text to the surrounding AML result. Later siblings can consume the materialized file.
+`<File />` writes resolved child text into its enclosing [`<Workspace />`](/docs/reference/primitives/workspace/) and contributes no text to the surrounding AML result. Later siblings can consume the materialized file.
 
 ```tsx
 import { mkdtemp, readFile, rm } from "node:fs/promises"
@@ -39,7 +39,7 @@ try {
 
 ## Placement and write behavior
 
-- `<File />` requires an active `<Workspace />` and is invalid inside [`<Sandbox />`](../sandbox/).
+- `<File />` requires an active `<Workspace />` and is invalid inside [`<Sandbox />`](/docs/reference/primitives/sandbox/).
 - Parent directories are created without following symlinks out of the materialization.
 - An existing symlink or directory at the destination is rejected.
 - AML writes through a temporary file and renames it over the destination where the filesystem permits.
@@ -55,6 +55,6 @@ try {
 </Workspace>
 ```
 
-The first `<Agent />` completes before `<File />` writes its result; the later sibling `<Agent />` then sees that file. For commands or guest-side file changes, add [`<Sandbox />`](../sandbox/) and let `<Agent />` or [`<Script />`](../script/) write through its runtime instead.
+The first `<Agent />` completes before `<File />` writes its result; the later sibling `<Agent />` then sees that file. For commands or guest-side file changes, add [`<Sandbox />`](/docs/reference/primitives/sandbox/) and let `<Agent />` or [`<Script />`](/docs/reference/primitives/script/) write through its runtime instead.
 
 See [Sandbox and Workspace composition](/docs/cookbook/sandboxes-and-workspaces/) and the [Workspace provider guides](/docs/providers/workspaces/).

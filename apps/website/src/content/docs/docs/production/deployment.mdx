@@ -3,7 +3,7 @@ title: Deployment
 description: Package AML workflows with the executables, credentials, images, and durable state they actually require.
 ---
 
-Deployment is the act of reproducing the complete AML provider graph in a controlled runtime. Installing `@aml-jsx/sdk` is not enough: built-in coding Agents require an ACP executable, Sandboxes require their host or remote environment, and revision-backed Workspaces require storage permissions and temporary disk.
+Deployment is the act of reproducing the complete AML provider graph in a controlled runtime. Installing `@aml-jsx/sdk` is not enough: built-in coding [`<Agent />`](/docs/reference/primitives/agent/) components require an ACP executable, [`<Sandbox />`](/docs/reference/primitives/sandbox/) components require their host or remote environment, and revision-backed [`<Workspace />`](/docs/reference/primitives/workspace/) components require storage permissions and temporary disk.
 
 ## Runtime requirements
 
@@ -17,7 +17,7 @@ AML publishes as an ESM package and requires Node.js `>=26`. The public package 
 }
 ```
 
-Use the same Node major version in development, CI, the service image, and any Sandbox image that runs a Node-based Agent. Pin the SDK and provider-adjacent tool versions as part of the deployment artifact.
+Use the same Node major version in development, CI, the service image, and any Sandbox image that runs a Node-based [`<Agent />`](/docs/reference/primitives/agent/). Pin the SDK and provider-adjacent tool versions as part of the deployment artifact.
 
 ## Compile TSX for plain Node.js
 
@@ -103,7 +103,7 @@ function requireEnv(name: string): string {
 }
 ```
 
-The example expects the image to contain the selected Agent executable and all project dependencies. `dockerSandbox()` starts a named image; it does not build it or install an ACP executable.
+The example expects the image to contain the selected [`<Agent />`](/docs/reference/primitives/agent/) executable and all project dependencies. [`dockerSandbox()`](/docs/providers/sandboxes/docker/) starts a named image; it does not build it or install an ACP executable.
 
 ## Image and host responsibilities
 

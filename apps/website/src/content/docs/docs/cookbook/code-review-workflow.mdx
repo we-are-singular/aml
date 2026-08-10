@@ -11,7 +11,7 @@ This recipe builds a small review pipeline that is useful even without credentia
 
 ```text
 fixture → correctness reviewer ┐
-                               ├→ synthesis Agent → review
+                               ├→ synthesis `<Agent />` → review
 fixture → maintainability reviewer ┘
 ```
 
@@ -21,9 +21,9 @@ The repository's [`review.tsx`](https://github.com/we-are-singular/aml/blob/main
 
 By the end, you will have one AML tree that:
 
-- exposes the same source fixture through a schema-defined JavaScript Tool;
+- exposes the same source fixture through a schema-defined JavaScript [`<Tool />`](/docs/reference/primitives/tool/);
 - evaluates two independent specialists with `Promise.all`;
-- passes their text into a final synthesis Agent;
+- passes their text into a final synthesis [`<Agent />`](/docs/reference/primitives/agent/);
 - keeps provider selection outside the workflow shape.
 
 ## Prerequisites
@@ -171,19 +171,23 @@ The specialist text is intentionally visible in the final prompt. A production w
 ## Failure and security notes
 
 <Aside type="caution" title="Tools execute in the host process">
-  AML JavaScript Tools are not automatically placed inside a Sandbox. Keep inputs allowlisted, validate both input and
-  output, and do not expose arbitrary filesystem or process access to model-authored arguments.
+  AML JavaScript Tools are not automatically placed inside a{" "}
+  <a href="/docs/reference/primitives/sandbox/">
+    <code>&lt;Sandbox /&gt;</code>
+  </a>
+  . Keep inputs allowlisted, validate both input and output, and do not expose arbitrary filesystem or process access to
+  model-authored arguments.
 </Aside>
 
 - A specialist failure rejects the `Promise.all`; the synthesis does not run with partial evidence.
-- A Tool input or output that violates its schema fails closed.
+- A [`<Tool />`](/docs/reference/primitives/tool/) input or output that violates its schema fails closed.
 - A real provider can hallucinate or misread evidence. Treat the final review as an input to a human or policy gate, not as proof.
 - For untrusted workflows, set finite runtime budgets such as `maxAgentCalls`, `maxConcurrentAgents`, and `maxTurnsPerAgent`.
 
 ## API and source links
 
-- [`<Agent />`](https://github.com/we-are-singular/aml/blob/main/sdk/src/components/agent/agent.tsx)
-- [`evaluate`](https://github.com/we-are-singular/aml/blob/main/sdk/src/core/evaluate.ts)
-- [`defineTool`](https://github.com/we-are-singular/aml/blob/main/sdk/src/components/tool/define-tool.ts)
-- [`AmlRuntime`](https://github.com/we-are-singular/aml/blob/main/sdk/src/core/aml-runtime.ts)
+- [`<Agent />`](/docs/reference/primitives/agent/)
+- [`evaluate()`](/docs/reference/runtime/#component-local-evaluation)
+- [`defineTool()`](/docs/reference/primitives/tool/)
+- [`AmlRuntime`](/docs/reference/runtime/)
 - [Maintained source example](https://github.com/we-are-singular/aml/blob/main/examples/src/integrations/review.tsx)

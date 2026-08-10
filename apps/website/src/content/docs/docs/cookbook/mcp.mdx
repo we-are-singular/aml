@@ -9,7 +9,7 @@ import { Aside, Badge, Steps } from "@astrojs/starlight/components"
 
 ## Goal
 
-Understand how AML attaches an MCP descriptor to one Agent and keeps that capability scoped. This page intentionally uses the repository's non-networking [`mcp.tsx`](https://github.com/we-are-singular/aml/blob/main/examples/src/capabilities/mcp.tsx) fixture.
+Understand how AML attaches an MCP descriptor to one [`<Agent />`](/docs/reference/primitives/agent/) and keeps that capability scoped. This page intentionally uses the repository's non-networking [`mcp.tsx`](https://github.com/we-are-singular/aml/blob/main/examples/src/capabilities/mcp.tsx) fixture.
 
 <Aside type="caution" title="This example does not connect to an MCP server">
   `https://example.com/mcp` is metadata in a deterministic test. The example runner never contacts that URL, discovers
@@ -83,8 +83,8 @@ MCP attached. Sibling isolated.
 
 <Steps>
 
-1. `defineMcpServer()` validates and freezes a named stdio or Streamable HTTP descriptor. It does not open a connection.
-2. `<Mcp use={projectServer} />` attaches that exact descriptor to the nearest Agent.
+1. [`defineMcpServer()`](/docs/reference/mcp-server/) validates and freezes a named stdio or Streamable HTTP descriptor. It does not open a connection.
+2. [`<Mcp />`](/docs/reference/primitives/mcp/) attaches that exact descriptor to the nearest [`<Agent />`](/docs/reference/primitives/agent/).
 3. The provider receives MCP metadata in the normalized Agent request. A real provider decides how to negotiate and relay the server.
 4. A sibling `<Agent />` has no `<Mcp />` child, so it receives no MCP capability. Capability scope follows the authored tree.
 
@@ -127,8 +127,8 @@ These snippets describe valid AML transport data; they are not runnable against 
 
 ## API and source links
 
-- [`defineMcpServer`](https://github.com/we-are-singular/aml/blob/main/sdk/src/components/mcp/define-mcp-server.ts)
-- [`<Mcp />`](https://github.com/we-are-singular/aml/blob/main/sdk/src/components/mcp/mcp.tsx)
-- [`AmlMcpServer` transport types](https://github.com/we-are-singular/aml/blob/main/sdk/src/components/mcp/aml-mcp-server.ts)
+- [`defineMcpServer()`](/docs/reference/mcp-server/)
+- [`<Mcp />`](/docs/reference/primitives/mcp/)
+- [`AmlMcpServer` transport types](/docs/reference/mcp-server/)
 - [Maintained fixture](https://github.com/we-are-singular/aml/blob/main/examples/src/capabilities/mcp.tsx)
 - [MCP specification](https://modelcontextprotocol.io/specification/2025-06-18)

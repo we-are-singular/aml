@@ -9,7 +9,7 @@ import { Aside, Badge, Steps } from "@astrojs/starlight/components"
 
 ## Goal
 
-Attach one application-owned function to an Agent without turning its return value into prompt text. The workflow below adapts the repository's [`context.tsx`](https://github.com/we-are-singular/aml/blob/main/examples/src/core/context.tsx), where a Tool reads session-owned data through a scoped dependency.
+Attach one application-owned function to an [`<Agent />`](/docs/reference/primitives/agent/) without turning its return value into prompt text. The workflow injects an application-owned repository into a component, then grants a narrow [`<Tool />`](/docs/reference/primitives/tool/) rather than exposing the repository itself.
 
 ## Prerequisites
 
@@ -20,7 +20,7 @@ Attach one application-owned function to an Agent without turning its return val
 ## Complete source
 
 ```tsx
-import { Agent, AmlRuntime, createContext, defineTool, Tool, useContext } from "@aml-jsx/sdk"
+import { Agent, AmlRuntime, defineTool, Tool } from "@aml-jsx/sdk"
 import { DeterministicAgentProvider } from "@aml-jsx/sdk/testing"
 import { z } from "zod"
 
@@ -29,8 +29,6 @@ class SessionRepository {
     return ["order-17", "order-29"]
   }
 }
-
-const Repository = createContext<SessionRepository>("SessionRepository")
 
 const provider = new DeterministicAgentProvider({
   async respond(request, context) {
@@ -46,8 +44,7 @@ const provider = new DeterministicAgentProvider({
   },
 })
 
-function OrderAgent() {
-  const repository = useContext(Repository)
+function OrderAgent({ repository }: { repository: SessionRepository }) {
   const listOrders = defineTool({
     description: "List orders for the active application session.",
     execute: async () => await repository.listOrders(),
@@ -63,11 +60,7 @@ function OrderAgent() {
   )
 }
 
-const result = await new AmlRuntime().evaluate(
-  <Repository.Provider value={new SessionRepository()}>
-    <OrderAgent />
-  </Repository.Provider>
-)
+const result = await new AmlRuntime().evaluate(<OrderAgent repository={new SessionRepository()} />)
 
 console.log(result)
 ```
@@ -80,12 +73,6 @@ Save the complete source as `recipe.tsx` in a project configured as shown in [Ge
 npx vite-node recipe.tsx
 ```
 
-From an AML repository checkout, the maintained context example exercises the same Tool and dependency boundary:
-
-```sh title="Terminal"
-npm run example -- context
-```
-
 ## Expected output
 
 ```text
@@ -96,7 +83,7 @@ orders:["order-17","order-29"]
 
 <Steps>
 
-1. `createContext()` creates an immutable dependency identity. `useContext()` reads the nearest value during AML evaluation.
+1. The application passes `SessionRepository` into `OrderAgent`; AML does not expose that object to the provider.
 2. `defineTool()` captures a name, description, input schema, and executor. The executor receives validated input and an `AgentToolExecutionContext` containing cancellation and trace state.
 3. `<Tool use={listOrders} />` grants the Tool only to its containing `<Agent />`. A sibling `<Agent />` does not receive it.
 4. The deterministic provider invokes the Tool explicitly and returns its JSON result as text. A real Agent provider may expose the same Tool through its native capability bridge.
@@ -118,8 +105,6 @@ orders:["order-17","order-29"]
 
 ## API and source links
 
-- [`defineTool`](https://github.com/we-are-singular/aml/blob/main/sdk/src/components/tool/define-tool.ts)
-- [`<Tool />`](https://github.com/we-are-singular/aml/blob/main/sdk/src/components/tool/tool.tsx)
-- [`AgentToolExecutionContext`](https://github.com/we-are-singular/aml/blob/main/sdk/src/components/tool/agent-tool.ts)
-- [`createContext`](https://github.com/we-are-singular/aml/blob/main/sdk/src/components/context/create-context.ts)
-- [Maintained source example](https://github.com/we-are-singular/aml/blob/main/examples/src/core/context.tsx)
+- [`defineTool()`](/docs/reference/primitives/tool/)
+- [`<Tool />`](/docs/reference/primitives/tool/)
+- [`AgentToolExecutionContext`](/docs/reference/primitives/tool/)

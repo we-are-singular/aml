@@ -42,7 +42,7 @@ Save option defaults are `on: "success"`, `retention: 1`, `gitignore: true`, and
 ## Placement and durability
 
 - One AML evaluation may contain at most one `<Workspace />`, and it must be the top-level resource boundary.
-- `<Workspace />` may contain multiple sibling [`<Sandbox />`](../sandbox/) components, `<Agent />` components, and [`<File />`](../file/) components.
+- `<Workspace />` may contain multiple sibling [`<Sandbox />`](/docs/reference/primitives/sandbox/) components, `<Agent />` components, and [`<File />`](/docs/reference/primitives/file/) components.
 - Writing a materialized file is not a durable publication by itself; enable `save` when a revision must persist.
 - `lock` protects durable identity across acquisitions. `writeConcurrency` coordinates writable `<Sandbox />` components inside the same evaluation; the controls solve different races.
 - `save={{ on: "always" }}` may publish after a failed descendant, but cancellation prevents saving.

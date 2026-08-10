@@ -11,9 +11,9 @@ import { Aside, Badge, Steps } from "@astrojs/starlight/components"
 
 Build a repository diagnostic with three visible boundaries:
 
-1. `<Agent />` proposes a small Node.js program;
-2. `<Script />` executes that resolved text inside an explicitly selected Docker Sandbox;
-3. a later `<Agent />` receives standard output as evidence.
+1. [`<Agent />`](/docs/reference/primitives/agent/) proposes a small Node.js program;
+2. [`<Script />`](/docs/reference/primitives/script/) executes that resolved text inside an explicitly selected Docker Sandbox;
+3. a later [`<Agent />`](/docs/reference/primitives/agent/) receives standard output as evidence.
 
 The workflow is deterministic at the Agent layer, so the example needs no model credentials. It still needs Docker and a local `node:26` image: that image supplies the Node interpreter used by `<Script />`, not an Agent executable. A live Agent provider can be substituted later, but the selected image must then also contain the compatible ACP executable and its dependencies.
 
@@ -142,7 +142,7 @@ The final `<Agent />` receives that line as ordinary prompt data. Docker Sandbox
 - [Sandbox provider boundary](/docs/reference/providers/#sandbox)
 - [Docker Sandbox provider](/docs/providers/sandboxes/docker/)
 - [Sandbox provider contract and security boundaries](/docs/providers/sandboxes/)
-- [`<Script />` implementation](https://github.com/we-are-singular/aml/blob/main/sdk/src/components/script/script-evaluator.ts)
+- [`<Script />`](/docs/reference/primitives/script/)
 - [`dockerSandbox` implementation](https://github.com/we-are-singular/aml/blob/main/providers/sandboxes/docker/src/docker-sandbox.ts)
 - [Maintained Docker example](https://github.com/we-are-singular/aml/blob/main/examples/src/integrations/docker.tsx)
 - Adapted from the local editorial source `marketing/examples/001-generated-diagnostic-pipeline.md`; the public contract is verified against the implementation links above.

@@ -51,6 +51,6 @@ At least one of `src` or `children` is required, and the combined content must b
 
 ## Placement and file access
 
-`<Skill />` produces ordinary text at its authored position. Put it inside [`<Agent />`](../agent/) for prompt instructions or inside [`<System />`](../system/) for system instructions. A Skill file is read by the AML application process; it is not loaded from [`<Workspace />`](../workspace/) or [`<Sandbox />`](../sandbox/) unless the configured runtime cwd points there.
+`<Skill />` produces ordinary text at its authored position. Put it inside [`<Agent />`](/docs/reference/primitives/agent/) for prompt instructions or inside [`<System />`](/docs/reference/primitives/system/) for system instructions. A Skill file is read by the AML application process; it is not loaded from [`<Workspace />`](/docs/reference/primitives/workspace/) or [`<Sandbox />`](/docs/reference/primitives/sandbox/) unless the configured runtime cwd points there.
 
 This primitive is distinct from the installable [AML coding-agent skill](/docs/agent-skill/): `<Skill />` contributes workflow instructions at runtime, while the coding-agent skill teaches an external coding agent how to author AML.

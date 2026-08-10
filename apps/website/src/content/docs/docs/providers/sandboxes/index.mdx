@@ -17,16 +17,16 @@ import ProviderHero from "../../../../../components/docs/ProviderHero.astro"
 
 ## Choose by trust boundary
 
-| Provider           | Execution model            | Workspace attachment                                   | Read-only `exec` / `spawn`                         | Use it when                                                                      |
-| ------------------ | -------------------------- | ------------------------------------------------------ | -------------------------------------------------- | -------------------------------------------------------------------------------- |
-| `localSandbox()`   | Ordinary host processes    | Direct path                                            | No; host processes cannot enforce read-only access | You trust the workflow and need fast local development or conformance runs.      |
-| `dockerSandbox()`  | A named Docker image       | Same-host bind mount at `/workspace`                   | Yes, through a read-only bind mount                | You need a local container boundary and can operate the Docker daemon and image. |
-| `daytonaSandbox()` | Disposable Daytona Sandbox | Archive upload to relative `workspace` guest directory | No; the transferred tree is not a read-only mount  | You need a remote disposable environment with Daytona-managed lifecycle.         |
-| `modalSandbox()`   | Disposable Modal Sandbox   | Archive upload to `/workspace`                         | No; the transferred tree is not a read-only mount  | You need a remote disposable environment backed by a registry image.             |
+| Provider                                                 | Execution model            | Workspace attachment                                   | Read-only `exec` / `spawn`                         | Use it when                                                                      |
+| -------------------------------------------------------- | -------------------------- | ------------------------------------------------------ | -------------------------------------------------- | -------------------------------------------------------------------------------- |
+| [`localSandbox()`](/docs/providers/sandboxes/local/)     | Ordinary host processes    | Direct path                                            | No; host processes cannot enforce read-only access | You trust the workflow and need fast local development or conformance runs.      |
+| [`dockerSandbox()`](/docs/providers/sandboxes/docker/)   | A named Docker image       | Same-host bind mount at `/workspace`                   | Yes, through a read-only bind mount                | You need a local container boundary and can operate the Docker daemon and image. |
+| [`daytonaSandbox()`](/docs/providers/sandboxes/daytona/) | Disposable Daytona Sandbox | Archive upload to relative `workspace` guest directory | No; the transferred tree is not a read-only mount  | You need a remote disposable environment with Daytona-managed lifecycle.         |
+| [`modalSandbox()`](/docs/providers/sandboxes/modal/)     | Disposable Modal Sandbox   | Archive upload to `/workspace`                         | No; the transferred tree is not a read-only mount  | You need a remote disposable environment backed by a registry image.             |
 
 The compatibility check between an Agent and a Sandbox is structural: it verifies the runtime shape, root, and access mode. It does not prove that an image contains the right executable, that credentials work, that network access is available, or that provider-native utilities are installed. Treat image and credential validation as part of deployment readiness.
 
-Need a concrete starting point? [Recommended Sandbox images](./images/) tracks public images we have inspected, upstream image recipes, exact Agent requirements, and combinations we deliberately do not claim are ready.
+Need a concrete starting point? [Recommended Sandbox images](/docs/providers/sandboxes/images/) tracks public images we have inspected, upstream image recipes, exact Agent requirements, and combinations we deliberately do not claim are ready.
 
 ## The shared lifecycle
 
@@ -109,6 +109,6 @@ Before shipping a workflow, verify:
 
 - [Sandbox runtime and lifecycle contract](https://github.com/we-are-singular/aml/blob/main/SANDBOXING.md)
 - [AML specification: Sandbox composition](https://github.com/we-are-singular/aml/blob/main/SPEC.md)
-- [Agent and Sandbox compatibility](../../compatibility/)
-- [Workspace providers](../workspaces/)
-- [Agent providers](../agents/)
+- [Agent and Sandbox compatibility](/docs/compatibility/)
+- [Workspace providers](/docs/providers/workspaces/)
+- [Agent providers](/docs/providers/agents/)

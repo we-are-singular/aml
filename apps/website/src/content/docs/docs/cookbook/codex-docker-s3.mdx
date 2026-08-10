@@ -8,7 +8,7 @@ import { Aside, Badge, Card, CardGrid, LinkCard, Steps } from "@astrojs/starligh
 <Badge text="Production skeleton" variant="caution" /> <Badge text="Credentials required" />
 <Badge text="Docker + S3" />
 
-This is the canonical three-provider composition: Codex supplies the Agent session, Docker supplies disposable execution, and S3 supplies durable Workspace revisions.
+This is the canonical three-provider composition: Codex supplies the [`<Agent />`](/docs/reference/primitives/agent/) session, Docker supplies disposable execution, and S3 supplies durable [`<Workspace />`](/docs/reference/primitives/workspace/) revisions.
 
 ```text
 application
@@ -87,9 +87,9 @@ console.log(result)
 ```
 
 <Aside type="note" title="Credential flow">
-  `apiKey` is captured by `codexAgent()` and mapped to `CODEX_API_KEY` for the ACP launch. If `apiKey` is omitted, the
-  Codex profile detects `env.CODEX_API_KEY` or `env.OPENAI_API_KEY`. The S3 client uses the AWS SDK credential chain.
-  Neither credential belongs in the Workspace, image, prompt, or trace content.
+  `apiKey` is captured by [`codexAgent()`](/docs/providers/agents/codex/) and mapped to `CODEX_API_KEY` for the ACP
+  launch. If `apiKey` is omitted, the Codex profile detects `env.CODEX_API_KEY` or `env.OPENAI_API_KEY`. The S3 client
+  uses the AWS SDK credential chain. Neither credential belongs in the Workspace, image, prompt, or trace content.
 </Aside>
 
 ## Build the application-owned image
@@ -218,5 +218,5 @@ Do not use `save={{ on: "always" }}` as crash-safe checkpointing. It can publish
 - [`docker-sandbox.ts`](https://github.com/we-are-singular/aml/blob/main/providers/sandboxes/docker/src/docker-sandbox.ts)
 - [`s3-workspace.ts`](https://github.com/we-are-singular/aml/blob/main/providers/workspaces/s3/src/s3-workspace.ts)
 - [`s3-workspace-lock.ts`](https://github.com/we-are-singular/aml/blob/main/providers/workspaces/s3/src/s3-workspace-lock.ts)
-- [`workspace-persistence.ts`](https://github.com/we-are-singular/aml/blob/main/sdk/src/workspace-persistence/workspace-persistence.ts)
+- [`WorkspacePersistence`](/docs/reference/provider-authoring/#revision-backed-storage-shortcut)
 - [AWS SDK credential provider chain](https://docs.aws.amazon.com/sdk-for-javascript/v3/developer-guide/setting-credentials-node.html)

@@ -7,7 +7,7 @@ import { Aside, Badge, Steps } from "@astrojs/starlight/components"
 
 <Badge text="Deployment shape" variant="caution" />
 
-This is an operational recipe, not a zero-credential demo. It shows the runtime boundary a Node job should own: provider construction, finite limits, redacted tracing, cancellation, and a clear result boundary. The live Agent still needs its executable, model configuration, and credentials.
+This is an operational recipe, not a zero-credential demo. It shows the runtime boundary a Node job should own: provider construction, finite limits, redacted tracing, cancellation, and a clear result boundary. The live [`<Agent />`](/docs/reference/primitives/agent/) still needs its executable, model configuration, and credentials.
 
 ## Goal
 
@@ -27,7 +27,7 @@ Create a job function that:
 - model-provider credentials configured through environment or provider-native configuration;
 - a structured logger in the surrounding job runner.
 
-AML does not install the executable, provision a model account, or turn `localSandbox()` into a security boundary.
+AML does not install the executable, provision a model account, or turn [`localSandbox()`](/docs/providers/sandboxes/local/) into a security boundary.
 
 ## Complete source
 
@@ -43,7 +43,6 @@ const runtime = new AmlRuntime({
   maxAgentCalls: 8,
   maxConcurrentAgents: 2,
   maxDepth: 12,
-  maxStateTransitions: 8,
   maxTurnsPerAgent: 8,
   trace: createConsoleTracer({
     captureContent: false,
@@ -123,14 +122,11 @@ The exact model prose is provider- and model-dependent. A successful run should 
 - An exceeded budget rejects the evaluation before more work is scheduled.
 - Cancellation stops future work but cannot roll back external effects.
 - A provider cleanup failure may be aggregated with the primary evaluation failure. Preserve both when reporting the job.
-- `createConsoleTracer()` is a dependency-free console sink, not a metrics backend. Adapt `TraceSink` to your logger or telemetry system if you need durable event aggregation.
+- [`createConsoleTracer()`](/docs/observability/) is a dependency-free console sink, not a metrics backend. Adapt `TraceSink` to your logger or telemetry system if you need durable event aggregation.
 
 ## API and source links
 
-- [`AmlRuntime`](https://github.com/we-are-singular/aml/blob/main/sdk/src/core/aml-runtime.ts)
-- [`AmlRuntimeOptions`](https://github.com/we-are-singular/aml/blob/main/sdk/src/core/aml-runtime.ts)
-- [`AmlEvaluationOptions`](https://github.com/we-are-singular/aml/blob/main/sdk/src/core/aml-runtime.ts)
-- [`createConsoleTracer`](https://github.com/we-are-singular/aml/blob/main/sdk/src/observability/create-console-tracer.ts)
-- [`TraceSink`](https://github.com/we-are-singular/aml/blob/main/sdk/src/observability/trace-sink.ts)
-- [`opencodeAgent`](https://github.com/we-are-singular/aml/blob/main/providers/agents/opencode/src/opencode-agent.ts)
+- [`AmlRuntime`, `AmlRuntimeOptions`, and `AmlEvaluationOptions`](/docs/reference/runtime/)
+- [`createConsoleTracer()` and `TraceSink`](/docs/observability/)
+- [`opencodeAgent`](/docs/providers/agents/opencode/)
 - [Provider-backed OpenCode example](https://github.com/we-are-singular/aml/blob/main/examples/src/integrations/opencode.tsx)

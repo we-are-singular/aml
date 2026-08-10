@@ -3,7 +3,7 @@ title: "<System />"
 description: "Add resolved instruction text to the nearest <Agent /> system prompt in authored order."
 ---
 
-`<System />` routes resolved child text into the system channel of its nearest containing [`<Agent />`](../agent/). It does not open a provider session itself.
+`<System />` routes resolved child text into the system channel of its nearest containing [`<Agent />`](/docs/reference/primitives/agent/). It does not open a provider session itself.
 
 ```tsx
 import { Agent, AmlRuntime, System } from "@aml-jsx/sdk"
@@ -41,4 +41,4 @@ The provider receives system text in this order: runtime `system`, `<Agent />` `
 - Multiple `<System />` blocks preserve authored order.
 - `<System />` changes the message channel, not provider selection, Sandbox authority, or Tool scope.
 
-Use [`<Skill />`](../skill/) for reusable instruction files and [`<FollowUp />`](../follow-up/) for later user turns in the same session.
+Use [`<Skill />`](/docs/reference/primitives/skill/) for reusable instruction files and [`<FollowUp />`](/docs/reference/primitives/follow-up/) for later user turns in the same session.

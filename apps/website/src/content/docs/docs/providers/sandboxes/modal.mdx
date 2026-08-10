@@ -44,7 +44,7 @@ The registry image must contain:
 - the selected ACP Agent executable and runtime, when running an Agent;
 - project dependencies and provider/model configuration;
 - a user able to read and write `/workspace` as required;
-- any native tools used by `<Script />` or the Agent.
+- any native tools used by [`<Script />`](/docs/reference/primitives/script/) or the Agent.
 
 AML does not install an Agent into the image. `setup` can prepare an experimental environment after acquisition, but it runs every time and is not an image build or cache. For production, publish a versioned image with the executable and dependencies already installed.
 
@@ -138,7 +138,7 @@ Remote state is not durable until reconciliation succeeds. Prefer a versioned im
 
 ## References
 
-- [Sandbox provider overview](./)
+- [Sandbox provider overview](/docs/providers/sandboxes/)
 - [Modal Sandbox documentation](https://modal.com/docs/guide/sandboxes)
 - [Modal image documentation](https://modal.com/docs/guide/images)
 - [AML Modal provider implementation](https://github.com/we-are-singular/aml/blob/main/providers/sandboxes/modal/src/modal-sandbox.ts)

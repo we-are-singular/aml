@@ -6,7 +6,7 @@ description: Learn how AML turns asynchronous JSX into provider-independent agen
 import { Aside, Card, CardGrid, LinkCard, Steps, TabItem, Tabs } from "@astrojs/starlight/components"
 import ExecutionDirections from "../../../components/docs/ExecutionDirections.astro"
 
-AML is an execution model for agent workflows written as TypeScript and JSX. It is not a UI renderer, a prompt templating language, or a second markup parser. JSX is the authoring syntax; `AmlRuntime` is the interpreter that resolves the resulting tree.
+AML is an execution model for agent workflows written as TypeScript and JSX. It is not a UI renderer, a prompt templating language, or a second markup parser. JSX is the authoring syntax; [`AmlRuntime`](/docs/reference/runtime/) is the interpreter that resolves the resulting tree.
 
 ## The three boundaries
 
@@ -22,11 +22,11 @@ Most AML workflows are easier to reason about when you separate three responsibi
 
 ### Choose the smallest boundary
 
-| The work needs to…                                      | Use       | Decision rule                                                                  |
-| ------------------------------------------------------- | --------- | ------------------------------------------------------------------------------ |
-| ask a model or coding harness to reason, plan, or edit  | Agent     | The result depends on a provider session rather than deterministic code.       |
-| run a command or long-lived process in a controlled cwd | Sandbox   | The operation needs execution authority, limits, cancellation, or isolation.   |
-| preserve or publish files across evaluations            | Workspace | The files need durable identity, locking, revisions, or an explicit save rule. |
+| The work needs to…                                      | Use                                                      | Decision rule                                                                  |
+| ------------------------------------------------------- | -------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| ask a model or coding harness to reason, plan, or edit  | [`<Agent />`](/docs/reference/primitives/agent/)         | The result depends on a provider session rather than deterministic code.       |
+| run a command or long-lived process in a controlled cwd | [`<Sandbox />`](/docs/reference/primitives/sandbox/)     | The operation needs execution authority, limits, cancellation, or isolation.   |
+| preserve or publish files across evaluations            | [`<Workspace />`](/docs/reference/primitives/workspace/) | The files need durable identity, locking, revisions, or an explicit save rule. |
 
 Compose boundaries only when the task needs them. A text-only Agent does not need an empty Workspace; a deterministic file transform does not become safer or clearer merely because a model performs it.
 
@@ -50,15 +50,15 @@ Here TypeScript owns selection, the empty case, and concurrency. AML owns each p
 
 ## What runs where
 
-| Authored element                    | Execution location                                                                                                       | Authority and result                                                                                                                 |
-| ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------ |
-| Function component and `evaluate()` | AML application process                                                                                                  | Builds or resolves AML values using the active lexical scope. It does not create isolation.                                          |
-| `<Agent />`                         | The selected Agent provider and its ACP/native process; a compatible active Sandbox supplies its cwd and process runtime | Owns model turns and returns an `AgentResponse`. Agent-native permissions cannot widen the Sandbox.                                  |
-| JavaScript `<Tool />`               | AML application process                                                                                                  | Calls the function captured by `defineTool()`. It is an application capability, not code moved into the Sandbox.                     |
-| `<Mcp />`                           | The location chosen by the provider integration and transport                                                            | A stdio command or remote HTTP URL remains privileged deployment configuration. Do not assume it shares the Tool or Sandbox process. |
-| `<Script />`                        | Active Sandbox runtime                                                                                                   | Executes only through `SandboxRuntime.exec()` or `spawn()` with that lease's cwd, access, timeout, and cancellation behavior.        |
-| `<File />`                          | Active Workspace materialization                                                                                         | Writes a validated logical Workspace path before descendants consume it. It does not write through an active Sandbox.                |
-| Workspace load/save                 | Workspace provider and its storage service                                                                               | Materializes before descendants, publishes according to save policy, and releases locks/temporary state after the subtree settles.   |
+| Authored element                                          | Execution location                                                                                                       | Authority and result                                                                                                                                 |
+| --------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Function component and `evaluate()`                       | AML application process                                                                                                  | Builds or resolves AML values using the active lexical scope. It does not create isolation.                                                          |
+| `<Agent />`                                               | The selected Agent provider and its ACP/native process; a compatible active Sandbox supplies its cwd and process runtime | Owns model turns and returns an `AgentResponse`. Agent-native permissions cannot widen the Sandbox.                                                  |
+| JavaScript [`<Tool />`](/docs/reference/primitives/tool/) | AML application process                                                                                                  | Calls the function captured by [`defineTool()`](/docs/reference/primitives/tool/). It is an application capability, not code moved into the Sandbox. |
+| `<Mcp />`                                                 | The location chosen by the provider integration and transport                                                            | A stdio command or remote HTTP URL remains privileged deployment configuration. Do not assume it shares the Tool or Sandbox process.                 |
+| `<Script />`                                              | Active Sandbox runtime                                                                                                   | Executes only through `SandboxRuntime.exec()` or `spawn()` with that lease's cwd, access, timeout, and cancellation behavior.                        |
+| `<File />`                                                | Active Workspace materialization                                                                                         | Writes a validated logical Workspace path before descendants consume it. It does not write through an active Sandbox.                                |
+| Workspace load/save                                       | Workspace provider and its storage service                                                                               | Materializes before descendants, publishes according to save policy, and releases locks/temporary state after the subtree settles.                   |
 
 ### Provider selection and path rules
 
@@ -72,11 +72,27 @@ These are the canonical execution-direction rules. Provider guides add vendor pr
 
 <CardGrid>
   <Card title="Agent" icon="rocket">
-    A model-facing session. Child `<Agent />` results become parent input; `<Tool />
-    `, `<Mcp />
-    `, `<Skill />
-    `, and `<FollowUp />` are scoped to the owning `<Agent />
-    `.
+    A model-facing session. Child{" "}
+    <a href="/docs/reference/primitives/agent/">
+      <code>&lt;Agent /&gt;</code>
+    </a>{" "}
+    results become parent input;{" "}
+    <a href="/docs/reference/primitives/tool/">
+      <code>&lt;Tool /&gt;</code>
+    </a>
+    ,{" "}
+    <a href="/docs/reference/primitives/mcp/">
+      <code>&lt;Mcp /&gt;</code>
+    </a>
+    ,{" "}
+    <a href="/docs/reference/primitives/skill/">
+      <code>&lt;Skill /&gt;</code>
+    </a>
+    , and{" "}
+    <a href="/docs/reference/primitives/follow-up/">
+      <code>&lt;FollowUp /&gt;</code>
+    </a>{" "}
+    are scoped to the owning <code>&lt;Agent /&gt;</code>.
   </Card>
   <Card title="Sandbox" icon="setting">
     An ephemeral execution lease. Nested scopes can narrow access, but cannot widen a read-only parent or select another
@@ -140,7 +156,7 @@ The array keeps the authored `[correctness, maintainability]` order even if the 
 
 ## Lexical scope and cleanup
 
-`<Workspace />`, `<Sandbox />`, and `<Context.Provider />` are lexical boundaries. A descendant inherits the active scope while it evaluates, and the boundary releases after its subtree settles.
+[`<Workspace />`](/docs/reference/primitives/workspace/) and [`<Sandbox />`](/docs/reference/primitives/sandbox/) are lexical boundaries. A descendant inherits the active scope while it evaluates, and the boundary releases after its subtree settles.
 
 <Steps>
   1. **Enter the outer scope.** AML acquires the Workspace and materializes its selected revision, then acquires the
@@ -162,8 +178,9 @@ The array keeps the authored `[correctness, maintainability]` order even if the 
 Nested `<Sandbox />` components reuse the outer lease. They may narrow `read-write` to `read-only`, or narrow a root path, but cannot widen permissions. `<File />` must be inside `<Workspace />` and cannot be used inside `<Sandbox />` because it writes through the durable Workspace boundary.
 
 <Aside type="caution" title="Local is trusted execution">
-  `localSandbox()` runs host processes. It provides the common Sandbox API but is not a hostile-code isolation boundary.
-  Use a provider with an appropriate isolation model for model-controlled or untrusted work.
+  [`localSandbox()`](/docs/providers/sandboxes/local/) runs host processes. It provides the common Sandbox API but is
+  not a hostile-code isolation boundary. Use a provider with an appropriate isolation model for model-controlled or
+  untrusted work.
 </Aside>
 
 ## Provider neutrality has limits

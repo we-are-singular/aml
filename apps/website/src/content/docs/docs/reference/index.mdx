@@ -7,29 +7,31 @@ Reference is for decisions and stable boundaries. It explains what AML owns, wha
 
 ## Start with the question
 
-| If you need to…                                                            | Start here                                      |
-| -------------------------------------------------------------------------- | ----------------------------------------------- |
-| Understand an authored component, its props, placement, or result          | [Primitives](/docs/reference/primitives/)       |
-| Configure evaluation limits, defaults, cancellation, or structured results | [Runtime and evaluation](./runtime/)            |
-| Decide whether work belongs in an Agent, Sandbox, or Workspace             | [Provider contracts](./providers/)              |
-| Implement a custom Agent, Sandbox, or Workspace adapter                    | [Provider authoring](./provider-authoring/)     |
-| Choose a built-in Agent, Sandbox, or Workspace                             | [Provider catalog](/docs/providers/)            |
-| Learn how a provider behaves in production                                 | The relevant [provider guide](/docs/providers/) |
-| Assemble a task from working examples                                      | [Cookbook](/docs/cookbook/)                     |
+| If you need to…                                                            | Start here                                                |
+| -------------------------------------------------------------------------- | --------------------------------------------------------- |
+| Understand an authored component, its props, placement, or result          | [Primitives](/docs/reference/primitives/)                 |
+| Configure evaluation limits, defaults, cancellation, or structured results | [Runtime and evaluation](/docs/reference/runtime/)        |
+| Define a portable stdio or HTTP MCP server                                 | [`defineMcpServer()`](/docs/reference/mcp-server/)        |
+| Test workflows or provider contracts without live infrastructure           | [Testing APIs](/docs/reference/testing/)                  |
+| Decide whether work belongs in an Agent, Sandbox, or Workspace             | [Provider contracts](/docs/reference/providers/)          |
+| Implement a custom Agent, Sandbox, or Workspace adapter                    | [Provider authoring](/docs/reference/provider-authoring/) |
+| Choose a built-in Agent, Sandbox, or Workspace                             | [Provider catalog](/docs/providers/)                      |
+| Learn how a provider behaves in production                                 | The relevant [provider guide](/docs/providers/)           |
+| Assemble a task from working examples                                      | [Cookbook](/docs/cookbook/)                               |
 
 ## AML's three boundaries
 
 ```text
-Workspace  → durable state and materialization
-Sandbox    → execution authority and environment
-Agent      → model or harness session
+<Workspace />  → durable state and materialization
+<Sandbox />    → execution authority and environment
+<Agent />      → model or harness session
 ```
 
 These boundaries compose, but they are not interchangeable. A Workspace gives descendants a materialized directory; it does not execute commands. A Sandbox executes literal commands and processes; its security properties depend on the selected provider and deployment. An Agent owns a provider session; it should not be used as a substitute for storage or an enforcing execution boundary.
 
 ## Import the supported boundary
 
-Application code imports runtime features from `@aml-jsx/sdk`. TypeScript selects the package's JSX runtime automatically when `jsxImportSource` is set to `@aml-jsx/sdk`; applications do not maintain those compiler imports by hand. Deterministic fixtures and provider conformance helpers are available from `@aml-jsx/sdk/testing` when a workflow needs a credential-free provider.
+Application code imports runtime features from `@aml-jsx/sdk`. TypeScript selects the package's JSX runtime automatically when `jsxImportSource` is set to `@aml-jsx/sdk`; applications do not maintain those compiler imports by hand. [Deterministic fixtures and provider conformance helpers](/docs/reference/testing/) are available from `@aml-jsx/sdk/testing` when a workflow needs a credential-free provider.
 
 Paths under `sdk/src/**` are implementation details, not supported imports. For working compiler and execution configuration, use [Getting started](/docs/getting-started/) and [Deployment](/docs/production/deployment/) instead of copying an export inventory. For authored AML, use the hand-maintained [primitive reference](/docs/reference/primitives/): it documents behavior and composition boundaries without turning internal types into a second API surface.
 

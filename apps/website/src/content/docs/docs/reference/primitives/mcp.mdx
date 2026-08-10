@@ -3,7 +3,7 @@ title: "<Mcp />"
 description: Grant a provider-native or explicitly configured MCP server to one Agent session.
 ---
 
-`<Mcp />` grants one Model Context Protocol server to its nearest containing [`<Agent />`](../agent/). Select exactly one form: a provider-native server name or a transport descriptor returned by `defineMcpServer()`.
+`<Mcp />` grants one Model Context Protocol server to its nearest containing [`<Agent />`](/docs/reference/primitives/agent/). Select exactly one form: a provider-native server name or a transport descriptor returned by [`defineMcpServer()`](/docs/reference/mcp-server/).
 
 ```tsx
 import { Agent, AmlRuntime, defineMcpServer, Mcp } from "@aml-jsx/sdk"
@@ -32,10 +32,10 @@ For a provider-native server configured outside AML, use `<Mcp name="server-name
 
 ## Props
 
-| Form       | Required prop       | Meaning                                                                               |
-| ---------- | ------------------- | ------------------------------------------------------------------------------------- |
-| Named      | `name: string`      | Ask the Agent provider for a provider-native server with that normalized name.        |
-| Configured | `use: AmlMcpServer` | Attach the exact stdio or Streamable HTTP descriptor returned by `defineMcpServer()`. |
+| Form       | Required prop       | Meaning                                                                                                              |
+| ---------- | ------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| Named      | `name: string`      | Ask the Agent provider for a provider-native server with that normalized name.                                       |
+| Configured | `use: AmlMcpServer` | Attach the exact stdio or Streamable HTTP descriptor returned by [`defineMcpServer()`](/docs/reference/mcp-server/). |
 
 `<Mcp />` accepts no children. Names must be unique inside one `<Agent />` and may be restricted by `AmlRuntime({ allowedMcpServers })`.
 
@@ -46,4 +46,4 @@ For a provider-native server configured outside AML, use `<Mcp name="server-name
 - Streamable HTTP headers are privileged deployment configuration. Avoid persisting secrets in workflow source, traces, or Workspace files.
 - Provider MCP support differs. Check [Codex](/docs/providers/agents/codex/), [OpenCode](/docs/providers/agents/opencode/), or [Pi](/docs/providers/agents/pi/) before choosing a form.
 
-See [Connect an MCP server](/docs/cookbook/mcp/) and [Tool or MCP?](/docs/cookbook/tool-or-mcp/) for complete examples and trade-offs.
+See the [`defineMcpServer()` reference](/docs/reference/mcp-server/), [Connect an MCP server](/docs/cookbook/mcp/), and [Tool or MCP?](/docs/cookbook/tool-or-mcp/) for complete examples and trade-offs.

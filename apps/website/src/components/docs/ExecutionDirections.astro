@@ -4,9 +4,9 @@
     <section>
       <p><span class="directions__arrow directions__arrow--down">↓</span> Scope flows down</p>
       <ol>
-        <li><strong>&lt;Workspace /&gt;</strong><small>durable files</small></li>
-        <li><strong>&lt;Sandbox /&gt;</strong><small>process authority</small></li>
-        <li><strong>&lt;Agent /&gt;</strong><small>&lt;Tool /&gt; · &lt;Mcp /&gt; · prompt</small></li>
+        <li><strong><a href="/docs/reference/primitives/workspace/"><code>&lt;Workspace /&gt;</code></a></strong><small>durable files</small></li>
+        <li><strong><a href="/docs/reference/primitives/sandbox/"><code>&lt;Sandbox /&gt;</code></a></strong><small>process authority</small></li>
+        <li><strong><a href="/docs/reference/primitives/agent/"><code>&lt;Agent /&gt;</code></a></strong><small><a href="/docs/reference/primitives/tool/"><code>&lt;Tool /&gt;</code></a> · <a href="/docs/reference/primitives/mcp/"><code>&lt;Mcp /&gt;</code></a> · prompt</small></li>
       </ol>
       <em>Descendants inherit only the capabilities declared around them.</em>
     </section>
@@ -96,6 +96,17 @@
   .directions__fanout b {
     color: var(--sl-color-white);
     font-size: 0.76rem;
+  }
+
+  li a {
+    color: inherit;
+  }
+
+  li code {
+    background: transparent;
+    color: inherit;
+    font-size: inherit;
+    padding: 0;
   }
 
   li small {

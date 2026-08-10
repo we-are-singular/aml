@@ -12,12 +12,12 @@ AML has eleven stable authoring primitives. Each exists because the runtime must
 
 ## Choose by responsibility
 
-| Responsibility                | Start with                       | Add when needed                                                                                                                |
-| ----------------------------- | -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
-| Run a provider session        | [`<Agent />`](./agent/)          | [`<System />`](./system/), [`<Tool />`](./tool/), [`<Mcp />`](./mcp/), [`<Skill />`](./skill/), [`<FollowUp />`](./follow-up/) |
-| Execute a command             | [`<Sandbox />`](./sandbox/)      | [`<Script />`](./script/) or a Sandbox-compatible [`<Agent />`](./agent/)                                                      |
-| Materialize or preserve files | [`<Workspace />`](./workspace/)  | [`<File />`](./file/) and, when commands are needed, [`<Sandbox />`](./sandbox/)                                               |
-| Group authored values         | [Fragment `<>…</>`](./fragment/) | Function components and ordinary TypeScript                                                                                    |
+| Responsibility                | Start with                                                | Add when needed                                                                                                                                                                                                                                             |
+| ----------------------------- | --------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Run a provider session        | [`<Agent />`](/docs/reference/primitives/agent/)          | [`<System />`](/docs/reference/primitives/system/), [`<Tool />`](/docs/reference/primitives/tool/), [`<Mcp />`](/docs/reference/primitives/mcp/), [`<Skill />`](/docs/reference/primitives/skill/), [`<FollowUp />`](/docs/reference/primitives/follow-up/) |
+| Execute a command             | [`<Sandbox />`](/docs/reference/primitives/sandbox/)      | [`<Script />`](/docs/reference/primitives/script/) or a Sandbox-compatible [`<Agent />`](/docs/reference/primitives/agent/)                                                                                                                                 |
+| Materialize or preserve files | [`<Workspace />`](/docs/reference/primitives/workspace/)  | [`<File />`](/docs/reference/primitives/file/) and, when commands are needed, [`<Sandbox />`](/docs/reference/primitives/sandbox/)                                                                                                                          |
+| Group authored values         | [Fragment `<>…</>`](/docs/reference/primitives/fragment/) | Function components and ordinary TypeScript                                                                                                                                                                                                                 |
 
 ## Read the tree in two directions
 
@@ -30,17 +30,12 @@ child result     ◀──up────  resolved input  ◀──up───�
 
 See [The AML mental model](/docs/concepts/) for the complete evaluation model and [AST and evaluation](/docs/ast/) for node construction and placement rules.
 
-<Aside type="note" title="Evaluating APIs are separate">
-  `<Loop />` and AML Context are implemented and exported for evaluation, but the project still marks them as
-  experimental. They are not included in the stable eleven or presented as release-ready primitive contracts here.
-</Aside>
-
 ## Shared authoring rules
 
 - Import primitives from `@aml-jsx/sdk`; do not import `sdk/src/**` implementation paths.
 - Configure TypeScript with `"jsx": "react-jsx"` and `"jsxImportSource": "@aml-jsx/sdk"`.
 - Treat JSX indentation as authored text. AML concatenates text without inserting separators.
-- Use provider props to override one boundary; otherwise the matching `AmlRuntime` default is used.
+- Use provider props to override one boundary; otherwise the matching [`AmlRuntime`](/docs/reference/runtime/) default is used.
 - Placement errors reject with `EvaluationError`. AML does not silently move capabilities, acquire missing resources, or fall back to host execution.
 
 Continue with [Runtime and evaluation](/docs/reference/runtime/) for limits and cancellation, [Provider boundaries](/docs/reference/providers/) for extension contracts, or the [Cookbook](/docs/cookbook/) for complete workflows.

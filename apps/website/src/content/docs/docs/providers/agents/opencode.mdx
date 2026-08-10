@@ -69,9 +69,9 @@ The AML repository currently pins `opencode-ai@1.18.9` for its integration toolc
 For container execution, [Recommended Sandbox images](/docs/providers/sandboxes/images/#opencode-cloudflare-sandbox) documents the official Cloudflare OpenCode image we inspected and the narrower compatibility it proves.
 
 <Aside type="caution" title="Install it where the Agent process runs">
-  A host-global installation is available to `localSandbox()`. Docker, Daytona, Modal, or another remote Sandbox needs
-  the executable in its own image or environment. Run `opencode --version` through that same execution path before
-  debugging AML configuration.
+  A host-global installation is available to [`localSandbox()`](/docs/providers/sandboxes/local/). Docker, Daytona,
+  Modal, or another remote Sandbox needs the executable in its own image or environment. Run `opencode --version`
+  through that same execution path before debugging AML configuration.
 </Aside>
 
 ## Complete example
@@ -168,13 +168,13 @@ const answer = await new AmlRuntime({ agentProvider: provider }).evaluate(
 )
 ```
 
-For authored MCP servers, use `<Mcp />` and the `allowedMcpServers` runtime policy. OpenCode receives the resulting server configuration through the shared ACP session. The server's transport, headers, environment, and executable still need to be available in the environment where the provider runs.
+For authored MCP servers, use [`<Mcp />`](/docs/reference/primitives/mcp/) and the `allowedMcpServers` runtime policy. OpenCode receives the resulting server configuration through the shared ACP session. The server's transport, headers, environment, and executable still need to be available in the environment where the provider runs.
 
 ## Structured output and follow-ups
 
 `evaluate(value, schema)` uses the shared ACP structured-output path. OpenCode receives the provider session's output request and AML validates the final JSON against the supplied Standard Schema. A structured evaluation must resolve to one `<Agent />` and cannot be satisfied by ordinary prose.
 
-`<FollowUp />` stays in the same OpenCode session. It cannot change the Agent's Tools or MCP set between turns; later turns stop when an earlier turn fails. This makes follow-ups useful for clarification, not for dynamically widening capabilities.
+[`<FollowUp />`](/docs/reference/primitives/follow-up/) stays in the same OpenCode session. It cannot change the Agent's Tools or MCP set between turns; later turns stop when an earlier turn fails. This makes follow-ups useful for clarification, not for dynamically widening capabilities.
 
 ## State isolation and lifecycle
 
@@ -204,7 +204,7 @@ The profile creates the launch configuration after AML has resolved the effectiv
 
 3. **A Tool is not visible**
 
-   Confirm that `<Tool />` is inside `<Agent />`, its name is unique, its input schema is valid JSON Schema, and the runtime `allowedTools` policy does not exclude it. Tool execution remains host-side.
+   Confirm that [`<Tool />`](/docs/reference/primitives/tool/) is inside [`<Agent />`](/docs/reference/primitives/agent/), its name is unique, its input schema is valid JSON Schema, and the runtime `allowedTools` policy does not exclude it. Tool execution remains host-side.
 
 4. **Network, shell, or edit operations still fail**
 

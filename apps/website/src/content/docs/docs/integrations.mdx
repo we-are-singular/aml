@@ -22,7 +22,7 @@ const runtime = new AmlRuntime({
 })
 ```
 
-`localSandbox()` runs trusted host processes. It is appropriate for a developer-owned checkout, not a hostile-code boundary.
+[`localSandbox()`](/docs/providers/sandboxes/local/) runs trusted host processes. It is appropriate for a developer-owned checkout, not a hostile-code boundary.
 
   </TabItem>
   <TabItem label="Docker execution">
@@ -37,7 +37,7 @@ const runtime = new AmlRuntime({
 })
 ```
 
-The image must already contain the compatible ACP executable, Node/runtime dependencies, project dependencies, credentials strategy, and any command-line tools the workflow needs. AML does not build the image or install an Agent.
+[`dockerSandbox()`](/docs/providers/sandboxes/docker/) expects the image to already contain the compatible ACP executable, Node/runtime dependencies, project dependencies, credentials strategy, and any command-line tools the workflow needs. AML does not build the image or install an Agent.
 
   </TabItem>
   <TabItem label="Durable revisions">
@@ -56,7 +56,7 @@ const runtime = new AmlRuntime({
 })
 ```
 
-The S3 provider needs an S3-compatible client/configuration and storage permissions for its index, revision objects, lock, and cleanup operations. See the [S3 Workspace guide](/docs/providers/workspaces/s3/).
+[`s3Workspace()`](/docs/providers/workspaces/s3/) needs an S3-compatible client/configuration and storage permissions for its index, revision objects, lock, and cleanup operations.
 
   </TabItem>
 </Tabs>
@@ -109,7 +109,7 @@ export function Review() {
 }
 ```
 
-In a real application supply the providers through the runtime or explicit props. `<File />` is shown at the `<Workspace />` boundary because it persists text through the Workspace provider; use `<Agent />` or `<Script />` inside `<Sandbox />` for process writes.
+In a real application supply the providers through the runtime or explicit props. [`<File />`](/docs/reference/primitives/file/) is shown at the [`<Workspace />`](/docs/reference/primitives/workspace/) boundary because it persists text through the Workspace provider; use [`<Agent />`](/docs/reference/primitives/agent/) or [`<Script />`](/docs/reference/primitives/script/) inside [`<Sandbox />`](/docs/reference/primitives/sandbox/) for process writes.
 
 ## Integration checklist
 

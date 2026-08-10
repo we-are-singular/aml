@@ -50,7 +50,7 @@ npm run smoke -- --agent codex --sandbox docker
 ### Agent and Sandbox
 
 - The Agent executable must exist where the Sandbox launches processes. A host installation is not visible inside Docker, Daytona, or Modal unless the selected environment contains it.
-- `localSandbox()` runs trusted host processes and cannot enforce read-only execution.
+- [`localSandbox()`](/docs/providers/sandboxes/local/) runs trusted host processes and cannot enforce read-only execution.
 - Docker can execute while presenting a read-only Workspace mount; Daytona and Modal currently reject process execution when the requested access cannot be enforced as read-only.
 - Agent-native filesystem, shell, or network permissions are policy translation. The Sandbox and deployment platform remain the enforcement boundary.
 - Tools run in the AML application process. An enclosing Sandbox does not automatically contain application-owned Tool code.
@@ -59,11 +59,11 @@ Read the [Agent comparison](/docs/providers/agents/) and [Sandbox comparison](/d
 
 ### Workspace and Sandbox
 
-| Workspace               | Persistence shape                      | Compatibility question                                                                     |
-| ----------------------- | -------------------------------------- | ------------------------------------------------------------------------------------------ |
-| `localWorkspace()`      | Existing directory                     | Does the Sandbox operate on that same host path, and do you need revisions?                |
-| `filesystemWorkspace()` | Local archive or folder revisions      | Can the deployment materialize temporary state and preserve its lock/revision storage?     |
-| `s3Workspace()`         | S3-compatible archive/folder revisions | Does the backend preserve conditional writes, stable ETags, listing, deletes, and streams? |
+| Workspace                                                         | Persistence shape                      | Compatibility question                                                                     |
+| ----------------------------------------------------------------- | -------------------------------------- | ------------------------------------------------------------------------------------------ |
+| [`localWorkspace()`](/docs/providers/workspaces/local/)           | Existing directory                     | Does the Sandbox operate on that same host path, and do you need revisions?                |
+| [`filesystemWorkspace()`](/docs/providers/workspaces/filesystem/) | Local archive or folder revisions      | Can the deployment materialize temporary state and preserve its lock/revision storage?     |
+| `s3Workspace()`                                                   | S3-compatible archive/folder revisions | Does the backend preserve conditional writes, stable ETags, listing, deletes, and streams? |
 
 Revision-backed Workspaces share AML's persistence engine, but their storage adapter still has to preserve the required protocol. “S3-compatible” is not enough by itself; use the [S3 compatibility checklist](/docs/providers/workspaces/s3/).
 

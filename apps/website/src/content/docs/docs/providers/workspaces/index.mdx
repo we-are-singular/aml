@@ -25,7 +25,7 @@ AML separates three concerns that are easy to conflate:
 | Durability          | Workspace provider | The directory or revision store that survives the evaluation.              |
 | Execution isolation | Sandbox provider   | The process, filesystem, and network boundary used by commands and Agents. |
 
-`<Workspace />` acquires one materialization at the top of an evaluation. Descendants work beneath its directory. On release, AML removes temporary materializations and asks the provider to release its lock or remote lease. `<Workspace />` may contain multiple sibling `<Sandbox />` components, but it cannot be nested inside another `<Workspace />` or placed inside `<Sandbox />`.
+[`<Workspace />`](/docs/reference/primitives/workspace/) acquires one materialization at the top of an evaluation. Descendants work beneath its directory. On release, AML removes temporary materializations and asks the provider to release its lock or remote lease. `<Workspace />` may contain multiple sibling `<Sandbox />` components, but it cannot be nested inside another `<Workspace />` or placed inside `<Sandbox />`.
 
 ```text
 durable source
@@ -37,15 +37,15 @@ materialized directory ──► Agent / Tool / File / Sandbox
       └── release: remove temporary state + release ownership
 ```
 
-The provider receives a logical `id` from `<Workspace id="..." />`. For revision-backed providers, that id selects the revision namespace. For `localWorkspace`, the configured physical directory is the durable identity; two providers aimed at the same directory contend even if their authored ids differ.
+The provider receives a logical `id` from [`<Workspace id="..." />`](/docs/reference/primitives/workspace/). For revision-backed providers, that id selects the revision namespace. For `localWorkspace`, the configured physical directory is the durable identity; two providers aimed at the same directory contend even if their authored ids differ.
 
 ## Choose a provider
 
-| Provider                                 | Materialization                 | Durable source                    | Revisions | Best fit                                                             |
-| ---------------------------------------- | ------------------------------- | --------------------------------- | --------- | -------------------------------------------------------------------- |
-| [`localWorkspace()`](./local/)           | The configured directory itself | Existing local directory          | No        | Trusted, same-host development and direct file workflows.            |
-| [`filesystemWorkspace()`](./filesystem/) | A unique temporary directory    | Local archive or folder artifacts | Yes       | Local jobs that need load, retention, rollback, or revision history. |
-| [`s3Workspace()`](./s3/)                 | A unique temporary directory    | S3 object storage                 | Yes       | Distributed workers and durable remote state shared across hosts.    |
+| Provider                                                          | Materialization                 | Durable source                    | Revisions | Best fit                                                             |
+| ----------------------------------------------------------------- | ------------------------------- | --------------------------------- | --------- | -------------------------------------------------------------------- |
+| [`localWorkspace()`](/docs/providers/workspaces/local/)           | The configured directory itself | Existing local directory          | No        | Trusted, same-host development and direct file workflows.            |
+| [`filesystemWorkspace()`](/docs/providers/workspaces/filesystem/) | A unique temporary directory    | Local archive or folder artifacts | Yes       | Local jobs that need load, retention, rollback, or revision history. |
+| [`s3Workspace()`](/docs/providers/workspaces/s3/)                 | A unique temporary directory    | S3 object storage                 | Yes       | Distributed workers and durable remote state shared across hosts.    |
 
 ### A complete revision-backed tree
 
@@ -99,7 +99,7 @@ Do not catch every save or conditional-write error as `WorkspaceConflictError`. 
 
 ## Safe file writes
 
-`<File />` writes into the active materialization and therefore requires `<Workspace />`. It is not a durable save by itself; enable the `<Workspace />` save policy if the file must become a revision.
+[`<File />`](/docs/reference/primitives/file/) writes into the active materialization and therefore requires [`<Workspace />`](/docs/reference/primitives/workspace/). It is not a durable save by itself; enable the `<Workspace />` save policy if the file must become a revision.
 
 ```tsx
 import { File, Workspace, filesystemWorkspace } from "@aml-jsx/sdk"
@@ -128,4 +128,4 @@ All providers must clean up their lease when acquisition, evaluation, save, or c
 | Cancellation before acquire             | Retry only if the request is still valid. No materialization should be assumed.                                         |
 | Failure during release                  | Record it as an operational failure; the provider may have left a lock, remote lease, or temporary resource to recover. |
 
-For provider authors, the stable contracts are [`WorkspaceProvider`](https://github.com/we-are-singular/aml/blob/main/sdk/src/components/workspace/workspace-provider.ts), [`WorkspacePersistence`](https://github.com/we-are-singular/aml/blob/main/sdk/src/workspace-persistence/workspace-persistence.ts), and the Workspace section of [`SPEC.md`](https://github.com/we-are-singular/aml/blob/main/SPEC.md#14-workspace). Provider-specific behavior is summarized in [`PROVIDERS.md`](https://github.com/we-are-singular/aml/blob/main/PROVIDERS.md).
+For provider authors, the stable [`WorkspaceProvider` and `WorkspacePersistence` contracts](/docs/reference/provider-authoring/#revision-backed-storage-shortcut) are documented with the Workspace section of [`SPEC.md`](https://github.com/we-are-singular/aml/blob/main/SPEC.md#14-workspace). Provider-specific behavior is summarized in [`PROVIDERS.md`](https://github.com/we-are-singular/aml/blob/main/PROVIDERS.md).

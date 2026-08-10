@@ -55,7 +55,7 @@ The [CLI guide](/docs/cli/) documents export selection, environment files, JSON 
 
 No. AML does not sell model access or proxy credentials through an AML service. For live work, it connects to a coding-agent provider that you install and authenticate in the environment where AML runs.
 
-For learning and repeatable examples, `@aml-jsx/sdk/testing` includes deterministic providers that do not call a model.
+For learning and repeatable examples, [`@aml-jsx/sdk/testing`](/docs/reference/testing/) includes deterministic providers that do not call a model.
 
 ### Which coding agents can I use?
 
@@ -65,7 +65,7 @@ The [coding-agent guide](/docs/providers/agents/) compares setup and capabilitie
 
 ### What do `<Agent />` and the other angle-bracket names mean?
 
-They are AML components. Each component adds one piece of the workflow. For example, `<Agent />` describes one coding-agent session, `<Tool />` grants a function to an agent, and `<Sandbox />` chooses where controlled work can run.
+They are AML components. Each component adds one piece of the workflow. For example, [`<Agent />`](/docs/reference/primitives/agent/) describes one coding-agent session, [`<Tool />`](/docs/reference/primitives/tool/) grants a function to an agent, and [`<Sandbox />`](/docs/reference/primitives/sandbox/) chooses where controlled work can run.
 
 They are TypeScript values rather than UI elements. The [component reference](/docs/reference/primitives/) lists each public component and links to focused examples.
 
@@ -79,13 +79,13 @@ The [runtime guide](/docs/runtime/) covers application-owned evaluation, limits,
 
 ### Can one workflow use more than one coding agent?
 
-Yes. One agent's result can become another agent's input, and independent agents can work concurrently with ordinary `Promise.all()`. Each `<Agent />` is still a separate session with its own explicitly granted instructions and capabilities.
+Yes. One agent's result can become another agent's input, and independent agents can work concurrently with ordinary `Promise.all()`. Each [`<Agent />`](/docs/reference/primitives/agent/) is still a separate session with its own explicitly granted instructions and capabilities.
 
 See the [code-review workflow](/docs/cookbook/code-review-workflow/) for both parallel review and a final synthesis step.
 
 ### Where will an agent run commands?
 
-That depends on the provider and the environment you place around it. A local setup can use your machine directly. A `<Sandbox />` can instead give the work a managed directory and process lifecycle through Docker, Daytona, Modal, or another sandbox provider.
+That depends on the provider and the environment you place around it. A local setup can use your machine directly. A [`<Sandbox />`](/docs/reference/primitives/sandbox/) can instead give the work a managed directory and process lifecycle through Docker, Daytona, Modal, or another sandbox provider.
 
 Start with the [sandbox guide](/docs/providers/sandboxes/) before choosing an execution environment.
 
@@ -93,11 +93,11 @@ Start with the [sandbox guide](/docs/providers/sandboxes/) before choosing an ex
 
 Only if you give it access to those files. A local agent or `localSandbox()` can operate on the host and should be treated as trusted code. A remote or container sandbox limits the working environment according to that provider's real isolation boundary.
 
-Use `<Workspace />` when files need to be materialized, revisioned, and saved deliberately. [Sandboxes and Workspaces](/docs/cookbook/sandboxes-and-workspaces/) explains how execution and durable files fit together.
+Use [`<Workspace />`](/docs/reference/primitives/workspace/) when files need to be materialized, revisioned, and saved deliberately. [Sandboxes and Workspaces](/docs/cookbook/sandboxes-and-workspaces/) explains how execution and durable files fit together.
 
 ### Does a sandbox make agent-written code completely safe?
 
-No. A sandbox is one boundary, not a complete security policy. You still control credentials, network access, mounted files, images, resource limits, and which tools the agent can call. `localSandbox()` is a convenience for trusted local work and provides no isolation from the host.
+No. A sandbox is one boundary, not a complete security policy. You still control credentials, network access, mounted files, images, resource limits, and which tools the agent can call. [`localSandbox()`](/docs/providers/sandboxes/local/) is a convenience for trusted local work and provides no isolation from the host.
 
 Review the selected [sandbox provider](/docs/providers/sandboxes/) and the [security guide](/docs/production/security/) before running model-controlled code.
 
@@ -105,7 +105,7 @@ Review the selected [sandbox provider](/docs/providers/sandboxes/) and the [secu
 
 ### Can an agent call my application's functions or APIs?
 
-Yes. A `<Tool />` grants one agent a schema-validated JavaScript function owned by your application. AML can also connect an agent to a separately operated Model Context Protocol (MCP) server when a capability already exists behind that standard boundary.
+Yes. A [`<Tool />`](/docs/reference/primitives/tool/) grants one agent a schema-validated JavaScript function owned by your application. AML can also connect an agent through [`<Mcp />`](/docs/reference/primitives/mcp/) to a separately operated Model Context Protocol (MCP) server when a capability already exists behind that standard boundary.
 
 The [Tools guide](/docs/cookbook/tools/) starts with a local function. The [Tool or MCP guide](/docs/cookbook/tool-or-mcp/) explains when an external server is worth the extra moving parts.
 

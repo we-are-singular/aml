@@ -20,7 +20,7 @@ The CLI deliberately owns only process-level concerns:
 - loading a trusted workflow module;
 - applying Vite-style environment files before the module is evaluated;
 - selecting the default, `main`, or requested named export;
-- creating an `AmlRuntime`, evaluating the exported AML value, and formatting the result;
+- creating an [`AmlRuntime`](/docs/reference/runtime/), evaluating the exported AML value, and formatting the result;
 - writing lifecycle and optional trace diagnostics to standard error.
 
 Provider selection and provider-specific options belong in the workflow file. The CLI does not have `--agent-provider`, `--sandbox-provider`, model, credential, or Workspace configuration flags.
@@ -66,16 +66,21 @@ export default <Agent provider={provider}>README.md</Agent>
 This credential-free example prints `Reviewed: README.md`. Replace the deterministic provider with a [supported Agent provider](/docs/providers/agents/) when the workflow is ready to call a live model. Keeping provider construction in the module makes the executable workflow self-contained: another runner can import the same tree, inspect its provider construction, or evaluate it with application-owned infrastructure later.
 
 <Aside type="note" title="Runtime defaults are not part of the current export contract">
-  `AmlRuntime` supports default Agent, Sandbox, and Workspace providers, but the experimental CLI currently constructs
-  an empty runtime internally. A CLI workflow must therefore put the required providers on its AML components. A future
-  workflow descriptor could expose runtime options without adding provider-specific command flags, but that contract is
-  not implemented today.
+  [`AmlRuntime`](/docs/reference/runtime/) supports default [Agent](/docs/providers/agents/),
+  [Sandbox](/docs/providers/sandboxes/), and [Workspace](/docs/providers/workspaces/) providers, but the experimental
+  CLI currently constructs an empty runtime internally. A CLI workflow must therefore put the required providers on its
+  AML components. A future workflow descriptor could expose runtime options without adding provider-specific command
+  flags, but that contract is not implemented today.
 </Aside>
 
 <Aside type="caution" title="Export the tree, not a nested runtime evaluation">
   Do not call `new AmlRuntime().evaluate(...)` inside the exported function. That starts an independent run before the
   CLI evaluates the returned text, preventing CLI tracing, cancellation, and runtime ownership from covering the Agent
-  work. Export `<Agent provider={provider}>…</Agent>` directly.
+  work. Export{" "}
+  <a href="/docs/reference/primitives/agent/">
+    <code>&lt;Agent /&gt;</code>
+  </a>{" "}
+  directly with `provider={provider}`.
 </Aside>
 
 ## Export resolution
@@ -171,7 +176,15 @@ The JSON result containing `Review the release-candidate release.` is written to
 
 <Aside type="caution" title="Workflow files are trusted code">
   `vite-node` evaluates the module and all of its imports in the CLI process. A Sandbox inside the exported AML tree can
-  constrain descendant Agent and Script execution, but it does not sandbox top-level JavaScript in the workflow module.
+  constrain descendant{" "}
+  <a href="/docs/reference/primitives/agent/">
+    <code>&lt;Agent /&gt;</code>
+  </a>{" "}
+  and{" "}
+  <a href="/docs/reference/primitives/script/">
+    <code>&lt;Script /&gt;</code>
+  </a>{" "}
+  execution, but it does not sandbox top-level JavaScript in the workflow module.
 </Aside>
 
 ## Source execution
@@ -202,7 +215,7 @@ aml run ./workflow.tsx --trace
 aml run ./workflow.tsx --trace --capture-content
 ```
 
-Treat `--capture-content` output as sensitive. It can include prompts, model output, Tool input and output, and filesystem context. See [Observability](/docs/observability/) for the runtime event and redaction contract.
+Treat `--capture-content` output as sensitive. It can include prompts, model output, [`<Tool />`](/docs/reference/primitives/tool/) input and output, and filesystem context. See [Observability](/docs/observability/) for the runtime event and redaction contract.
 
 ## Current command reference
 

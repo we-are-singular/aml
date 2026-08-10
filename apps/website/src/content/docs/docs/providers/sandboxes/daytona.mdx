@@ -106,7 +106,7 @@ Cancellation during creation or hydration can trigger asynchronous provider clea
 
 Daytona rejects `exec()` and `spawn()` under `access="read-only"`. The Workspace is transferred into a writable remote directory; it is not a read-only mount. This is an intentional limitation, not a promise that commands execute safely without changing the remote tree.
 
-Use `read-write` for a Daytona ACP Agent unless the complete Agent/Sandbox contract you selected provides another supported launch path. A read-only Daytona Sandbox is suitable for structural composition or an operation that never invokes the runtime, not for ordinary `<Script />` components or ACP sessions.
+Use `read-write` for a Daytona ACP Agent unless the complete Agent/Sandbox contract you selected provides another supported launch path. A read-only Daytona Sandbox is suitable for structural composition or an operation that never invokes the runtime, not for ordinary [`<Script />`](/docs/reference/primitives/script/) components or ACP sessions.
 
 ## Failure modes and troubleshooting
 
@@ -131,7 +131,7 @@ Because transfer is full-tree and release-time, a provider outage can lose remot
 
 ## References
 
-- [Sandbox provider overview](./)
+- [Sandbox provider overview](/docs/providers/sandboxes/)
 - [Daytona documentation](https://www.daytona.io/docs/)
 - [AML Daytona provider implementation](https://github.com/we-are-singular/aml/blob/main/providers/sandboxes/daytona/src/daytona-sandbox.ts)
 - [AML Daytona provider tests](https://github.com/we-are-singular/aml/blob/main/providers/sandboxes/daytona/tests/daytona-sandbox.test.ts)

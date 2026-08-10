@@ -9,7 +9,7 @@ import { Aside, Badge, Steps } from "@astrojs/starlight/components"
 
 ## Goal
 
-Use `<Workspace />` for files that should survive resource scopes, then give `<Sandbox />` a narrower execution boundary for `<Agent />`. This recipe is intentionally deterministic and uses a temporary directory; it does not require Docker, credentials, or a model.
+Use [`<Workspace />`](/docs/reference/primitives/workspace/) for files that should survive resource scopes, then give [`<Sandbox />`](/docs/reference/primitives/sandbox/) a narrower execution boundary for [`<Agent />`](/docs/reference/primitives/agent/). This recipe is intentionally deterministic and uses a temporary directory; it does not require Docker, credentials, or a model.
 
 AML separates the two responsibilities:
 
@@ -137,9 +137,9 @@ The temporary directory contains `reports/summary.md` until the operating system
 
 ## API and source links
 
-- [`<Workspace />`](https://github.com/we-are-singular/aml/blob/main/sdk/src/components/workspace/workspace.tsx)
-- [`<File />`](https://github.com/we-are-singular/aml/blob/main/sdk/src/components/file/file.tsx)
-- [`<Sandbox />`](https://github.com/we-are-singular/aml/blob/main/sdk/src/components/sandbox/sandbox.tsx)
+- [`<Workspace />`](/docs/reference/primitives/workspace/)
+- [`<File />`](/docs/reference/primitives/file/)
+- [`<Sandbox />`](/docs/reference/primitives/sandbox/)
 - [`localWorkspace`](https://github.com/we-are-singular/aml/blob/main/providers/workspaces/local/src/index.ts)
 - [`localSandbox`](https://github.com/we-are-singular/aml/blob/main/providers/sandboxes/local/src/index.ts)
 - [Workspace resource example](https://github.com/we-are-singular/aml/blob/main/examples/src/resources/workspace.tsx)

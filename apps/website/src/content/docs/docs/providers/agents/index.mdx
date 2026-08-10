@@ -59,12 +59,12 @@ The three built-in profiles all use the shared ACP engine. They do not create a 
   />
 </CardGrid>
 
-| If you need…                                          | Start with                   | Why                                                                                                |
-| ----------------------------------------------------- | ---------------------------- | -------------------------------------------------------------------------------------------------- |
-| Codex-native configuration and OpenAI model workflows | `codexAgent()`               | Writes Codex ACP configuration and maps AML filesystem mode into Codex's agent mode.               |
-| OpenCode's model catalog and native tool policy       | `opencodeAgent()`            | Starts `opencode acp --pure` and translates filesystem, shell, and network permissions.            |
-| Pi's extensible tool ecosystem or Pi MCP adapter      | `piAgent()`                  | Uses Pi's generated wrapper and `pi-mcp-adapter` for AML Tools and MCP.                            |
-| No credentials while designing a workflow             | `DeterministicAgentProvider` | Use the testing entrypoint for a local fixture; it is not one of these live coding-agent profiles. |
+| If you need…                                          | Start with                                                                          | Why                                                                                                |
+| ----------------------------------------------------- | ----------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| Codex-native configuration and OpenAI model workflows | [`codexAgent()`](/docs/providers/agents/codex/)                                     | Writes Codex ACP configuration and maps AML filesystem mode into Codex's agent mode.               |
+| OpenCode's model catalog and native tool policy       | [`opencodeAgent()`](/docs/providers/agents/opencode/)                               | Starts `opencode acp --pure` and translates filesystem, shell, and network permissions.            |
+| Pi's extensible tool ecosystem or Pi MCP adapter      | [`piAgent()`](/docs/providers/agents/pi/)                                           | Uses Pi's generated wrapper and `pi-mcp-adapter` for AML Tools and MCP.                            |
+| No credentials while designing a workflow             | [`DeterministicAgentProvider`](/docs/reference/testing/#deterministicagentprovider) | Use the testing entrypoint for a local fixture; it is not one of these live coding-agent profiles. |
 
 <Aside type="tip" title="Start with the harness you already operate">
   There is no universal live default. Codex is the shortest tutorial path when you already have an OpenAI API key;
@@ -116,7 +116,7 @@ const answer = await runtime.evaluate(
 )
 ```
 
-`<Agent />` also accepts a provider directly, which is useful when different specialists in one evaluation use different profiles:
+[`<Agent />`](/docs/reference/primitives/agent/) also accepts a provider directly, which is useful when different specialists in one evaluation use different profiles:
 
 ```tsx
 import { Agent, AmlRuntime, codexAgent, opencodeAgent } from "@aml-jsx/sdk"
@@ -169,7 +169,7 @@ MCP server identity, allowlists, transport configuration, and lifecycle belong t
 
 ### Follow-up turns
 
-`<FollowUp />` stays in the same provider session. Tools and MCP capabilities remain fixed for the session; later turns cannot widen access. A failure stops subsequent turns and rejects the evaluation.
+[`<FollowUp />`](/docs/reference/primitives/follow-up/) stays in the same provider session. Tools and MCP capabilities remain fixed for the session; later turns cannot widen access. A failure stops subsequent turns and rejects the evaluation.
 
 ## Security checklist
 

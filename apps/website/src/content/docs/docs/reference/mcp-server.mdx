@@ -1,0 +1,111 @@
+---
+title: defineMcpServer()
+description: Define an immutable stdio or Streamable HTTP MCP server descriptor without connecting to it.
+---
+
+import { Aside, Tabs, TabItem } from "@astrojs/starlight/components"
+
+`defineMcpServer()` creates the transport descriptor consumed by [`<Mcp />`](/docs/reference/primitives/mcp/). It validates and snapshots configuration, but does not start a process, connect to a URL, authenticate, discover tools, or grant the server to an Agent.
+
+```ts
+import { defineMcpServer } from "@aml-jsx/sdk"
+
+const documentation = defineMcpServer({
+  name: "documentation",
+  transport: {
+    type: "streamable-http",
+    url: "https://mcp.example.com/docs",
+    headers: { Authorization: `Bearer ${process.env.MCP_TOKEN}` },
+  },
+})
+```
+
+Attach the returned descriptor explicitly:
+
+```tsx
+<Agent>
+  <Mcp use={documentation} />
+  Find the relevant API contract.
+</Agent>
+```
+
+## Signature
+
+```ts
+function defineMcpServer(options: DefineMcpServerOptions): Readonly<AmlMcpServer>
+
+interface DefineMcpServerOptions {
+  readonly name: string
+  readonly transport: DefineMcpStdioTransport | DefineMcpStreamableHttpTransport
+}
+```
+
+`name` must be non-empty and already normalized. Use the same exact name in `AmlRuntime({ allowedMcpServers })` when the runtime applies an allowlist.
+
+## Transport forms
+
+<Tabs>
+  <TabItem label="stdio">
+
+```ts
+const localServer = defineMcpServer({
+  name: "project",
+  transport: {
+    type: "stdio",
+    command: "project-mcp",
+    args: ["--root", "/workspace"],
+    cwd: "/workspace",
+    env: { LOG_LEVEL: "warn" },
+  },
+})
+```
+
+The selected Agent provider decides where the command runs. Verify whether that is the AML host, an active Sandbox, or another provider-owned environment before relying on paths or credentials.
+
+  </TabItem>
+  <TabItem label="Streamable HTTP">
+
+```ts
+const remoteServer = defineMcpServer({
+  name: "billing",
+  transport: {
+    type: "streamable-http",
+    url: new URL("https://billing.example.com/mcp"),
+    headers: { Authorization: `Bearer ${process.env.BILLING_MCP_TOKEN}` },
+  },
+})
+```
+
+The URL must use `http:` or `https:`. A `URL` input is normalized to text. AML snapshots the headers, but the server and selected Agent provider still own authentication, connection, discovery, and request behavior.
+
+  </TabItem>
+</Tabs>
+
+## Capture and immutability
+
+AML reads the authority-bearing `name` and `transport` fields once, validates the selected transport, copies its arrays and records, and freezes the normalized descriptor. Later mutation of the original input does not change the server definition.
+
+The descriptor carries an AML-owned identity. Construct it with `defineMcpServer()` rather than manually casting a structurally similar object.
+
+## Failure boundary
+
+Definition fails before evaluation when:
+
+- the options, transport, or required fields are not readable;
+- the name, command, arguments, working directory, environment, URL, or headers are invalid;
+- the transport type is not `stdio` or `streamable-http`;
+- a Streamable HTTP URL is not absolute HTTP(S).
+
+Connection, authentication, unsupported-transport, server-discovery, and tool-call failures happen later at the Agent provider boundary.
+
+<Aside type="caution" title="Configuration can contain authority">
+  Treat stdio environment values and HTTP headers as secrets-bearing deployment configuration. Do not put credentials in
+  prompts, Workspace files, committed source, or captured trace content.
+</Aside>
+
+## Related documentation
+
+- [`<Mcp />`](/docs/reference/primitives/mcp/)
+- [Connect an MCP server](/docs/cookbook/mcp/)
+- [Choose between a Tool and MCP](/docs/cookbook/tool-or-mcp/)
+- [Agent provider compatibility](/docs/providers/agents/)

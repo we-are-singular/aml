@@ -27,7 +27,7 @@ cloudflare/sandbox@sha256:c34f783dcf456a135d8e5a1fdfd060001a133f304f9a3f556a4afa
 
 AML verification on 2026-08-10 confirmed that the `linux/amd64` image starts with an overridden shell entrypoint and contains `sh`, `tar`, `mkdir`, `rm`, Git, Node.js, and `/usr/local/bin/opencode`. The installed OpenCode version was `1.18.15`, and `opencode acp --help` completed successfully.
 
-That makes it the current recommended **starting image for `opencodeAgent()` with `dockerSandbox()`**. It proves executable-level compatibility, not model credentials, network policy, project dependencies, Docker hardening, or a successful live model session.
+That makes it the current recommended **starting image for [`opencodeAgent()`](/docs/providers/agents/opencode/) with [`dockerSandbox()`](/docs/providers/sandboxes/docker/)**. It proves executable-level compatibility, not model credentials, network policy, project dependencies, Docker hardening, or a successful live model session.
 
 ```tsx
 import { AmlRuntime, dockerSandbox, localWorkspace, opencodeAgent } from "@aml-jsx/sdk"
@@ -75,7 +75,7 @@ RUN npm install --global \
     && codex --version
 ```
 
-Build this in your own registry, add the project toolchain and non-root/security policy your deployment needs, then pass the pinned tag or digest to `dockerSandbox()` or `modalSandbox()`. The versions above match AML's current Codex provider verification baseline; changing them requires another compatibility pass.
+Build this in your own registry, add the project toolchain and non-root/security policy your deployment needs, then pass the pinned tag or digest to [`dockerSandbox()`](/docs/providers/sandboxes/docker/) or [`modalSandbox()`](/docs/providers/sandboxes/modal/). The versions above match AML's current Codex provider verification baseline; changing them requires another compatibility pass.
 
 Do not bake `OPENAI_API_KEY`, Codex home state, or repository credentials into an image layer. Inject credentials when the Sandbox starts and keep Codex's invocation state in the writable directory AML prepares for the session.
 

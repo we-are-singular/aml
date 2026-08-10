@@ -31,11 +31,11 @@ AML owns evaluation and composition. The adapter owns every vendor-specific reso
 
 ## Three independent extension points
 
-| Provider      | Receives                                                                        | Produces                                        | Owns until completion                                                          |
-| ------------- | ------------------------------------------------------------------------------- | ----------------------------------------------- | ------------------------------------------------------------------------------ |
-| **Agent**     | One assembled session request and evaluation context                            | A final text or structured response             | Model/harness session, ordered turns, protocol clients, and invocation cleanup |
-| **Sandbox**   | Logical root, cwd, access, cancellation, and optional Workspace materialization | An opaque lease with a portable command runtime | Ephemeral environment, process transport, path mapping, and release            |
-| **Workspace** | Durable id, load/save policy, lock preference, and cancellation                 | A lease over one materialized directory         | Materialization, writer authority, revision publication, and release           |
+| Provider                                                     | Receives                                                                        | Produces                                        | Owns until completion                                                          |
+| ------------------------------------------------------------ | ------------------------------------------------------------------------------- | ----------------------------------------------- | ------------------------------------------------------------------------------ |
+| **[`<Agent />`](/docs/reference/primitives/agent/)**         | One assembled session request and evaluation context                            | A final text or structured response             | Model/harness session, ordered turns, protocol clients, and invocation cleanup |
+| **[`<Sandbox />`](/docs/reference/primitives/sandbox/)**     | Logical root, cwd, access, cancellation, and optional Workspace materialization | An opaque lease with a portable command runtime | Ephemeral environment, process transport, path mapping, and release            |
+| **[`<Workspace />`](/docs/reference/primitives/workspace/)** | Durable id, load/save policy, lock preference, and cancellation                 | A lease over one materialized directory         | Materialization, writer authority, revision publication, and release           |
 
 These boundaries compose but do not collapse into one generic provider:
 
@@ -64,7 +64,7 @@ const sandboxProvider = dockerSandbox({
 const runtime = new AmlRuntime({ sandboxProvider })
 ```
 
-The image name and output budget belong to `dockerSandbox()`. They do not become generic `<Sandbox />` props because Daytona, Modal, Local, and future providers do not share one honest configuration surface.
+The image name and output budget belong to [`dockerSandbox()`](/docs/providers/sandboxes/docker/). They do not become generic `<Sandbox />` props because Daytona, Modal, Local, and future providers do not share one honest configuration surface.
 
 <Aside type="note" title="Portable policy, provider-specific mechanism">
   Components express portable intent such as Sandbox access, Workspace save policy, Agent permissions, and model

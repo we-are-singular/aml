@@ -6,7 +6,7 @@ description: Run AML evaluations with explicit limits, cancellation, persistence
 Production operations should treat an AML evaluation as a resource lifecycle, not just a Promise that returns text.
 
 ```text
-acquire Workspace → acquire Sandbox → run Agent / Script
+acquire <Workspace /> → acquire <Sandbox /> → run <Agent /> / <Script />
        → reconcile remote changes → save revision
        → release Sandbox → release Workspace
 ```
@@ -15,7 +15,7 @@ Any stage can fail. The original failure and cleanup failures may both matter, a
 
 ## Limits and deadlines
 
-`AmlRuntime` defaults to `maxAgentCalls: 32`, `maxConcurrentAgents: 4`, `maxDepth: 16`, `maxStateTransitions: 16`, and `maxTurnsPerAgent: 16`. Set these based on the workflow and expose the effective values in deployment configuration. A zero value disables the corresponding limit; do that only intentionally.
+[`AmlRuntime`](/docs/reference/runtime/) defaults to `maxAgentCalls: 32`, `maxConcurrentAgents: 4`, `maxDepth: 16`, and `maxTurnsPerAgent: 16`. Set these based on the workflow and expose the effective values in deployment configuration. A zero value disables the corresponding limit; do that only intentionally.
 
 ```ts
 import { AmlRuntime } from "@aml-jsx/sdk"
@@ -24,7 +24,6 @@ const runtime = new AmlRuntime({
   maxAgentCalls: 12,
   maxConcurrentAgents: 2,
   maxDepth: 12,
-  maxStateTransitions: 8,
   maxTurnsPerAgent: 6,
 })
 ```

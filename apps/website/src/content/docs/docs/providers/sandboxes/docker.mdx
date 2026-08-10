@@ -38,7 +38,7 @@ The image must already contain everything the workflow needs:
 
 - a usable `sh` entrypoint because AML starts a keepalive shell and runs setup through `sh -lc`;
 - `mkdir`, `rm`, and the normal process utilities used by the image and Agent;
-- the selected ACP Agent executable and its runtime, if `<Agent />` is nested in `<Sandbox />`;
+- the selected ACP Agent executable and its runtime, if [`<Agent />`](/docs/reference/primitives/agent/) is nested in [`<Sandbox />`](/docs/reference/primitives/sandbox/);
 - the Agent’s model/provider configuration mechanism or client dependencies;
 - project dependencies needed by commands;
 - a user that can read `/workspace` and write there when the Workspace is mounted read-write.
@@ -78,7 +78,7 @@ await runtime.evaluate(
 console.log(await readFile(join(directory, "output.txt"), "utf8"))
 ```
 
-For a real Agent, replace the image with one that contains the ACP executable and use the corresponding Agent provider inside the same `<Sandbox />`. Do not use a public tutorial image as evidence that your Agent/Sandbox pair is deployable.
+For a real Agent, replace the image with one that contains the ACP executable and use the corresponding Agent provider inside the same [`<Sandbox />`](/docs/reference/primitives/sandbox/). Do not use a public tutorial image as evidence that your Agent/Sandbox pair is deployable.
 
 ## Lifecycle
 
@@ -126,7 +126,7 @@ Treat the Docker daemon and selected image as part of your security boundary. Pi
 
 ## References
 
-- [Sandbox provider overview](./)
+- [Sandbox provider overview](/docs/providers/sandboxes/)
 - [Docker’s security documentation](https://docs.docker.com/engine/security/)
 - [Docker image and container reference](https://docs.docker.com/reference/)
 - [AML Docker provider implementation](https://github.com/we-are-singular/aml/blob/main/providers/sandboxes/docker/src/docker-sandbox.ts)

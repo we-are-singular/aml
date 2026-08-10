@@ -11,9 +11,9 @@ import { Aside, Badge, Steps } from "@astrojs/starlight/components"
 
 Turn a model-shaped routing proposal into bounded local work without allowing the proposal to select an arbitrary directory:
 
-1. an Agent returns a schema-validated route record;
+1. an [`<Agent />`](/docs/reference/primitives/agent/) returns a schema-validated route record;
 2. ordinary application code validates category, resolves the approved root and candidate, and enforces canonical containment;
-3. only after those checks does the application construct `localWorkspace()` and run a handoff `<Agent />` inside `<Workspace />`.
+3. only after those checks does the application construct [`localWorkspace()`](/docs/providers/workspaces/local/) and run a handoff [`<Agent />`](/docs/reference/primitives/agent/) inside [`<Workspace />`](/docs/reference/primitives/workspace/).
 
 The example uses deterministic Agent providers, so it needs no credentials or network access. It does require an existing playbook directory with an `account-access` subdirectory. The route record is deliberately a proposal, not an authorization decision.
 
@@ -173,6 +173,6 @@ If the route points outside the canonical root, resolves to the root itself, or 
 - [Local Workspace provider](/docs/providers/workspaces/local/)
 - [Workspace provider contracts](/docs/providers/workspaces/)
 - [Workspace provider boundary](/docs/reference/providers/#workspace)
-- [`evaluate` implementation](https://github.com/we-are-singular/aml/blob/main/sdk/src/core/evaluate.ts)
+- [`evaluate()`](/docs/reference/runtime/#component-local-evaluation)
 - [Maintained routing example](https://github.com/we-are-singular/aml/blob/main/examples/src/integrations/workspace-routing.tsx)
 - Adapted from the local editorial source `marketing/examples/007-structured-routing.md`; the public contract is verified against the maintained routing example and provider references above.

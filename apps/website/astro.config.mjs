@@ -154,6 +154,7 @@ export default defineConfig({
             {
               label: "Core workflows",
               items: [
+                { slug: "docs/cookbook/testing" },
                 { slug: "docs/cookbook/code-review-workflow" },
                 { slug: "docs/cookbook/structured-output" },
                 { slug: "docs/cookbook/follow-up-editorial-passes" },
@@ -206,6 +207,8 @@ export default defineConfig({
               label: "Runtime and extension APIs",
               items: [
                 { slug: "docs/reference/runtime" },
+                { slug: "docs/reference/mcp-server" },
+                { slug: "docs/reference/testing" },
                 { slug: "docs/reference/providers" },
                 { slug: "docs/reference/provider-authoring" },
               ],

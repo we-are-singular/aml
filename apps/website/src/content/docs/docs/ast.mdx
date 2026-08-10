@@ -7,11 +7,11 @@ import { Aside, Card, CardGrid, TabItem, Tabs } from "@astrojs/starlight/compone
 
 AML has three distinct stages. Keeping them separate prevents a common mistake: treating authored JSX as if it were already a provider request.
 
-| Stage             | What exists                                                           | What it does not do                                         |
-| ----------------- | --------------------------------------------------------------------- | ----------------------------------------------------------- |
-| Authoring         | TypeScript/TSX expressions and component functions                    | It does not contact a provider just because JSX was written |
-| Node construction | Immutable `AmlNode` descriptors produced by the automatic JSX runtime | It does not invoke the component function                   |
-| Evaluation        | `AmlRuntime` normalizes values and executes runtime-owned primitives  | It does not render DOM or accept unknown intrinsic elements |
+| Stage             | What exists                                                                                      | What it does not do                                         |
+| ----------------- | ------------------------------------------------------------------------------------------------ | ----------------------------------------------------------- |
+| Authoring         | TypeScript/TSX expressions and component functions                                               | It does not contact a provider just because JSX was written |
+| Node construction | Immutable AML JSX descriptors produced by the automatic JSX runtime                              | It does not invoke the component function                   |
+| Evaluation        | [`AmlRuntime`](/docs/reference/runtime/) normalizes values and executes runtime-owned primitives | It does not render DOM or accept unknown intrinsic elements |
 
 ## Authored JSX is ordinary TypeScript
 
@@ -54,7 +54,7 @@ The evaluator accepts these renderable values:
 
 - strings and numbers, which become text;
 - `null`, `undefined`, and booleans, which contribute no output;
-- `AmlNode` values, which are evaluated by their component type;
+- AML JSX descriptors, which are evaluated by their component type;
 - promises, which are awaited;
 - arrays, which are flattened in authored order;
 - fragments, which group children without creating a runtime resource boundary.
@@ -70,21 +70,17 @@ Unknown objects, DOM-like intrinsic elements, cyclic arrays, and cyclic nodes ar
 
 Built-in primitive components are marked for special evaluation. They are not ordinary components that merely return a string.
 
-| Primitive                                                                                                                                                                                                                                                   | Status     | Owner               | Meaning                                                                     |
-| ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------- | ------------------- | --------------------------------------------------------------------------- |
-| [`<Agent />`](/docs/reference/primitives/agent/)                                                                                                                                                                                                            | Stable     | Agent executor      | Collects a request plan and runs a provider session.                        |
-| [`<System />`](/docs/reference/primitives/system/), [`<Tool />`](/docs/reference/primitives/tool/), [`<Mcp />`](/docs/reference/primitives/mcp/), [`<Skill />`](/docs/reference/primitives/skill/), [`<FollowUp />`](/docs/reference/primitives/follow-up/) | Stable     | nearest `<Agent />` | Adds typed data to one `<Agent />` plan.                                    |
-| [`<Sandbox />`](/docs/reference/primitives/sandbox/)                                                                                                                                                                                                        | Stable     | Sandbox evaluator   | Acquires and narrows an execution lease.                                    |
-| [`<Script />`](/docs/reference/primitives/script/)                                                                                                                                                                                                          | Stable     | Sandbox runtime     | Runs one literal command or shell source in the active Sandbox.             |
-| [`<Workspace />`](/docs/reference/primitives/workspace/)                                                                                                                                                                                                    | Stable     | Workspace evaluator | Materializes and publishes durable files.                                   |
-| [`<File />`](/docs/reference/primitives/file/)                                                                                                                                                                                                              | Stable     | Workspace evaluator | Writes resolved text through the active Workspace.                          |
-| [`<>…</>`](/docs/reference/primitives/fragment/)                                                                                                                                                                                                            | Stable     | JSX runtime         | Groups authored values without adding another boundary.                     |
-| `<Loop />`                                                                                                                                                                                                                                                  | Evaluating | Loop evaluator      | Repeats fresh `<Agent />` components over schema-validated state snapshots. |
-| `<Context.Provider />`                                                                                                                                                                                                                                      | Evaluating | Context registry    | Provides an immutable application dependency lexically.                     |
+| Primitive                                                                                                                                                                                                                                                   | Status | Owner               | Meaning                                                         |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ | ------------------- | --------------------------------------------------------------- |
+| [`<Agent />`](/docs/reference/primitives/agent/)                                                                                                                                                                                                            | Stable | Agent executor      | Collects a request plan and runs a provider session.            |
+| [`<System />`](/docs/reference/primitives/system/), [`<Tool />`](/docs/reference/primitives/tool/), [`<Mcp />`](/docs/reference/primitives/mcp/), [`<Skill />`](/docs/reference/primitives/skill/), [`<FollowUp />`](/docs/reference/primitives/follow-up/) | Stable | nearest `<Agent />` | Adds typed data to one `<Agent />` plan.                        |
+| [`<Sandbox />`](/docs/reference/primitives/sandbox/)                                                                                                                                                                                                        | Stable | Sandbox evaluator   | Acquires and narrows an execution lease.                        |
+| [`<Script />`](/docs/reference/primitives/script/)                                                                                                                                                                                                          | Stable | Sandbox runtime     | Runs one literal command or shell source in the active Sandbox. |
+| [`<Workspace />`](/docs/reference/primitives/workspace/)                                                                                                                                                                                                    | Stable | Workspace evaluator | Materializes and publishes durable files.                       |
+| [`<File />`](/docs/reference/primitives/file/)                                                                                                                                                                                                              | Stable | Workspace evaluator | Writes resolved text through the active Workspace.              |
+| [`<>…</>`](/docs/reference/primitives/fragment/)                                                                                                                                                                                                            | Stable | JSX runtime         | Groups authored values without adding another boundary.         |
 
 Placement is part of the contract. For example, `<Tool />` and `<Mcp />` are valid only inside `<Agent />`, `<Script />` requires `<Sandbox />`, and `<File />` requires `<Workspace />` and cannot be nested inside `<Sandbox />`.
-
-`<Loop />`, `<Context.Provider />`, `createContext()`, and `useContext()` are implemented and exported for evaluation, but the project does not yet treat them as stable release-ready contracts. They are excluded from the [eleven stable primitives](/docs/reference/primitives/).
 
 ## Post-order consumers versus lexical scopes
 
@@ -118,7 +114,7 @@ The actual runtime uses an explicit frame stack rather than relying on JavaScrip
 
 ## Component-local `evaluate()`
 
-`evaluate()` is only valid while an AML function component is active. It evaluates another value in the current domain and returns its text, or validates one `<Agent />` result against a Standard Schema-compatible schema:
+[`evaluate()`](/docs/reference/runtime/#component-local-evaluation) is only valid while an AML function component is active. It evaluates another value in the current domain and returns its text, or validates one [`<Agent />`](/docs/reference/primitives/agent/) result against a Standard Schema-compatible schema:
 
 ```tsx
 import { Agent, evaluate } from "@aml-jsx/sdk"

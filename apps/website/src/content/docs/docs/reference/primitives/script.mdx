@@ -3,7 +3,7 @@ title: "<Script />"
 description: Execute one literal command or resolved shell source through the active Sandbox runtime.
 ---
 
-`<Script />` runs authored execution through its enclosing [`<Sandbox />`](../sandbox/). AML never falls back to a host child process when no `<Sandbox />` exists.
+`<Script />` runs authored execution through its enclosing [`<Sandbox />`](/docs/reference/primitives/sandbox/). AML never falls back to a host child process when no `<Sandbox />` exists.
 
 ```tsx
 import { AmlRuntime, Sandbox, Script } from "@aml-jsx/sdk"
@@ -46,6 +46,6 @@ Both forms accept `timeoutMs`, which must be a positive safe integer. `args` is 
 
 Successful standard output becomes AML text for later composition. A non-zero exit code rejects with `EvaluationError` and includes trimmed stderr detail when available. The provider owns output bounds, process termination, and the exact meaning of timeout and cancellation.
 
-Generated source is still executable authority. If [`<Agent />`](../agent/) produces the children of `<Script />`, treat that output as untrusted and select an enforcing Sandbox with tight credentials, filesystem access, network policy, and resource limits.
+Generated source is still executable authority. If [`<Agent />`](/docs/reference/primitives/agent/) produces the children of `<Script />`, treat that output as untrusted and select an enforcing Sandbox with tight credentials, filesystem access, network policy, and resource limits.
 
 See the [generated diagnostic recipe](/docs/cookbook/generated-diagnostic/) and the [Sandbox provider guides](/docs/providers/sandboxes/).

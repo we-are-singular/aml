@@ -23,7 +23,7 @@ import ProviderHero from "../../../../../components/docs/ProviderHero.astro"
 - acquisition resolves symlinks and requires an existing directory;
 - writes are visible immediately in that directory;
 - `save()` does not copy, archive, or publish anything;
-- use `filesystemWorkspace()` or `s3Workspace()` for revisions and restore-by-id.
+- use [`filesystemWorkspace()`](/docs/providers/workspaces/filesystem/) or [`s3Workspace()`](/docs/providers/workspaces/s3/) for revisions and restore-by-id.
 
 The logical `<Workspace />` `id` labels the evaluation. It does not select a child directory. Two local providers targeting the same physical directory compete for the same lock.
 

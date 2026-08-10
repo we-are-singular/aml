@@ -7,7 +7,7 @@ import { Aside, Badge, Card, CardGrid, LinkCard, Steps } from "@astrojs/starligh
 
 <Badge text="Operations runbook" variant="caution" /> <Badge text="Provider-specific" />
 
-This page is a compact response guide for failures after an AML evaluation starts. First preserve the original error, evaluation id, Workspace id, provider names, and timestamps. Then classify the incident before changing locks, containers, remote Sandboxes, or revisions.
+This page is a compact response guide for failures after an AML evaluation starts. First preserve the original error, evaluation id, [`<Workspace />`](/docs/reference/primitives/workspace/) id, provider names, and timestamps. Then classify the incident before changing locks, containers, remote [`<Sandbox />`](/docs/reference/primitives/sandbox/) instances, or revisions.
 
 ## Failure decision tree
 
@@ -194,7 +194,7 @@ Trace events are discriminated: `span.end` has `status` and `durationMs`; point 
   />
 </CardGrid>
 
-- [`WorkspaceConflictError`](https://github.com/we-are-singular/aml/blob/main/sdk/src/components/workspace/workspace-conflict-error.ts)
+- [`WorkspaceConflictError`](/docs/errors/#public-aml-error-classes)
 - [`WorkspaceEvaluator`](https://github.com/we-are-singular/aml/blob/main/sdk/src/components/workspace/workspace-evaluator.ts)
 - [`DockerSandboxProvider`](https://github.com/we-are-singular/aml/blob/main/providers/sandboxes/docker/src/docker-sandbox.ts)
 - [`DaytonaSandboxProvider`](https://github.com/we-are-singular/aml/blob/main/providers/sandboxes/daytona/src/daytona-sandbox.ts)
@@ -202,5 +202,4 @@ Trace events are discriminated: `span.end` has `status` and `durationMs`; point 
 - [`FilesystemWorkspaceStorage`](https://github.com/we-are-singular/aml/blob/main/providers/workspaces/local/src/filesystem-workspace.ts)
 - [`LocalWorkspaceProvider`](https://github.com/we-are-singular/aml/blob/main/providers/workspaces/local/src/local-workspace.ts)
 - [`S3WorkspaceLock`](https://github.com/we-are-singular/aml/blob/main/providers/workspaces/s3/src/s3-workspace-lock.ts)
-- [`TraceSink`](https://github.com/we-are-singular/aml/blob/main/sdk/src/observability/trace-sink.ts)
-- [`Trace event types`](https://github.com/we-are-singular/aml/blob/main/sdk/src/observability/trace-event.ts)
+- [`TraceSink` and trace event types](/docs/observability/)

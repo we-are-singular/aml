@@ -3,7 +3,7 @@ title: Security model
 description: Understand AML’s trust boundaries, capability scopes, credentials, and provider-specific limitations.
 ---
 
-AML composes capabilities; it does not turn arbitrary model output into a trusted program. Security comes from the boundary around the application, the selected Sandbox platform, the Workspace contents, provider credentials, and the effects exposed through Tools and MCP.
+AML composes capabilities; it does not turn arbitrary model output into a trusted program. Security comes from the boundary around the application, the selected [`<Sandbox />`](/docs/reference/primitives/sandbox/) platform, [`<Workspace />`](/docs/reference/primitives/workspace/) contents, provider credentials, and the effects exposed through [`<Tool />`](/docs/reference/primitives/tool/) and [`<Mcp />`](/docs/reference/primitives/mcp/).
 
 ## Threat boundaries
 
@@ -49,7 +49,7 @@ Do not put API keys in `system`, Agent prompts, `<File />` contents, `setup`, co
 
 ## Capability scope
 
-`allowedTools` and `allowedMcpServers` on `AmlRuntime` are exact-name allowlists. A Tool is trusted application code, not a shell alias, and its input is validated against the generated JSON Schema before the function executes. `<Tool />` components are scoped to the `<Agent />` where they are declared; they are not inherited by child `<Agent />` components.
+`allowedTools` and `allowedMcpServers` on [`AmlRuntime`](/docs/reference/runtime/) are exact-name allowlists. A [`<Tool />`](/docs/reference/primitives/tool/) is trusted application code, not a shell alias, and its input is validated against the generated JSON Schema before the function executes. `<Tool />` components are scoped to the `<Agent />` where they are declared; they are not inherited by child `<Agent />` components.
 
 ```tsx
 import { Agent, AmlRuntime, Tool, createConsoleTracer, defineTool } from "@aml-jsx/sdk"

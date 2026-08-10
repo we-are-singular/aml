@@ -9,7 +9,7 @@ import { Aside, Badge, Steps } from "@astrojs/starlight/components"
 
 ## Goal
 
-Use one Agent session to turn application-supplied notes into an internal FAQ through three authored turns:
+Use one [`<Agent />`](/docs/reference/primitives/agent/) session to turn application-supplied notes into an internal FAQ through three authored turns:
 
 1. draft an outline;
 2. challenge unsupported claims and missing prerequisites;
@@ -23,7 +23,7 @@ This is useful when the sequence is fixed and the provider may own the conversat
 - no credentials or network access for this deterministic example;
 - an application-owned source packet. The example includes deliberately untrusted notes to make the data boundary visible.
 
-For a live version, replace the deterministic provider with `opencodeAgent({})`, `codexAgent({})`, or `piAgent({})` and configure the provider's executable and credentials. The FollowUp contract remains the same, but the exact final prose becomes provider- and model-dependent.
+For a live version, replace the deterministic provider with [`opencodeAgent({})`](/docs/providers/agents/opencode/), [`codexAgent({})`](/docs/providers/agents/codex/), or [`piAgent({})`](/docs/providers/agents/pi/) and configure the provider's executable and credentials. The [`<FollowUp />`](/docs/reference/primitives/follow-up/) contract remains the same, but the exact final prose becomes provider- and model-dependent.
 
 ## Complete source
 
@@ -99,16 +99,18 @@ The important observable behavior is session shape: the provider receives one in
 <Steps>
 
 1. `<FollowUp />` contributes one static later input to its nearest containing `<Agent />` session. FollowUps are flat and retain declaration order.
-2. AML resolves the complete Agent plan before opening the provider session. The provider sends the initial input and later inputs sequentially while owning the intervening conversation history.
+2. AML resolves the complete [`<Agent />`](/docs/reference/primitives/agent/) plan before opening the provider session. The provider sends the initial input and later inputs sequentially while owning the intervening conversation history.
 3. The final response is the result of the last successful turn. Source notes and model responses remain data; AML does not interpret them as AML or execute instructions found inside them.
 4. If the host must inspect, validate, or branch on an intermediate result, stop using one static `<FollowUp />` chain and create separate `<Agent />` evaluations with an ordinary TypeScript data boundary.
 
 </Steps>
 
 <Aside type="note" title="FollowUp is not a dynamic loop">
-  You cannot await the outline inside this same `<Agent />` and then decide whether to append `<FollowUp />
-  `. Host-side branching requires a separate component-local `evaluate()` boundary targeting a new `<Agent />
-  `, after which application code can validate the returned value and author the next `<Agent />` tree.
+  You cannot await the outline inside this same <code>&lt;Agent /&gt;</code> and then decide whether to append
+  <code>&lt;FollowUp /&gt;</code>. Host-side branching requires a separate component-local `evaluate()` boundary
+  targeting a new <code>&lt;Agent /&gt;</code>, after which application code can validate the returned value and author
+  the next
+  <code>&lt;Agent /&gt;</code> tree.
 </Aside>
 
 ## Failure, security, and cancellation notes
@@ -132,7 +134,7 @@ The important observable behavior is session shape: the provider receives one in
 - [Agent provider boundary](/docs/reference/providers/#agent)
 - [FollowUp and runtime reference](/docs/reference/runtime/)
 - [Agent providers](/docs/providers/agents/)
-- [`<FollowUp />` implementation](https://github.com/we-are-singular/aml/blob/main/sdk/src/components/follow-up/follow-up.tsx)
+- [`<FollowUp />`](/docs/reference/primitives/follow-up/)
 - [Maintained FollowUp example](https://github.com/we-are-singular/aml/blob/main/examples/src/core/follow-up.tsx)
 - [FollowUp specification](https://github.com/we-are-singular/aml/blob/main/SPEC.md#6-followup)
 - Adapted from the local editorial source `marketing/examples/012-deliberate-editorial-passes.md`; the public contract is verified against the implementation and specification links above.

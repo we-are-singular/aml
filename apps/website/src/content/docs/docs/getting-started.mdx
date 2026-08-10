@@ -5,7 +5,7 @@ description: Install AML and resolve a credential-free workflow before connectin
 
 import { Aside, Card, CardGrid, Steps, TabItem, Tabs } from "@astrojs/starlight/components"
 
-This guide gives you a deterministic first success: no API key, ACP executable, Docker daemon, or remote account required. The main path shows an application-owned `AmlRuntime`; an optional CLI path then runs an exported tree without application glue. You will finally swap in a real Agent provider without changing the authored AML tree.
+This guide gives you a deterministic first success: no API key, ACP executable, Docker daemon, or remote account required. The main path shows an application-owned [`AmlRuntime`](/docs/reference/runtime/); an optional CLI path then runs an exported tree without application glue. You will finally swap in a real [Agent provider](/docs/providers/agents/) without changing the authored AML tree.
 
 ## Prerequisites
 
@@ -126,13 +126,13 @@ Resolved: Explain what AML evaluates.
 
 1. JSX creates an AML node tree; it does not run `<Agent />` during rendering.
 2. `AmlRuntime.evaluate()` validates and resolves the tree.
-3. `<Agent />` builds a normalized request from its system text, prompt, capabilities, and effective scopes.
+3. [`<Agent />`](/docs/reference/primitives/agent/) builds a normalized request from its system text, prompt, capabilities, and effective scopes.
 4. The selected provider returns an `AgentResponse`; the runtime returns its text from the root.
 5. The runtime releases acquired resources in reverse order.
 
 </Steps>
 
-The deterministic provider deliberately echoes a known result and records calls. It is part of the public testing entrypoint, making it useful for tutorials, examples, and workflow tests—not just AML's own test suite.
+The [`DeterministicAgentProvider`](/docs/reference/testing/#deterministicagentprovider) deliberately echoes a known result and records calls. It is part of the public testing entrypoint, making it useful for tutorials, examples, and workflow tests—not just AML's own test suite.
 
 ### Run the same tree with the CLI
 
@@ -142,7 +142,7 @@ The application above constructs `AmlRuntime` because it owns the process. For a
 npm install --save-dev @aml-jsx/cli
 ```
 
-Create `src/cli-workflow.tsx`. Put the provider directly on `<Agent />`, export the tree, and let the CLI create and instrument the runtime:
+Create `src/cli-workflow.tsx`. Put the provider directly on [`<Agent />`](/docs/reference/primitives/agent/), export the tree, and let the CLI create and instrument the runtime:
 
 ```tsx title="src/cli-workflow.tsx"
 import { Agent } from "@aml-jsx/sdk"
@@ -292,7 +292,7 @@ This follows the repository smoke path with an OpenAI-backed model. If you selec
 
 ## 4. Add files and command execution
 
-`<File />` requires `<Workspace />`, and `<Script />` requires `<Sandbox />`. This example creates a fresh temporary directory so it cannot overwrite your repository.
+[`<File />`](/docs/reference/primitives/file/) requires [`<Workspace />`](/docs/reference/primitives/workspace/), and [`<Script />`](/docs/reference/primitives/script/) requires [`<Sandbox />`](/docs/reference/primitives/sandbox/). This example creates a fresh temporary directory so it cannot overwrite your repository.
 
 ```tsx title="src/resources.tsx"
 import { mkdtemp } from "node:fs/promises"
@@ -319,9 +319,9 @@ console.log(output)
 ```
 
 <Aside type="danger" title="Local Sandbox is trusted host execution">
-  `localSandbox()` starts ordinary host processes with your application's privileges. AML validates logical Workspace
-  paths, but it does not isolate the process, environment, network, or host filesystem. Use only trusted commands and
-  read the [Sandbox security guidance](/docs/production/security/).
+  [`localSandbox()`](/docs/providers/sandboxes/local/) starts ordinary host processes with your application's
+  privileges. AML validates logical Workspace paths, but it does not isolate the process, environment, network, or host
+  filesystem. Use only trusted commands and read the [Sandbox security guidance](/docs/production/security/).
 </Aside>
 
 ## Where to go next

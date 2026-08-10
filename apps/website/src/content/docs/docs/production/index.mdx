@@ -9,15 +9,15 @@ This section is a set of production guidance pages, not a generic security certi
 
 ## Choose the right page
 
-| You need to…                                                 | Read                                                                                             |
-| ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------ |
-| establish a threat model and protect credentials             | [Security](./security/)                                                                          |
-| package AML into a service, worker, or job                   | [Deployment](./deployment/)                                                                      |
-| operate retries, cancellation, locks, and traces             | [Operations](./operations/)                                                                      |
-| diagnose a live cleanup, lock, publication, or trace failure | [Incident response](./incident-response/)                                                        |
-| understand the provider-specific trade-offs                  | [Sandbox providers](../providers/sandboxes/) and [Workspace providers](../providers/workspaces/) |
-| understand how AML provider adapters are structured          | [Provider engineering](../provider-authoring/)                                                   |
-| implement a new adapter against the public TypeScript API    | [Provider authoring reference](/docs/reference/provider-authoring/)                              |
+| You need to…                                                 | Read                                                                                                   |
+| ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------ |
+| establish a threat model and protect credentials             | [Security](/docs/production/security/)                                                                 |
+| package AML into a service, worker, or job                   | [Deployment](/docs/production/deployment/)                                                             |
+| operate retries, cancellation, locks, and traces             | [Operations](/docs/production/operations/)                                                             |
+| diagnose a live cleanup, lock, publication, or trace failure | [Incident response](/docs/production/incident-response/)                                               |
+| understand the provider-specific trade-offs                  | [Sandbox providers](/docs/providers/sandboxes/) and [Workspace providers](/docs/providers/workspaces/) |
+| understand how AML provider adapters are structured          | [Provider engineering](/docs/provider-authoring/)                                                      |
+| implement a new adapter against the public TypeScript API    | [Provider authoring reference](/docs/reference/provider-authoring/)                                    |
 
 ## The production topology
 
@@ -102,7 +102,7 @@ try {
 }
 ```
 
-This is a wiring example, not a claim that the image or credentials are ready. The image must contain the selected ACP executable and its dependencies; the object-storage identity must have the permissions required by the [S3 Workspace](../providers/workspaces/s3/) protocol; and the application must decide whether model-generated actions are trusted.
+This is a wiring example, not a claim that the image or credentials are ready. The image must contain the selected ACP executable and its dependencies; the object-storage identity must have the permissions required by the [S3 Workspace](/docs/providers/workspaces/s3/) protocol; and the application must decide whether model-generated actions are trusted.
 
 ## Readiness gates
 
@@ -119,17 +119,17 @@ Before production traffic, verify each gate with the exact provider combination 
 
 The current providers are shipped built-ins in a pre-stable SDK. “Built-in” does not mean every combination has identical capabilities or that a vendor environment is continuously certified. Check the provider pages for requirements and compatibility:
 
-- [Agent providers](../providers/agents/) use ACP for the built-in coding-agent integrations.
-- [Sandbox providers](../providers/sandboxes/) differ in read-only behavior, transfer semantics, cancellation, and deployment-owned security posture.
-- [Workspace providers](../providers/workspaces/) differ in direct materialization versus revision-backed persistence.
+- [Agent providers](/docs/providers/agents/) use ACP for the built-in coding-agent integrations.
+- [Sandbox providers](/docs/providers/sandboxes/) differ in read-only behavior, transfer semantics, cancellation, and deployment-owned security posture.
+- [Workspace providers](/docs/providers/workspaces/) differ in direct materialization versus revision-backed persistence.
 
 Treat a provider combination as production-ready only after exercising its actual image, credentials, network, filesystem, and failure paths. An adapter that passes structural validation has proved its API shape; it has not proved vendor availability, credentials, or a hostile-code threat model. The [compatibility guide](/docs/compatibility/) defines the narrower evidence labels used throughout these docs.
 
 ## Related concepts
 
-- [AML evaluation model](../concepts/)
-- [Runtime limits and errors](../runtime/)
-- [Observability](../observability/)
+- [AML evaluation model](/docs/concepts/)
+- [Runtime limits and errors](/docs/runtime/)
+- [Observability](/docs/observability/)
 - [Incident response](/docs/production/incident-response/)
 - [Provider engineering](/docs/provider-authoring/)
 - [Provider authoring reference](/docs/reference/provider-authoring/)
