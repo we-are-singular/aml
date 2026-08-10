@@ -53,19 +53,8 @@ export async function updateChangelogDocument({
 }
 
 async function validateDraft(repoRoot: string, draft: ChangelogDraft): Promise<void> {
-  assertSingleLine(draft.title, "Changelog title")
-  assertParagraph(draft.summary, "Changelog summary")
-
-  if (draft.highlights.length === 0) {
-    throw new TypeError("Changelog draft must contain at least one highlight")
-  }
-
   for (const [index, highlight] of draft.highlights.entries()) {
-    assertSingleLine(highlight.title, `Highlight ${index + 1} title`)
-    assertParagraph(highlight.details, `Highlight ${index + 1} details`)
-
     for (const link of highlight.links) {
-      assertSingleLine(link.label, `Highlight ${index + 1} link label`)
       await validateDocsLink(repoRoot, link.href)
     }
   }
@@ -159,23 +148,6 @@ function replaceEntry(current: string, entry: string, lane: ReleaseLane, version
 
 function entryMarker(lane: ReleaseLane, version: string, edge: "end" | "start"): string {
   return `{/* changelog:${lane}:v${version}:${edge} */}`
-}
-
-function assertSingleLine(value: string, label: string): void {
-  if (value.trim().length === 0 || value !== value.trim() || /[\r\n<>{}]/.test(value)) {
-    throw new TypeError(`${label} must be one non-empty normalized line`)
-  }
-}
-
-function assertParagraph(value: string, label: string): void {
-  if (
-    value.trim().length === 0 ||
-    value !== value.trim() ||
-    /[<>{}]/.test(value) ||
-    /(?:^|\n)\s*(?:#|---|\{\/\*)/.test(value)
-  ) {
-    throw new TypeError(`${label} must be normalized prose without MDX structure`)
-  }
 }
 
 function normalizeMdxCommitList(value: string): string {

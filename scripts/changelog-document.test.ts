@@ -43,11 +43,14 @@ describe("updateChangelogDocument", () => {
     ).rejects.toThrow("does not resolve")
   })
 
-  it("rejects model prose that could become executable MDX", async () => {
+  it("preserves Markdown and inline HTML authored by the model", async () => {
     const root = await fixtureRoot()
-    await expect(
-      updateChangelogDocument(release(root, { summary: "Runs <Component /> inside the page." }))
-    ).rejects.toThrow("without MDX structure")
+    await updateChangelogDocument(
+      release(root, { summary: "Use **Markdown** with <code>inline HTML</code> and `{braces}`." })
+    )
+
+    const content = await readFile(changelogPath(root), "utf8")
+    expect(content).toContain("Use **Markdown** with <code>inline HTML</code> and `{braces}`.")
   })
 })
 

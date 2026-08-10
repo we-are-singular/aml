@@ -32,7 +32,7 @@ const AnalysisSchema = z.object({
     .min(1),
 })
 
-/** The constrained editorial shape that can be rendered safely into the changelog MDX. */
+/** The editorial shape rendered into the changelog while preserving authored Markdown. */
 const DraftSchema = z.object({
   title: z.string().trim().min(1),
   summary: z.string().trim().min(1),
@@ -129,9 +129,9 @@ export function WriteChangelog({
       {JSON.stringify(analysis, null, 2)}
       Authoritative commit list:
       {release.commitList}
-      Write a short title without the version, a one-paragraph summary, and a small set of explanatory highlights.
-      Title, summary, and highlight text must be plain prose without Markdown, JSX, braces, or angle brackets. Put links
-      only in the structured links arrays, and only when an existing AML docs page materially helps the reader.
+      Write a short title without the version, a summary, and a small set of explanatory highlights. Markdown and inline
+      HTML such as &lt;code&gt; are allowed in the authored text. Put links only in the structured links arrays, and
+      only when an existing AML docs page materially helps the reader.
     </Agent>
   )
 }

@@ -24,7 +24,7 @@ release range + target document
             ↓ structured analysis
     <WriteChangelog /> ── second <Agent /> writes from supplied evidence
             ↓ structured draft
-updateChangelogDocument() ─ validates links and MDX, then writes the page
+updateChangelogDocument() ─ validates links, then writes the authored Markdown
 ```
 
 <Aside type="tip" title="A real AML workflow, not a showcase fixture">
@@ -183,9 +183,9 @@ export function WriteChangelog({
       {JSON.stringify(analysis, null, 2)}
       Authoritative commit list:
       {release.commitList}
-      Write a short title without the version, a one-paragraph summary, and a small set of explanatory highlights.
-      Title, summary, and highlight text must be plain prose without Markdown, JSX, braces, or angle brackets. Put links
-      only in the structured links arrays, and only when an existing AML docs page materially helps the reader.
+      Write a short title without the version, a summary, and a small set of explanatory highlights. Markdown and inline
+      HTML are allowed in the authored text. Put links only in the structured links arrays, and only when an existing
+      AML docs page materially helps the reader.
     </Agent>
   )
 }
@@ -235,7 +235,7 @@ export async function MaintainChangelog({ lane }: { readonly lane: ReleaseLane }
 2. Evaluate `<ReleaseNotes />` and reject an empty lane-specific commit list.
 3. Evaluate `<AnalyzeRelease />` against `AnalysisSchema`.
 4. Feed that typed result into `<WriteChangelog />` and validate it against `DraftSchema`.
-5. Validate every docs link, reject unsafe MDX-shaped prose, and idempotently insert the versioned entry.
+5. Validate every docs link and idempotently insert the authored Markdown as a versioned entry.
 
 </Steps>
 
@@ -256,7 +256,7 @@ export const cli = <MaintainChangelog lane="cli" />
 
 The caller only chooses the target. The component owns the reusable workflow, and the application keeps control of when
 to evaluate it. The exact title, summary, and highlights remain model-dependent; the schemas, commit inventory, route
-checks, placement, and MDX safety rules remain deterministic.
+checks and versioned document placement remain deterministic.
 
 ## Failure and security notes
 
@@ -265,7 +265,7 @@ checks, placement, and MDX safety rules remain deterministic.
 - Missing OpenCode credentials stop provider construction.
 - A response that fails either Zod schema fails the workflow instead of writing partial prose.
 - Documentation links must resolve to real Starlight content routes.
-- Titles, summaries, and highlights that could introduce JSX or MDX structure are rejected.
+- Markdown and inline HTML in titles, summaries, and highlights are preserved.
 - Re-running the same version replaces its marked entry instead of appending a duplicate.
 - The local release-notes process is trusted host code. Do not pass model-authored commands or arguments into it.
 
