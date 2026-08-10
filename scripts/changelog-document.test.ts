@@ -19,6 +19,9 @@ describe("updateChangelogDocument", () => {
 
     const content = await readFile(changelogPath(root), "utf8")
     expect(content.match(/changelog:sdk:v1\.2\.3:start/g)).toHaveLength(1)
+    expect(content).toContain("{/* changelog:sdk:v1.2.3:start */}\n\n## SDK v1.2.3")
+    expect(content).toContain("- feat(agent): add a release (abc1234)\n\n{/* changelog:sdk:v1.2.3:end */}")
+    expect(content).not.toContain("* feat(agent)")
     expect(content).toContain("Corrected summary.")
     expect(content).not.toContain("First summary.")
   })

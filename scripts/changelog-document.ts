@@ -117,6 +117,7 @@ function renderEntry({
 
   return [
     start,
+    "",
     `## ${lane === "sdk" ? "SDK" : "CLI"} v${version} — ${draft.title}`,
     "",
     `Released ${date}.`,
@@ -129,7 +130,8 @@ function renderEntry({
     "",
     "### Commits",
     "",
-    escapeMdxCommitList(commitList.trim()),
+    normalizeMdxCommitList(commitList),
+    "",
     end,
   ].join("\n")
 }
@@ -176,6 +178,14 @@ function assertParagraph(value: string, label: string): void {
   }
 }
 
-function escapeMdxCommitList(value: string): string {
-  return value.replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll("{", "&#123;").replaceAll("}", "&#125;")
+function normalizeMdxCommitList(value: string): string {
+  return value
+    .trim()
+    .split(/\r?\n/)
+    .map(line => line.replace(/^\*\s+/, "- "))
+    .join("\n")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll("{", "&#123;")
+    .replaceAll("}", "&#125;")
 }
