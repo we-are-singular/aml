@@ -53,7 +53,22 @@ export async function runCli(argv: string[], io: CliIo = defaultIo): Promise<num
     const exitCode = await cli.runMatchedCommand()
     return typeof exitCode === "number" ? exitCode : 0
   } catch (error) {
-    io.stderr.write(`aml: ${error instanceof Error ? error.message : String(error)}\n`)
+    io.stderr.write(`aml: ${formatCliError(error)}\n`)
     return 1
   }
+}
+
+/** Preserves provider diagnostics hidden behind AML's contextual error wrappers. */
+function formatCliError(error: unknown): string {
+  const messages: string[] = []
+  const seen = new Set<unknown>()
+  let current: unknown = error
+
+  while (current !== undefined && !seen.has(current)) {
+    seen.add(current)
+    messages.push(current instanceof Error ? current.message : String(current))
+    current = current instanceof Error ? current.cause : undefined
+  }
+
+  return messages.join("\n  caused by: ")
 }

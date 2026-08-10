@@ -124,6 +124,15 @@ describe("compiled aml command", () => {
     expect(result.stderr).not.toContain("trace fixture prompt")
   })
 
+  it("prints the provider cause when an Agent fails", () => {
+    const result = runCli(["run", resolve(fixtures, "agent-error.tsx")], { cwd: repositoryRoot })
+
+    expect(result.status).toBe(1)
+    expect(result.stdout).toBe("")
+    expect(result.stderr).toContain('Agent "broken-provider" (span-1) failed')
+    expect(result.stderr).toContain("caused by: provider stderr: model request failed")
+  })
+
   it.each([
     {
       args: ["unknown"],
