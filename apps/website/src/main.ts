@@ -5,7 +5,9 @@ import { initGettingStarted } from "./getting-started"
 import { initHeroTree } from "./hero-tree"
 import { initProviders } from "./providers"
 import { initReference } from "./reference"
+import { initReveal } from "./reveal"
 
+initReveal()
 initAcpDiagram()
 initAmbient()
 initHeroTree()

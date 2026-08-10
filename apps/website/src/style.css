@@ -102,11 +102,25 @@ body {
   }
 }
 
-/* ---------- entrance motion ---------- */
+/* ---------- scroll reveal ---------- */
 
 .reveal {
-  animation: reveal-in 0.7s cubic-bezier(0.22, 1, 0.36, 1) both;
-  animation-delay: var(--reveal-delay, 0ms);
+  opacity: 1;
+  translate: 0 0;
+}
+
+html.reveal-ready .reveal {
+  opacity: 0;
+  translate: 0 26px;
+  transition:
+    opacity 0.7s cubic-bezier(0.22, 1, 0.36, 1),
+    translate 0.7s cubic-bezier(0.22, 1, 0.36, 1);
+  transition-delay: var(--reveal-delay, 0ms);
+}
+
+html.reveal-ready .reveal.is-visible {
+  opacity: 1;
+  translate: 0 0;
 }
 
 .benefit-grid > .reveal:nth-child(2) {
@@ -121,25 +135,14 @@ body {
   --reveal-delay: 240ms;
 }
 
-@keyframes reveal-in {
-  from {
-    opacity: 0;
-    translate: 0 26px;
-  }
-  to {
-    opacity: 1;
-    translate: 0 0;
-  }
-}
-
 @media (prefers-reduced-motion: reduce) {
   html {
     scroll-behavior: auto;
   }
-  .reveal {
-    animation: none;
+  html.reveal-ready .reveal {
     opacity: 1;
     translate: none;
+    transition: none;
   }
   .animate-marquee,
   .animate-ticker {
@@ -152,10 +155,10 @@ body {
 }
 
 @media print {
-  .reveal {
-    animation: none;
+  html.reveal-ready .reveal {
     opacity: 1;
     translate: none;
+    transition: none;
   }
 }
 
