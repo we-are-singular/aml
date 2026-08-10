@@ -1,4 +1,6 @@
+import { readFileSync } from "node:fs"
 import { resolve } from "node:path"
+import { URL } from "node:url"
 
 import { describe, expect, it } from "vitest"
 
@@ -6,6 +8,9 @@ import { runCli } from "./helpers/run-cli.js"
 
 const repositoryRoot = resolve(import.meta.dirname, "../../..")
 const fixtures = resolve(import.meta.dirname, "fixtures")
+const packageManifest = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")) as Readonly<{
+  version: string
+}>
 
 function expectSuccess(result: ReturnType<typeof runCli>): void {
   expect(result.error).toBeUndefined()
@@ -27,7 +32,10 @@ describe("compiled aml command", () => {
     const help = runCli(["run", "--help"])
 
     expectSuccess(version)
-    expect(version.stdout).toMatch(/^aml\/0\.1\.0 \S+ node-v\S+\n$/)
+    const [identifier, platform, nodeVersion] = version.stdout.trim().split(" ")
+    expect(identifier).toBe(`aml/${packageManifest.version}`)
+    expect(platform).toMatch(/^\S+$/)
+    expect(nodeVersion).toMatch(/^node-v\S+$/)
     expect(version.stderr).toBe("")
     expectSuccess(help)
     expect(help.stdout).toContain("aml run <workflowFile>")
