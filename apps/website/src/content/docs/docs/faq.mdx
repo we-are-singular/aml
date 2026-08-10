@@ -43,7 +43,13 @@ The [AST and evaluation guide](/docs/ast/) explains what AML creates from JSX wh
 
 You need Node.js 26 or newer, an ESM project, and a runner that understands TypeScript and TSX. The first tutorial uses a deterministic test provider, so you do not need an API key, coding-agent executable, Docker daemon, or remote account.
 
-Follow [getting started](/docs/getting-started/) for the exact install and run commands.
+Follow [getting started](/docs/getting-started/) for both the application-owned runtime and experimental CLI paths.
+
+### Do I need to write an application entry point to run a workflow?
+
+No. An application can construct `AmlRuntime` when it needs complete control over defaults, limits, events, and process lifecycle. For local automation and standalone trusted workflow files, install `@aml-jsx/cli`, export the AML tree, and run `npx aml run ./workflow.tsx`.
+
+The [CLI guide](/docs/cli/) documents export selection, environment files, JSON output, tracing, and why a CLI workflow should not construct a second nested runtime.
 
 ### Does AML include an AI model or an account?
 
@@ -65,9 +71,9 @@ They are TypeScript values rather than UI elements. The [component reference](/d
 
 ### When does the work actually start?
 
-Creating JSX only builds a description of the workflow. No agent starts until your application asks AML to evaluate that value—usually with `runtime.evaluate(tree)`. This makes it possible to construct and inspect a workflow before it performs outside work.
+Creating JSX only builds a description of the workflow. No agent starts until your application asks AML to evaluate that value with `runtime.evaluate(tree)`, or the CLI evaluates an exported tree with `aml run`. This makes it possible to construct and inspect a workflow before it performs outside work.
 
-The [runtime guide](/docs/runtime/) covers evaluation, limits, cancellation, and cleanup.
+The [runtime guide](/docs/runtime/) covers application-owned evaluation, limits, cancellation, and cleanup; the [CLI guide](/docs/cli/) covers standalone workflow files.
 
 ## Agents, commands, and files
 

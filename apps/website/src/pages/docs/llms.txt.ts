@@ -8,6 +8,7 @@ export const prerender = true
 const sectionOrder = [
   "docs",
   "docs/getting-started",
+  "docs/cli",
   "docs/examples",
   "docs/faq",
   "docs/concepts",
@@ -15,7 +16,6 @@ const sectionOrder = [
   "docs/runtime",
   "docs/observability",
   "docs/errors",
-  "docs/cli",
   "docs/cookbook",
   "docs/providers",
   "docs/production",
@@ -54,6 +54,9 @@ export async function GET({ site }: APIContext): Promise<Response> {
     "This file concatenates every published AML documentation page for language models, search tools, and offline reference.",
     `For the shorter project and editorial overview, see ${new URL(withBase("llms.txt"), canonicalSite).href}.`,
     `For the navigable documentation website, see ${new URL(withBase("docs/"), canonicalSite).href}.`,
+    `CLI guide: ${new URL(withBase("docs/cli/"), canonicalSite).href}`,
+    "Install the CLI beside the SDK with `npm install @aml-jsx/sdk && npm install --save-dev @aml-jsx/cli`.",
+    "Run an exported workflow with `npx aml run ./workflow.tsx`; the file is positional and `--entry` selects a named export.",
     "",
     `Pages included: ${entries.length}`,
   ].join("\n")

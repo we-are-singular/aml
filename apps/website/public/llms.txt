@@ -6,7 +6,9 @@ Website: https://agent-markup-language.com/
 Documentation: https://agent-markup-language.com/docs/
 Complete documentation: https://agent-markup-language.com/docs/llms.txt
 Source: https://github.com/we-are-singular/aml
-Package: https://www.npmjs.com/package/@aml-jsx/sdk
+SDK package: https://www.npmjs.com/package/@aml-jsx/sdk
+CLI package: https://www.npmjs.com/package/@aml-jsx/cli
+CLI documentation: https://agent-markup-language.com/docs/cli/
 Specification: https://github.com/we-are-singular/aml/blob/main/SPEC.md
 License: MIT
 Status: pre-stable and under active development.
@@ -17,15 +19,17 @@ Use the focused page that matches the task before loading the complete corpus. E
 
 ```sh
 curl -fsSL https://agent-markup-language.com/docs/getting-started.md
+curl -fsSL https://agent-markup-language.com/docs/cli.md
 curl -fsSL https://agent-markup-language.com/docs/providers/agents/codex.md
 curl -fsSL https://agent-markup-language.com/docs/reference/primitives/agent.md
 ```
 
 Use https://agent-markup-language.com/docs/llms.txt when a question spans multiple sections or when discovering the relevant page. The HTML and Markdown routes are generated from the same source. For an installed project, its `@aml-jsx/sdk` types remain authoritative when the current website documents a newer pre-stable version.
 
-The documentation has four primary areas:
+Use these primary documentation destinations:
 
 - Learn: https://agent-markup-language.com/docs/
+- CLI: https://agent-markup-language.com/docs/cli/
 - Providers: https://agent-markup-language.com/docs/providers/
 - Cookbook: https://agent-markup-language.com/docs/cookbook/
 - Reference: https://agent-markup-language.com/docs/reference/
@@ -82,6 +86,36 @@ const result = await new AmlRuntime({ agentProvider: provider }).evaluate(
 ```
 
 The deterministic testing provider requires no API key, network, or Agent executable. For a real provider, install and configure the compatible ACP executable in the host or Sandbox where AML will launch it.
+
+## Run an exported workflow with the CLI
+
+Install the experimental CLI beside the SDK when a trusted TSX workflow should run without application entry-point glue:
+
+```sh
+npm install @aml-jsx/sdk
+npm install --save-dev @aml-jsx/cli
+```
+
+The workflow must export an AML tree. Put required providers directly on their components because the CLI creates an empty `AmlRuntime`:
+
+```tsx
+import { Agent } from "@aml-jsx/sdk"
+import { DeterministicAgentProvider } from "@aml-jsx/sdk/testing"
+
+const provider = new DeterministicAgentProvider({
+  name: "cli-example",
+  respond: request => ({ text: `Resolved: ${request.prompt}` }),
+})
+
+export default <Agent provider={provider}>Review README.md.</Agent>
+```
+
+```sh
+npx aml run ./workflow.tsx
+npx aml run ./workflow.tsx --entry namedExport --json --trace
+```
+
+The workflow file is positional; `--entry` selects an export inside it. Results go to stdout. Lifecycle events, errors, and metadata-only traces go to stderr. Do not create and evaluate another `AmlRuntime` inside the exported function; that bypasses CLI runtime ownership for the nested Agent work. Read https://agent-markup-language.com/docs/cli/ for environment precedence, export resolution, content-capture policy, and the trusted-code boundary.
 
 ## Core surface
 
@@ -144,6 +178,7 @@ Add `-g` for a global installation. The skill guides AML authoring; an applicati
 ## Canonical references
 
 - Getting started: https://agent-markup-language.com/docs/getting-started/
+- Experimental CLI: https://agent-markup-language.com/docs/cli/
 - Examples: https://agent-markup-language.com/docs/examples/
 - Concepts and evaluation: https://agent-markup-language.com/docs/concepts/
 - Cookbook: https://agent-markup-language.com/docs/cookbook/

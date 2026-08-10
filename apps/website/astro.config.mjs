@@ -72,6 +72,7 @@ export default defineConfig({
               items: [
                 { label: "Overview", slug: "docs" },
                 { label: "Getting started", slug: "docs/getting-started" },
+                { label: "CLI (experimental)", slug: "docs/cli" },
                 { label: "Agent skill", slug: "docs/agent-skill" },
                 { label: "Examples", slug: "docs/examples" },
                 { label: "FAQ", slug: "docs/faq" },
@@ -101,7 +102,7 @@ export default defineConfig({
             {
               label: "Extend and contribute",
               collapsed: true,
-              items: [{ label: "CLI (experimental)", slug: "docs/cli" }, { slug: "docs/integrations" }],
+              items: [{ slug: "docs/integrations" }],
             },
           ],
         },

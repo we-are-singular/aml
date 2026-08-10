@@ -23,6 +23,15 @@ npm run example -- structured
 
 The first command prints the current filename-derived catalog. Treat that output and [`examples/run.ts`](https://github.com/we-are-singular/aml/blob/main/examples/run.ts) as the source of truth; this page deliberately recommends paths instead of duplicating every filename.
 
+Each maintained example also exports an AML tree, so the experimental CLI can run one source file directly. Build the repository CLI and try the credential-free basic example:
+
+```sh title="Terminal"
+npm run build --workspace=@aml-jsx/cli
+node apps/cli/dist/index.js run ./examples/src/core/basic.tsx
+```
+
+The shared example runner remains useful for its catalog and common tracer. Use the [CLI guide](/docs/cli/) when your own workflow should expose a default or named export without a separate application entry point.
+
 ## Choose by goal
 
 <CardGrid>

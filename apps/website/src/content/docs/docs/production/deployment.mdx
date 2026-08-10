@@ -64,6 +64,8 @@ npm start
 
 Node executes the emitted `.js`, not the original `.tsx`. If this is a workspace application, use the repository's workspace-aware install/prune command rather than copying an incomplete child lock context.
 
+For a trusted local or CI workflow that does not need an application-owned service lifecycle, the [experimental CLI](/docs/cli/) can load TS, TSX, or JavaScript directly through Vite. Production services should normally deploy an explicit compiled entry point so runtime defaults, cancellation, telemetry, and shutdown remain application-owned.
+
 ## Build the provider graph
 
 An AML workflow needs an Agent provider only when an `<Agent />` is evaluated, a Sandbox provider when a `<Sandbox />` is evaluated, and a Workspace provider when a `<Workspace />` is evaluated. Configure defaults at the runtime and use explicit component props when a tree intentionally mixes providers.

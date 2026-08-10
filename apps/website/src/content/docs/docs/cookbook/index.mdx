@@ -30,6 +30,8 @@ Every recipe assumes:
 - TypeScript/TSX support with AML's automatic JSX runtime;
 - the public application entrypoint, `@aml-jsx/sdk`.
 
+The complete recipe files construct and evaluate their own `AmlRuntime`, which is the clearest shape when an application owns limits, defaults, telemetry, and shutdown. To run a workflow with the [experimental CLI](/docs/cli/) instead, export the AML tree, put required providers directly on their components, and use `npx aml run ./workflow.tsx`. Do not wrap a second `AmlRuntime` inside the exported CLI entry.
+
 The recipe status tells you what the source actually does:
 
 - <Badge text="Deterministic" variant="success" /> uses `@aml-jsx/sdk/testing` and needs no model, credentials, or

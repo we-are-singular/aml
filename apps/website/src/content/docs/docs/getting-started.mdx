@@ -5,7 +5,7 @@ description: Install AML and resolve a credential-free workflow before connectin
 
 import { Aside, Card, CardGrid, Steps, TabItem, Tabs } from "@astrojs/starlight/components"
 
-This guide gives you a deterministic first success: no API key, ACP executable, Docker daemon, or remote account required. You will then swap in a real Agent provider without changing the authored AML tree.
+This guide gives you a deterministic first success: no API key, ACP executable, Docker daemon, or remote account required. The main path shows an application-owned `AmlRuntime`; an optional CLI path then runs an exported tree without application glue. You will finally swap in a real Agent provider without changing the authored AML tree.
 
 ## Prerequisites
 
@@ -133,6 +133,46 @@ Resolved: Explain what AML evaluates.
 </Steps>
 
 The deterministic provider deliberately echoes a known result and records calls. It is part of the public testing entrypoint, making it useful for tutorials, examples, and workflow tests—not just AML's own test suite.
+
+### Run the same tree with the CLI
+
+The application above constructs `AmlRuntime` because it owns the process. For a standalone workflow file, install the experimental CLI beside the SDK:
+
+```sh title="Terminal"
+npm install --save-dev @aml-jsx/cli
+```
+
+Create `src/cli-workflow.tsx`. Put the provider directly on `<Agent />`, export the tree, and let the CLI create and instrument the runtime:
+
+```tsx title="src/cli-workflow.tsx"
+import { Agent } from "@aml-jsx/sdk"
+import { DeterministicAgentProvider } from "@aml-jsx/sdk/testing"
+
+const provider = new DeterministicAgentProvider({
+  name: "cli-workflow",
+  respond: request => ({ text: `Resolved: ${request.prompt}` }),
+})
+
+export default <Agent provider={provider}>Explain what AML evaluates.</Agent>
+```
+
+Run the exported workflow:
+
+```sh title="Terminal"
+npx aml run ./src/cli-workflow.tsx
+```
+
+Expected output on standard output:
+
+```text title="Output"
+Resolved: Explain what AML evaluates.
+```
+
+<Aside type="caution" title="Do not create a second runtime inside a CLI workflow">
+  Export the AML tree itself. Calling `new AmlRuntime().evaluate(...)` inside the exported function creates a separate
+  nested evaluation, so the CLI cannot trace, cancel, or configure the Agent work it was intended to own. The complete
+  export, environment, and output contract is in the [CLI guide](/docs/cli/).
+</Aside>
 
 ## 3. Connect a real Agent
 
@@ -298,6 +338,9 @@ console.log(output)
   </Card>
   <Card title="Prepare production" icon="approve-check-circle">
     Review isolation, secrets, persistence, cancellation, and telemetry in [Production](/docs/production/).
+  </Card>
+  <Card title="Run workflow files" icon="laptop">
+    Use the [experimental CLI](/docs/cli/) when an exported AML tree should run without application entry-point glue.
   </Card>
   <Card title="Work with a coding agent" icon="pencil">
     Install and verify the [AML authoring skill](/docs/agent-skill/) before asking an agent to generate or review AML

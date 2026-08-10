@@ -1,6 +1,6 @@
 ---
 title: CLI (experimental)
-description: Run trusted AML TypeScript and TSX workflow files directly with the experimental @aml-jsx/cli package.
+description: Run trusted AML TypeScript, TSX, and JavaScript workflow files directly with the experimental @aml-jsx/cli package.
 ---
 
 import { Aside, Steps } from "@astrojs/starlight/components"
@@ -8,8 +8,8 @@ import { Aside, Steps } from "@astrojs/starlight/components"
 `@aml-jsx/cli` runs an AML workflow source file without a separate application entry point. It loads TypeScript, TSX, or JavaScript through Vite and `vite-node`, resolves one exported AML value, evaluates it, and prints the result.
 
 <Aside type="caution" title="Experimental package">
-  The CLI is currently an experimental workspace package. Its command and export contracts may change before its first
-  public release. Use the explicit [`AmlRuntime` application pattern](/docs/runtime/) when you need a stable production
+  The CLI is packaged separately from the SDK. Its command and export contracts may change while it remains
+  experimental. Use the explicit [`AmlRuntime` application pattern](/docs/runtime/) when you need a stable production
   entry point or complete control over runtime construction.
 </Aside>
 
@@ -25,19 +25,26 @@ The CLI deliberately owns only process-level concerns:
 
 Provider selection and provider-specific options belong in the workflow file. The CLI does not have `--agent-provider`, `--sandbox-provider`, model, credential, or Workspace configuration flags.
 
-## Run the repository package
+## Run the package
 
-Until the package is published, build and invoke the workspace copy from an AML repository checkout:
+Install the CLI beside the SDK used by the workflow:
 
 ```sh title="Terminal"
-npm run build --workspace=@aml-jsx/cli
-node apps/cli/dist/index.js run ./workflow.tsx
+npm install @aml-jsx/sdk
+npm install --save-dev @aml-jsx/cli
 ```
 
-The intended published command is:
+Run it through the project-local executable:
 
 ```sh title="Terminal"
-aml run ./workflow.tsx
+npx aml run ./workflow.tsx
+```
+
+From an AML repository checkout, contributors can build and invoke the workspace copy directly:
+
+```sh
+npm run build --workspace=@aml-jsx/cli
+node apps/cli/dist/index.js run ./workflow.tsx
 ```
 
 ## Write a workflow entry
@@ -45,18 +52,18 @@ aml run ./workflow.tsx
 Export an AML renderable directly or export a zero-argument function that returns one. The current CLI creates the `AmlRuntime`; the module does not export a runtime instance.
 
 ```tsx title="workflow.tsx"
-import { Agent, codexAgent } from "@aml-jsx/sdk"
+import { Agent } from "@aml-jsx/sdk"
+import { DeterministicAgentProvider } from "@aml-jsx/sdk/testing"
 
-const Codex = codexAgent({ model: "gpt-5.3-codex" })
+const provider = new DeterministicAgentProvider({
+  name: "cli-example",
+  respond: request => ({ text: `Reviewed: ${request.prompt}` }),
+})
 
-export default (
-  <Agent provider={Codex} system="Return one concise paragraph.">
-    Explain how this repository is organized.
-  </Agent>
-)
+export default <Agent provider={provider}>README.md</Agent>
 ```
 
-This keeps the executable workflow self-contained: another runner can import the same tree, inspect its provider construction, or evaluate it with application-owned infrastructure later.
+This credential-free example prints `Reviewed: README.md`. Replace the deterministic provider with a [supported Agent provider](/docs/providers/agents/) when the workflow is ready to call a live model. Keeping provider construction in the module makes the executable workflow self-contained: another runner can import the same tree, inspect its provider construction, or evaluate it with application-owned infrastructure later.
 
 <Aside type="note" title="Runtime defaults are not part of the current export contract">
   `AmlRuntime` supports default Agent, Sandbox, and Workspace providers, but the experimental CLI currently constructs
@@ -65,14 +72,23 @@ This keeps the executable workflow self-contained: another runner can import the
   not implemented today.
 </Aside>
 
+<Aside type="caution" title="Export the tree, not a nested runtime evaluation">
+  Do not call `new AmlRuntime().evaluate(...)` inside the exported function. That starts an independent run before the
+  CLI evaluates the returned text, preventing CLI tracing, cancellation, and runtime ownership from covering the Agent
+  work. Export `<Agent provider={provider}>…</Agent>` directly.
+</Aside>
+
 ## Export resolution
 
 The command resolves and executes one export in this order:
 
 <Steps>
-  1. Use the export selected by `--entry`, when supplied. 2. Otherwise use the module's `default` export. 3. Otherwise
-  call an exported `main()` function. 4. Await a selected function or promise and validate that it resolves to an AML
-  renderable.
+
+1. Use the export selected by `--entry`, when supplied.
+2. Otherwise use the module's `default` export.
+3. Otherwise call an exported `main()` function.
+4. Await a selected function or promise and validate that it resolves to an AML renderable.
+
 </Steps>
 
 A function can build the tree after environment variables have been loaded:
@@ -88,7 +104,7 @@ export default function ReviewRepository() {
 }
 ```
 
-Select a different named export when one module contains several entry points:
+The workflow file is the positional argument immediately after `run`. `--entry` selects an export inside that file; it does not replace the file argument. Select a different named export when one module contains several entry points:
 
 ```sh title="Terminal"
 aml run ./workflow.tsx --entry releaseReview
@@ -96,27 +112,74 @@ aml run ./workflow.tsx --entry releaseReview
 
 ## Environment loading
 
-Before importing the workflow, the CLI reads Vite-style environment files from the workflow's directory. The mode is `NODE_ENV`, or `development` when `NODE_ENV` is absent.
+Before importing the workflow, the CLI reads Vite-style environment files from the directory containing the workflow file—not necessarily the process's current working directory. The mode is `NODE_ENV`, or `development` when `NODE_ENV` is absent.
 
-```text
-.env
-.env.local
-.env.<mode>
-.env.<mode>.local
+```text title="Project layout"
+project/
+├── .env.ci               # explicit override selected from the current directory
+└── src/
+    ├── workflow.tsx
+    ├── .env              # workflow-local base values
+    ├── .env.local        # workflow-local machine values
+    ├── .env.development
+    └── .env.development.local
 ```
 
 Existing process environment values win over values in these files. An explicitly selected runtime environment file is applied last and can override both:
 
 ```sh title="Terminal"
-aml run ./workflow.tsx --runtime-env-file .env.production
+aml run ./workflow.tsx --runtime-env-file .env.ci
 ```
 
 The option is named `--runtime-env-file` because modern Node.js interprets `--env-file` before the AML command receives its arguments. Relative override paths are resolved from the current working directory first, then from the workflow directory.
+
+## Run a named workflow in CI
+
+One module can expose several jobs while keeping provider and environment choices in source. This credential-free example selects one named export and echoes its resolved prompt:
+
+```tsx title="src/automation.tsx"
+import { Agent } from "@aml-jsx/sdk"
+import { DeterministicAgentProvider } from "@aml-jsx/sdk/testing"
+
+const provider = new DeterministicAgentProvider({
+  name: "ci-example",
+  respond: request => ({ text: request.prompt }),
+})
+
+export const releaseReview = (
+  <Agent provider={provider}>Review the {process.env.RELEASE_CHANNEL ?? "preview"} release.</Agent>
+)
+
+export const dependencyReview = <Agent provider={provider}>Review dependency updates.</Agent>
+```
+
+Put `RELEASE_CHANNEL=stable` in `src/.env`, then apply a job-specific override from the process working directory:
+
+```dotenv title=".env.ci"
+RELEASE_CHANNEL=release-candidate
+```
+
+```sh title="Terminal"
+npx aml run ./src/automation.tsx \
+  --entry releaseReview \
+  --runtime-env-file .env.ci \
+  --json \
+  --trace
+```
+
+The JSON result containing `Review the release-candidate release.` is written to standard output. Lifecycle and metadata-only trace events go to standard error; prompt and result content remain redacted unless `--capture-content` is supplied explicitly.
 
 <Aside type="caution" title="Workflow files are trusted code">
   `vite-node` evaluates the module and all of its imports in the CLI process. A Sandbox inside the exported AML tree can
   constrain descendant Agent and Script execution, but it does not sandbox top-level JavaScript in the workflow module.
 </Aside>
+
+## Source execution
+
+The CLI intentionally has one compiler path: Vite and `vite-node`. It creates a one-shot Vite transform environment,
+loads the trusted module with source-map support, closes that environment, and then evaluates the selected AML value.
+There is no `--compiler` abstraction. A second loader should only be introduced if native platform evidence demonstrates
+a compatibility gap that Vite cannot address.
 
 ## Output and diagnostics
 
@@ -151,8 +214,8 @@ Treat `--capture-content` output as sensitive. It can include prompts, model out
 | `--trace`                   | Write metadata-only runtime trace events to standard error.               |
 | `--capture-content`         | Include sensitive trace content and imply `--trace`.                      |
 | `--json`                    | Emit a JSON result envelope instead of plain workflow text.               |
-| `--help`                    | Show Clipanion command help.                                              |
-| `--version`                 | Show the CLI package version once the publish build injects it correctly. |
+| `-h, --help`                | Show CAC-generated command help.                                          |
+| `-v, --version`             | Show the CLI package, platform, architecture, and Node versions.          |
 
 ## When to use it
 

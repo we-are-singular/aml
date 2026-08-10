@@ -9,6 +9,8 @@ import { Aside, Card, CardGrid, Steps } from "@astrojs/starlight/components"
 
 This page explains lifecycle choices and production behavior. For the concise constructor options, exact defaults, and per-evaluation decisions, use the [runtime reference](/docs/reference/runtime/).
 
+Application entry points construct `AmlRuntime` directly. If a trusted workflow should run as an exported TSX file instead, the [experimental CLI](/docs/cli/) creates the runtime and expects providers on the relevant AML components.
+
 ```tsx
 import { AmlRuntime } from "@aml-jsx/sdk"
 

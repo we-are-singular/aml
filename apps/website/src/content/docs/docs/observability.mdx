@@ -32,6 +32,10 @@ const trace = createConsoleTracer({
 runtime.on("trace", trace)
 ```
 
+When an exported workflow runs through the [experimental CLI](/docs/cli/), `--trace` attaches the same console tracer
+and sends its metadata-only output to standard error. Content stays redacted unless the operator supplies
+`--capture-content` explicitly.
+
 Trace sinks are captured when the runtime is constructed. Trace-consumer errors go to `onTraceError` when configured and do not become workflow failures merely because a logger rejected a line.
 
 ## The discriminated event union
