@@ -107,7 +107,13 @@ try {
   }
 
   const packedBin = packedFiles.get("dist/index.js")
-  if (packedBin === undefined || (packedBin.mode & 0o111) === 0) {
+  if (packedBin === undefined) {
+    throw new Error("CLI package is missing dist/index.js")
+  }
+
+  // Windows npm installs a .cmd shim and does not expose a meaningful POSIX mode.
+  // The installed binary is exercised below on every platform.
+  if (platform !== "win32" && (packedBin.mode & 0o111) === 0) {
     throw new Error("Packed aml executable is not marked executable")
   }
 
