@@ -2,7 +2,6 @@
   "$schema": "https://unpkg.com/release-it@21/schema/release-it.json",
   "verbose": true,
   "hooks": {
-    "after:git:init": "node ../scripts/check-release-branch.ts",
     "after:bump": [
       "npm install --package-lock-only --ignore-scripts --prefix ..",
       "git add ../package-lock.json",
