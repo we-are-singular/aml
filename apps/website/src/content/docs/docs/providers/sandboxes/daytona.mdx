@@ -16,17 +16,6 @@ import ProviderHero from "../../../../../components/docs/ProviderHero.astro"
   caution="The Workspace is transferred, not mounted. Remote edits can be lost if acquisition, execution, or reconciliation fails before the tree is downloaded."
 />
 
-<Aside type="danger" title="Restricted-tier egress blocks some coding agents">
-  Daytona's organization-level firewall for restricted tiers cannot be widened by `create.domainAllowList`. GitHub
-  Copilot's `*.githubcopilot.com` endpoints are currently absent from Daytona's published essential-services list and
-  are reset during TLS, so GitHub Copilot CLI cannot discover models in those Sandboxes. Cline's own `api.cline.bot`
-  platform endpoint is affected as well, although Cline configured directly against an allowed model provider may use a
-  different route. Amp, Anthropic, Cursor, and Devin domains are present in Daytona's published allowlist, but verify
-  the exact Agent endpoint before production use. See [Daytona's network
-  limits](https://www.daytona.io/docs/en/network-limits/) and [GitHub's Copilot
-  allowlist](https://docs.github.com/en/copilot/reference/copilot-allowlist-reference).
-</Aside>
-
 ## When to use it
 
 Choose Daytona when you want Daytona-managed remote environments and are prepared to provide its credentials/client, image or snapshot configuration, and a compatible image runtime. It is a transfer-based provider: AML archives the local Workspace, uploads it, runs the workflow remotely, downloads the complete remote tree on writable release, and then destroys the Sandbox.
@@ -48,6 +37,29 @@ Daytona starts commands in the Sandbox user’s writable home. AML therefore use
 | `workspace`      | `string`                              | None              | Fallback local Workspace path. An active `<Workspace />` materialization takes precedence.          |
 
 `image` and `snapshot` are mutually exclusive, but both may be omitted. With neither root option, the Daytona client uses its default creation behavior. Do not put either field inside `create`; the provider rejects that configuration to keep environment identity explicit.
+
+## Network egress and firewall tiers
+
+<Aside type="danger" title="Confirm outbound access for the selected Agent">
+  Daytona applies network access according to the organization tier. Tier 1 and Tier 2 use Daytona's managed
+  essential-services allowlist, while Tier 3 and Tier 4 support custom Sandbox network settings. If an Agent requires an
+  endpoint outside the effective policy, its model connection may fail. Review the required Agent domains and test them
+  from the deployed Sandbox before a live run.
+</Aside>
+
+| Organization tier | Daytona network behavior                       | Sandbox configuration                                                                                |
+| ----------------- | ---------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| Tier 1 or Tier 2  | Access to Daytona's managed essential services | Per-Sandbox `domainAllowList` and `networkAllowList` settings cannot expand the organization policy. |
+| Tier 3 or Tier 4  | Full internet access by default                | Custom network rules can restrict access to the domains and networks required by the workload.       |
+
+AML passes provider-native network fields through `create`; it does not alter Daytona's organization-level policy.
+Before running a production Agent image, identify its outbound endpoints and test them from the same Daytona Sandbox.
+For Tier 1/2, compare those endpoints with the managed essential-services list. For Tier 3/4, review any custom firewall
+configuration and allow only the domains required by the workload.
+
+See Daytona's published [network limits and essential services](https://www.daytona.io/docs/en/network-limits/) for the
+tier contract. The currently proposed additions are visible in the [updated whitelist
+file](https://github.com/radisicc/sandbox-network-whitelist/blob/add-github-copilot-domains/whitelist.yaml).
 
 ## Remote image and environment requirements
 
@@ -122,19 +134,19 @@ Use `read-write` for a Daytona ACP Agent unless the complete Agent/Sandbox contr
 
 ## Failure modes and troubleshooting
 
-| Symptom                                                | Cause                                                                                     | What to check                                                                    |
-| ------------------------------------------------------ | ----------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
-| `image` and `snapshot` rejected together               | Environment identity is ambiguous.                                                        | Choose exactly one, or omit both for Daytona’s default creation behavior.        |
-| `image`/`snapshot` inside `create` rejected            | AML keeps root identity separate from native creation fields.                             | Move the field to the factory root.                                              |
-| `requires an active Workspace or configured workspace` | No source tree was provided.                                                              | Add `<Workspace />` or a `workspace` fallback.                                   |
-| `tar` transfer fails locally                           | Host `tar` is missing, the source is inaccessible, or archive output exceeded the budget. | Run `tar -C <source> -cf /tmp/check.tar .` as the AML user.                      |
-| Hydration fails remotely                               | Image lacks `sh`, `tar`, `mkdir`, `rm`, or a writable home.                               | Open a Daytona shell with the same image/user and verify utilities.              |
-| Agent command not found                                | The image/snapshot does not contain the ACP executable.                                   | Install and pin it in the image/snapshot; AML does not install it.               |
-| Agent API resets during TLS                            | Daytona's restricted-tier organization firewall does not allow the provider domain.       | Check Daytona's essential-services list; per-Sandbox allowlists cannot widen it. |
-| `cannot execute under read-only access`                | Transferred Workspaces cannot enforce read-only process execution.                        | Use `read-write` or a different provider.                                        |
-| Remote changes disappear                               | The Sandbox failed before writable reconciliation completed.                              | Use checkpoints/durable persistence and inspect Daytona lifecycle logs.          |
-| Reconciliation fails                                   | Remote archive creation/download or local extraction failed.                              | Check remote `tar`, local disk space, output limits, and Workspace permissions.  |
-| Cleanup fails after another error                      | Provider failure and destruction failure occurred together.                               | Inspect the aggregate error and Daytona account/Sandbox state.                   |
+| Symptom                                                | Cause                                                                                     | What to check                                                                                                             |
+| ------------------------------------------------------ | ----------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| `image` and `snapshot` rejected together               | Environment identity is ambiguous.                                                        | Choose exactly one, or omit both for Daytona’s default creation behavior.                                                 |
+| `image`/`snapshot` inside `create` rejected            | AML keeps root identity separate from native creation fields.                             | Move the field to the factory root.                                                                                       |
+| `requires an active Workspace or configured workspace` | No source tree was provided.                                                              | Add `<Workspace />` or a `workspace` fallback.                                                                            |
+| `tar` transfer fails locally                           | Host `tar` is missing, the source is inaccessible, or archive output exceeded the budget. | Run `tar -C <source> -cf /tmp/check.tar .` as the AML user.                                                               |
+| Hydration fails remotely                               | Image lacks `sh`, `tar`, `mkdir`, `rm`, or a writable home.                               | Open a Daytona shell with the same image/user and verify utilities.                                                       |
+| Agent command not found                                | The image/snapshot does not contain the ACP executable.                                   | Install and pin it in the image/snapshot; AML does not install it.                                                        |
+| Agent API resets during TLS                            | A required endpoint is outside the effective Daytona network policy.                      | Compare the endpoint with the managed whitelist or the Sandbox's custom network settings, then test it from that Sandbox. |
+| `cannot execute under read-only access`                | Transferred Workspaces cannot enforce read-only process execution.                        | Use `read-write` or a different provider.                                                                                 |
+| Remote changes disappear                               | The Sandbox failed before writable reconciliation completed.                              | Use checkpoints/durable persistence and inspect Daytona lifecycle logs.                                                   |
+| Reconciliation fails                                   | Remote archive creation/download or local extraction failed.                              | Check remote `tar`, local disk space, output limits, and Workspace permissions.                                           |
+| Cleanup fails after another error                      | Provider failure and destruction failure occurred together.                               | Inspect the aggregate error and Daytona account/Sandbox state.                                                            |
 
 ## Security and production posture
 
@@ -147,6 +159,7 @@ Because transfer is full-tree and release-time, a provider outage can lose remot
 - [Sandbox provider overview](/docs/providers/sandboxes/)
 - [Daytona documentation](https://www.daytona.io/docs/)
 - [Daytona network limits and essential services](https://www.daytona.io/docs/en/network-limits/)
+- [Updated Daytona whitelist file](https://github.com/radisicc/sandbox-network-whitelist/blob/add-github-copilot-domains/whitelist.yaml)
 - [AML Daytona provider implementation](https://github.com/we-are-singular/aml/blob/main/providers/sandboxes/daytona/src/daytona-sandbox.ts)
 - [AML Daytona provider tests](https://github.com/we-are-singular/aml/blob/main/providers/sandboxes/daytona/tests/daytona-sandbox.test.ts)
 - [Sandboxing architecture](https://github.com/we-are-singular/aml/blob/main/SANDBOXING.md)
