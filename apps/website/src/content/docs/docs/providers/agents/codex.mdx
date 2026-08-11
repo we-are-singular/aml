@@ -149,7 +149,7 @@ AML JavaScript Tools are exposed through the shared ACP MCP bridge when the Agen
 
 ## Structured output
 
-When `evaluate(value, schema)` is used, AML asks the provider session for structured output and validates the returned JSON against the supplied Standard Schema. The Codex profile contributes the Codex configuration and uses the shared ACP structured-output path; it does not perform a second schema validation itself.
+When `evaluate(value, schema)` is used, AML exposes `aml_submit_result` through the shared ACP MCP bridge. Each submitted candidate is immediately validated against the supplied Standard Schema. Codex receives a tool error for an invalid candidate and may correct it in the same turn. AML accepts the first valid candidate and ignores later submissions.
 
 ```tsx
 import { Agent, evaluate, codexAgent } from "@aml-jsx/sdk"
@@ -166,7 +166,7 @@ const finding = await evaluate(
 )
 ```
 
-The final result must be valid JSON for the schema. A prose answer, invalid JSON, or a provider session that cannot honor structured output rejects the evaluation.
+The turn must submit at least one valid JSON result for the schema. A prose-only answer or a turn that ends without a valid submission rejects the evaluation. With tracing enabled, each attempt appears as an `agent.output` event.
 
 ## Failure modes and troubleshooting
 
@@ -190,7 +190,7 @@ The final result must be valid JSON for the schema. A prose answer, invalid JSON
 
 5. **Structured output fails**
 
-   Reduce the schema and inspect the provider's raw model behavior. The schema applies to the final `<Agent />` result; invalid JSON or a missing structured response is an evaluation error.
+   Enable tracing and inspect `agent.output` events. Invalid candidates are returned to Codex for correction; a missing submission or a turn that finishes without a valid candidate is an evaluation error.
 
 </Steps>
 

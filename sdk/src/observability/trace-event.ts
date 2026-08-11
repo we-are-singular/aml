@@ -27,7 +27,7 @@ export type AmlTraceSpanKind =
 /**
  * Point-in-time events that belong to an existing execution span.
  */
-export type AmlTraceEventName = "agent.turn" | "capability.mcp" | "capability.tool" | "loop.transition"
+export type AmlTraceEventName = "agent.output" | "agent.turn" | "capability.mcp" | "capability.tool" | "loop.transition"
 
 /**
  * Common immutable correlation and ordering fields on every trace event.

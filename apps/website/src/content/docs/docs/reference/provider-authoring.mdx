@@ -81,13 +81,15 @@ export const agentProvider = defineAgentProvider(internalReviewer)
 
 `AgentRequest` contains the assembled initial prompt, ordered `followUps`, system text, model override, portable permissions, Tools, MCP servers, trace identity, and optional structured-output request. One `run()` call represents one authored `<Agent />` session. If a later turn fails, the provider fails the complete call rather than substituting an earlier response.
 
-`AgentExecutionContext` supplies the evaluation signal, events, trace identity, and optional effective `SandboxSession`. A provider must reject a pre-aborted signal with its reason, observe cancellation during external work, and release invocation-owned clients, processes, streams, bridges, and temporary files before `run()` settles.
+`AgentExecutionContext` supplies the evaluation signal, subscriber-only events, trace identity, and optional effective `SandboxSession`. Providers cannot publish AML trace events or invoke the application-owned output validator through this public context. A provider must reject a pre-aborted signal with its reason, observe cancellation during external work, and release invocation-owned clients, processes, streams, bridges, and temporary files before `run()` settles.
+
+Direct providers return one `structured` value in `AgentResponse`; AML validates it at the final application boundary. Immediate candidate validation, first-valid-result selection, and submission tracing belong to AML's internal shared ACP adapter rather than the public provider contract.
 
 If `supportsSandbox()` returns `true`, `run()` must actually launch model-controlled work through `context.sandbox.lease.runtime` and honor the effective root and access. The handshake cannot widen a nested Sandbox policy.
 
 ### ACP profile extension
 
-Use `defineAcpAgentProvider()` when the vendor already exposes an Agent Client Protocol executable. AML's shared ACP adapter owns process launch, one-session turn order, JavaScript Tool and structured-output bridging, MCP descriptors, temporary state, local versus Sandbox execution, abort, and cleanup.
+Use `defineAcpAgentProvider()` when the vendor already exposes an Agent Client Protocol executable. AML's shared ACP adapter owns process launch, one-session turn order, JavaScript Tool and structured-output bridging, immediate candidate validation, first-valid-result selection, submission tracing, MCP descriptors, temporary state, local versus Sandbox execution, abort, and cleanup.
 
 ```ts
 import { defineAcpAgentProvider, type AcpAgentProfile } from "@aml-jsx/sdk"

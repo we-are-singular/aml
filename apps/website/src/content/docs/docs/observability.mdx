@@ -63,7 +63,7 @@ runtime.on("trace", event => {
 })
 ```
 
-The current point-event names are `agent.turn`, `capability.mcp`, `capability.tool`, and `loop.transition`. Span kinds include `evaluation`, `component`, `agent`, `file`, `system`, `skill`, `tool`, `loop`, `sandbox`, `script`, and `workspace`.
+The current point-event names are `agent.output`, `agent.turn`, `capability.mcp`, `capability.tool`, and `loop.transition`. `agent.output` records the structured submission call number and whether AML marked it `invalid`, `accepted`, or `ignored`; it does not include the submitted payload. Span kinds include `evaluation`, `component`, `agent`, `file`, `system`, `skill`, `tool`, `loop`, `sandbox`, `script`, and `workspace`.
 
 ## Content capture is opt-in
 

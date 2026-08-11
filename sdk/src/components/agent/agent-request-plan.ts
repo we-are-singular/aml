@@ -7,6 +7,7 @@ import type { AgentTool } from "../tool/agent-tool.js"
 import { instrumentAgentTools } from "../tool/instrument-agent-tools.js"
 import type { AgentProps } from "./agent.js"
 import type { AgentExecutionContext } from "./agent-execution-context.js"
+import { attachAgentStructuredOutputServices } from "./agent-structured-output-services.js"
 import type { ModelSchema } from "./model-schema.js"
 import type { AgentRequest } from "./agent-request.js"
 
@@ -114,6 +115,15 @@ export class AgentRequestPlan {
       signal: input.context.signal,
       trace: input.trace,
     })
+
+    if (input.output !== undefined) {
+      attachAgentStructuredOutputServices(context, {
+        traceSubmission: (call, status) => input.context.traceEvent(input.trace, "agent.output", { call, status }),
+        validate: async value => {
+          await input.output?.validate(value)
+        },
+      })
+    }
 
     // Capability grants are observable at the portable runtime boundary.
     for (const tool of tools) {

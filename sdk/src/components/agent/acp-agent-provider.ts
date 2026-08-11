@@ -13,6 +13,7 @@ import type { AgentProvider } from "./agent-provider.js"
 import type { AgentProviderSession, AgentProviderTurn } from "./agent-provider-session.js"
 import type { AgentRequest } from "./agent-request.js"
 import type { AgentResponse } from "./agent-response.js"
+import { agentStructuredOutputServices } from "./agent-structured-output-services.js"
 import { AbstractAgentProvider } from "./abstract-agent-provider.js"
 import { defineAgentProvider } from "./define-agent-provider.js"
 import { AcpMcpBridge } from "./acp-mcp-bridge.js"
@@ -97,7 +98,12 @@ class AcpAgentProvider<Name extends string> extends AbstractAgentProvider<Name> 
 
     try {
       if (javaScriptTools.length > 0 || request.output !== undefined) {
-        bridge = new AcpMcpBridge(javaScriptTools, request.output, context)
+        bridge = new AcpMcpBridge(
+          javaScriptTools,
+          request.output,
+          context,
+          request.output === undefined ? undefined : agentStructuredOutputServices(context)
+        )
         let connection = await bridge.start(context.signal)
 
         if (context.sandbox !== undefined) {

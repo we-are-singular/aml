@@ -35,12 +35,21 @@ describe("AcpMcpBridge", () => {
         },
         type: "json",
       },
-      context
+      context,
+      {
+        traceSubmission: () => undefined,
+        validate: async value => {
+          z.object({ proof: z.string() }).parse(value)
+        },
+      }
     )
     const connection = await bridge.start(context.signal)
     const client = await connectMcp(connection)
 
     try {
+      expect(bridge.instruction).toContain("Call aml_submit_result once")
+      expect(bridge.instruction).toContain("If the Tool returns an error, correct the result and retry")
+      expect(bridge.instruction).toContain("After the Tool accepts a result, do not call it again")
       await expect(client.listTools()).resolves.toMatchObject({
         tools: [{ name: "echo_fixture" }, { name: ACP_STRUCTURED_OUTPUT_TOOL_NAME }],
       })
@@ -60,6 +69,155 @@ describe("AcpMcpBridge", () => {
       })
       expect(bridge.structuredResult()).toEqual({ proof: "accepted" })
       expect(execute).toHaveBeenCalledOnce()
+    } finally {
+      await client.close()
+      await bridge.close()
+    }
+  })
+
+  it("accepts the first valid structured submission and traces later calls as ignored", async () => {
+    const traceSubmission = vi.fn()
+    const validateOutput = vi.fn(async (value: unknown) => {
+      z.object({ proof: z.string() }).parse(value)
+    })
+    const context = createAgentExecutionContext()
+    const bridge = new AcpMcpBridge(
+      [],
+      {
+        jsonSchema: {
+          additionalProperties: false,
+          properties: { proof: { type: "string" } },
+          required: ["proof"],
+          type: "object",
+        },
+        type: "json",
+      },
+      context,
+      { traceSubmission, validate: validateOutput }
+    )
+    const connection = await bridge.start(context.signal)
+    const client = await connectMcp(connection)
+
+    try {
+      bridge.beginStructuredTurn()
+
+      await expect(
+        client.callTool({
+          arguments: { result: { proof: 1 } },
+          name: ACP_STRUCTURED_OUTPUT_TOOL_NAME,
+        })
+      ).resolves.toMatchObject({ isError: true })
+      await expect(
+        client.callTool({
+          arguments: { result: { proof: "accepted" } },
+          name: ACP_STRUCTURED_OUTPUT_TOOL_NAME,
+        })
+      ).resolves.not.toMatchObject({ isError: true })
+      await expect(
+        client.callTool({
+          arguments: { result: { proof: "ignored" } },
+          name: ACP_STRUCTURED_OUTPUT_TOOL_NAME,
+        })
+      ).resolves.toMatchObject({
+        content: [{ text: expect.stringContaining("ignored") }],
+      })
+
+      expect(bridge.structuredResult()).toEqual({ proof: "accepted" })
+      expect(validateOutput).toHaveBeenCalledTimes(2)
+      expect(traceSubmission.mock.calls).toEqual([
+        [1, "invalid"],
+        [2, "accepted"],
+        [3, "ignored"],
+      ])
+    } finally {
+      await client.close()
+      await bridge.close()
+    }
+  })
+
+  it("serializes concurrent submissions so the first valid result wins", async () => {
+    let releaseValidation: (() => void) | undefined
+    const validationBlocked = new Promise<void>(resolve => {
+      releaseValidation = resolve
+    })
+    const traceSubmission = vi.fn()
+    const validate = vi.fn(async () => await validationBlocked)
+    const context = createAgentExecutionContext()
+    const bridge = new AcpMcpBridge(
+      [],
+      {
+        jsonSchema: { type: "object" },
+        type: "json",
+      },
+      context,
+      { traceSubmission, validate }
+    )
+    const connection = await bridge.start(context.signal)
+    const client = await connectMcp(connection)
+
+    try {
+      bridge.beginStructuredTurn()
+      const first = client.callTool({
+        arguments: { result: { proof: "first" } },
+        name: ACP_STRUCTURED_OUTPUT_TOOL_NAME,
+      })
+      await vi.waitFor(() => expect(validate).toHaveBeenCalledOnce())
+      const second = client.callTool({
+        arguments: { result: { proof: "second" } },
+        name: ACP_STRUCTURED_OUTPUT_TOOL_NAME,
+      })
+
+      releaseValidation?.()
+      await expect(Promise.all([first, second])).resolves.toHaveLength(2)
+
+      expect(bridge.structuredResult()).toEqual({ proof: "first" })
+      expect(validate).toHaveBeenCalledOnce()
+      expect(traceSubmission.mock.calls).toEqual([
+        [1, "accepted"],
+        [2, "ignored"],
+      ])
+    } finally {
+      await client.close()
+      await bridge.close()
+    }
+  })
+
+  it("recovers from a structured submission before the final authored turn", async () => {
+    const traceSubmission = vi.fn()
+    const context = createAgentExecutionContext()
+    const bridge = new AcpMcpBridge(
+      [],
+      {
+        jsonSchema: { type: "object" },
+        type: "json",
+      },
+      context,
+      { traceSubmission, validate: async () => undefined }
+    )
+    const connection = await bridge.start(context.signal)
+    const client = await connectMcp(connection)
+
+    try {
+      await expect(
+        client.callTool({
+          arguments: { result: { proof: "early" } },
+          name: ACP_STRUCTURED_OUTPUT_TOOL_NAME,
+        })
+      ).resolves.toMatchObject({ isError: true })
+
+      bridge.beginStructuredTurn()
+      await expect(
+        client.callTool({
+          arguments: { result: { proof: "accepted" } },
+          name: ACP_STRUCTURED_OUTPUT_TOOL_NAME,
+        })
+      ).resolves.not.toMatchObject({ isError: true })
+
+      expect(bridge.structuredResult()).toEqual({ proof: "accepted" })
+      expect(traceSubmission.mock.calls).toEqual([
+        [1, "invalid"],
+        [2, "accepted"],
+      ])
     } finally {
       await client.close()
       await bridge.close()

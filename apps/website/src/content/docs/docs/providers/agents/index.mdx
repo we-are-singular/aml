@@ -165,7 +165,9 @@ MCP server identity, allowlists, transport configuration, and lifecycle belong t
 
 ### Structured output
 
-`evaluate(value, schema)` asks for one structured `<Agent />` result and validates the final JSON with the supplied Standard Schema. Codex and OpenCode use the shared ACP structured-output path. Pi uses an explicit `aml_submit_result` MCP call. All three reject invalid or missing structured results.
+`evaluate(value, schema)` asks for one structured `<Agent />` result. Built-in ACP profiles submit candidates through the invocation-owned `aml_submit_result` MCP tool. AML validates each candidate immediately with the supplied Standard Schema: an invalid candidate is returned to the Agent as a tool error, the first valid candidate is accepted, and later submissions are ignored. A turn that ends without a valid candidate rejects the evaluation.
+
+With tracing enabled, AML emits `agent.output` for every submission with its call number and `invalid`, `accepted`, or `ignored` status. Payloads are not included in these events.
 
 ### Follow-up turns
 

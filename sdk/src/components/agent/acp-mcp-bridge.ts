@@ -10,6 +10,7 @@ import type { AmlJsonValue } from "../../core/aml-json-value.js"
 import type { AgentJavaScriptTool, AgentToolExecutionContext } from "../tool/agent-tool.js"
 import type { AgentExecutionContext } from "./agent-execution-context.js"
 import type { AgentOutputRequest } from "./agent-output-request.js"
+import type { AgentStructuredOutputServices } from "./agent-structured-output-services.js"
 import type { AcpStructuredOutputController } from "./acp-agent-session.js"
 
 export const ACP_STRUCTURED_OUTPUT_TOOL_NAME = "aml_submit_result"
@@ -32,29 +33,40 @@ export class AcpMcpBridge implements AcpStructuredOutputController {
   readonly #http: HttpServer
   readonly #name = `aml_${randomUUID().replaceAll("-", "")}`
   readonly #output: AgentOutputRequest | undefined
+  readonly #outputServices: Readonly<AgentStructuredOutputServices> | undefined
   readonly #tools: ReadonlyMap<string, AgentJavaScriptTool>
   #acceptStructuredOutput = false
   #closePromise: Promise<void> | undefined
   #connection: AcpMcpBridgeConnection | undefined
+  #structuredAccepted = false
   #structuredCalls = 0
   #structuredError: Error | undefined
+  #structuredSubmissionQueue: Promise<void> = Promise.resolve()
   #structuredValue: unknown
 
   readonly instruction =
-    `Call ${ACP_STRUCTURED_OUTPUT_TOOL_NAME} exactly once with the final value in its result field. ` +
+    `Call ${ACP_STRUCTURED_OUTPUT_TOOL_NAME} once with the final value in its result field. ` +
+    "If the Tool returns an error, correct the result and retry the call. " +
+    "After the Tool accepts a result, do not call it again. " +
     "Do not return a substitute JSON value only as message text."
 
   constructor(
     tools: readonly AgentJavaScriptTool[],
     output: AgentOutputRequest | undefined,
-    context: AgentExecutionContext
+    context: AgentExecutionContext,
+    outputServices?: Readonly<AgentStructuredOutputServices>
   ) {
     if (tools.some(tool => tool.name === ACP_STRUCTURED_OUTPUT_TOOL_NAME)) {
       throw new TypeError(`AML JavaScript Tool name "${ACP_STRUCTURED_OUTPUT_TOOL_NAME}" is reserved`)
     }
 
+    if ((output === undefined) !== (outputServices === undefined)) {
+      throw new TypeError("AML ACP structured output requires invocation-owned validation services")
+    }
+
     this.#context = context
     this.#output = output
+    this.#outputServices = outputServices
     this.#tools = new Map(tools.map(tool => [tool.name, tool]))
     this.#http = createServer((request, response) => {
       void this.#handleRequest(request, response)
@@ -87,8 +99,8 @@ export class AcpMcpBridge implements AcpStructuredOutputController {
       throw this.#structuredError
     }
 
-    if (this.#structuredCalls !== 1) {
-      throw new Error(`ACP Agent must call ${ACP_STRUCTURED_OUTPUT_TOOL_NAME} exactly once on the structured turn`)
+    if (!this.#structuredAccepted) {
+      throw new Error(`ACP Agent did not submit a valid result through ${ACP_STRUCTURED_OUTPUT_TOOL_NAME}`)
     }
 
     return this.#structuredValue
@@ -276,20 +288,40 @@ export class AcpMcpBridge implements AcpStructuredOutputController {
 
   #submitStructuredOutput(argumentsValue: unknown) {
     this.#structuredCalls += 1
+    const call = this.#structuredCalls
 
+    const submission = this.#structuredSubmissionQueue.then(
+      async () => await this.#processStructuredOutput(argumentsValue, call)
+    )
+    this.#structuredSubmissionQueue = submission.then(
+      () => undefined,
+      () => undefined
+    )
+    return submission
+  }
+
+  async #processStructuredOutput(argumentsValue: unknown, call: number) {
     if (this.#output === undefined) {
       this.#structuredError ??= new Error("ACP Agent submitted structured output for a text invocation")
       return toolError(this.#structuredError.message)
     }
 
     if (!this.#acceptStructuredOutput) {
-      this.#structuredError ??= new Error("ACP Agent submitted structured output before the final authored turn")
-      return toolError(this.#structuredError.message)
+      const message = "ACP Agent submitted structured output before the final authored turn"
+      this.#outputServices?.traceSubmission(call, "invalid")
+      return toolError(message)
     }
 
-    if (this.#structuredCalls > 1) {
-      this.#structuredError ??= new Error("ACP Agent submitted structured output more than once")
-      return toolError(this.#structuredError.message)
+    if (this.#structuredAccepted) {
+      this.#outputServices?.traceSubmission(call, "ignored")
+      return {
+        content: [
+          {
+            text: "A valid structured result was already accepted; this submission was ignored.",
+            type: "text" as const,
+          },
+        ],
+      }
     }
 
     if (
@@ -297,14 +329,39 @@ export class AcpMcpBridge implements AcpStructuredOutputController {
       argumentsValue === null ||
       !Object.prototype.hasOwnProperty.call(argumentsValue, "result")
     ) {
-      this.#structuredError ??= new Error(`${ACP_STRUCTURED_OUTPUT_TOOL_NAME} requires a result property`)
-      return toolError(this.#structuredError.message)
+      const message = `${ACP_STRUCTURED_OUTPUT_TOOL_NAME} requires a result property`
+      this.#outputServices?.traceSubmission(call, "invalid")
+      return toolError(message)
     }
 
-    this.#structuredValue = Reflect.get(argumentsValue, "result")
+    const result = Reflect.get(argumentsValue, "result")
+
+    try {
+      await this.#outputServices?.validate(result)
+    } catch (error) {
+      this.#outputServices?.traceSubmission(call, "invalid")
+      return toolError(validationErrorMessage(error))
+    }
+
+    this.#structuredAccepted = true
+    this.#structuredValue = result
+    this.#outputServices?.traceSubmission(call, "accepted")
     return {
       content: [{ text: "Structured result accepted.", type: "text" as const }],
     }
+  }
+}
+
+function validationErrorMessage(error: unknown): string {
+  if (!(error instanceof Error)) return "Structured result failed schema validation"
+
+  const cause = error.cause
+  if (cause === undefined) return error.message
+
+  try {
+    return `${error.message}: ${JSON.stringify(cause)}`
+  } catch {
+    return error.message
   }
 }
 

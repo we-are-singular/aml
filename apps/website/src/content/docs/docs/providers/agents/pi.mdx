@@ -200,7 +200,7 @@ System instructions for this AML session:
 
 When MCP is enabled, AML also explains that Tools and MCP use Pi's `mcp` proxy. This is intentionally different from providers with native system fields; treat the first-turn prefix as part of the authored prompt budget.
 
-For `evaluate(value, schema)`, Pi receives an explicit instruction to call the MCP tool `aml_submit_result` exactly once with the final value in `args.result`. Returning substitute JSON only as message text is not sufficient. AML then validates the submitted JSON against the Standard Schema and rejects invalid results.
+For `evaluate(value, schema)`, Pi receives an explicit instruction to call the MCP tool `aml_submit_result` with the final value in `args.result`. Returning substitute JSON only as message text is not sufficient. AML immediately validates each candidate against the Standard Schema and returns invalid candidates as tool errors so Pi can correct them. The first valid candidate is accepted and later submissions are ignored.
 
 ```tsx
 import { Agent, evaluate, piAgent } from "@aml-jsx/sdk"
@@ -247,7 +247,7 @@ AML materializes wrapper files, Pi settings, and lazy MCP configuration into tha
 
 3. **Structured output rejects**
 
-   Inspect whether Pi called `aml_submit_result` exactly once and passed a JSON-compatible value under `args.result`. Message text that resembles JSON is not the structured result.
+   Enable tracing and inspect the `agent.output` events. Pi must submit at least one valid JSON-compatible value under `args.result`; invalid attempts may be corrected, while submissions after the first valid result are ignored. Message text that resembles JSON is not the structured result.
 
 4. **The system instruction appears in the answer**
 

@@ -75,7 +75,7 @@ Use a Standard Schema only when the component has one structured `<Agent />` res
 const report = await evaluate(<Agent>Return the report.</Agent>, ReportSchema)
 ```
 
-The schema remains application-owned. AML converts it for the provider and validates the final structured value before returning it.
+The schema remains application-owned. AML derives the provider-facing JSON Schema from it and retains the authoritative validator. On the shared ACP path, AML validates every `aml_submit_result` candidate immediately so the Agent can correct invalid output in the same turn. The first valid candidate wins; later candidates are ignored. AML still enforces the schema at the final application boundary before returning the value.
 
 ## Errors and lifecycle events
 

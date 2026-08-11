@@ -41,7 +41,7 @@ For a live session, replace the deterministic provider with [Codex](/docs/provid
 
 AML resolves child `<Agent />` components, text, [`<System />`](/docs/reference/primitives/system/), [`<Skill />`](/docs/reference/primitives/skill/), [`<Tool />`](/docs/reference/primitives/tool/), [`<Mcp />`](/docs/reference/primitives/mcp/), and [`<FollowUp />`](/docs/reference/primitives/follow-up/) descriptors before the provider session begins. Prompt and system fragments are trimmed at the session boundary; ordinary child text is otherwise concatenated without inserted separators.
 
-The provider returns an `AgentResponse`. Normal evaluation contributes its `text` to the surrounding AML value. Component-local [`evaluate()`](/docs/reference/runtime/#component-local-evaluation) can additionally validate a single `<Agent />` result against a Standard Schema.
+The provider returns an `AgentResponse`. Normal evaluation contributes its `text` to the surrounding AML value. Component-local [`evaluate()`](/docs/reference/runtime/#component-local-evaluation) can additionally validate a single `<Agent />` result against a Standard Schema. Built-in ACP providers validate submitted candidates during the turn, accept the first valid candidate, and ignore later submissions.
 
 ## Placement and scope
 

@@ -172,7 +172,7 @@ For authored MCP servers, use [`<Mcp />`](/docs/reference/primitives/mcp/) and t
 
 ## Structured output and follow-ups
 
-`evaluate(value, schema)` uses the shared ACP structured-output path. OpenCode receives the provider session's output request and AML validates the final JSON against the supplied Standard Schema. A structured evaluation must resolve to one `<Agent />` and cannot be satisfied by ordinary prose.
+`evaluate(value, schema)` uses the shared ACP structured-output path. OpenCode submits candidates through `aml_submit_result`; AML validates each one immediately against the supplied Standard Schema and returns invalid candidates as tool errors so OpenCode can correct them. The first valid candidate is accepted and later submissions are ignored. A structured evaluation must resolve to one `<Agent />` and cannot be satisfied by ordinary prose.
 
 [`<FollowUp />`](/docs/reference/primitives/follow-up/) stays in the same OpenCode session. It cannot change the Agent's Tools or MCP set between turns; later turns stop when an earlier turn fails. This makes follow-ups useful for clarification, not for dynamically widening capabilities.
 
