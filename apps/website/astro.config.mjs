@@ -2,6 +2,7 @@ import { defineConfig } from "astro/config"
 import starlight from "@astrojs/starlight"
 import sitemap from "@astrojs/sitemap"
 import tailwindcss from "@tailwindcss/vite"
+import { agentSkillsPlugin } from "./src/plugins/agent-skills.mjs"
 import { docsMarkdownPlugin } from "./src/plugins/docs-markdown/plugin.mjs"
 import remarkBasePath from "./src/plugins/remark-base-path.mjs"
 import { sitemapAliasPlugin } from "./src/plugins/sitemap-alias.mjs"
@@ -233,5 +234,6 @@ export default defineConfig({
       filter: page => !page.endsWith(".md") && !page.endsWith(".txt"),
     }),
     sitemapAliasPlugin(),
+    agentSkillsPlugin(),
   ],
 })
