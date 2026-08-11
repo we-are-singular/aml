@@ -7,12 +7,31 @@ import { execa } from "execa"
 
 import { AcpMcpBridge, ACP_STRUCTURED_OUTPUT_TOOL_NAME } from "../src/components/agent/acp-mcp-bridge.js"
 import { AcpMcpRelay } from "../src/components/agent/acp-mcp-relay.js"
+import {
+  agentStructuredOutputServices,
+  attachAgentStructuredOutputServices,
+} from "../src/components/agent/agent-structured-output-services.js"
 import { spawnLocalProcess } from "../src/components/agent/spawn-local-process.js"
 import { defineTool } from "../src/components/tool/define-tool.js"
 import type { SandboxRuntime } from "../src/components/sandbox/sandbox-runtime.js"
 import { createAgentExecutionContext } from "../src/testing/create-agent-execution-context.js"
 
 describe("AcpMcpBridge", () => {
+  it("shares structured-output services across SDK module copies", async () => {
+    const context = createAgentExecutionContext()
+    const services = {
+      traceSubmission: vi.fn(),
+      validate: vi.fn(async () => undefined),
+    }
+
+    attachAgentStructuredOutputServices(context, services)
+    vi.resetModules()
+    const secondCopy = await import("../src/components/agent/agent-structured-output-services.js")
+
+    expect(agentStructuredOutputServices(context)).toBe(services)
+    expect(secondCopy.agentStructuredOutputServices(context)).toBe(services)
+  })
+
   it("serves JavaScript Tools and structured submission over authenticated MCP", async () => {
     const execute = vi.fn(async ({ value }: { value: string }) => ({
       echoed: value,
