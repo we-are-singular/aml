@@ -408,15 +408,15 @@ apps/website/src/
 
 The public routes are intentionally available to both people and agents:
 
-| Route                       | Purpose                                                         |
-| --------------------------- | --------------------------------------------------------------- |
-| `/`                         | Marketing and project overview.                                 |
-| `/docs/` and `/docs/**`     | Navigable Starlight documentation.                              |
-| `/docs.md`                  | Markdown alternative for the documentation homepage.            |
-| `/docs/<page>.md`           | Markdown alternative linked from every documentation page.      |
-| `/llms.txt`                 | Concise project and editorial overview.                         |
-| `/docs/llms.txt`            | Complete documentation in one text response.                    |
-| `/robots.txt`, `/sitemap-*` | Search crawler discovery; Markdown alternatives stay canonical. |
+| Route                         | Purpose                                                         |
+| ----------------------------- | --------------------------------------------------------------- |
+| `/`                           | Marketing and project overview.                                 |
+| `/docs/` and `/docs/**`       | Navigable Starlight documentation.                              |
+| `/docs.md`                    | Markdown alternative for the documentation homepage.            |
+| `/docs/<page>.md`             | Markdown alternative linked from every documentation page.      |
+| `/llms.txt`                   | Concise project and editorial overview.                         |
+| `/docs/llms.txt`              | Complete documentation in one text response.                    |
+| `/robots.txt`, `/sitemap.xml` | Search crawler discovery; Markdown alternatives stay canonical. |
 
 Marketing metadata is centralized in `src/config/site.ts`. Starlight extends its generated metadata through
 `components/docs/DocHead.astro`, which adds the share image, Markdown alternate, complete-docs discovery link, and

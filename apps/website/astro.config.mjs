@@ -4,6 +4,7 @@ import sitemap from "@astrojs/sitemap"
 import tailwindcss from "@tailwindcss/vite"
 import { docsMarkdownPlugin } from "./src/plugins/docs-markdown/plugin.mjs"
 import remarkBasePath from "./src/plugins/remark-base-path.mjs"
+import { sitemapAliasPlugin } from "./src/plugins/sitemap-alias.mjs"
 
 const base = process.env.SITE_BASE ?? "/"
 const site = (process.env.SITE_URL ?? "https://agent-markup-language.com").replace(/\/$/, "")
@@ -231,5 +232,6 @@ export default defineConfig({
     sitemap({
       filter: page => !page.endsWith(".md") && !page.endsWith(".txt"),
     }),
+    sitemapAliasPlugin(),
   ],
 })
