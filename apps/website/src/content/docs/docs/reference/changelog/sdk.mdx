@@ -7,6 +7,34 @@ This page tracks `@aml-jsx/sdk`. Entries are newest first. See [GitHub Releases]
 
 {/* changelog:entries */}
 
+{/* changelog:sdk:v0.4.3:start */}
+
+## SDK v0.4.3 — Recoverable structured output submissions
+
+Released 2026-08-11.
+
+Agents now receive actionable validation errors when submitting invalid structured output, allowing correction and retry within the same turn instead of terminal failure. The first valid submission wins; subsequent submissions are traced but ignored. This release also adds a new <code>agent.output</code> trace event for observability and an automated changelog authoring workflow.
+
+### Highlights
+
+- **Recoverable structured output submissions** The <code>aml_submit_result</code> tool now validates each submission against the output schema before accepting it. Invalid submissions return a tool error with the validation failure, allowing the agent to retry within the same turn. After the first valid submission is accepted, later submissions are silently ignored with a success response. Early submissions (before the final authored turn) are also retriable rather than terminal. [Structured output cookbook](/docs/cookbook/structured-output) · [Agent primitives reference](/docs/reference/primitives/agent)
+- **Structured output schema validation** The bridge now calls the application-owned schema's validate method on each submission before accepting it. Validation failures are returned to the agent as tool errors containing the error message and cause. Validation is performed through <code>AgentStructuredOutputServices</code>, a shared registry that uses <code>Symbol.for</code> to work across multiple physical copies of the SDK in one JavaScript realm. [Runtime architecture](/docs/runtime)
+- **New <code>agent.output</code> trace event** A new <code>agent.output</code> trace event fires on every <code>aml_submit_result</code> call with a call number and status of 'accepted', 'ignored', or 'invalid'. This provides structured observability into the submission lifecycle: you can see how many attempts an agent made, which attempt was accepted, and whether earlier attempts were rejected by validation or arrived before the turn was ready. [Observability](/docs/observability)
+- **Automated changelog authoring workflow** The SDK and CLI release-it configurations now run a changelog generation script as part of the <code>after:bump</code> hook, which produces markdown changelog entries and stages them. The generated changelog is formatted and committed automatically. [SDK changelog](/docs/reference/changelog/sdk) · [CLI changelog](/docs/reference/changelog/cli)
+
+### Commits
+
+- fix(sdk): share structured output services (2b4fa27)
+- fix(sdk): recover structured output submissions (261e748)
+- fix(sdk): stream release hook traces (1ba1c80)
+- fix(sdk): review generated changelog formatting (f494035)
+- fix(sdk): trace changelog authoring (a21ad63)
+- fix(sdk): preserve authored changelog markdown (dd58489)
+- fix(sdk): format generated changelog entries (09be3c1)
+- feat(sdk): add aml-authored changelog workflow (a8e9e60)
+
+{/* changelog:sdk:v0.4.3:end */}
+
 {/* changelog:sdk:v0.4.2:start */}
 
 ## SDK v0.4.2 — Independent package release lanes
