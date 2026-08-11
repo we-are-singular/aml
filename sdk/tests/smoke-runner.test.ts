@@ -1,13 +1,20 @@
 import { describe, expect, it } from "vitest"
 
-import { parseSmokeCommand, selectSmokeCases, SMOKE_AGENT_NAMES, SMOKE_SANDBOX_NAMES } from "./smoke/smoke-matrix.js"
+import {
+  parseSmokeCommand,
+  requiredCopilotGithubToken,
+  selectSmokeCases,
+  SMOKE_AGENT_NAMES,
+  SMOKE_SANDBOX_NAMES,
+} from "./smoke/smoke-matrix.js"
 
 describe("smoke matrix runner", () => {
   it("derives the complete Cartesian product from both registries", () => {
-    expect(SMOKE_AGENT_NAMES).toEqual(["codex", "opencode", "pi"])
+    expect(SMOKE_AGENT_NAMES).toEqual(["codex", "copilot", "opencode", "pi"])
     expect(SMOKE_SANDBOX_NAMES).toEqual(["daytona", "docker", "local", "modal"])
     expect(selectSmokeCases()).toHaveLength(SMOKE_AGENT_NAMES.length * SMOKE_SANDBOX_NAMES.length)
     expect(selectSmokeCases()).toContainEqual({ agent: "codex", sandbox: "daytona" })
+    expect(selectSmokeCases()).toContainEqual({ agent: "copilot", sandbox: "local" })
     expect(selectSmokeCases()).toContainEqual({ agent: "pi", sandbox: "local" })
   })
 
@@ -38,5 +45,26 @@ describe("smoke matrix runner", () => {
     expect(() => parseSmokeCommand(["--agent", "missing"])).toThrow('Unknown smoke Agent "missing"')
     expect(() => parseSmokeCommand(["--sandbox"])).toThrow("--sandbox requires a value")
     expect(() => parseSmokeCommand(["--wat"])).toThrow('Unknown smoke argument "--wat"')
+  })
+
+  it("resolves Copilot credentials with an optional smoke override and native precedence", () => {
+    expect(
+      requiredCopilotGithubToken({
+        AML_COPILOT_GITHUB_TOKEN: "smoke-override",
+        COPILOT_GITHUB_TOKEN: "copilot-token",
+        GH_TOKEN: "gh-token",
+        GITHUB_TOKEN: "github-token",
+      })
+    ).toBe("smoke-override")
+    expect(
+      requiredCopilotGithubToken({
+        COPILOT_GITHUB_TOKEN: "copilot-token",
+        GH_TOKEN: "gh-token",
+        GITHUB_TOKEN: "github-token",
+      })
+    ).toBe("copilot-token")
+    expect(requiredCopilotGithubToken({ GH_TOKEN: "gh-token", GITHUB_TOKEN: "github-token" })).toBe("gh-token")
+    expect(requiredCopilotGithubToken({ GITHUB_TOKEN: "github-token" })).toBe("github-token")
+    expect(() => requiredCopilotGithubToken({})).toThrow("Copilot smoke requires COPILOT_GITHUB_TOKEN")
   })
 })

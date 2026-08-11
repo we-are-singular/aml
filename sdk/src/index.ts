@@ -1,6 +1,7 @@
 export * from "./core.js"
 
 // The public package ships the built-in provider adapters from one entry point.
+export * from "@aml-jsx/agent-copilot"
 export * from "@aml-jsx/agent-codex"
 export * from "@aml-jsx/agent-opencode"
 export * from "@aml-jsx/agent-pi"

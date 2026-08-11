@@ -32,7 +32,7 @@ export const benefits: readonly Benefit[] = [
   {
     title: "Change providers without starting over",
     description:
-      "Move between OpenCode, Codex, and Pi — or use a deterministic test provider — without rebuilding the workflow around a new SDK.",
+      "Move between OpenCode, Codex, GitHub Copilot, and Pi — or use a deterministic test provider — without rebuilding the workflow around a new SDK.",
     icon: "switch",
     iconClass: "bg-agent-soft text-agent",
   },

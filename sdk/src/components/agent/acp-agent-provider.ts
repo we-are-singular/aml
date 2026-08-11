@@ -31,7 +31,11 @@ import { spawnLocalProcess } from "./spawn-local-process.js"
  * Execution environment prepared once for an ACP Agent profile.
  */
 export interface AcpAgentLaunchContext {
+  /** Invocation-owned MCP server hosting AML JavaScript Tools and structured output. */
+  readonly amlMcpServerName?: string
   readonly cwd: string
+  /** Whether the launched process inherits the AML host's `process.env`. */
+  readonly inheritsProcessEnvironment: boolean
   readonly mcpServers: readonly McpServer[]
   readonly request: Readonly<AgentRequest>
   readonly stateDirectory: string
@@ -92,6 +96,7 @@ class AcpAgentProvider<Name extends string> extends AbstractAgentProvider<Name> 
   protected async openSession(request: AgentRequest, context: AgentExecutionContext): Promise<AgentProviderSession> {
     const mcpServers = [...mapMcpServers(request.mcpServers, this.#profile)]
     const javaScriptTools = request.tools
+    let amlMcpServerName: string | undefined
     let bridge: AcpMcpBridge | undefined
     let execution: Readonly<AcpExecution> | undefined
     let relay: AcpMcpRelay | undefined
@@ -117,10 +122,11 @@ class AcpAgentProvider<Name extends string> extends AbstractAgentProvider<Name> 
           relay = started.relay
         }
 
+        amlMcpServerName = connection.name
         mcpServers.push(bridge.asMcpServer(connection))
       }
 
-      execution = await prepareExecution(this.#profile, request, mcpServers, context)
+      execution = await prepareExecution(this.#profile, request, mcpServers, context, amlMcpServerName)
       const session = await openAcpSession({
         ...(execution.launch.authenticationMethodId === undefined
           ? {}
@@ -169,7 +175,8 @@ async function prepareExecution<Name extends string>(
   profile: Readonly<AcpAgentProfile<Name>>,
   request: Readonly<AgentRequest>,
   mcpServers: readonly McpServer[],
-  context: AgentExecutionContext
+  context: AgentExecutionContext,
+  amlMcpServerName: string | undefined
 ): Promise<Readonly<AcpExecution>> {
   const sandbox = context.sandbox
 
@@ -179,7 +186,14 @@ async function prepareExecution<Name extends string>(
     const cleanup = async (): Promise<void> => await rm(stateDirectory, { force: true, recursive: true })
 
     try {
-      const launch = profile.createLaunch({ cwd, mcpServers, request, stateDirectory })
+      const launch = profile.createLaunch({
+        ...(amlMcpServerName === undefined ? {} : { amlMcpServerName }),
+        cwd,
+        inheritsProcessEnvironment: true,
+        mcpServers,
+        request,
+        stateDirectory,
+      })
       await writeLocalLaunchFiles(stateDirectory, launch.files ?? [])
       const processHandle = await spawnLocalProcess(launch.command, launch.args ?? [], {
         cwd,
@@ -224,7 +238,14 @@ async function prepareExecution<Name extends string>(
   }
 
   try {
-    const launch = profile.createLaunch({ cwd, mcpServers, request, stateDirectory })
+    const launch = profile.createLaunch({
+      ...(amlMcpServerName === undefined ? {} : { amlMcpServerName }),
+      cwd,
+      inheritsProcessEnvironment: false,
+      mcpServers,
+      request,
+      stateDirectory,
+    })
     await materializeSandboxFiles(sandbox.lease.runtime, stateDirectory, launch.files ?? [], context.signal)
     const processHandle = await sandbox.lease.runtime.spawn(launch.command, launch.args ?? [], {
       cwd: sandbox.cwd,

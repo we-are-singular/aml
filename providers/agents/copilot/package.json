@@ -1,0 +1,26 @@
+{
+  "name": "@aml-jsx/agent-copilot",
+  "version": "0.0.0",
+  "private": true,
+  "files": [
+    "dist"
+  ],
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "vite build && tsc --project tsconfig.build.json",
+    "lint": "tsc --noEmit && oxlint .",
+    "package:check": "node ../../../scripts/check-agent-provider-package.ts copilot copilotAgent",
+    "test": "vitest run",
+    "test:integration": "vitest run tests/copilot-agent.integration.test.tsx"
+  },
+  "dependencies": {
+    "@aml-jsx/sdk": "*"
+  }
+}

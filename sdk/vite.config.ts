@@ -13,6 +13,7 @@ export default defineConfig({
   },
   resolve: {
     alias: {
+      "@aml-jsx/agent-copilot": resolve(import.meta.dirname, "../providers/agents/copilot/src/index.ts"),
       "@aml-jsx/agent-codex": resolve(import.meta.dirname, "../providers/agents/codex/src/index.ts"),
       "@aml-jsx/agent-opencode": resolve(import.meta.dirname, "../providers/agents/opencode/src/index.ts"),
       "@aml-jsx/agent-pi": resolve(import.meta.dirname, "../providers/agents/pi/src/index.ts"),
@@ -31,6 +32,7 @@ export default defineConfig({
       entryRoot: resolve(import.meta.dirname, ".."),
       include: [
         "src",
+        "../providers/agents/copilot/src",
         "../providers/agents/codex/src",
         "../providers/agents/opencode/src",
         "../providers/agents/pi/src",
