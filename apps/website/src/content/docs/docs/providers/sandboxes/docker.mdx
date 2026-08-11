@@ -43,7 +43,7 @@ The image must already contain everything the workflow needs:
 - project dependencies needed by commands;
 - a user that can read `/workspace` and write there when the Workspace is mounted read-write.
 
-`node:26-alpine` is a valid smoke-test image for basic shell/Node commands, but it is not a complete Codex, OpenCode, or Pi Agent image merely because it contains Node. Build and publish a deliberate image for a real Agent workflow, or use the trusted `setup` hook for experiments.
+`node:26-alpine` is a valid smoke-test image for basic shell/Node commands, but it is not a complete Codex, GitHub Copilot, OpenCode, or Pi Agent image merely because it contains Node. Build and publish a deliberate image for a real Agent workflow, or use the trusted `setup` hook for experiments.
 
 See [Recommended Sandbox images](/docs/providers/sandboxes/images/) for the verified Cloudflare OpenCode image, current Codex build baseline, Modal recipe status, and an image verification checklist.
 

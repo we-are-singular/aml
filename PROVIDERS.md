@@ -6,7 +6,7 @@ Provider implementations live under private `providers/<kind>/<name>` workspaces
 
 ## Recommended order
 
-1. Prove the full Codex, OpenCode, and Pi matrix through the currently supported Sandbox `spawn()` implementations.
+1. Prove the full Codex, GitHub Copilot, OpenCode, and Pi matrix through the currently supported Sandbox `spawn()` implementations.
 2. Revisit AgentOS only when it can join that same ACP process boundary.
 3. Add further coding agents only through compatible ACP implementations.
 4. Design volume-mounted Workspaces with compatible Sandbox providers deliberately.
@@ -22,24 +22,24 @@ Model SDKs remain possible custom providers, but they are not a second built-in 
 
 ### Implemented
 
-| Provider | Public export     | Kind           | Native coding tools |
-| -------- | ----------------- | -------------- | ------------------- |
-| OpenCode | `opencodeAgent()` | Coding harness | Yes                 |
-| Codex    | `codexAgent()`    | Coding harness | Yes                 |
-| Pi       | `piAgent()`       | Coding harness | Yes                 |
+| Provider       | Public export     | Kind           | Native coding tools |
+| -------------- | ----------------- | -------------- | ------------------- |
+| OpenCode       | `opencodeAgent()` | Coding harness | Yes                 |
+| Codex          | `codexAgent()`    | Coding harness | Yes                 |
+| GitHub Copilot | `copilotAgent()`  | Coding harness | Yes                 |
+| Pi             | `piAgent()`       | Coding harness | Yes                 |
 
 These public factories are thin ACP profiles over the shared session engine.
 
 ### Priority candidates
 
-| Priority | Provider                                                                                                 | Proposed package         | Why it is useful                                                                                                       |
-| -------- | -------------------------------------------------------------------------------------------------------- | ------------------------ | ---------------------------------------------------------------------------------------------------------------------- |
-| P0       | [GitHub Copilot](https://agentclientprotocol.com/get-started/registry)                                   | `@aml-jsx/agent-copilot` | Registry-distributed ACP Agent with broad adoption; a high-value proof that another major vendor needs only a profile. |
-| P0       | [Hermes](https://github.com/NousResearch/hermes-agent/blob/main/website/docs/user-guide/features/acp.md) | `@aml-jsx/agent-hermes`  | Native stdio ACP mode with sessions, tools, diffs, terminal operations, approvals, and streamed content.               |
-| P0       | [Amp](https://agentclientprotocol.com/get-started/registry)                                              | `@aml-jsx/agent-amp`     | Registry-distributed ACP wrapper for Amp and a useful proof for another opinionated coding harness.                    |
-| P1       | [Claude Agent](https://agentclientprotocol.com/get-started/registry)                                     | `@aml-jsx/agent-claude`  | Maintained ACP wrapper for Claude Code; important parity for a major coding agent.                                     |
-| P1       | [Cursor](https://agentclientprotocol.com/get-started/registry)                                           | `@aml-jsx/agent-cursor`  | Registry-distributed Cursor Agent; tests a vendor-owned ACP implementation rather than an AML-maintained integration.  |
-| P1       | [Gemini CLI](https://agentclientprotocol.com/get-started/registry)                                       | `@aml-jsx/agent-gemini`  | Native ACP support from another major coding-agent family.                                                             |
+| Priority | Provider                                                                                                 | Proposed package        | Why it is useful                                                                                                      |
+| -------- | -------------------------------------------------------------------------------------------------------- | ----------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| P0       | [Hermes](https://github.com/NousResearch/hermes-agent/blob/main/website/docs/user-guide/features/acp.md) | `@aml-jsx/agent-hermes` | Native stdio ACP mode with sessions, tools, diffs, terminal operations, approvals, and streamed content.              |
+| P0       | [Amp](https://agentclientprotocol.com/get-started/registry)                                              | `@aml-jsx/agent-amp`    | Registry-distributed ACP wrapper for Amp and a useful proof for another opinionated coding harness.                   |
+| P1       | [Claude Agent](https://agentclientprotocol.com/get-started/registry)                                     | `@aml-jsx/agent-claude` | Maintained ACP wrapper for Claude Code; important parity for a major coding agent.                                    |
+| P1       | [Cursor](https://agentclientprotocol.com/get-started/registry)                                           | `@aml-jsx/agent-cursor` | Registry-distributed Cursor Agent; tests a vendor-owned ACP implementation rather than an AML-maintained integration. |
+| P1       | [Gemini CLI](https://agentclientprotocol.com/get-started/registry)                                       | `@aml-jsx/agent-gemini` | Native ACP support from another major coding-agent family.                                                            |
 
 ### Research candidates
 

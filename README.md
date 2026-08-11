@@ -14,7 +14,7 @@ Agent SDKs are good at running one provider session. Real workflows usually need
 
 Without a shared runtime, those concerns become orchestration code tied to one provider. AML keeps the workflow declarative and uses the Agent Client Protocol (ACP) as the canonical session boundary for built-in coding agents.
 
-When an `<Agent />` node resolves, the AML Runtime preloads its `<Workspace />` into the selected `<Sandbox />` and prompts the Agent SDK through ACP. The Workspace keeps files durable between runs; the Sandbox owns code execution, filesystem access, and permissions.
+When an `<Agent />` node resolves, the AML Runtime preloads its `<Workspace />` into the selected `<Sandbox />` and prompts the coding Agent through ACP. The Workspace keeps files durable between runs; the Sandbox owns code execution, filesystem access, and permissions.
 
 ```text
 AML tree
@@ -89,7 +89,7 @@ runtime.on("trace", createConsoleTracer())
 console.log(await runtime.evaluate(<Review />))
 ```
 
-The workflow stays the same when the provider changes. Replace `OpenCode` with a Codex or Pi provider without rewriting the AML tree:
+The workflow stays the same when the provider changes. Replace `OpenCode` with a Codex, GitHub Copilot, or Pi provider without rewriting the AML tree:
 
 ```tsx
 import { piAgent } from "@aml-jsx/sdk"
@@ -100,7 +100,7 @@ const Pi = piAgent({
 })
 ```
 
-Codex, OpenCode, and Pi use compatible ACP Agent executables. Their normal public factories are thin profiles over one shared session engine, so changing the provider does not select a different local-versus-Sandbox lifecycle. The selected host, image, snapshot, or package set must contain the compatible executable; AML does not install Agents implicitly.
+Codex, GitHub Copilot, OpenCode, and Pi use compatible ACP Agent executables. Their normal public factories are thin profiles over one shared session engine, so changing the provider does not select a different local-versus-Sandbox lifecycle. The selected host, image, snapshot, or package set must contain the compatible executable; AML does not install Agents implicitly.
 
 ## Coding agents
 
@@ -164,6 +164,7 @@ The public SDK includes the runtime, built-in integrations, and testing utilitie
 | --------- | ------------------------------------------------ | ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Agent     | [OpenCode adapter](./providers/agents/opencode)  | `opencodeAgent()`       | OpenCode ACP profile with model/system mapping and native capability metadata.                                                                                                                       |
 | Agent     | [Codex adapter](./providers/agents/codex)        | `codexAgent()`          | Codex ACP profile using the maintained Codex ACP adapter.                                                                                                                                            |
+| Agent     | [Copilot adapter](./providers/agents/copilot)    | `copilotAgent()`        | GitHub Copilot CLI profile using its native ACP server and invocation-private Copilot state.                                                                                                         |
 | Agent     | [Pi adapter](./providers/agents/pi)              | `piAgent()`             | Pi ACP profile using the maintained Pi ACP adapter.                                                                                                                                                  |
 | Sandbox   | [Local adapter](./providers/sandboxes/local)     | `localSandbox()`        | Runs the common Sandbox runtime as trusted host processes for development; it is explicitly non-isolating.                                                                                           |
 | Sandbox   | [Docker adapter](./providers/sandboxes/docker)   | `dockerSandbox()`       | Starts a user-selected image, mounts the Workspace, and exposes the common bounded command runtime without building or provisioning the image.                                                       |
@@ -176,12 +177,12 @@ The public SDK includes the runtime, built-in integrations, and testing utilitie
 
 The credentialed smoke runner exercises the complete built-in Agent × Sandbox matrix:
 
-| Sandbox \ Agent | Codex | OpenCode | Pi  |
-| --------------- | ----- | -------- | --- |
-| Local           | Yes   | Yes      | Yes |
-| Docker          | Yes   | Yes      | Yes |
-| Daytona         | Yes   | Yes      | Yes |
-| Modal           | Yes   | Yes      | Yes |
+| Sandbox \ Agent | Codex | Copilot | OpenCode | Pi  |
+| --------------- | ----- | ------- | -------- | --- |
+| Local           | Yes   | Yes     | Yes      | Yes |
+| Docker          | Yes   | Yes     | Yes      | Yes |
+| Daytona         | Yes   | Yes     | Yes      | Yes |
+| Modal           | Yes   | Yes     | Yes      | Yes |
 
 Every cell launches its Agent through the same shared ACP engine and `SandboxRuntime.spawn()`. These proofs use read-write Workspaces where a provider cannot enforce read-only access. The selected host, image, or snapshot must contain the required executable. Sandbox providers do not install Agents implicitly.
 
@@ -300,7 +301,7 @@ Requirements:
 - Node.js 26 or newer
 - npm 11 or newer
 - Docker for Docker integration tests, examples, and the local MinIO integration
-- Configured OpenCode, Pi-supported model-provider, or Codex credentials only for live Agent examples
+- Configured Codex, GitHub Copilot, OpenCode, or Pi-supported model-provider credentials only for live Agent examples
 
 Install dependencies:
 
@@ -345,7 +346,7 @@ docker compose down
 
 Smoke files use a dedicated Vitest configuration and stay outside default unit tests. Omitting both smoke filters runs every registered Agent against every registered Sandbox. npm requires the `--` separator before smoke-runner options.
 
-The smoke runner loads the repository's untracked `.env`. All three Agent rows use `OPENAI_API_KEY` or `AML_CODEX_API_KEY`; `AML_CODEX_MODEL`, `AML_OPENCODE_MODEL`, and `AML_PI_MODEL` may override their models. Daytona uses `DAYTONA_API_KEY`. Modal uses the repository-local `MODAL_API_KEY` and `MODAL_API_SECRET` names as `tokenId` and `tokenSecret`; Modal's own ambient credential names remain `MODAL_TOKEN_ID` and `MODAL_TOKEN_SECRET`. These environment names configure only the repository's smoke CLI. Applications configure providers through their native factory options.
+The smoke runner loads the repository's untracked `.env`. Codex, OpenCode, and Pi use `OPENAI_API_KEY` or `AML_CODEX_API_KEY`; `AML_CODEX_MODEL`, `AML_OPENCODE_MODEL`, and `AML_PI_MODEL` may override their models. Copilot uses `COPILOT_GITHUB_TOKEN`, `GH_TOKEN`, or `GITHUB_TOKEN` in that order and defaults to `gpt-5-mini`; `AML_COPILOT_GITHUB_TOKEN` and `AML_COPILOT_MODEL` are optional smoke-only overrides. Daytona uses `DAYTONA_API_KEY`. Modal uses the repository-local `MODAL_API_KEY` and `MODAL_API_SECRET` names as `tokenId` and `tokenSecret`; Modal's own ambient credential names remain `MODAL_TOKEN_ID` and `MODAL_TOKEN_SECRET`. These environment names configure only the repository's smoke CLI. Applications configure providers through their native factory options and runtime environment.
 
 Commits are checked with lint-staged and commitlint. Pushes run the same formatting, linting, test, and build
 contract enforced by GitHub Actions.

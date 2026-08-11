@@ -1,0 +1,304 @@
+---
+title: GitHub Copilot Agent
+description: Run GitHub Copilot CLI through AML's shared Agent Client Protocol lifecycle.
+---
+
+import { Aside, Badge, Card, CardGrid, LinkCard, Steps } from "@astrojs/starlight/components"
+import ProviderHero from "../../../../../components/docs/ProviderHero.astro"
+
+<ProviderHero
+  name="copilot"
+  eyebrow="Built-in Agent provider"
+  title="GitHub Copilot Agent"
+  factory="copilotAgent()"
+  summary="A thin AML profile over GitHub Copilot CLI's native ACP server. AML owns evaluation, capability grants, structured results, cancellation, and cleanup; Copilot owns the coding-agent session and model access."
+  bestFor="GitHub Copilot accounts that need an ACP coding Agent inside provider-neutral AML workflows."
+  caution="The provider uses an invocation-private Copilot home and never copies your interactive CLI configuration. Authentication follows the launched process environment, while trusted Workspaces can still contribute native MCP configuration."
+/>
+
+<Badge text="Built-in" variant="success" /> <Badge text="Native ACP" /> <Badge text="Credentialed" />
+
+## What this provider launches
+
+`copilotAgent()` launches `copilot --acp` by default:
+
+```text
+<Agent>
+  AML normalizes model, system, permissions, Tools, MCP, and output
+        ↓
+  copilot --acp
+        ↓
+  GitHub Copilot model session
+```
+
+Each Agent acquisition receives an invocation-private `COPILOT_HOME`. This prevents the workflow from loading the
+operator's saved OAuth login, MCP servers, permissions, settings, sessions, plugins, or instructions. The provider also
+starts Copilot with custom instructions, built-in MCP, remote control, and automatic updates disabled. Copilot's
+automatic login discovery is also disabled so it does not fall back to stored credentials outside `COPILOT_HOME`.
+
+<Aside type="caution" title="Interactive login is intentionally not inherited">
+  Running `copilot login` writes authentication into the interactive Copilot home. AML does not read or copy that file.
+  Provide a fine-grained token through the runtime environment, or prepare an application-owned command/runtime
+  explicitly. Never make a deployment depend on a developer's private Copilot directory.
+</Aside>
+
+## Prerequisites
+
+<CardGrid>
+  <Card title="Install Copilot CLI" icon="download">
+    Install GitHub Copilot CLI in every trusted host or Sandbox image where AML can launch the Agent. AML does not
+    install runtime software during evaluation.
+  </Card>
+  <Card title="Provide explicit authentication" icon="seti:lock">
+    Make one of Copilot CLI's supported authentication variables available in the launched runtime. Fine-grained tokens
+    require the Copilot Requests permission.
+  </Card>
+  <Card title="Confirm account policy" icon="approve-check-circle">
+    The GitHub account must have Copilot CLI access, and organization policy must permit the CLI and selected model.
+  </Card>
+</CardGrid>
+
+## Install and verify
+
+Install Copilot CLI in the environment where the Agent process will run, then inspect that exact executable:
+
+```sh title="Terminal"
+npm install --global @github/copilot
+copilot --version
+copilot help environment
+```
+
+The AML repository pins `@github/copilot@1.0.79` for deterministic development and smoke setup. That is the verified
+baseline for this provider, not a guarantee that every newer release preserves the same ACP behavior. Use the pinned
+version when reproducing repository tests:
+
+```sh title="Terminal"
+npm install --global @github/copilot@1.0.79
+```
+
+<Aside type="caution" title="Install it where Copilot runs">
+  A host-global installation is visible to [`localSandbox()`](/docs/providers/sandboxes/local/). Docker, Daytona, Modal,
+  or another remote Sandbox needs Copilot CLI in its own image or environment. Run `copilot --version` through the same
+  execution path before debugging AML configuration.
+</Aside>
+
+## Complete example
+
+This example uses the highest-priority Copilot token variable explicitly, selects `gpt-5-mini`, and runs against an
+existing local repository. Local Sandbox needs `read-write` access to start the Copilot process and is suitable only for
+trusted development; use a hardened Sandbox when read-only access or hostile-input isolation is required.
+
+```tsx
+import { Agent, AmlRuntime, Sandbox, Workspace, copilotAgent, localSandbox, localWorkspace } from "@aml-jsx/sdk"
+
+const token = process.env.COPILOT_GITHUB_TOKEN
+if (!token) throw new Error("COPILOT_GITHUB_TOKEN is required")
+
+const provider = copilotAgent({
+  env: { COPILOT_GITHUB_TOKEN: token },
+  model: "gpt-5-mini",
+  reasoningEffort: "low",
+})
+
+const result = await new AmlRuntime({
+  agentProvider: provider,
+}).evaluate(
+  <Workspace
+    id="copilot-review"
+    provider={localWorkspace({ directory: "/absolute/path/to/repository" })}
+    load={false}
+    save={false}
+  >
+    <Sandbox provider={localSandbox()} access="read-write">
+      <Agent system="Return concise, evidence-based answers.">
+        Summarize this repository and identify its primary runtime boundary.
+      </Agent>
+    </Sandbox>
+  </Workspace>
+)
+
+console.log(result)
+```
+
+The example maps one application-owned token into the native variable Copilot already understands. No token mapping is
+required when the launched environment is already configured correctly. Do not put credentials in a Workspace, prompt,
+or repository file.
+
+## Options and precedence
+
+| Option             | Type                                                                     | Default     | Semantics                                                                                  |
+| ------------------ | ------------------------------------------------------------------------ | ----------- | ------------------------------------------------------------------------------------------ |
+| `command`          | `string`                                                                 | `"copilot"` | Copilot ACP executable or application-owned launcher.                                      |
+| `args`             | `readonly string[]`                                                      | `[]`        | Extra Copilot arguments inserted before AML-owned ACP, isolation, model, and policy flags. |
+| `env`              | `Record<string, string>`                                                 | `{}`        | Optional runtime environment overlay; AML does not filter or rewrite credential variables. |
+| `model`            | `string`                                                                 | `"auto"`    | Provider-level model fallback.                                                             |
+| `reasoningEffort`  | `"none" \| "minimal" \| "low" \| "medium" \| "high" \| "xhigh" \| "max"` | —           | Copilot reasoning-effort flag; the chosen model and plan must support it.                  |
+| `workingDirectory` | `string`                                                                 | —           | Fallback cwd when no active Sandbox supplies one.                                          |
+
+Precedence is deliberate:
+
+1. `<Agent model="..." />` overrides the factory `model`.
+2. The factory defaults to `auto`, which lets Copilot select from the models available to the authenticated account.
+3. Authored AML system content becomes an explicit first-turn prelude because ACP has no portable system-message field.
+4. AML-owned launch flags are appended after `args`, so factory arguments cannot replace ACP mode, private state,
+   capability isolation, or portable permission policy.
+5. An active Sandbox supplies the effective cwd; otherwise `workingDirectory` or the application cwd is used.
+
+## Authentication and private state
+
+The provider always sets:
+
+```text
+COPILOT_HOME=<invocation-private AML state directory>
+```
+
+It never copies `~/.copilot/config.json` and never points `COPILOT_HOME` at the operator's interactive configuration.
+Within each environment source, authentication variables use this order:
+
+```text
+COPILOT_GITHUB_TOKEN > GH_TOKEN > GITHUB_TOKEN
+```
+
+Explicit token configuration in `copilotAgent({ env })` wins as a source, regardless of ambient variables. A local launch
+then checks the inherited `process.env` when no token was configured explicitly. AML passes the selected variable name to
+Copilot CLI without copying or renaming its value.
+
+A remote Sandbox does not inherit the AML host's `process.env`. When no token is present in the provider `env`, AML leaves
+selection to Copilot CLI inside the Sandbox, preserving credentials supplied by that runtime's native secret mechanism.
+This prevents a host variable from changing which Sandbox credential is used.
+
+AML does not bulk-copy the host's `process.env` into a provisioned remote Sandbox. Pass deliberate values through the
+provider `env` option or configure secrets in that Sandbox/deployment. The Sandbox provider may also supply its own
+environment according to its native contract.
+
+## Permissions and capabilities
+
+| AML request                | Copilot launch mapping                                               | Boundary that still matters                                     |
+| -------------------------- | -------------------------------------------------------------------- | --------------------------------------------------------------- |
+| `filesystem: "read-write"` | Standard Copilot tools; ACP approvals handled non-interactively.     | Host or Sandbox controls actual filesystem authority.           |
+| `filesystem: "read-only"`  | Denies Copilot's `write` permission kind and hides edit/write tools. | Sandbox remains the hard filesystem boundary.                   |
+| `shell: false`             | Denies Copilot's `shell` permission kind and hides `bash`.           | Sandbox process policy remains authoritative.                   |
+| `network: false`           | Denies URLs and hides Copilot web fetch/search tools.                | Sandbox or deployment egress policy must contain shell/network. |
+
+Copilot's deny rules take precedence over ACP approvals. They narrow the model-visible tool set and avoid wasted tool
+attempts, but they do not turn the trusted local launcher into an isolation boundary.
+
+## State isolation and lifecycle
+
+For every acquired Copilot session, AML creates a fresh temporary directory and launches Copilot with:
+
+```text
+COPILOT_HOME             <invocation state directory>
+--log-dir                logs remain in the invocation state directory
+--no-custom-instructions no AGENTS.md or related instruction loading
+--disable-builtin-mcps   no built-in GitHub MCP server
+--auth-token-env         use the selected provider or local token variable when AML can inspect it
+--no-auto-login          no interactive or stored-credential fallback
+--no-remote              no remote control
+--no-remote-export       no session export to GitHub web or mobile
+```
+
+`--disable-builtin-mcps` removes Copilot's own default MCP servers and the private `COPILOT_HOME` prevents user-level
+MCP configuration from leaking into the evaluation. AML-authored Tools and MCP servers still use the shared Agent
+capability path described in the related documentation below.
+
+<Aside type="caution" title="Workspace MCP discovery remains Copilot-native">
+  Copilot CLI can load `.mcp.json` and `.github/mcp.json` from a trusted working directory even in ACP server mode.
+  `--disable-builtin-mcps` does not disable those files, and AML's `allowedMcpServers` policy governs AML-authored MCP
+  declarations rather than Copilot's native workspace discovery. Review or remove native workspace MCP configuration
+  when the evaluation requires a closed capability inventory.
+</Aside>
+
+AML starts the ACP process only after the effective Sandbox cwd, permissions, Tools, MCP servers, model, and system text
+are known. On release it closes the session, terminates the process, and removes the invocation state directory. Reusing
+one `copilotAgent()` factory does not reuse Copilot state between evaluations.
+
+## Failure modes and troubleshooting
+
+<Steps>
+
+1. **Authentication required**
+
+   Supply a supported token through the runtime environment. An interactive `copilot login` is not imported into the
+   private AML invocation. Explicit provider token configuration wins over inherited local variables. Within either
+   source, precedence is `COPILOT_GITHUB_TOKEN`, then `GH_TOKEN`, then `GITHUB_TOKEN`. An unconfigured remote Sandbox uses
+   Copilot's native discovery inside that runtime.
+
+2. **Model unavailable**
+
+   Use `model: "auto"` or a model enabled for the account and organization. `gpt-5-mini` is a useful low-cost smoke model
+   when available.
+
+3. **Command not found**
+
+   Install `copilot` in the exact host or Sandbox image used by the Agent, or set `command` to an application-owned
+   launcher.
+
+4. **Repository instructions are ignored**
+
+   This is intentional: AML passes `--no-custom-instructions`, so Copilot does not load `AGENTS.md`, `CLAUDE.md`, or
+   GitHub Copilot instruction files. Put evaluation instructions in `<Agent system>` or authored AML content.
+
+5. **The Agent can do more than expected**
+
+   Inspect Copilot launch flags, native `.mcp.json` or `.github/mcp.json` files, and the enclosing Sandbox. ACP permission
+   mapping is policy; the Sandbox is the security boundary.
+
+</Steps>
+
+## Provider references
+
+<CardGrid>
+  <LinkCard
+    title="Copilot CLI ACP server"
+    href="https://docs.github.com/en/copilot/reference/copilot-cli-reference/acp-server"
+    description="GitHub's native ACP server behavior and integration contract."
+  />
+  <LinkCard
+    title="Copilot CLI command reference"
+    href="https://docs.github.com/en/copilot/reference/copilot-cli-reference/cli-programmatic-reference"
+    description="Launch flags, models, environment, permissions, and runtime behavior."
+  />
+  <LinkCard
+    title="Authenticating Copilot CLI"
+    href="https://docs.github.com/en/copilot/how-tos/copilot-cli/set-up-copilot-cli/authenticate-copilot-cli"
+    description="Token variables, credential precedence, OAuth storage, and organization policy."
+  />
+  <LinkCard
+    title="Allowing and denying tools"
+    href="https://docs.github.com/en/copilot/how-tos/copilot-cli/use-copilot-cli/allowing-tools"
+    description="Copilot tool availability and permission-rule semantics."
+  />
+  <LinkCard
+    title="AML Copilot profile source"
+    href="https://github.com/we-are-singular/aml/tree/main/providers/agents/copilot"
+    description="Profile implementation, deterministic tests, and credentialed integration test."
+  />
+</CardGrid>
+
+## Related AML documentation
+
+Use the shared AML documentation for capabilities that behave the same across ACP Agent providers:
+
+<CardGrid>
+  <LinkCard
+    title="JavaScript Tools"
+    href="/docs/cookbook/tools/"
+    description="Define, scope, validate, and operate an application-owned Tool."
+  />
+  <LinkCard
+    title="Model Context Protocol"
+    href="/docs/cookbook/mcp/"
+    description="Declare MCP servers, transports, allowlists, and runtime requirements."
+  />
+  <LinkCard
+    title="Runtime configuration"
+    href="/docs/runtime/"
+    description="Configure limits, cancellation, lifecycle events, tracing, and cleanup."
+  />
+  <LinkCard
+    title="Agent component reference"
+    href="/docs/reference/primitives/agent/"
+    description="Review Agent props, resolution, capability scope, and result behavior."
+  />
+</CardGrid>

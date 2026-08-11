@@ -31,6 +31,7 @@ const symbol = (name: Extract<ProviderIcon, { type: "symbol" }>["name"]): Provid
  */
 export const providerVisuals = {
   codex: { label: "Codex", icon: asset("providers/codex.svg") },
+  copilot: { label: "GitHub Copilot", icon: asset("providers/github-copilot.svg") },
   opencode: { label: "OpenCode", icon: asset("providers/opencode.svg") },
   pi: { label: "Pi", icon: asset("providers/pi.svg") },
   "local-sandbox": { label: "Local Sandbox", icon: symbol("terminal") },
@@ -144,10 +145,10 @@ export const integrationGroups: readonly IntegrationGroup[] = [
     integrations: [
       { label: "OpenCode", icon: providerVisuals.opencode.icon, href: "docs/providers/agents/opencode/" },
       { label: "Codex", icon: providerVisuals.codex.icon, href: "docs/providers/agents/codex/" },
+      { label: "GitHub Copilot", icon: providerVisuals.copilot.icon, href: "docs/providers/agents/copilot/" },
       { label: "Pi", icon: providerVisuals.pi.icon, href: "docs/providers/agents/pi/" },
       { label: "Claude Code", icon: asset("providers/claude-code.svg"), status: "roadmap" },
       { label: "Cursor", icon: asset("providers/cursor.svg"), status: "roadmap" },
-      { label: "GitHub Copilot", icon: asset("providers/github-copilot.svg"), status: "roadmap" },
       { label: "Hermes Agent", icon: asset("providers/hermes-agent.svg"), status: "roadmap" },
       { label: "Gemini CLI", icon: asset("providers/gemini-cli.svg"), status: "roadmap" },
       { label: "Cline", icon: asset("providers/cline.svg"), status: "roadmap" },
@@ -283,6 +284,13 @@ export const agentOptions: readonly AgentOption[] = [
     fn: "codexAgent",
     construction: 'codexAgent({ model: "gpt-5.3-codex" })',
     icon: providerVisuals.codex.icon,
+  },
+  {
+    id: "copilot",
+    label: "GitHub Copilot",
+    fn: "copilotAgent",
+    construction: 'copilotAgent({ model: "gpt-5-mini" })',
+    icon: providerVisuals.copilot.icon,
   },
   {
     id: "pi",

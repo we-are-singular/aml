@@ -21,6 +21,7 @@ Use the focused page that matches the task before loading the complete corpus. E
 curl -fsSL https://agent-markup-language.com/docs/getting-started.md
 curl -fsSL https://agent-markup-language.com/docs/cli.md
 curl -fsSL https://agent-markup-language.com/docs/providers/agents/codex.md
+curl -fsSL https://agent-markup-language.com/docs/providers/agents/copilot.md
 curl -fsSL https://agent-markup-language.com/docs/reference/primitives/agent.md
 ```
 
@@ -139,6 +140,7 @@ The workflow file is positional; `--entry` selects an export inside it. Results 
 Agent providers:
 
 - `codexAgent()` for Codex through `codex-acp`.
+- `copilotAgent()` for GitHub Copilot CLI's native `copilot --acp` server.
 - `opencodeAgent()` for OpenCode's ACP server.
 - `piAgent()` for `pi-acp` and Pi.
 

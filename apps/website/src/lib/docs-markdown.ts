@@ -280,6 +280,7 @@ const providerCatalogMarkdown = `
 **Agent providers**
 
 - [Codex](/docs/providers/agents/codex/) — Codex coding workflows through \`codex-acp\`.
+- [GitHub Copilot](/docs/providers/agents/copilot/) — Copilot CLI model access through native \`copilot --acp\`.
 - [OpenCode](/docs/providers/agents/opencode/) — open-source model access through OpenCode ACP.
 - [Pi](/docs/providers/agents/pi/) — extensible Pi harnesses through \`pi-acp\`.
 

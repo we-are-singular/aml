@@ -115,9 +115,10 @@ export default defineConfig({
               label: "Agent providers",
               items: [
                 { label: "Choose an Agent", slug: "docs/providers/agents" },
-                { slug: "docs/providers/agents/codex" },
-                { slug: "docs/providers/agents/opencode" },
-                { slug: "docs/providers/agents/pi" },
+                { label: "Codex", slug: "docs/providers/agents/codex" },
+                { label: "GitHub Copilot", slug: "docs/providers/agents/copilot" },
+                { label: "OpenCode", slug: "docs/providers/agents/opencode" },
+                { label: "Pi", slug: "docs/providers/agents/pi" },
               ],
             },
             {

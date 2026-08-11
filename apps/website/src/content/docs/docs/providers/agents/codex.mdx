@@ -3,7 +3,7 @@ title: Codex Agent
 description: Run Codex through AML's maintained Agent Client Protocol profile.
 ---
 
-import { Aside, Badge, Card, CardGrid, LinkCard, Steps, TabItem, Tabs } from "@astrojs/starlight/components"
+import { Aside, Badge, Card, CardGrid, LinkCard, Steps } from "@astrojs/starlight/components"
 import ProviderHero from "../../../../../components/docs/ProviderHero.astro"
 
 <ProviderHero
@@ -32,6 +32,10 @@ import ProviderHero from "../../../../../components/docs/ProviderHero.astro"
 ```
 
 Every acquisition receives a private `CODEX_HOME`, `CODEX_SQLITE_HOME`, and log directory under AML's temporary session state. This prevents concurrent evaluations from sharing adapter state accidentally. The state directory is released when the Agent session finishes.
+
+The private `CODEX_HOME` also prevents the operator's global Codex guidance from being inherited. Codex still discovers
+project-scoped `AGENTS.md` and `AGENTS.override.md` files from the repository root down to the effective working
+directory. AML's authored `system` content becomes `developer_instructions` in addition to that project guidance.
 
 ## Prerequisites
 
@@ -145,29 +149,6 @@ The effective values are resolved as follows:
 | `shell: false`             | No additional Codex-native mapping is claimed by this profile.            | Use a Sandbox that rejects shell execution.                                 |
 | `network: false`           | No additional Codex-native mapping is claimed by this profile.            | Use a Sandbox or deployment network policy that enforces it.                |
 
-AML JavaScript Tools are exposed through the shared ACP MCP bridge when the Agent is running with a compatible ACP session. MCP servers declared in the AML tree are passed through the shared ACP session engine after allowlist and capability checks. These are Agent capabilities, not a replacement for Sandbox isolation.
-
-## Structured output
-
-When `evaluate(value, schema)` is used, AML exposes `aml_submit_result` through the shared ACP MCP bridge. Each submitted candidate is immediately validated against the supplied Standard Schema. Codex receives a tool error for an invalid candidate and may correct it in the same turn. AML accepts the first valid candidate and ignores later submissions.
-
-```tsx
-import { Agent, evaluate, codexAgent } from "@aml-jsx/sdk"
-import { z } from "zod"
-
-const Finding = z.object({
-  severity: z.enum(["low", "medium", "high"]),
-  summary: z.string(),
-})
-
-const finding = await evaluate(
-  <Agent provider={codexAgent({ model: "gpt-5.3-codex" })}>Inspect the change and return one concise finding.</Agent>,
-  Finding
-)
-```
-
-The turn must submit at least one valid JSON result for the schema. A prose-only answer or a turn that ends without a valid submission rejects the evaluation. With tracing enabled, each attempt appears as an `agent.output` event.
-
 ## Failure modes and troubleshooting
 
 <Steps>
@@ -188,19 +169,25 @@ The turn must submit at least one valid JSON result for the schema. A prose-only
 
    Remove leading/trailing whitespace and null bytes from strings. Keep `config` JSON-compatible: no cycles, functions, class instances, `BigInt`, or non-finite numbers.
 
-5. **Structured output fails**
+5. **Codex follows instructions you did not put in `<Agent system>`**
 
-   Enable tracing and inspect `agent.output` events. Invalid candidates are returned to Codex for correction; a missing submission or a turn that finishes without a valid candidate is an evaluation error.
+   Inspect the repository's `AGENTS.md` and `AGENTS.override.md` chain. The private `CODEX_HOME` isolates global Codex
+   state, but it intentionally does not suppress project instructions.
 
 </Steps>
 
-## References
+## Provider references
 
 <CardGrid>
   <LinkCard
     title="Codex ACP package"
     href="https://github.com/agentclientprotocol/codex-acp"
     description="ACP adapter source and installation context."
+  />
+  <LinkCard
+    title="Codex project instructions"
+    href="https://developers.openai.com/codex/guides/agents-md/"
+    description="Official OpenAI documentation for AGENTS.md discovery and precedence."
   />
   <LinkCard
     title="Agent Client Protocol"
@@ -216,5 +203,32 @@ The turn must submit at least one valid JSON result for the schema. A prose-only
     title="AML Codex tests"
     href="https://github.com/we-are-singular/aml/tree/main/providers/agents/codex/tests"
     description="Launch, precedence, and live integration coverage."
+  />
+</CardGrid>
+
+## Related AML documentation
+
+These capabilities use AML's shared Agent lifecycle and do not require Codex-specific setup:
+
+<CardGrid>
+  <LinkCard
+    title="JavaScript Tools"
+    href="/docs/cookbook/tools/"
+    description="Define, scope, validate, and operate an application-owned Tool."
+  />
+  <LinkCard
+    title="Model Context Protocol"
+    href="/docs/cookbook/mcp/"
+    description="Declare MCP servers, transports, allowlists, and runtime requirements."
+  />
+  <LinkCard
+    title="Runtime configuration"
+    href="/docs/runtime/"
+    description="Configure limits, cancellation, lifecycle events, tracing, and cleanup."
+  />
+  <LinkCard
+    title="Agent component reference"
+    href="/docs/reference/primitives/agent/"
+    description="Review Agent props, resolution, capability scope, and result behavior."
   />
 </CardGrid>

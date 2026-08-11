@@ -2,10 +2,10 @@
 
 ## Built-in agent providers
 
-The package exports three bundled Agent factories from `@aml-jsx/sdk`:
+The package exports four bundled Agent factories from `@aml-jsx/sdk`:
 
 ```tsx
-import { codexAgent, opencodeAgent, piAgent } from "@aml-jsx/sdk"
+import { codexAgent, copilotAgent, opencodeAgent, piAgent } from "@aml-jsx/sdk"
 
 const OpenCode = opencodeAgent({
   directory: process.cwd(),
@@ -15,15 +15,20 @@ const Codex = codexAgent({
   workingDirectory: process.cwd(),
 })
 
+const Copilot = copilotAgent({
+  model: "gpt-5-mini",
+  workingDirectory: process.cwd(),
+})
+
 const Pi = piAgent({
   env: { OPENCODE_API_KEY: process.env.OPENCODE_API_KEY ?? "" },
   model: "opencode-go/glm-5.1",
 })
 ```
 
-Only set options needed by the application. Let each provider use its normal credential discovery unless the surrounding project deliberately injects credentials.
+Only set options needed by the application. Let credentials flow through the selected runtime environment unless the surrounding project deliberately injects them. Do not copy interactive user configuration into an automated provider invocation.
 
-Codex, OpenCode, and Pi are thin profiles over one ACP session engine. Preserve provider-native configuration where a profile exposes it instead of inventing a portable credential object. The selected host, image, snapshot, or Sandbox package set must contain the compatible ACP Agent executable.
+Codex, GitHub Copilot, OpenCode, and Pi are thin profiles over one ACP session engine. Preserve provider-native configuration where a profile exposes it instead of inventing a portable credential object. Copilot always receives an invocation-private `COPILOT_HOME`; it does not load the user's interactive Copilot configuration. The selected host, image, snapshot, or Sandbox package set must contain the compatible ACP Agent executable.
 
 The shared engine owns FollowUps, JavaScript Tool and structured-output MCP bridges, cancellation, streaming, and cleanup. Profiles map Agent filesystem, shell, and network permission requests to their native controls. Inside a Sandbox, the Sandbox—not ACP permissions—is the security boundary for model-controlled operations.
 

@@ -38,7 +38,13 @@ const sizeClasses = {
 </span>
 
 <style>
-  :global([data-theme="dark"]) .provider-mark:is([data-provider="codex"], [data-provider="opencode"], [data-provider="pi"])
+  :global([data-theme="dark"])
+    .provider-mark:is(
+      [data-provider="codex"],
+      [data-provider="copilot"],
+      [data-provider="opencode"],
+      [data-provider="pi"]
+    )
     :global(.provider-mark__icon) {
     filter: invert(1) brightness(1.08);
   }

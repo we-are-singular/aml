@@ -8,16 +8,16 @@ import AcpBoundary from "../../../../../components/docs/AcpBoundary.astro"
 import ProviderHero from "../../../../../components/docs/ProviderHero.astro"
 
 <ProviderHero
-  names={["codex", "opencode", "pi"]}
+  names={["codex", "copilot", "opencode", "pi"]}
   eyebrow="Built-in Agent providers"
   title="Choose your Agent"
-  factory="codexAgent() · opencodeAgent() · piAgent()"
+  factory="codexAgent() · copilotAgent() · opencodeAgent() · piAgent()"
   summary="AML's built-in Agents are thin profiles over a shared Agent Client Protocol session engine. Pick the coding harness that matches your model and workflow, then keep the rest of your AML tree portable."
   bestFor="Portable orchestration across coding-agent runtimes, Tools, MCP, Sandboxes, Workspaces, and typed results."
   caution="A provider profile does not install executables, provision credentials, or prove that a particular Sandbox image is deployable. Validate the complete Agent × Sandbox × Workspace combination."
 />
 
-<Badge text="Three built-in profiles" variant="success" /> <Badge text="Shared lifecycle" />
+<Badge text="Four built-in profiles" variant="success" /> <Badge text="Shared lifecycle" />
 <Badge text="Provider-dependent" />
 
 ## The provider boundary
@@ -35,7 +35,7 @@ AML JSX tree
   → release session and resources
 ```
 
-The three built-in profiles all use the shared ACP engine. They do not create a second orchestration model, own their own scheduler, or bypass AML cleanup. Their differences are the executable launch, native configuration format, permission translation, and provider-specific capability adapters.
+The four built-in profiles all use the shared ACP engine. They do not create a second orchestration model, own their own scheduler, or bypass AML cleanup. Their differences are the executable launch, native configuration format, permission translation, and provider-specific capability adapters.
 
 <AcpBoundary />
 
@@ -53,6 +53,11 @@ The three built-in profiles all use the shared ACP engine. They do not create a 
     description="OpenCode's native ACP server. Translates AML permissions into OpenCode tools and permission rules."
   />
   <LinkCard
+    title="GitHub Copilot"
+    href="/docs/providers/agents/copilot/"
+    description="Copilot CLI's native ACP server with private invocation state and explicit runtime authentication."
+  />
+  <LinkCard
     title="Pi"
     href="/docs/providers/agents/pi/"
     description="Pi ACP with a generated wrapper for restricted permissions and the Pi MCP extension for Tools and MCP."
@@ -62,15 +67,16 @@ The three built-in profiles all use the shared ACP engine. They do not create a 
 | If you need…                                          | Start with                                                                          | Why                                                                                                |
 | ----------------------------------------------------- | ----------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
 | Codex-native configuration and OpenAI model workflows | [`codexAgent()`](/docs/providers/agents/codex/)                                     | Writes Codex ACP configuration and maps AML filesystem mode into Codex's agent mode.               |
+| GitHub Copilot plans and model access                 | [`copilotAgent()`](/docs/providers/agents/copilot/)                                 | Starts `copilot --acp` with private state and maps AML permissions to Copilot deny rules.          |
 | OpenCode's model catalog and native tool policy       | [`opencodeAgent()`](/docs/providers/agents/opencode/)                               | Starts `opencode acp --pure` and translates filesystem, shell, and network permissions.            |
 | Pi's extensible tool ecosystem or Pi MCP adapter      | [`piAgent()`](/docs/providers/agents/pi/)                                           | Uses Pi's generated wrapper and `pi-mcp-adapter` for AML Tools and MCP.                            |
 | No credentials while designing a workflow             | [`DeterministicAgentProvider`](/docs/reference/testing/#deterministicagentprovider) | Use the testing entrypoint for a local fixture; it is not one of these live coding-agent profiles. |
 
 <Aside type="tip" title="Start with the harness you already operate">
   There is no universal live default. Codex is the shortest tutorial path when you already have an OpenAI API key;
-  OpenCode is the natural choice when you rely on its model catalog and native tool policy; Pi is the better fit when
-  its extensible Tool and MCP path is the reason you chose the harness. Validate one live provider before adding a
-  remote Sandbox or durable Workspace.
+  GitHub Copilot fits runtimes with an explicit Copilot token; OpenCode fits its model catalog and native tool policy;
+  Pi is the better fit when its extensible Tool and MCP path is the reason you chose the harness. Validate one live
+  provider before adding a remote Sandbox or durable Workspace.
 </Aside>
 
 ## Shared prerequisites
@@ -136,38 +142,42 @@ For independent specialist evaluations, use explicit `Promise.all([evaluate(...)
 
 ## Cross-provider capability matrix
 
-| Capability                 | Codex                              | OpenCode                                             | Pi                                        |
-| -------------------------- | ---------------------------------- | ---------------------------------------------------- | ----------------------------------------- |
-| ACP command                | `codex-acp`                        | `opencode acp --pure`                                | `pi-acp`                                  |
-| Native command option      | `codexPathOverride` → `CODEX_PATH` | `command` selects OpenCode launcher                  | `piCommand` selects native Pi command     |
-| Provider model fallback    | `model`                            | `model`, then `config.model`                         | `model`                                   |
-| Agent-level model override | Yes                                | Yes                                                  | Yes                                       |
-| System instruction mapping | Codex `developer_instructions`     | OpenCode AML profile `prompt`                        | First-turn text prefix                    |
-| Filesystem mapping         | Codex `INITIAL_AGENT_MODE`         | `edit`/`write` tool and permission rules             | Generated wrapper `--tools` list          |
-| Shell mapping              | Enclosing Sandbox                  | OpenCode `bash` tool and permission                  | Generated wrapper `bash` tool             |
-| Network mapping            | Enclosing Sandbox                  | OpenCode `webfetch`/`websearch` tools and permission | Enclosing Sandbox/network policy          |
-| AML JavaScript Tools       | Shared ACP MCP bridge              | Shared ACP MCP bridge                                | Pi MCP extension and generated wrapper    |
-| Authored MCP               | Shared ACP session                 | Shared ACP session                                   | `agent/mcp.json` through `pi-mcp-adapter` |
-| Structured output          | Shared ACP path                    | Shared ACP path                                      | `aml_submit_result` MCP call              |
-| Per-session state          | Codex home/config/sqlite/logs      | OpenCode DB and XDG directories                      | Pi HOME, agent, and session directories   |
+| Capability                 | Codex                          | GitHub Copilot                       | OpenCode                                             | Pi                                        |
+| -------------------------- | ------------------------------ | ------------------------------------ | ---------------------------------------------------- | ----------------------------------------- |
+| ACP command                | `codex-acp`                    | `copilot --acp`                      | `opencode acp --pure`                                | `pi-acp`                                  |
+| Native command option      | `codexPathOverride`            | `command` selects Copilot launcher   | `command` selects OpenCode launcher                  | `piCommand` selects native Pi command     |
+| Provider model fallback    | `model`                        | `model`, defaulting to `auto`        | `model`, then `config.model`                         | `model`                                   |
+| Agent-level model override | Yes                            | Yes                                  | Yes                                                  | Yes                                       |
+| System instruction mapping | Codex `developer_instructions` | First-turn text prefix               | OpenCode AML profile `prompt`                        | First-turn text prefix                    |
+| Project instruction files  | Loads `AGENTS.md` hierarchy    | Disabled by the AML launch profile   | Loads project `AGENTS.md` or `CLAUDE.md`             | Loads project `AGENTS.md` or `CLAUDE.md`  |
+| Filesystem mapping         | Codex `INITIAL_AGENT_MODE`     | Write deny rule and tool exclusion   | `edit`/`write` tool and permission rules             | Generated wrapper `--tools` list          |
+| Shell mapping              | Enclosing Sandbox              | Shell deny rule and tool exclusion   | OpenCode `bash` tool and permission                  | Generated wrapper `bash` tool             |
+| Network mapping            | Enclosing Sandbox              | URL deny rule and web tool exclusion | OpenCode `webfetch`/`websearch` tools and permission | Enclosing Sandbox/network policy          |
+| AML JavaScript Tools       | Shared ACP MCP bridge          | Shared ACP MCP bridge                | Shared ACP MCP bridge                                | Pi MCP extension and generated wrapper    |
+| Authored MCP               | Shared ACP session             | Shared ACP session                   | Shared ACP session                                   | `agent/mcp.json` through `pi-mcp-adapter` |
+| Structured output          | Shared ACP path                | Shared ACP path                      | Shared ACP path                                      | `aml_submit_result` MCP call              |
+| Per-session state          | Codex home/config/sqlite/logs  | Private `COPILOT_HOME`               | OpenCode DB and XDG directories                      | Pi HOME, agent, and session directories   |
 
 The matrix describes the profile translation, not a guarantee that every provider can run in every Sandbox. Consult the Sandbox provider page for `exec`/`spawn` behavior and the individual Agent page for launch prerequisites.
 
 ## Capabilities are layered
 
+The contracts below belong to AML, not to a particular coding harness. Individual provider pages focus on executable
+setup, authentication, native configuration, permission translation, state isolation, and provider-specific adapters.
+
 ### Tools
 
-AML JavaScript Tools execute in the application process. They are validated by AML, then exposed to ACP profiles through the shared MCP bridge or provider-native extension. A Tool is not automatically sandboxed just because its owning `<Agent />` is inside `<Sandbox />`.
+AML JavaScript Tools execute in the application process. They are validated by AML, then exposed to ACP profiles through the shared MCP bridge or provider-native extension. A Tool is not automatically sandboxed just because its owning `<Agent />` is inside `<Sandbox />`. Use the [JavaScript Tool guide](/docs/cookbook/tools/) for the complete definition and security model.
 
 ### MCP
 
-MCP server identity, allowlists, transport configuration, and lifecycle belong to AML's normalized Agent request. The provider maps that request into its ACP or native configuration. Executable stdio servers must exist in the provider environment; remote servers still require URL, headers, network access, and credential configuration.
+MCP server identity, allowlists, transport configuration, and lifecycle belong to AML's normalized Agent request. The provider maps that request into its ACP or native configuration. Executable stdio servers must exist in the provider environment; remote servers still require URL, headers, network access, and credential configuration. Use the [MCP guide](/docs/cookbook/mcp/) for transport examples and failure handling.
 
 ### Structured output
 
 `evaluate(value, schema)` asks for one structured `<Agent />` result. Built-in ACP profiles submit candidates through the invocation-owned `aml_submit_result` MCP tool. AML validates each candidate immediately with the supplied Standard Schema: an invalid candidate is returned to the Agent as a tool error, the first valid candidate is accepted, and later submissions are ignored. A turn that ends without a valid candidate rejects the evaluation.
 
-With tracing enabled, AML emits `agent.output` for every submission with its call number and `invalid`, `accepted`, or `ignored` status. Payloads are not included in these events.
+With tracing enabled, AML emits `agent.output` for every submission with its call number and `invalid`, `accepted`, or `ignored` status. Payloads are not included in these events. See the [structured-output cookbook](/docs/cookbook/structured-output/) for the complete pattern.
 
 ### Follow-up turns
 
@@ -226,6 +236,11 @@ With tracing enabled, AML emits `agent.output` for every submission with its cal
     description="OpenCode ACP launch and native capability mapping."
   />
   <LinkCard
+    title="GitHub Copilot profile"
+    href="/docs/providers/agents/copilot/"
+    description="Copilot CLI authentication, private state, permissions, and native ACP launch."
+  />
+  <LinkCard
     title="Pi profile"
     href="/docs/providers/agents/pi/"
     description="Pi wrapper, MCP adapter, and session isolation."
@@ -239,5 +254,30 @@ With tracing enabled, AML emits `agent.output` for every submission with its cal
     title="AML provider tests"
     href="https://github.com/we-are-singular/aml/tree/main/providers/agents"
     description="Launch-shape, permission, and live integration evidence."
+  />
+</CardGrid>
+
+## Core Agent documentation
+
+<CardGrid>
+  <LinkCard
+    title="JavaScript Tools"
+    href="/docs/cookbook/tools/"
+    description="Define, scope, validate, and operate an application-owned Tool."
+  />
+  <LinkCard
+    title="Model Context Protocol"
+    href="/docs/cookbook/mcp/"
+    description="Declare MCP servers, transports, allowlists, and runtime requirements."
+  />
+  <LinkCard
+    title="Runtime configuration"
+    href="/docs/runtime/"
+    description="Configure limits, cancellation, lifecycle events, tracing, and cleanup."
+  />
+  <LinkCard
+    title="Agent component reference"
+    href="/docs/reference/primitives/agent/"
+    description="Review Agent props, resolution, capability scope, and result behavior."
   />
 </CardGrid>

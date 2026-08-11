@@ -86,7 +86,7 @@ AML is developed as an npm workspace monorepo and distributed as one public pack
 @aml-jsx/sdk
 ```
 
-`@aml-jsx/sdk` owns the JSX runtime, evaluator, primitives, public provider interfaces, provider definition helpers, conformance contracts, and the concrete integrations included in the current release. The package root exports the built-in Agent factories `opencodeAgent()`, `codexAgent()`, and `piAgent()`; the Sandbox factories `localSandbox()`, `dockerSandbox()`, `daytonaSandbox()`, and `modalSandbox()`; and the durable `localWorkspace()`, `filesystemWorkspace()`, and `s3Workspace()` factories.
+`@aml-jsx/sdk` owns the JSX runtime, evaluator, primitives, public provider interfaces, provider definition helpers, conformance contracts, and the concrete integrations included in the current release. The package root exports the built-in Agent factories `opencodeAgent()`, `codexAgent()`, `copilotAgent()`, and `piAgent()`; the Sandbox factories `localSandbox()`, `dockerSandbox()`, `daytonaSandbox()`, and `modalSandbox()`; and the durable `localWorkspace()`, `filesystemWorkspace()`, and `s3Workspace()` factories.
 
 The SDK exports both `@aml-jsx/sdk/jsx-runtime` and `@aml-jsx/sdk/jsx-dev-runtime` for TypeScript and Vite's automatic production and development JSX transforms.
 
@@ -1193,7 +1193,7 @@ The selected built-in Agent profile must be launchable through the effective San
 
 The model API may remain remote while the coding-agent process, native filesystem operations, and command execution occur in the current Sandbox. Model location and execution-environment location are separate concerns.
 
-The built-in Codex, OpenCode, and Pi profiles implement `supportsSandbox()` against the same process contract. Compatibility means the Sandbox can spawn that profile's ACP executable and enforce the effective root and access view; it does not imply that every provider-native operation or optional ACP capability is available. Unsupported capabilities must reject before the first prompt rather than fall back to the AML host.
+The built-in Codex, GitHub Copilot, OpenCode, and Pi profiles implement `supportsSandbox()` against the same process contract. Compatibility means the Sandbox can spawn that profile's ACP executable and enforce the effective root and access view; it does not imply that every provider-native operation or optional ACP capability is available. Unsupported capabilities must reject before the first prompt rather than fall back to the AML host.
 
 Trusted `defineTool()` functions run in the AML process unless they explicitly use Sandbox-scoped capabilities. JSX placement alone cannot confine arbitrary JavaScript.
 
@@ -2045,10 +2045,11 @@ Prompts, System and Skill contents, Tool input/output, MCP configuration, filesy
 
 ### 16.3 Agent adapter requirements
 
-Every built-in coding-agent adapter is a profile over the shared ACP session engine. Codex uses the maintained Codex ACP adapter, OpenCode uses its native ACP Agent, and Pi uses the maintained Pi ACP adapter. Public factories retain the ordinary product names:
+Every built-in coding-agent adapter is a profile over the shared ACP session engine. Codex uses the maintained Codex ACP adapter, GitHub Copilot and OpenCode use their native ACP Agents, and Pi uses the maintained Pi ACP adapter. Public factories retain the ordinary product names:
 
 ```ts
 function codexAgent(options?: CodexAgentOptions): AgentProvider
+function copilotAgent(options?: CopilotAgentOptions): AgentProvider
 function opencodeAgent(options?: OpenCodeAgentOptions): AgentProvider
 function piAgent(options?: PiAgentOptions): AgentProvider
 ```
@@ -2075,13 +2076,14 @@ Every profile must:
 - keep credentials, configuration, protocol messages, session identifiers, and provider-native events behind the adapter boundary
 - support both the trusted local process launcher and every advertised `SandboxRuntime.spawn()` implementation through the same engine
 
-Codex, OpenCode, and Pi may expose different profile options and native capabilities, but they must not own separate prompting, streaming, Tool bridging, structured-output, FollowUp, or cleanup algorithms. A provider-specific deviation requires a change to this specification and the shared engine, not a parallel lifecycle.
+Codex, GitHub Copilot, OpenCode, and Pi may expose different profile options and native capabilities, but they must not own separate prompting, streaming, Tool bridging, structured-output, FollowUp, or cleanup algorithms. A provider-specific deviation requires a change to this specification and the shared engine, not a parallel lifecycle.
 
 ### 16.4 Built-in ACP profile mappings
 
-All three built-in coding Agents use the lifecycle above. Their remaining differences are launch and configuration mappings:
+All four built-in coding Agents use the lifecycle above. Their remaining differences are launch and configuration mappings:
 
 - Codex launches `codex-acp`. It maps read-only versus read-write filesystem access to the adapter's Agent mode. The adapter does not expose exact shell or network switches, so an enclosing Sandbox remains responsible for those restrictions.
+- GitHub Copilot launches `copilot --acp`. It uses an invocation-private `COPILOT_HOME`, disables automatic login discovery plus ambient instructions and MCP configuration, and maps narrowed filesystem, shell, and network requests to Copilot deny rules and tool exclusions. The enclosing Sandbox remains the hard execution boundary.
 - OpenCode launches `opencode acp --pure`. It maps filesystem writes, shell, and its native web tools to the portable Agent permission request through an invocation-private OpenCode configuration.
 - Pi launches `pi-acp`. Its normal built-in tools provide the optimistic defaults. When permissions are narrowed, AML supplies Pi's native `--tools` allowlist; `pi-mcp-adapter` is also required when the invocation uses JavaScript Tools, explicit MCP servers, or structured output.
 

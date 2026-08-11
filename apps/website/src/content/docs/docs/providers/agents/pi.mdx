@@ -3,7 +3,7 @@ title: Pi Agent
 description: Run Pi through AML's ACP profile with optional MCP and tool bridging.
 ---
 
-import { Aside, Badge, Card, CardGrid, LinkCard, Steps, TabItem, Tabs } from "@astrojs/starlight/components"
+import { Aside, Badge, Card, CardGrid, LinkCard, Steps } from "@astrojs/starlight/components"
 import ProviderHero from "../../../../../components/docs/ProviderHero.astro"
 
 <ProviderHero
@@ -121,9 +121,10 @@ console.log(result)
 
 In production, inject a valid credential or fail the process before starting the evaluation. Do not commit API keys or write them into a Workspace.
 
-## Tool and MCP example
+## Pi MCP adapter example
 
-Pi's MCP extension carries both AML JavaScript Tools and authored MCP servers. The explicit adapter path is the most reproducible setup:
+Unlike the other built-in ACP profiles, Pi needs its MCP extension and generated wrapper for AML JavaScript Tools,
+authored MCP servers, and structured output. The explicit adapter path is the most reproducible setup:
 
 ```tsx
 import { fileURLToPath } from "node:url"
@@ -231,6 +232,10 @@ PI_CODING_AGENT_SESSION_DIR <state>/sessions
 PI_SKIP_VERSION_CHECK      1
 ```
 
+The private `HOME` prevents Pi from inheriting the operator's global `~/.pi/agent/AGENTS.md`. Pi still walks parent
+directories and the effective working directory for project `AGENTS.md` or `CLAUDE.md` files. The AML profile does not
+pass Pi's `--no-context-files` flag, so those project instructions are combined with AML's first-turn system prefix.
+
 AML materializes wrapper files, Pi settings, and lazy MCP configuration into that state directory. It then acquires the ACP session, starts the provider, handles turns and Tool/MCP calls, strips Pi ACP startup information from returned text, validates the final response, and releases the session. Reusing a factory does not reuse Pi's per-evaluation HOME or session map.
 
 ## Failure modes and troubleshooting
@@ -251,7 +256,9 @@ AML materializes wrapper files, Pi settings, and lazy MCP configuration into tha
 
 4. **The system instruction appears in the answer**
 
-   Pi receives it as first-turn text because ACP has no native system field here. Make the instruction explicit and ask Pi to follow it without repeating it.
+   Pi receives it as first-turn text because ACP has no native system field here. Make the instruction explicit and ask
+   Pi to follow it without repeating it. If behavior conflicts with the authored system text, also inspect project
+   `AGENTS.md` and `CLAUDE.md` context files.
 
 5. **Permission behavior is surprising**
 
@@ -263,13 +270,13 @@ AML materializes wrapper files, Pi settings, and lazy MCP configuration into tha
 
 </Steps>
 
-## References
+## Provider references
 
 <CardGrid>
   <LinkCard
     title="Pi coding agent"
-    href="https://github.com/earendil-works/pi"
-    description="Pi's native coding-agent project and configuration context."
+    href="https://github.com/earendil-works/pi/tree/main/packages/coding-agent#context-files"
+    description="Pi's native coding-agent setup, context-file discovery, and configuration."
   />
   <LinkCard
     title="Pi ACP adapter"
@@ -290,5 +297,32 @@ AML materializes wrapper files, Pi settings, and lazy MCP configuration into tha
     title="AML Pi tests"
     href="https://github.com/we-are-singular/aml/tree/main/providers/agents/pi/tests"
     description="Launch, wrapper configuration, and live Tool/structured-output coverage."
+  />
+</CardGrid>
+
+## Related AML documentation
+
+The adapter and wrapper above are Pi-specific; capability definition and runtime behavior remain shared AML contracts:
+
+<CardGrid>
+  <LinkCard
+    title="JavaScript Tools"
+    href="/docs/cookbook/tools/"
+    description="Define, scope, validate, and operate an application-owned Tool."
+  />
+  <LinkCard
+    title="Model Context Protocol"
+    href="/docs/cookbook/mcp/"
+    description="Declare MCP servers, transports, allowlists, and runtime requirements."
+  />
+  <LinkCard
+    title="Runtime configuration"
+    href="/docs/runtime/"
+    description="Configure limits, cancellation, lifecycle events, tracing, and cleanup."
+  />
+  <LinkCard
+    title="Agent component reference"
+    href="/docs/reference/primitives/agent/"
+    description="Review Agent props, resolution, capability scope, and result behavior."
   />
 </CardGrid>

@@ -30,6 +30,7 @@ function nextRestorePointIndex(): number {
 
 const providerByHref = new Map<string, ProviderVisualName>([
   [withBase("docs/providers/agents/codex/"), "codex"],
+  [withBase("docs/providers/agents/copilot/"), "copilot"],
   [withBase("docs/providers/agents/opencode/"), "opencode"],
   [withBase("docs/providers/agents/pi/"), "pi"],
   [withBase("docs/providers/sandboxes/local/"), "local-sandbox"],
@@ -195,7 +196,13 @@ function containsCurrentPage(entries: SidebarEntry[]): boolean {
       opacity: 1;
     }
 
-    :global([data-theme="dark"]) a:is([data-provider="codex"], [data-provider="opencode"], [data-provider="pi"])
+    :global([data-theme="dark"])
+      a:is(
+        [data-provider="codex"],
+        [data-provider="copilot"],
+        [data-provider="opencode"],
+        [data-provider="pi"]
+      )
       :global(.provider-sidebar-icon) {
       filter: invert(1) brightness(1.08);
     }
