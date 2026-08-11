@@ -16,6 +16,17 @@ import ProviderHero from "../../../../../components/docs/ProviderHero.astro"
   caution="The provider uses an invocation-private Copilot home and never copies your interactive CLI configuration. Authentication follows the launched process environment, while trusted Workspaces can still contribute native MCP configuration."
 />
 
+<Aside type="danger" title="Restricted Daytona tiers currently block GitHub Copilot">
+  Daytona's organization-level firewall for restricted tiers takes precedence over per-Sandbox `domainAllowList`
+  settings. GitHub Copilot CLI requires `*.githubcopilot.com`, which is not in Daytona's published essential-services
+  list, so model discovery is reset before an HTTP response is received. Adding the domain through
+  `daytonaSandbox({ create: { domainAllowList: ... } })` cannot override that policy. Use another Sandbox, a Daytona
+  tier with unrestricted egress, or confirm that Daytona has added the domain before deploying this combination. This
+  is a Daytona network failure, not evidence of an invalid Copilot token or exhausted Copilot credits. See
+  [Daytona's network limits](https://www.daytona.io/docs/en/network-limits/) and
+  [GitHub's Copilot allowlist](https://docs.github.com/en/copilot/reference/copilot-allowlist-reference).
+</Aside>
+
 <Badge text="Built-in" variant="success" /> <Badge text="Native ACP" /> <Badge text="Credentialed" />
 
 ## What this provider launches
@@ -244,6 +255,13 @@ one `copilotAgent()` factory does not reuse Copilot state between evaluations.
    Inspect Copilot launch flags, native `.mcp.json` or `.github/mcp.json` files, and the enclosing Sandbox. ACP permission
    mapping is policy; the Sandbox is the security boundary.
 
+6. **Daytona resets the Copilot model endpoint**
+
+   If model discovery fails with `ECONNRESET` against `api.githubcopilot.com` or
+   `api.individual.githubcopilot.com`, test TLS from the same Daytona Sandbox. Restricted-tier organization policy
+   cannot be widened with a per-Sandbox `domainAllowList`; use an unrestricted environment or ask Daytona to add
+   `*.githubcopilot.com` to its essential-services allowlist.
+
 </Steps>
 
 ## Provider references
@@ -268,6 +286,11 @@ one `copilotAgent()` factory does not reuse Copilot state between evaluations.
     title="Allowing and denying tools"
     href="https://docs.github.com/en/copilot/how-tos/copilot-cli/use-copilot-cli/allowing-tools"
     description="Copilot tool availability and permission-rule semantics."
+  />
+  <LinkCard
+    title="Copilot network allowlist"
+    href="https://docs.github.com/en/copilot/reference/copilot-allowlist-reference"
+    description="GitHub hostnames that restricted execution environments must permit."
   />
   <LinkCard
     title="AML Copilot profile source"
