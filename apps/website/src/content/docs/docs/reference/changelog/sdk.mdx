@@ -7,6 +7,28 @@ This page tracks `@aml-jsx/sdk`. Entries are newest first. See [GitHub Releases]
 
 {/* changelog:entries */}
 
+{/* changelog:sdk:v0.4.4:start */}
+
+## SDK v0.4.4 — Add GitHub Copilot as built-in agent provider
+
+Released 2026-08-11.
+
+This release adds GitHub Copilot to the AML SDK as a first-class agent provider alongside Codex, OpenCode, and Pi, enabling `copilot --acp` launches with AML permission bridging and structured output support.
+
+### Highlights
+
+- **New `copilotAgent()` factory function** Exported from `@aml-jsx/sdk`, the `copilotAgent()` factory creates a Copilot agent provider with options for command, args, environment overlay, model, reasoning effort, and working directory. The provider launches `copilot --acp` with invocation-private state (`COPILOT_HOME`), explicit authentication resolution (`COPILOT_GITHUB_TOKEN > GH_TOKEN > GITHUB_TOKEN`), and AML permission-to-deny-rule mapping (`--deny-tool=write|shell|url`). [Copilot provider reference](/docs/providers/agents/copilot/) · [Agent providers overview](/docs/providers/agents/)
+- **Expanded `AcpAgentLaunchContext` interface** Two new optional fields added to the shared ACP agent launch context: `amlMcpServerName?: string` (name of the invocation-owned MCP server hosting AML JavaScript Tools) and `inheritsProcessEnvironment: boolean` (whether the launched process inherits the host's `process.env`). All ACP profiles now pass these to `createLaunch()`, enabling provider-specific behavior like Copilot's environment-aware auth token resolution. [Agent primitives reference](/docs/reference/primitives/agent/)
+- **Copilot permission mapping (filesystem, shell, network)** The Copilot profile translates AML permission grants into Copilot CLI deny flags and tool exclusions: `read-only` filesystem excludes edit/write tools and passes `--deny-tool=write`; `shell: false` excludes bash and passes `--deny-tool=shell`; `network: false` excludes web tools and passes `--deny-tool=url`. Deny rules take precedence over ACP approvals, narrowing the model-visible tool set. [Copilot provider reference](/docs/providers/agents/copilot/)
+- **Structured output instruction for Copilot** When AML provides an output schema and the MCP server is active, the Copilot profile injects a `structuredOutputInstruction` that names the `aml_submit_result` MCP tool with the correct server prefix, instructing Copilot to call it once with the final result. [Agent primitives reference](/docs/reference/primitives/agent/)
+- **Documentation and catalog updates** Added a full Copilot provider reference page and updated the cross-provider capability matrix to include GitHub Copilot as the fourth built-in agent provider alongside Codex, OpenCode, and Pi. [Agent providers overview](/docs/providers/agents/) · [Copilot provider reference](/docs/providers/agents/copilot/)
+
+### Commits
+
+- feat(sdk): add github copilot agent provider (cbbe572)
+
+{/* changelog:sdk:v0.4.4:end */}
+
 {/* changelog:sdk:v0.4.3:start */}
 
 ## SDK v0.4.3 — Recoverable structured output submissions
