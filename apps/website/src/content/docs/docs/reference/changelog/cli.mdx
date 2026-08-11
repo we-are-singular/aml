@@ -7,6 +7,32 @@ This page tracks `@aml-jsx/cli`. Entries are newest first. See [GitHub Releases]
 
 {/* changelog:entries */}
 
+{/* changelog:cli:v0.1.3:start */}
+
+## CLI v0.1.3 — CLI v0.1.3 – Richer error diagnostics and Windows portability
+
+Released 2026-08-11.
+
+Prints the full provider error cause chain on failure, fixes Windows compatibility for the packed CLI, and automates changelog generation during releases.
+
+### Highlights
+
+- **Full error cause chain in CLI output** When an Agent run fails, the CLI now walks the <code>Error.cause</code> chain and prints each link separated by <code>caused by:</code>, revealing the actual provider diagnostic that was previously hidden behind a generic wrapper message. [CLI reference](/docs/cli) · [Error handling](/docs/errors) · [Changelog](/docs/reference/changelog/cli)
+- **Windows portability fixes** Two changes make the packed CLI installable and testable on Windows: the workflow-loader no longer executes Vite's client-only <code>/@vite/env</code> bootstrap (which resolves as a filesystem module in packed builds), and the package-check script skips POSIX executable-bit validation on <code>win32</code> since npm installs a <code>.cmd</code> shim instead of a raw binary. [Compatibility](/docs/compatibility) · [CLI reference](/docs/cli)
+- **Auto-generated changelog on release** The <code>release-it</code> <code>after:bump</code> hook now runs <code>changelog:cli</code>, formats the generated page, and stages it alongside the package-lock bump so every future CLI release includes an up-to-date changelog entry without manual editing. [CLI changelog](/docs/reference/changelog/cli)
+- **Dedicated CI portability workflow** Node and OS portability checks were extracted from the website workflow into <code>.github/workflows/cli-portability.yml</code>, keeping CI concerns separated and the website deploy pipeline lightweight. [Operations](/docs/production/operations)
+
+### Commits
+
+- fix(cli): print provider failure causes (e6010fd)
+- fix(cli): format generated changelog entries (264974c)
+- feat(cli): maintain changelog during releases (732c409)
+- fix(cli): avoid windows vite env bootstrap (5c675b0)
+- ci(cli): scope portability checks (d850329)
+- fix(cli): make package check portable on windows (6d15564)
+
+{/* changelog:cli:v0.1.3:end */}
+
 {/* changelog:cli:v0.1.2:start */}
 
 ## CLI v0.1.2 — Version-aware integration checks
