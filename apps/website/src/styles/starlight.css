@@ -355,7 +355,10 @@ body {
   }
 
   .doc-hero-stack > .doc-actions {
+    display: flex;
     margin-bottom: 2.75rem;
+    margin-left: auto;
+    width: fit-content;
   }
 
   .sl-markdown-content {
@@ -587,6 +590,20 @@ body {
   .card-grid > .sl-link-card:focus-within {
     outline: 2px solid var(--aml-accent);
     outline-offset: 3px;
+  }
+
+  .docs-agent-links .card-grid > .sl-link-card:first-child {
+    background: var(--aml-accent);
+    border-color: var(--aml-accent);
+  }
+
+  .docs-agent-links .card-grid > .sl-link-card:first-child :is(.title, .description, .icon) {
+    color: var(--sl-color-text-invert);
+  }
+
+  .docs-agent-links .card-grid > .sl-link-card:first-child:hover {
+    background: var(--aml-accent-hover);
+    border-color: var(--aml-accent-hover);
   }
 
   .starlight-aside {
@@ -859,10 +876,6 @@ body {
   .doc-actions__chatgpt-icon {
     color: var(--aml-text);
   }
-
-  .doc-actions__gemini-icon {
-    color: #5b82ef;
-  }
 }
 
 @keyframes aml-doc-actions-popover-in {
@@ -906,6 +919,10 @@ body {
       gap: 1rem;
     }
 
+    .doc-title-row > .doc-actions {
+      align-self: flex-end;
+    }
+
     .hero {
       margin-inline: -0.15rem;
       padding: 2.35rem 1.4rem;
@@ -931,15 +948,6 @@ body {
     .sl-markdown-content .sl-heading-wrapper.level-h2 {
       margin-top: 3.25rem;
       padding-top: 1.8rem;
-    }
-
-    .doc-actions__menu {
-      position: static;
-    }
-
-    .doc-actions__popover {
-      left: 0;
-      right: auto;
     }
   }
 }

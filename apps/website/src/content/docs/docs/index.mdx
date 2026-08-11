@@ -12,6 +12,8 @@ hero:
       variant: minimal
 ---
 
+import { CardGrid, LinkCard } from "@astrojs/starlight/components"
+
 <nav class="docs-hot-links" aria-label="Documentation shortcuts">
   <a href="/docs/faq/">FAQ</a>
   <a href="/docs/examples/">Examples</a>
@@ -20,9 +22,22 @@ hero:
   <a href="/docs/providers/">Providers</a>
   <a href="/docs/cookbook/">Cookbook</a>
   <a href="/docs/reference/">Reference</a>
-  <a href="/docs/llms.txt">Full docs for LLMs</a>
-  <a href="/llms.txt">Project llms.txt</a>
 </nav>
+
+<div class="docs-agent-links not-content">
+  <CardGrid>
+    <LinkCard
+      title="Full documentation for agents"
+      description="Give an agent the complete AML documentation in one plain-text file."
+      href="/docs/llms.txt"
+    />
+    <LinkCard
+      title="Project llms.txt"
+      description="Share the concise project overview and links to the full agent documentation."
+      href="/llms.txt"
+    />
+  </CardGrid>
+</div>
 
 AML is an asynchronous TypeScript and JSX runtime for building executable agent workflows. JSX describes the dependency tree; [`AmlRuntime`](/docs/reference/runtime/) evaluates it, opens scoped resources, runs provider sessions, and cleans up in reverse order. It is not a UI framework or a second workflow language—ordinary TypeScript still owns control flow and concurrency.
 

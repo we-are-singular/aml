@@ -24,7 +24,7 @@ const names = "names" in props ? props.names : [props.name]
 const markSize = names.length > 1 ? "md" : "lg"
 ---
 
-<section class="provider-hero" aria-label={`${title} provider overview`}>
+<section class="provider-hero not-content" aria-label={`${title} provider overview`}>
   <div class="provider-hero__identity">
     <div class:list={["provider-hero__marks", { "provider-hero__marks--group": names.length > 1 }]}>
       {names.map(name => <ProviderMark name={name} size={markSize} />)}
