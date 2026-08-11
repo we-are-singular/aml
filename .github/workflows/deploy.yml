@@ -11,9 +11,10 @@ jobs:
   deploy:
     name: GitHub Pages
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 20
     concurrency:
       group: github-pages
+      cancel-in-progress: true
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
