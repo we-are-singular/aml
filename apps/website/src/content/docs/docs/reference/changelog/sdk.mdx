@@ -10,6 +10,26 @@ This page tracks `@aml-jsx/sdk`. Entries are newest first. See [GitHub Releases]
 
 {/* changelog:entries */}
 
+## SDK v0.5.0 — Trace the Agent lifecycle and cancel on process signals
+
+Released 2026-08-12.
+
+This release makes Agent execution observable across its full lifecycle and gives application-owned Node processes a portable way to turn `SIGINT`/`SIGTERM` into a single cancellation signal. It also fixes the OpenCode profile so it no longer overrides OpenCode's native coding prompt, and lets the Copilot provider resolve during clean type-checking.
+
+### Highlights
+
+- **Process signal cancellation** A new `ProcessSignalCancellation` helper, exported from `@aml-jsx/sdk`, installs `SIGINT`/`SIGTERM` listeners and converts the first signal into one caller-owned `AbortSignal`. Constructing the helper explicitly opts the process in — importing the SDK does not. The first signal aborts active evaluations so AML can release Agent sessions, Sandbox leases, and Workspace scopes; a second signal exits immediately. Cleanup is bounded by the default 10-second deadline, and `exitCode` preserves status `130` (`SIGINT`) or `143` (`SIGTERM`) without an early `process.exit()`. Frameworks or supervisors that already own shutdown can pass their existing signal instead. [Runtime reference](/docs/runtime/#process-signals)
+- **Agent and ACP lifecycle tracing** Agent execution now emits a dedicated `agent.session` span enclosing setup, turns, and cleanup, alongside new `sandbox.process` and `acp.session.*` point events for process spawn/kill and ACP session creation, prompt submission, streaming updates, and completion. `agent.cleanup` reports teardown explicitly, and the console tracer renders these as a nested tree from the `agent` span down through turns. Metadata-only tracing stays content-free; enabling content capture passes each serialized ACP update object through unchanged. [Observability](/docs/observability)
+- **Preserved OpenCode native system prompt** Because OpenCode replaces its model-specific base coding prompt whenever a custom Agent has a non-empty `prompt`, the OpenCode profile no longer sets that field. Non-empty AML System content is instead prepended to the first user turn inside literal `<SYSTEM>` tags, while empty content adds no prelude — preserving OpenCode's native prompt while carrying the AML instructions across ACP. [OpenCode Agent](/docs/providers/agents/opencode/)
+- **Clean-checkout Copilot type resolution** The SDK's `tsconfig` now maps `@aml-jsx/agent-copilot` to its source, so consumers and CI can type-check against the Copilot provider without relying on stale build output. [Copilot provider reference](/docs/providers/agents/copilot/)
+
+### Commits
+
+- fix(agent-opencode): preserve native system prompt (f977e1a)
+- feat(sdk): trace agent and acp lifecycle (e956aad)
+- feat(sdk): add process signal cancellation (11d2a4a)
+- fix(sdk): resolve copilot source during type-checking (3cab6be)
+
 ## SDK v0.4.4 — Add GitHub Copilot as built-in agent provider
 
 Released 2026-08-11.
