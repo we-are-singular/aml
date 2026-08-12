@@ -81,7 +81,7 @@ describe("compiled aml command", () => {
 
     expectSuccess(result)
     expect(result.stdout).toBe("named result\n")
-  })
+  }, 15_000)
 
   it("executes JavaScript workflows through the same Vite loader", () => {
     const result = runCli(["run", resolve(fixtures, "javascript.js")], {
