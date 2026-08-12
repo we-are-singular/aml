@@ -335,6 +335,7 @@ Common commands:
 | `npm run smoke -- --agent pi --sandbox daytona`               | Run one Agent × Sandbox smoke matrix cell with live traces.     |
 | `npm run smoke -- --agent codex`                              | Run one Agent against every registered Sandbox.                 |
 | `npm run smoke -- --sandbox docker`                           | Run every registered Agent against one Sandbox.                 |
+| `npm run smoke:kitchen-sink`                                  | Run all stable primitives through R2, OpenCode, and Modal.      |
 | `npx vite-node sdk/tests/smoke/workspace-s3-chain.smoke.tsx`  | Run the Docker → Daytona → S3 Workspace persistence proof.      |
 | `npm run test:integration --workspace=@aml-jsx/sandbox-modal` | Run Modal's credentialed Workspace round-trip proof.            |
 | `npm run smoke -- --list`                                     | List the complete or filtered matrix without executing it.      |
@@ -351,17 +352,31 @@ npm run test:integration --workspace=@aml-jsx/workspace-s3
 docker compose down
 ```
 
-Smoke files use a dedicated Vitest configuration and stay outside default unit tests. Omitting both smoke filters runs every registered Agent against every registered Sandbox. npm requires the `--` separator before smoke-runner options.
+### Smoke tests
 
-The smoke runner loads the repository's untracked `.env`. Codex, OpenCode, and Pi use `OPENAI_API_KEY` or `AML_CODEX_API_KEY`; `AML_CODEX_MODEL`, `AML_OPENCODE_MODEL`, and `AML_PI_MODEL` may override their models. Copilot uses `COPILOT_GITHUB_TOKEN`, `GH_TOKEN`, or `GITHUB_TOKEN` in that order and defaults to `gpt-5-mini`; `AML_COPILOT_GITHUB_TOKEN` and `AML_COPILOT_MODEL` are optional smoke-only overrides. Daytona uses `DAYTONA_API_KEY`. Modal uses the repository-local `MODAL_API_KEY` and `MODAL_API_SECRET` names as `tokenId` and `tokenSecret`; Modal's own ambient credential names remain `MODAL_TOKEN_ID` and `MODAL_TOKEN_SECRET`. These environment names configure only the repository's smoke CLI. Applications configure providers through their native factory options and runtime environment.
+Matrix smoke files use a dedicated Vitest configuration and stay outside default unit tests. Omitting both matrix filters runs every registered Agent against every registered Sandbox. npm requires the `--` separator before smoke-runner options.
+
+The manual kitchen-sink smoke defaults to `--agent opencode --sandbox modal --workspace r2 --mcp context7`. It accepts any registered Agent or Sandbox, plus `local | r2` Workspaces and `context7 | none` MCP selection. The workflow exercises all eleven stable primitives, then reacquires the saved Workspace and verifies the persisted files. Run `npm run smoke:kitchen-sink -- --help` for the current selections. Context7 supports anonymous testing; `CONTEXT7_API_KEY` raises its rate limit when configured.
+
+The smoke runners load the repository's untracked `.env`. Codex, OpenCode, and Pi use `OPENAI_API_KEY` or `AML_CODEX_API_KEY`; `AML_CODEX_MODEL`, `AML_OPENCODE_MODEL`, and `AML_PI_MODEL` may override their models. Copilot uses `COPILOT_GITHUB_TOKEN`, `GH_TOKEN`, or `GITHUB_TOKEN` in that order and defaults to `gpt-5-mini`; `AML_COPILOT_GITHUB_TOKEN` and `AML_COPILOT_MODEL` are optional smoke-only overrides. Daytona uses `DAYTONA_API_KEY`. Modal uses the repository-local `MODAL_API_KEY` and `MODAL_API_SECRET` names as `tokenId` and `tokenSecret`; Modal's own ambient credential names remain `MODAL_TOKEN_ID` and `MODAL_TOKEN_SECRET`. The R2 Workspace accepts `R2_BUCKET`, `R2_ENDPOINT`, `R2_ACCESS_KEY_ID`, and `R2_SECRET_ACCESS_KEY`, with the existing `AML_S3_*` aliases. These environment names configure only the repository's smoke CLI. Applications configure providers through their native factory options and runtime environment.
+
+The full matrix and the default kitchen sink are manual release gates. Run both before every package release, and always before a major-version release:
+
+```sh
+npm run smoke
+npm run smoke:kitchen-sink
+```
+
+They intentionally stay outside CI and `npm run release:check` because they consume paid model inference and may provision billable remote Sandbox and Workspace infrastructure. A green deterministic CI run does not replace these live compatibility and composition proofs.
 
 Commits are checked with lint-staged and commitlint. Pushes run the same formatting, linting, test, and build
 contract enforced by GitHub Actions.
 
 ## Releasing
 
-SDK and CLI releases are manual and independent. Start from a clean `main` that matches `origin/main`, authenticate with
-npm and GitHub, then run the interactive release for the intended package:
+SDK and CLI releases are manual and independent. Complete the [manual smoke tests](#smoke-tests), start from a clean
+`main` that matches `origin/main`, authenticate with npm and GitHub, then run the interactive release for the intended
+package:
 
 ```sh
 npm login
