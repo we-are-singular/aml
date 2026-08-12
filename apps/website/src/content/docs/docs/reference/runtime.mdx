@@ -56,6 +56,10 @@ const result = await runtime.evaluate(<Agent>Review the changed files.</Agent>, 
 
 AML checks cancellation before work and across asynchronous provider and cleanup boundaries. Evaluation settles only after owned Sandbox and Workspace resources have completed cleanup. If cancellation and cleanup both fail, AML preserves both causes in an `AggregateError`.
 
+`ProcessSignalCancellation` is the optional Node process bridge for application-owned entry points. Construction listens for `SIGINT` and `SIGTERM`; the first signal aborts its `signal`, a second signal forces exit, and `cleanupDeadlineMs` bounds graceful cleanup before forced exit. The deadline defaults to 10 seconds and must be a non-negative safe integer. Read `exitCode` after evaluation settles to preserve `130` or `143`, then call `dispose()` to remove both listeners and cancel the deadline timer. Importing `@aml-jsx/sdk` alone never installs signal listeners.
+
+Use one instance for the process shutdown boundary, not one per evaluation. Combine `cancellation.signal` with request-specific cancellation through `AbortSignal.any()` when a service has multiple active requests. [`Runtime lifecycle`](/docs/runtime/#process-signals) has the complete entry-point pattern.
+
 Evaluation is post-order: child components resolve before their containing `<Agent />` plan is sent to a provider. Follow-ups share the Agent session history and count toward `maxTurnsPerAgent`.
 
 ## Component-local evaluation
@@ -101,4 +105,4 @@ The finish event reports `status: "ok" | "error"`, `runId`, `signal`, and an opt
 
 For end-to-end lifecycle patterns, see [Runtime lifecycle](/docs/runtime/). For provider-specific defaults and credentials, see the [provider catalog](/docs/providers/).
 
-Sources: [`AmlRuntime`](https://github.com/we-are-singular/aml/blob/main/sdk/src/core/aml-runtime.ts), [`evaluate`](https://github.com/we-are-singular/aml/blob/main/sdk/src/core/evaluate.ts), [`EvaluationError`](https://github.com/we-are-singular/aml/blob/main/sdk/src/core/evaluation-error.ts), and [`AmlEventSubscriber`](https://github.com/we-are-singular/aml/blob/main/sdk/src/core/aml-event-subscriber.ts).
+Sources: [`AmlRuntime`](https://github.com/we-are-singular/aml/blob/main/sdk/src/core/aml-runtime.ts), [`ProcessSignalCancellation`](https://github.com/we-are-singular/aml/blob/main/sdk/src/core/process-signal-cancellation.ts), [`evaluate`](https://github.com/we-are-singular/aml/blob/main/sdk/src/core/evaluate.ts), [`EvaluationError`](https://github.com/we-are-singular/aml/blob/main/sdk/src/core/evaluation-error.ts), and [`AmlEventSubscriber`](https://github.com/we-are-singular/aml/blob/main/sdk/src/core/aml-event-subscriber.ts).

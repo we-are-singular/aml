@@ -82,6 +82,37 @@ try {
 
 An already-aborted signal rejects before the tree starts. During execution AML propagates the signal to active provider calls and Sandbox operations and stops advancing to later frames. Cancellation does not roll back a Tool, Script, provider, or network side effect that already completed.
 
+### Process signals
+
+An application-owned Node entry point can opt into graceful `SIGINT` and `SIGTERM` handling with `ProcessSignalCancellation`. Constructing the helper installs process listeners; importing the SDK does not. Pass its signal to every active evaluation and dispose it only after those evaluations settle:
+
+```tsx
+import { AmlRuntime, ProcessSignalCancellation } from "@aml-jsx/sdk"
+
+const cancellation = new ProcessSignalCancellation({ cleanupDeadlineMs: 15_000 })
+
+try {
+  await runtime.evaluate(<Workflow />, { signal: cancellation.signal })
+} catch (error) {
+  if (cancellation.exitCode === undefined) throw error
+} finally {
+  cancellation.dispose()
+}
+
+if (cancellation.exitCode !== undefined) {
+  process.exitCode = cancellation.exitCode
+}
+```
+
+The first signal aborts the evaluation and lets AML release Agent sessions, Sandbox leases, and Workspace scopes. A second signal exits immediately. Cleanup is bounded to 10 seconds by default; set `cleanupDeadlineMs` for the deployment's shutdown budget. When cleanup completes first, use `exitCode` to preserve status `130` for `SIGINT` or `143` for `SIGTERM` without calling `process.exit()` early.
+
+<Aside type="caution" title="Use one owner at the process boundary">
+  Do not construct one helper per request. A service should create one at its composition root, stop accepting new work,
+  combine its signal with request deadlines using `AbortSignal.any()`, await every active evaluation, and then dispose
+  the helper. Frameworks or supervisors that already own shutdown should pass their existing signal instead of
+  installing a competing process listener.
+</Aside>
+
 ## Lifecycle events
 
 `start` and `finish` are runtime lifecycle events. They are dispatched to lifecycle listeners as part of evaluation control flow:

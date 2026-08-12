@@ -136,6 +136,7 @@ workflows with `@aml-jsx/sdk`.
 | API                                   | Purpose                                                                                                          |
 | ------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
 | `AmlRuntime`                          | Evaluates a complete AML tree, owns budgets and lifecycle events, and returns the final text output.             |
+| `ProcessSignalCancellation`           | Converts application-owned SIGINT/SIGTERM handling into bounded runtime cancellation.                            |
 | `evaluate()`                          | Evaluates AML from inside an active component and returns text or schema-validated structured data.              |
 | `defineTool()`                        | Turns a JavaScript function into a model-callable capability with validated input and optional validated output. |
 | `defineMcpServer()`                   | Creates an immutable provider-neutral MCP descriptor for a local stdio process or remote Streamable HTTP server. |

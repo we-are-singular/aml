@@ -147,6 +147,11 @@ export type { AmlRenderable } from "./core/aml-node.js"
 export { AmlRuntime, type AmlEvaluationOptions, type AmlRuntimeOptions } from "./core/aml-runtime.js"
 export { EvaluationError } from "./core/evaluation-error.js"
 export { evaluate } from "./core/evaluate.js"
+export {
+  type ProcessSignal,
+  ProcessSignalCancellation,
+  type ProcessSignalCancellationOptions,
+} from "./core/process-signal-cancellation.js"
 export type { AmlTraceIdentity } from "./core/trace-identity.js"
 
 // Provider-neutral observability contracts and the dependency-free console view.

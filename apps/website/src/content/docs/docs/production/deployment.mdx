@@ -140,6 +140,10 @@ export async function runWithDeadline(runtime: AmlRuntime, tree: JSX.Element, ms
 
 The application remains responsible for the outer request, queue, and process lifecycle. AML closes its evaluation-owned providers in `finally`, but an external effect already performed by a Tool, Agent, or command is not automatically rolled back.
 
+For a standalone Node process that owns its shutdown policy, create one [`ProcessSignalCancellation`](/docs/runtime/#process-signals) at the composition root. Pass its signal, or an `AbortSignal.any()` combination with a request deadline, to every active evaluation. On the first `SIGINT` or `SIGTERM`, stop accepting work and await those evaluations so AML cleanup can complete. The helper forces exit after its configurable cleanup deadline or immediately on a second signal. Dispose it after all evaluations settle and assign its conventional `exitCode`; do not call `process.exit()` while cleanup is still running.
+
+Do not add another process-signal bridge when a queue worker, HTTP framework, container runtime integration, or service host already exposes a shutdown `AbortSignal`. Pass that owner-provided signal directly. The SDK does not install listeners merely because it was imported.
+
 ## CI and release gate
 
 The useful deployment checks are provider-specific:

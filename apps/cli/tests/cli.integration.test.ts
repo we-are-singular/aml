@@ -138,34 +138,40 @@ describe("compiled aml command", () => {
     expect(result.stderr).toContain("caused by: provider stderr: model request failed")
   })
 
-  it("turns SIGINT into runtime cancellation and reaps a Local Sandbox process group", async () => {
-    const temporaryDirectory = await mkdtemp(join(tmpdir(), "aml-cli-signal-"))
-    const pidFile = join(temporaryDirectory, "child.pid")
-    const child = spawnCli(["run", resolve(fixtures, "signal-local-sandbox.tsx")], {
-      cwd: repositoryRoot,
-      env: { AML_SIGNAL_TEST_PID_FILE: pidFile },
-    })
-    let stderr = ""
-    let stdout = ""
-    child.stderr.setEncoding("utf8").on("data", chunk => (stderr += chunk))
-    child.stdout.setEncoding("utf8").on("data", chunk => (stdout += chunk))
+  it.each([
+    { exitCode: 130, signal: "SIGINT" as const },
+    { exitCode: 143, signal: "SIGTERM" as const },
+  ])(
+    "turns $signal into runtime cancellation and reaps a Local Sandbox process group",
+    async ({ exitCode, signal }) => {
+      const temporaryDirectory = await mkdtemp(join(tmpdir(), "aml-cli-signal-"))
+      const pidFile = join(temporaryDirectory, "child.pid")
+      const child = spawnCli(["run", resolve(fixtures, "signal-local-sandbox.tsx")], {
+        cwd: repositoryRoot,
+        env: { AML_SIGNAL_TEST_PID_FILE: pidFile },
+      })
+      let stderr = ""
+      let stdout = ""
+      child.stderr.setEncoding("utf8").on("data", chunk => (stderr += chunk))
+      child.stdout.setEncoding("utf8").on("data", chunk => (stdout += chunk))
 
-    try {
-      const sandboxChildPid = Number((await waitForFile(pidFile)).trim())
-      expect(sandboxChildPid).toBeGreaterThan(0)
+      try {
+        const sandboxChildPid = Number((await waitForFile(pidFile)).trim())
+        expect(sandboxChildPid).toBeGreaterThan(0)
 
-      child.kill("SIGINT")
-      const completion = await waitForExit(child)
+        child.kill(signal)
+        const completion = await waitForExit(child)
 
-      expect(completion).toEqual({ code: 130, signal: null })
-      expect(stdout).toBe("")
-      expect(stderr).toContain("aml: starting run")
-      expect(() => kill(sandboxChildPid, 0)).toThrow(expect.objectContaining({ code: "ESRCH" }))
-    } finally {
-      if (child.exitCode === null && child.signalCode === null) child.kill("SIGKILL")
-      await rm(temporaryDirectory, { force: true, recursive: true })
+        expect(completion).toEqual({ code: exitCode, signal: null })
+        expect(stdout).toBe("")
+        expect(stderr).toContain("aml: starting run")
+        expect(() => kill(sandboxChildPid, 0)).toThrow(expect.objectContaining({ code: "ESRCH" }))
+      } finally {
+        if (child.exitCode === null && child.signalCode === null) child.kill("SIGKILL")
+        await rm(temporaryDirectory, { force: true, recursive: true })
+      }
     }
-  })
+  )
 
   it.skipIf(platform === "win32")("reaps the active ACP Agent and Sandbox MCP relay before exiting", async () => {
     const temporaryDirectory = await mkdtemp(join(tmpdir(), "aml-cli-acp-signal-"))
@@ -266,7 +272,7 @@ async function waitForExit(
   child: ReturnType<typeof spawnCli>
 ): Promise<Readonly<{ code: number | null; signal: NodeJS.Signals | null }>> {
   return await new Promise((resolveExit, reject) => {
-    const timeout = setTimeout(() => reject(new Error("timed out waiting for aml to exit after SIGINT")), 10_000)
+    const timeout = setTimeout(() => reject(new Error("timed out waiting for aml to exit after signal")), 10_000)
     child.once("error", reject)
     child.once("close", (code, signal) => {
       clearTimeout(timeout)
