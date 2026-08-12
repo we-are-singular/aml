@@ -90,6 +90,22 @@ The shared example runner remains useful for its catalog and common tracer. Use 
     [Compose Sandboxes and Workspaces](/docs/cookbook/sandboxes-and-workspaces/)
 
   </Card>
+  <Card title="Stop safely from the CLI" icon="seti:lock">
+    Run `cli-process-safety.tsx` through `aml run`, interrupt it, and verify that cancellation reaps the tracked local process tree before exit.
+
+    [`operations/cli-process-safety.tsx`](https://github.com/we-are-singular/aml/blob/main/examples/src/operations/cli-process-safety.tsx)
+
+    [Build the process-safety walkthrough](/docs/cookbook/cli-process-safety/)
+
+  </Card>
+  <Card title="Watch a live Agent work" icon="setting">
+    Run `observe-agent.tsx` with OpenCode to turn Agent spans and captured ACP updates into an ordered activity feed across the initial turn and two FollowUps.
+
+    [`operations/observe-agent.tsx`](https://github.com/we-are-singular/aml/blob/main/examples/src/operations/observe-agent.tsx)
+
+    [Build the observability walkthrough](/docs/cookbook/observe-agent-activity/)
+
+  </Card>
 </CardGrid>
 
 ## When an example needs infrastructure

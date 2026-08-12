@@ -181,6 +181,8 @@ export default defineConfig({
               collapsed: true,
               items: [
                 { slug: "docs/cookbook/production-job" },
+                { slug: "docs/cookbook/cli-process-safety" },
+                { slug: "docs/cookbook/observe-agent-activity" },
                 { slug: "docs/cookbook/codex-docker-s3" },
                 { slug: "docs/cookbook/structured-routing" },
               ],

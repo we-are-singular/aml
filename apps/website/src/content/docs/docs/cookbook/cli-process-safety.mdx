@@ -1,0 +1,121 @@
+---
+title: Stop a CLI workflow safely
+description: Let aml run translate SIGINT and SIGTERM into bounded cancellation, process-tree termination, and Sandbox cleanup.
+---
+
+import { Aside, Badge, Steps } from "@astrojs/starlight/components"
+
+<Badge text="Resource-backed" variant="note" />
+
+## Goal
+
+Run a real, long-lived process through the experimental CLI, interrupt it with <kbd>Ctrl</kbd>+<kbd>C</kbd>, and verify that:
+
+1. the signal cancels the active AML evaluation;
+2. the local Sandbox terminates the complete process group and releases its lease;
+3. the CLI waits for cleanup, then exits with status `130` for `SIGINT` or `143` for `SIGTERM`.
+
+This example is intentionally credential-free. It uses [`localSandbox()`](/docs/providers/sandboxes/local/) to make process ownership visible, not to isolate untrusted code.
+
+## Prerequisites
+
+- Node.js `>=26`, repository dependencies, and a POSIX host with `sh` and `sleep`;
+- the built repository CLI, or `@aml-jsx/cli` installed beside `@aml-jsx/sdk`;
+- a terminal where you can send <kbd>Ctrl</kbd>+<kbd>C</kbd>;
+- no model, Agent executable, credentials, or network access.
+
+## Building block: one explicit resource owner
+
+[`<Script />`](/docs/reference/primitives/script/) requires a Sandbox with an enforcing runtime. The local provider needs `read-write` because a host process cannot enforce read-only filesystem access.
+
+```tsx
+const LongRunningProcess = (
+  <Sandbox access="read-write" provider={localSandbox({ workspace: cwd() })}>
+    <Script shell="sh">
+      {String.raw`
+sleep 300 &
+child=$!
+
+if [ -n "$AML_PROCESS_SAFETY_PID_FILE" ]; then
+  printf '%s\n' "$child" > "$AML_PROCESS_SAFETY_PID_FILE"
+fi
+
+wait "$child"
+`}
+    </Script>
+  </Sandbox>
+)
+```
+
+The inline shell starts a child process and waits for it. `AML_PROCESS_SAFETY_PID_FILE` is optional; when set, it records the child PID so cleanup can be checked independently. The Sandbox lease tracks the shell process, and local spawning creates a process group, so releasing the lease terminates the shell and its `sleep` descendant rather than abandoning the child.
+
+The command does not install its own cleanup abstraction. Process lifetime belongs to the Sandbox provider, and application interruption belongs to the runner.
+
+## Main file: export the tree
+
+The maintained file combines the imports and the two blocks above, then exports the AML value directly:
+
+```tsx title="cli-process-safety.tsx"
+import { cwd } from "node:process"
+
+import { localSandbox, Sandbox, Script } from "@aml-jsx/sdk"
+
+// LongRunningProcess is the AML tree defined above.
+export default LongRunningProcess
+```
+
+Do not construct `AmlRuntime` in this file. `aml run` must own the runtime for its signal controller to cover the Script, Sandbox release, diagnostics, and final exit code as one lifecycle.
+
+## Run and interrupt it
+
+From the repository root:
+
+```sh title="Terminal"
+npm run build --workspace=@aml-jsx/cli
+AML_PROCESS_SAFETY_PID_FILE=/tmp/aml-process-safety.pid \
+  node apps/cli/dist/index.js run ./examples/src/operations/cli-process-safety.tsx --trace
+```
+
+Wait for `/tmp/aml-process-safety.pid` to appear, then press <kbd>Ctrl</kbd>+<kbd>C</kbd> once. The CLI starts graceful cancellation and allows up to ten seconds for cleanup. A second interrupt explicitly stops waiting; it cannot guarantee JavaScript cleanup completed.
+
+Check the conventional status and recorded child PID:
+
+```sh title="Terminal"
+status=$?
+pid=$(cat /tmp/aml-process-safety.pid)
+printf 'exit=%s child=%s\n' "$status" "$pid"
+kill -0 "$pid"
+```
+
+Expected: `exit=130 ...`, and `kill -0` fails because the child no longer exists. If you send `SIGTERM` from another terminal, expect status `143`.
+
+## What happens on the first signal
+
+<Steps>
+
+1. The CLI's process-signal owner aborts the signal passed to `runtime.evaluate()` and starts its ten-second forced-exit deadline.
+2. The active Script receives cancellation through the Sandbox command signal. The local provider terminates the tracked process group.
+3. AML unwinds the evaluation and releases the acquired Sandbox lease. Release is still called even though the Script did not complete normally.
+4. Only after evaluation cleanup settles does the CLI dispose its signal listeners and deadline, set the conventional exit code, and return control to Node.
+
+</Steps>
+
+## Failure and safety boundaries
+
+<Aside type="caution" title="Graceful process safety is not crash recovery">
+  `SIGKILL`, a runtime crash, host loss, and power failure cannot execute JavaScript cleanup. Remote or durable
+  providers still need platform TTLs, reapers, and incident detection.
+</Aside>
+
+- `localSandbox()` executes trusted host commands. Replace it with an appropriately configured container or remote Sandbox for hostile code.
+- The ten-second deadline bounds shutdown; it does not prove a remote provider reached a terminal state before forced exit.
+- A second signal is an operator override. Use it only when stopping immediately is more important than completing cleanup.
+- Application code using `AmlRuntime` directly can use [`ProcessSignalCancellation`](/docs/runtime/#process-signal-cancellation). Do not add a second signal owner around `aml run`.
+- Remove the optional PID file after the walkthrough; it is verification state, not an AML resource.
+
+## Source and API links
+
+- [Maintained CLI process-safety example](https://github.com/we-are-singular/aml/blob/main/examples/src/operations/cli-process-safety.tsx)
+- [CLI interruption contract](/docs/cli/#interrupting-a-run)
+- [`<Sandbox />` and provider cleanup](/docs/reference/primitives/sandbox/)
+- [`<Script />`](/docs/reference/primitives/script/)

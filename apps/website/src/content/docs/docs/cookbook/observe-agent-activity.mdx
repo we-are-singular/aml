@@ -1,0 +1,162 @@
+---
+title: Observe a live Agent session
+description: Use AML's console tracer to see Agent turns and ACP activity across an Agent and its FollowUps.
+---
+
+import { Aside, Badge, Steps } from "@astrojs/starlight/components"
+
+<Badge text="Credentialed" variant="caution" />
+
+## Goal
+
+Run one incident-analysis [`<Agent />`](/docs/reference/primitives/agent/) with an application Tool and two [`<FollowUp />`](/docs/reference/primitives/follow-up/) turns, while AML's built-in console tracer shows:
+
+- the initial and follow-up turn boundaries;
+- ordered ACP message, thought, Tool, plan, usage, and other update variants;
+- provider session and process lifecycle;
+- Agent cleanup after the final turn or a failure.
+
+This observes what crosses AML's ACP connection. It cannot reveal hidden vendor retries, unreported sub-agents, model internals, or Tool activity the Agent does not emit.
+
+## Prerequisites
+
+- Node.js `>=26`, ESM TypeScript/TSX, `@aml-jsx/sdk`, and `zod`;
+- the OpenCode executable and model credentials available to the process;
+- `AML_OPENCODE_MODEL` when you do not want the example's `opencode-go/minimax-m3` default;
+- a local terminal approved to receive prompt, Tool, thought, and response content.
+
+## Building block 1: application-owned evidence
+
+The Agent receives the incident packet through one typed Tool. This is an explicit application capability, not ambient filesystem or network access.
+
+```tsx
+const ReadIncidentPacket = defineTool({
+  description: "Read the complete, application-owned incident packet",
+  input: z.object({}),
+  name: "read_incident_packet",
+  async execute() {
+    return INCIDENT_PACKET
+  },
+})
+```
+
+The maintained source defines a small frozen packet containing the deploy time, observed latency change, rollback status, and three span summaries.
+
+## Building block 2: the AML component tree
+
+The workflow reads like the session it authors: capability first, initial instruction next, then two ordered later turns.
+
+```tsx
+function IncidentReview() {
+  return (
+    <Agent
+      provider={provider}
+      system="You are an incident analyst. Separate direct evidence, inference, and missing information."
+    >
+      <Tool use={ReadIncidentPacket} />
+      Call read_incident_packet. Form a preliminary incident hypothesis using only the returned evidence.
+      <FollowUp>
+        Audit the preliminary hypothesis. Identify the strongest alternative explanation and the next observation that
+        would distinguish between them.
+      </FollowUp>
+      <FollowUp>
+        Produce the final five-line incident update. Label facts, inference, uncertainty, next check, and rollback
+        status.
+      </FollowUp>
+    </Agent>
+  )
+}
+```
+
+This is one Agent session and three sequential ACP prompt requests. `<FollowUp />` keeps the preliminary response and audit in provider-owned conversation history. If application code must inspect or branch on an intermediate response, use separate Agent evaluations instead.
+
+## Building block 3: compose the built-in tracer
+
+Observability is a runtime concern, so the application composes AML's dependency-free console tracer at its runtime boundary:
+
+```tsx
+const runtime = new AmlRuntime({
+  maxAgentCalls: 1,
+  maxTurnsPerAgent: 3,
+  trace: createConsoleTracer({
+    captureContent: true,
+    write: line => process.stderr.write(`${line}\n`),
+  }),
+})
+```
+
+`createConsoleTracer()` already understands AML's span tree, turn correlation, event ordering, duration fields, and content policy. The workflow does not need a reporter class or a parallel ACP schema.
+
+<Aside type="caution" title="This example deliberately captures content">
+  `captureContent: true` can expose prompts, responses, thoughts, Tool input/output, plans, repository context, and
+  errors. Keep the default `false` for routine production telemetry. Enable content only for an approved destination and
+  retention window.
+</Aside>
+
+With content capture enabled, each `acp.session.update` line includes the provider's unchanged serialized ACP update. Consumers that need a specialized dashboard may decode the ACP version they support, but that is integration code—not part of the AML workflow and not necessary for seeing the live event stream.
+
+## Main file
+
+The maintained `.tsx` file combines the imports, incident packet, Tool, `IncidentReview` component, provider, and runtime blocks above. Its final result boundary stays one line:
+
+```tsx title="observe-agent.tsx"
+process.stdout.write(`${await runtime.evaluate(<IncidentReview />)}\n`)
+```
+
+Trace activity goes to standard error and the final workflow result goes to standard output, so the result remains pipeable. This is an application-owned runtime example; run it with `vite-node`, not `aml run`. The CLI owns its own runtime and exposes the same tracer through `--trace --capture-content`.
+
+## Run it
+
+From the repository root:
+
+```sh title="Terminal"
+AML_OPENCODE_MODEL=opencode-go/minimax-m3 \
+  npx vite-node examples/src/operations/observe-agent.tsx \
+  > /tmp/incident-update.txt
+```
+
+The requested five-line update goes to `/tmp/incident-update.txt`. Standard error shows a trace shaped like:
+
+```text
+▶ agent Agent
+  ▶ agent.session provider="opencode"
+    ▶ agent.turn index=1 kind="initial"
+    • acp.session.update sessionUpdate="tool_call" update="{...}"
+    • acp.session.update sessionUpdate="tool_call_update" update="{...}"
+    ✓ agent.turn 1.8s
+    ▶ agent.turn index=2 kind="follow-up"
+    ...
+    ▶ agent.turn index=3 kind="follow-up"
+    ...
+    ▶ agent.cleanup
+    ✓ agent.cleanup 8.1ms
+```
+
+Exact ACP variants, serialized content, timings, chunk sizes, and prose depend on the Agent and model. Turn order does not: AML ends one authored turn before starting the next.
+
+## How the events map to the tree
+
+<Steps>
+
+1. Runtime construction captures the trace sink and its content policy. The sink observes the run; it is not an Agent capability.
+2. `<Agent />` opens one provider session. Its `<Tool />` child grants one scoped application capability.
+3. AML starts `agent.turn index=1 kind="initial"` and submits the first ACP prompt. Every ACP notification becomes one ordered `acp.session.update`.
+4. AML ends the initial turn before starting each `<FollowUp />` in declaration order.
+5. The final FollowUp response becomes the workflow result. AML then closes the provider session and reports `agent.cleanup` independently.
+
+</Steps>
+
+## Failure and design notes
+
+- A provider can emit no updates and still complete a turn. Updates are progress evidence, not a completeness guarantee.
+- Trace sinks are not awaited and cannot control workflow success. Use `onTraceError` for sink failures; do not put business logic in telemetry.
+- One captured update can contain customer data even when the displayed event name looks harmless.
+- For durable telemetry, keep content capture off and record span durations, turn kinds, update discriminants, stop reasons, and usage metadata.
+- Use the CLI form, `aml run workflow.tsx --trace --capture-content`, when the workflow should export only an AML tree and let the CLI own runtime construction.
+
+## Source and API links
+
+- [Maintained Agent activity example](https://github.com/we-are-singular/aml/blob/main/examples/src/operations/observe-agent.tsx)
+- [Observability and ACP boundary](/docs/observability/)
+- [FollowUp editorial passes](/docs/cookbook/follow-up-editorial-passes/)
+- [`AmlRuntime` event API](/docs/reference/runtime/#events)

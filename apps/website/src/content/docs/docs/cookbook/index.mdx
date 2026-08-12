@@ -121,6 +121,16 @@ The recipe status tells you what the source actually does:
     description="Set explicit runtime budgets, propagate cancellation, and emit content-minimizing traces around a real OpenCode Agent provider."
   />
   <LinkCard
+    title="Stop a CLI workflow safely"
+    href="/docs/cookbook/cli-process-safety/"
+    description="Interrupt a real process tree and follow CLI cancellation through Sandbox release to the conventional exit status."
+  />
+  <LinkCard
+    title="Observe a live Agent session"
+    href="/docs/cookbook/observe-agent-activity/"
+    description="Build an ordered activity feed from Agent turn spans and unchanged ACP updates across two FollowUps."
+  />
+  <LinkCard
     title="Compose Codex, Docker, and S3"
     href="/docs/cookbook/codex-docker-s3/"
     description="Follow one production skeleton across a credentialed Agent, disposable container, and durable revisioned Workspace."
@@ -135,6 +145,8 @@ The recipe status tells you what the source actually does:
 | Recipe                                                   | Status                                     | Needs                                                                                     | Best for                                                             |
 | -------------------------------------------------------- | ------------------------------------------ | ----------------------------------------------------------------------------------------- | -------------------------------------------------------------------- |
 | [Production job](/docs/cookbook/production-job/)         | Credentialed + deployment shape            | Node/ESM TSX runtime, OpenCode executable, model configuration, credentials, and a logger | Background jobs that need bounded execution and operational controls |
+| [CLI process safety](/docs/cookbook/cli-process-safety/) | Resource-backed, credential-free           | POSIX host, local Sandbox, CLI, and one terminal interrupt                                | Graceful signal handling and process-tree cleanup                    |
+| [Agent activity](/docs/cookbook/observe-agent-activity/) | Credentialed                               | OpenCode executable, model credentials, and an approved content-capturing terminal        | Understanding live ACP activity across Agent turns                   |
 | [Codex + Docker + S3](/docs/cookbook/codex-docker-s3/)   | Credentialed + container + durable storage | Codex ACP image, Docker, model credentials, S3 bucket, and AWS identity                   | Understanding the complete three-provider lifecycle                  |
 | [Structured routing](/docs/cookbook/structured-routing/) | Deterministic                              | Node, SDK/testing, `zod`, and an application-owned root directory                         | Safely turning model-shaped data into resource selection             |
 
