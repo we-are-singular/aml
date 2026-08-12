@@ -10,6 +10,42 @@ This page tracks `@aml-jsx/cli`. Entries are newest first. See [GitHub Releases]
 
 {/* changelog:entries */}
 
+## CLI v0.2.0 — Graceful cancellation of interrupted runs
+
+Released 2026-08-12.
+
+`aml run` now turns `SIGINT` (Ctrl+C) and `SIGTERM` into cancellation of the active evaluation, closing Agent sessions and releasing Sandbox leases before the CLI exits, instead of terminating abruptly.
+
+### Highlights
+
+- **Graceful run cancellation.** Pressing Ctrl+C (or sending `SIGTERM`) aborts the running workflow and clears its `AbortSignal`, propagating cancellation to Agent sessions, ACP requests, MCP relays, and Sandbox operations. AML closes active sessions and invokes each acquired lease's `release()` boundary so local and remote provider resources are cleaned up before the process exits. [CLI reference](/docs/cli/#interrupting-a-run) · [Providers](/docs/reference/providers) · [Operations](/docs/production/operations)
+- **Predictable signal exit codes.** The first interrupt starts a graceful shutdown with up to 10 seconds for provider cleanup, then exits with the conventional status — `130` for `SIGINT`, `143` for `SIGTERM`. A second interrupt (or a cleanup that outlives the deadline) forces immediate termination with the same status. [CLI reference](/docs/cli/#interrupting-a-run)
+- **Cancellation-aware provider cleanup.** The evaluation `AbortSignal` now flows into acquisition and runtime Sandbox operations, and release is memoized so success, failure, and cancellation converge on one idempotent provider call. Persistent shared providers terminate evaluation-owned executions without destroying infrastructure meant to outlive the run. [Providers](/docs/reference/providers) · [Operations](/docs/production/operations) · [Incident response](/docs/production/incident-response)
+
+### Commits
+
+- test(cli): scope signal tests to supported platforms (a0060a9)
+- fix(cli): gracefully cancel interrupted runs (8879658)
+- release(cli): v0.1.4 (86e08d2)
+
+## CLI v0.1.4 — Graceful cancellation of interrupted runs
+
+Released 2026-08-12.
+
+`aml run` now turns `SIGINT` (Ctrl+C) and `SIGTERM` into cancellation of the active evaluation, closing Agent sessions and releasing Sandbox leases before exiting, instead of terminating abruptly.
+
+### Highlights
+
+- **Graceful run cancellation.** Pressing Ctrl+C (or sending `SIGTERM`) aborts the running workflow and clears its `AbortSignal`, propagating cancellation to Agent sessions, ACP requests, MCP relays, and Sandbox operations. AML closes active sessions and invokes each acquired lease's `release()` boundary so local and remote provider resources are cleaned up before the process exits. [CLI reference](/docs/cli/#interrupting-a-run) · [Providers](/docs/reference/providers) · [Operations](/docs/production/operations)
+- **Predictable signal exit codes.** The first interrupt starts a graceful shutdown with up to 10 seconds for provider cleanup, then exits with the conventional status — `130` for `SIGINT`, `143` for `SIGTERM`. A second interrupt (or a cleanup that outlives the deadline) forces immediate termination with the same status. [CLI reference](/docs/cli/#interrupting-a-run)
+- **Cancellation-aware provider cleanup.** The evaluation `AbortSignal` now flows into acquisition and runtime Sandbox operations, and release is memoized so success, failure, and cancellation converge on one idempotent provider call. Persistent shared providers terminate evaluation-owned executions without destroying infrastructure meant to outlive the run. [Providers](/docs/reference/providers) · [Operations](/docs/production/operations) · [Incident response](/docs/production/incident-response)
+
+### Commits
+
+- test(cli): scope signal tests to supported platforms (a0060a9)
+- fix(cli): gracefully cancel interrupted runs (8879658)
+- release(cli): v0.1.4 (86e08d2)
+
 ## CLI v0.1.3 — CLI v0.1.3 – Richer error diagnostics and Windows portability
 
 Released 2026-08-11.
