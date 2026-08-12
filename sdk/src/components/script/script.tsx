@@ -3,15 +3,29 @@ import { AmlNode, type AmlRenderable } from "../../core/aml-node.js"
 export type ScriptShell = "bash" | "node" | "sh"
 
 /**
- * Authored execution using either a literal command or interpreter.
+ * Options shared by both Script execution forms.
  */
-export interface ScriptProps {
-  readonly args?: readonly string[]
-  readonly children?: AmlRenderable
-  readonly command?: string
-  readonly shell?: ScriptShell
+interface SharedScriptProps {
+  readonly cwd?: string
   readonly timeoutMs?: number
 }
+
+/**
+ * Authored execution using either a literal command or explicit interpreter.
+ */
+export type ScriptProps =
+  | (SharedScriptProps & {
+      readonly args?: readonly string[]
+      readonly children?: never
+      readonly command: string
+      readonly shell?: never
+    })
+  | (SharedScriptProps & {
+      readonly args?: never
+      readonly children: AmlRenderable
+      readonly command?: never
+      readonly shell: ScriptShell
+    })
 
 /**
  * Executes resolved AML text or one literal command on the host or in the active Sandbox.

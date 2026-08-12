@@ -1,11 +1,11 @@
-import { mkdtemp, rm } from "node:fs/promises"
+import { mkdir, mkdtemp, rm } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import process from "node:process"
 
-import { describe, expect, it, vi } from "vitest"
+import { describe, expect, expectTypeOf, it, vi } from "vitest"
 
-import { Agent, AmlRuntime, Sandbox, Script, Workspace } from "../src/index.js"
+import { Agent, AmlRuntime, Sandbox, Script, type ScriptProps, Workspace } from "../src/index.js"
 import {
   DeterministicAgentProvider,
   DeterministicSandboxProvider,
@@ -13,26 +13,42 @@ import {
 } from "../src/testing.js"
 
 describe("<Script>", () => {
-  it("executes on the host from the runtime cwd when no Sandbox is active", async () => {
+  it("defines disjoint command and shell forms", () => {
+    expectTypeOf<Extract<ScriptProps, { command: string }>["args"]>().toEqualTypeOf<readonly string[] | undefined>()
+    expectTypeOf<Extract<ScriptProps, { shell: string }>["children"]>().toEqualTypeOf<ScriptProps["children"]>()
+
+    // @ts-expect-error command form cannot execute child source
+    const commandWithChildren: ScriptProps = { children: "git status", command: "git" }
+    // @ts-expect-error shell form requires child source
+    const shellWithoutChildren: ScriptProps = { shell: "sh" }
+    // @ts-expect-error shell form does not accept an argument vector
+    const shellWithArgs: ScriptProps = { args: ["status"], children: "git", shell: "sh" }
+
+    expect([commandWithChildren, shellWithoutChildren, shellWithArgs]).toHaveLength(3)
+  })
+
+  it("executes on the host from a cwd relative to the runtime cwd", async () => {
     const directory = await mkdtemp(join(tmpdir(), "aml-script-host-"))
+    const packageDirectory = join(directory, "packages", "cli")
 
     try {
+      await mkdir(packageDirectory, { recursive: true })
       await expect(
         new AmlRuntime({ cwd: directory }).evaluate(
-          <Script command={process.execPath} args={["-e", "process.stdout.write(process.cwd())"]} />
+          <Script command={process.execPath} args={["-e", "process.stdout.write(process.cwd())"]} cwd="packages/cli" />
         )
-      ).resolves.toBe(directory)
+      ).resolves.toBe(packageDirectory)
     } finally {
       await rm(directory, { force: true, recursive: true })
     }
   })
 
   it("executes Agent-generated source in the active Sandbox and returns stdout", async () => {
-    const commands: Array<Readonly<{ args: readonly string[]; command: string; cwd: string }>> = []
+    const commands: Array<Readonly<{ args: readonly string[]; command: string; cwd: string | undefined }>> = []
     const workspace = new DeterministicWorkspaceProvider()
     const sandbox = new DeterministicSandboxProvider({
-      exec(command, args, request) {
-        commands.push({ args, command, cwd: request.cwd })
+      exec(command, args, _request, options) {
+        commands.push({ args, command, cwd: options.cwd })
         return {
           exitCode: 0,
           stderr: "",
@@ -49,7 +65,7 @@ describe("<Script>", () => {
       new AmlRuntime({ agentProvider: agent }).evaluate(
         <Workspace cwd="repository" id="script" provider={workspace} save>
           <Sandbox access="read-write" provider={sandbox}>
-            <Script shell="node">
+            <Script cwd="packages/worker" shell="node">
               <Agent>Write the script.</Agent>
             </Script>
           </Sandbox>
@@ -61,7 +77,7 @@ describe("<Script>", () => {
       {
         args: ["--input-type=module", "--eval", 'console.log("generated output")'],
         command: "node",
-        cwd: "repository",
+        cwd: "packages/worker",
       },
     ])
     expect(workspace.saves).toEqual(["deterministic-workspace-1"])
@@ -88,11 +104,40 @@ describe("<Script>", () => {
       "git",
       ["clone", "https://example.test/repo.git", "."],
       expect.any(Object),
-      expect.objectContaining({ signal: expect.any(AbortSignal) })
+      expect.objectContaining({ cwd: ".", signal: expect.any(AbortSignal) })
     )
   })
 
   it("validates execution mode before resolving children", async () => {
+    const child = vi.fn(() => "not evaluated")
+    const RuntimeScript = Script as unknown as (props: Record<string, unknown>) => never
+
+    function Child() {
+      return child()
+    }
+
+    await expect(
+      new AmlRuntime().evaluate(
+        <RuntimeScript command="git" shell="sh">
+          <Child />
+        </RuntimeScript>
+      )
+    ).rejects.toThrow("<Script> requires exactly one of command or shell")
+
+    const sandbox = new DeterministicSandboxProvider()
+    await expect(
+      new AmlRuntime().evaluate(
+        <Sandbox provider={sandbox}>
+          <RuntimeScript command="git" shell="sh" />
+        </Sandbox>
+      )
+    ).rejects.toThrow("<Script> requires exactly one of command or shell")
+
+    expect(child).not.toHaveBeenCalled()
+    expect(sandbox.releases).toEqual(["deterministic-sandbox-1"])
+  })
+
+  it("rejects non-portable cwd before resolving children", async () => {
     const child = vi.fn(() => "not evaluated")
 
     function Child() {
@@ -101,23 +146,13 @@ describe("<Script>", () => {
 
     await expect(
       new AmlRuntime().evaluate(
-        <Script command="git" shell="sh">
+        <Script cwd="../outside" shell="sh">
           <Child />
         </Script>
       )
-    ).rejects.toThrow("<Script> requires exactly one of command or shell")
-
-    const sandbox = new DeterministicSandboxProvider()
-    await expect(
-      new AmlRuntime().evaluate(
-        <Sandbox provider={sandbox}>
-          <Script command="git" shell="sh" />
-        </Sandbox>
-      )
-    ).rejects.toThrow("<Script> requires exactly one of command or shell")
+    ).rejects.toThrow("<Script> cwd cannot contain parent traversal")
 
     expect(child).not.toHaveBeenCalled()
-    expect(sandbox.releases).toEqual(["deterministic-sandbox-1"])
   })
 
   it("fails on a non-zero exit and still releases the Sandbox", async () => {

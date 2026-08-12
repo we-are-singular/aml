@@ -4,6 +4,7 @@ import { spawnLocalProcess } from "../agent/spawn-local-process.js"
 import type { SandboxSession } from "../sandbox/sandbox-provider.js"
 import type { SandboxExecResult } from "../sandbox/sandbox-runtime.js"
 import { EvaluationError } from "../../core/evaluation-error.js"
+import { resolvePortablePath } from "../../core/resolve-portable-path.js"
 import { supportsSandboxRuntime } from "../sandbox/sandbox-runtime.js"
 import type { ScriptProps, ScriptShell } from "./script.js"
 
@@ -12,12 +13,14 @@ const MAX_HOST_OUTPUT_BYTES = 4 * 1024 * 1024
 interface CommandScriptEvaluation {
   readonly args: readonly string[]
   readonly command: string
+  readonly cwd: string
   readonly kind: "command"
   readonly sandbox: Readonly<SandboxSession> | undefined
   readonly timeoutMs: number | undefined
 }
 
 interface InterpretedScriptEvaluation {
+  readonly cwd: string
   readonly kind: "interpreted"
   readonly sandbox: Readonly<SandboxSession> | undefined
   readonly shell: ScriptShell
@@ -53,6 +56,7 @@ export class ScriptEvaluator {
       )
     }
 
+    const cwd = resolveScriptCwd(this.#cwd, props.cwd, sandbox)
     const timeoutMs = validateTimeout(props.timeoutMs)
     const hasCommand = props.command !== undefined
     const hasShell = props.shell !== undefined
@@ -79,6 +83,7 @@ export class ScriptEvaluator {
       return Object.freeze({
         args: Object.freeze([...args]),
         command: props.command,
+        cwd,
         kind: "command",
         sandbox,
         timeoutMs,
@@ -94,6 +99,7 @@ export class ScriptEvaluator {
     }
 
     return Object.freeze({
+      cwd,
       kind: "interpreted",
       sandbox,
       shell: props.shell,
@@ -126,8 +132,9 @@ export class ScriptEvaluator {
 
     const result =
       plan.sandbox === undefined
-        ? await executeHost(command, args, this.#cwd, signal, plan.timeoutMs)
+        ? await executeHost(command, args, plan.cwd, signal, plan.timeoutMs)
         : await plan.sandbox.lease.runtime.exec(command, args, {
+            cwd: plan.cwd,
             signal,
             ...(plan.timeoutMs === undefined ? {} : { timeoutMs: plan.timeoutMs }),
           })
@@ -141,6 +148,19 @@ export class ScriptEvaluator {
 
     return result
   }
+}
+
+function resolveScriptCwd(hostCwd: string, value: unknown, sandbox: Readonly<SandboxSession> | undefined): string {
+  if (value === undefined) {
+    return sandbox?.cwd ?? hostCwd
+  }
+
+  if (sandbox !== undefined) {
+    return resolvePortablePath(sandbox.root, value, "<Script> cwd")
+  }
+
+  const relative = resolvePortablePath(".", value, "<Script> cwd")
+  return resolve(hostCwd, ...relative.split("/"))
 }
 
 /**
