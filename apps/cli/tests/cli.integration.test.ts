@@ -67,16 +67,20 @@ describe("compiled aml command", () => {
     expect(result.stdout).toBe("path with spaces\n")
   })
 
-  it("supports main and explicit async named exports", () => {
-    const main = runCli(["run", resolve(fixtures, "main.ts")], { cwd: repositoryRoot })
-    const named = runCli(["run", resolve(fixtures, "exports.ts"), "--entry", "alternate"], {
+  it("supports main exports", () => {
+    const result = runCli(["run", resolve(fixtures, "main.ts")], { cwd: repositoryRoot })
+
+    expectSuccess(result)
+    expect(result.stdout).toBe("main result\n")
+  })
+
+  it("supports explicit async named exports", () => {
+    const result = runCli(["run", resolve(fixtures, "exports.ts"), "--entry", "alternate"], {
       cwd: repositoryRoot,
     })
 
-    expectSuccess(main)
-    expect(main.stdout).toBe("main result\n")
-    expectSuccess(named)
-    expect(named.stdout).toBe("named result\n")
+    expectSuccess(result)
+    expect(result.stdout).toBe("named result\n")
   })
 
   it("executes JavaScript workflows through the same Vite loader", () => {
