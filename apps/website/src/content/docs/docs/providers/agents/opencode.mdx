@@ -37,7 +37,7 @@ opencode acp --pure --cwd <effective-sandbox-cwd> <your args>
 The private XDG directories isolate OpenCode-native user state. OpenCode still loads project rules from `AGENTS.md`, or
 `CLAUDE.md` when no project `AGENTS.md` exists. It can also fall back to `~/.claude/CLAUDE.md` because this profile does
 not replace `HOME`; set `OPENCODE_DISABLE_CLAUDE_CODE_PROMPT=1` in `env` when that compatibility behavior is unwanted.
-Loaded rules are combined with the AML-owned profile prompt derived from `<Agent system>`.
+Loaded rules remain OpenCode system instructions. AML-authored System content is delivered separately as a first-turn prelude.
 
 ## Prerequisites
 
@@ -132,7 +132,9 @@ Model precedence is:
 2. `opencodeAgent({ model: "..." })`
 3. `opencodeAgent({ config: { model: "..." } })`
 
-The effective system text becomes the `prompt` on the AML OpenCode agent profile. AML sets `default_agent` to `aml` and merges the existing `config.agent` table, replacing the `aml` profile with the session-specific profile. This profile is `mode: "primary"`, receives the effective prompt, and exposes only the tools allowed by AML's normalized permission request.
+AML sets `default_agent` to `aml` and merges the existing `config.agent` table, replacing the `aml` profile with the session-specific profile. This profile is `mode: "primary"` and exposes only the tools allowed by AML's normalized permission request.
+
+OpenCode replaces its model-specific base coding prompt when a custom Agent has a non-empty `prompt`, so AML does not set that field. ACP has no system-message field; when the effective AML System text is non-empty, AML prepends it to the first user turn inside literal `<SYSTEM>` tags. Empty System content adds no prelude. This preserves OpenCode's native model-specific prompt, but the ACP protocol still carries the prelude as user-role content.
 
 ## Permission mapping
 

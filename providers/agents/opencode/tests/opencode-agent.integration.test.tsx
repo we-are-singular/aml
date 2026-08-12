@@ -1,7 +1,8 @@
 import { randomUUID } from "node:crypto"
 
-import { Agent, AmlRuntime, FollowUp } from "@aml-jsx/sdk"
+import { Agent, type AmlTraceEvent, AmlRuntime, evaluate, FollowUp } from "@aml-jsx/sdk"
 import { expect, it } from "vitest"
+import { z } from "zod"
 
 import { opencodeAgent } from "../src/index.js"
 
@@ -20,10 +21,90 @@ liveTest(
       <Agent>
         Remember the exact token "{secret}". Reply only with acknowledged.
         <FollowUp>Return only the exact token from the preceding message.</FollowUp>
-      </Agent>
+      </Agent>,
+      { signal: AbortSignal.timeout(30_000) }
     )
 
     expect(output.trim()).toBe(secret)
   },
-  120_000
+  45_000
+)
+
+liveTest(
+  "delivers non-empty system instructions without stalling the ACP session",
+  async () => {
+    const provider = opencodeAgent({
+      directory: process.cwd(),
+      model: process.env.AML_OPENCODE_MODEL ?? "opencode-go/minimax-m3",
+    })
+
+    const output = await new AmlRuntime({ agentProvider: provider }).evaluate(
+      <Agent system="Reply concisely and follow the supplied instructions.">Reply with exactly: ready</Agent>,
+      { signal: AbortSignal.timeout(30_000) }
+    )
+
+    expect(output.trim()).toBe("ready")
+  },
+  45_000
+)
+
+liveTest(
+  "retains non-empty system instructions through follow-up structured output",
+  async () => {
+    const proof = randomUUID()
+    const Result = z.object({ proof: z.string() })
+    const provider = opencodeAgent({
+      directory: process.cwd(),
+      model: process.env.AML_OPENCODE_MODEL ?? "opencode-go/minimax-m3",
+    })
+
+    async function StructuredProof() {
+      const result = await evaluate(
+        <Agent system="Return only what each user message explicitly requests.">
+          Remember the exact token "{proof}". Reply only with acknowledged.
+          <FollowUp>Submit the exact token as the structured proof.</FollowUp>
+        </Agent>,
+        Result
+      )
+
+      return result.proof
+    }
+
+    await expect(
+      new AmlRuntime({ agentProvider: provider }).evaluate(<StructuredProof />, {
+        signal: AbortSignal.timeout(30_000),
+      })
+    ).resolves.toBe(proof)
+  },
+  45_000
+)
+
+liveTest(
+  "runs repository shell tools with non-empty system instructions",
+  async () => {
+    const events: AmlTraceEvent[] = []
+    const provider = opencodeAgent({
+      directory: process.cwd(),
+      model: process.env.AML_OPENCODE_MODEL ?? "opencode-go/minimax-m3",
+    })
+
+    const output = await new AmlRuntime({ agentProvider: provider, trace: event => events.push(event) }).evaluate(
+      <Agent system="Run the requested command before answering and return only its output.">
+        Run `git rev-parse --is-inside-work-tree` in the repository.
+      </Agent>,
+      { signal: AbortSignal.timeout(30_000) }
+    )
+
+    expect(output.trim()).toBe("true")
+    expect(events.every(event => !Object.hasOwn(event.attributes, "update"))).toBe(true)
+    expect(
+      events.some(
+        event =>
+          event.type === "event" &&
+          event.name === "acp.session.update" &&
+          event.attributes.sessionUpdate === "tool_call"
+      )
+    ).toBe(true)
+  },
+  45_000
 )

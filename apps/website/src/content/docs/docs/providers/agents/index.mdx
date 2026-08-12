@@ -148,7 +148,7 @@ For independent specialist evaluations, use explicit `Promise.all([evaluate(...)
 | Native command option      | `codexPathOverride`            | `command` selects Copilot launcher   | `command` selects OpenCode launcher                  | `piCommand` selects native Pi command     |
 | Provider model fallback    | `model`                        | `model`, defaulting to `auto`        | `model`, then `config.model`                         | `model`                                   |
 | Agent-level model override | Yes                            | Yes                                  | Yes                                                  | Yes                                       |
-| System instruction mapping | Codex `developer_instructions` | First-turn text prefix               | OpenCode AML profile `prompt`                        | First-turn text prefix                    |
+| System instruction mapping | Codex `developer_instructions` | First-turn text prefix               | First-turn literal `<SYSTEM>` prelude                | First-turn text prefix                    |
 | Project instruction files  | Loads `AGENTS.md` hierarchy    | Disabled by the AML launch profile   | Loads project `AGENTS.md` or `CLAUDE.md`             | Loads project `AGENTS.md` or `CLAUDE.md`  |
 | Filesystem mapping         | Codex `INITIAL_AGENT_MODE`     | Write deny rule and tool exclusion   | `edit`/`write` tool and permission rules             | Generated wrapper `--tools` list          |
 | Shell mapping              | Enclosing Sandbox              | Shell deny rule and tool exclusion   | OpenCode `bash` tool and permission                  | Generated wrapper `bash` tool             |

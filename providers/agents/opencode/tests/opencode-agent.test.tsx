@@ -1,4 +1,5 @@
-import { Agent, AmlRuntime, Sandbox, type SandboxProcess } from "@aml-jsx/sdk"
+import { agent, methods, ndJsonStream } from "@agentclientprotocol/sdk"
+import { Agent, AmlRuntime, FollowUp, Sandbox, type SandboxProcess } from "@aml-jsx/sdk"
 import { DeterministicSandboxProvider } from "@aml-jsx/sdk/testing"
 import { describe, expect, it } from "vitest"
 
@@ -12,11 +13,7 @@ describe("opencodeAgent()", () => {
       readonly options: Readonly<{ cwd?: string; env?: Readonly<Record<string, string>> }>
     }> = []
     const sandboxProvider = new DeterministicSandboxProvider({
-      exec: command => ({
-        exitCode: 0,
-        stderr: "",
-        stdout: command === "pwd" ? "/sandbox/repository\n" : "",
-      }),
+      exec: command => ({ exitCode: 0, stderr: "", stdout: command === "pwd" ? "/sandbox/repository\n" : "" }),
       spawn(command, args, _request, options) {
         spawned.push({ args, command, options })
         return completedProcess()
@@ -59,7 +56,6 @@ describe("opencodeAgent()", () => {
         aml: {
           mode: "primary",
           permission: { "*": "allow" },
-          prompt: "Follow the system.",
           tools: { "*": true },
         },
       },
@@ -67,6 +63,48 @@ describe("opencodeAgent()", () => {
       model: "anthropic/claude-sonnet-4-6",
       share: "disabled",
     })
+    expect(config.agent.aml).not.toHaveProperty("prompt")
+  })
+
+  it("prepends non-empty System content to the first ACP turn in literal tags", async () => {
+    const prompts: string[] = []
+    const sandboxProvider = new DeterministicSandboxProvider({
+      exec: command => ({ exitCode: 0, stderr: "", stdout: command === "pwd" ? "/sandbox/repository\n" : "" }),
+      spawn() {
+        return acpFixtureProcess(prompt => prompts.push(prompt))
+      },
+    })
+
+    await expect(
+      new AmlRuntime({ agentProvider: opencodeAgent() }).evaluate(
+        <Sandbox provider={sandboxProvider}>
+          <Agent system="Follow the system.">
+            Initial
+            <FollowUp>Second</FollowUp>
+          </Agent>
+        </Sandbox>
+      )
+    ).resolves.toBe("")
+
+    expect(prompts).toEqual(["<SYSTEM>\nFollow the system.\n</SYSTEM>\n\nInitial", "Second"])
+  })
+
+  it("does not add a first-turn prelude when System content is empty", async () => {
+    const prompts: string[] = []
+    const sandboxProvider = new DeterministicSandboxProvider({
+      exec: command => ({ exitCode: 0, stderr: "", stdout: command === "pwd" ? "/sandbox/repository\n" : "" }),
+      spawn() {
+        return acpFixtureProcess(prompt => prompts.push(prompt))
+      },
+    })
+
+    await new AmlRuntime({ agentProvider: opencodeAgent() }).evaluate(
+      <Sandbox provider={sandboxProvider}>
+        <Agent>Initial</Agent>
+      </Sandbox>
+    )
+
+    expect(prompts).toEqual(["Initial"])
   })
 
   it("maps restrictive Agent permissions into OpenCode's native controls", async () => {
@@ -88,6 +126,7 @@ describe("opencodeAgent()", () => {
       )
     ).rejects.toThrow()
 
+    if (config === undefined) throw new Error("OpenCode configuration was not captured")
     expect(config).toMatchObject({
       agent: {
         aml: {
@@ -96,6 +135,8 @@ describe("opencodeAgent()", () => {
         },
       },
     })
+    expect(config).not.toHaveProperty("instructions")
+    expect((config.agent as { aml: unknown }).aml).not.toHaveProperty("prompt")
   })
 
   it("validates process configuration without external work", () => {
@@ -113,6 +154,36 @@ function completedProcess(): Readonly<SandboxProcess> {
     stderr: emptyStream(),
     stdout: emptyStream(),
     async wait() {
+      return { exitCode: 0 }
+    },
+  })
+}
+
+function acpFixtureProcess(onPrompt: (prompt: string) => void): Readonly<SandboxProcess> {
+  const clientToAgent = new TransformStream<Uint8Array, Uint8Array>()
+  const agentToClient = new TransformStream<Uint8Array, Uint8Array>()
+  const app = agent({ name: "opencode-test" })
+    .onRequest(methods.agent.initialize, ({ params }) => ({
+      agentCapabilities: {},
+      protocolVersion: params.protocolVersion,
+    }))
+    .onRequest(methods.agent.session.new, () => ({ sessionId: "opencode-test-session" }))
+    .onRequest(methods.agent.session.prompt, ({ params }) => {
+      onPrompt(params.prompt.flatMap(block => (block.type === "text" ? [block.text] : [])).join(""))
+      return { stopReason: "end_turn" }
+    })
+  const connection = app.connect(ndJsonStream(agentToClient.writable, clientToAgent.readable))
+
+  return Object.freeze({
+    id: "opencode-acp-fixture",
+    async kill() {
+      connection.close()
+    },
+    stdin: clientToAgent.writable,
+    stderr: emptyStream(),
+    stdout: agentToClient.readable,
+    async wait() {
+      await connection.closed
       return { exitCode: 0 }
     },
   })

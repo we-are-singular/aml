@@ -63,7 +63,6 @@ class OpenCodeAcpProfile implements AcpAgentProfile<"opencode"> {
         aml: {
           mode: "primary",
           permission,
-          prompt: context.request.system,
           tools,
         },
       },
@@ -83,6 +82,9 @@ class OpenCodeAcpProfile implements AcpAgentProfile<"opencode"> {
         XDG_DATA_HOME: `${context.stateDirectory}/data`,
         XDG_STATE_HOME: `${context.stateDirectory}/state`,
       },
+      ...(context.request.system.length === 0
+        ? {}
+        : { initialPromptPrefix: `<SYSTEM>\n${context.request.system}\n</SYSTEM>` }),
       permissionPolicy: "allow_always",
     })
   }
