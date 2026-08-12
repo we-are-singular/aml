@@ -1,6 +1,7 @@
 import type { CAC } from "cac"
 
 import type { CliIo } from "../cli.js"
+import { RunSignalCancellation } from "../run-signal-cancellation.js"
 import { executeWorkflow } from "../workflow-runner.js"
 
 interface RunOptions {
@@ -12,14 +13,34 @@ interface RunOptions {
 }
 
 async function runWorkflow(workflowFile: string, options: RunOptions, io: CliIo): Promise<number> {
-  const outcome = await executeWorkflow({
-    captureTraceContent: options.captureContent ?? false,
-    enableTrace: (options.trace ?? false) || (options.captureContent ?? false),
-    ...(options.entry === undefined ? {} : { exportName: options.entry }),
-    ...(options.runtimeEnvFile === undefined ? {} : { envFilePath: options.runtimeEnvFile }),
-    filePath: workflowFile,
-    writeDiagnostic: line => io.stderr.write(`${line}\n`),
-  })
+  const cancellation = new RunSignalCancellation()
+  let outcome
+
+  try {
+    outcome = await executeWorkflow({
+      captureTraceContent: options.captureContent ?? false,
+      enableTrace: (options.trace ?? false) || (options.captureContent ?? false),
+      ...(options.entry === undefined ? {} : { exportName: options.entry }),
+      ...(options.runtimeEnvFile === undefined ? {} : { envFilePath: options.runtimeEnvFile }),
+      filePath: workflowFile,
+      signal: cancellation.signal,
+      writeDiagnostic: line => io.stderr.write(`${line}\n`),
+    })
+  } catch (error) {
+    // Runtime cancellation rejects like any other evaluation failure. At the
+    // process boundary, preserve the signal contract instead of reporting it
+    // as a generic CLI error.
+    if (cancellation.exitCode !== undefined) {
+      return cancellation.exitCode
+    }
+    throw error
+  } finally {
+    cancellation.dispose()
+  }
+
+  if (cancellation.exitCode !== undefined) {
+    return cancellation.exitCode
+  }
 
   if (options.json) {
     io.stdout.write(

@@ -57,7 +57,10 @@ Provider cleanup differs:
 - Local kills tracked host process groups but cannot repair a host-level failure or isolate a child that escapes provider ownership.
 - Docker removes the disposable container when command cancellation may leave a remote command running.
 - Daytona and Modal attempt to destroy the remote Sandbox; a provider API failure can leave a remote resource that needs operator inspection.
+- Persistent or shared remote providers should terminate evaluation-owned executions and release the evaluation lease without destroying infrastructure intended to outlive the run.
 - Filesystem and S3 Workspaces attempt to release temporary materialization and lock state; save and release errors should be logged independently. Current S3 lock refresh/release requests are finalization operations and may complete after evaluation cancellation.
+
+`SIGKILL`, process crashes, host failure, and power loss cannot run JavaScript cleanup. Use provider-side TTLs or reapers for remote resources and operational orphan detection for host processes and containers. The experimental [`aml run` CLI](/docs/cli/#interrupting-a-run) handles `SIGINT` and `SIGTERM` gracefully, but its force-exit deadline cannot make unresponsive provider cleanup succeed.
 
 Do not acknowledge a queue message merely because cancellation was requested. Wait for the evaluation to settle, then decide whether the external job can be retried.
 

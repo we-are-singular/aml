@@ -1,10 +1,15 @@
 import { readFileSync } from "node:fs"
-import { resolve } from "node:path"
+import { mkdtemp, readFile, rm } from "node:fs/promises"
+import { tmpdir } from "node:os"
+import { join, resolve } from "node:path"
+import { kill, platform } from "node:process"
+import { clearTimeout, setTimeout } from "node:timers"
+import { setTimeout as delay } from "node:timers/promises"
 import { URL } from "node:url"
 
 import { describe, expect, it } from "vitest"
 
-import { runCli } from "./helpers/run-cli.js"
+import { runCli, spawnCli } from "./helpers/run-cli.js"
 
 const repositoryRoot = resolve(import.meta.dirname, "../../..")
 const fixtures = resolve(import.meta.dirname, "fixtures")
@@ -133,6 +138,67 @@ describe("compiled aml command", () => {
     expect(result.stderr).toContain("caused by: provider stderr: model request failed")
   })
 
+  it("turns SIGINT into runtime cancellation and reaps a Local Sandbox process group", async () => {
+    const temporaryDirectory = await mkdtemp(join(tmpdir(), "aml-cli-signal-"))
+    const pidFile = join(temporaryDirectory, "child.pid")
+    const child = spawnCli(["run", resolve(fixtures, "signal-local-sandbox.tsx")], {
+      cwd: repositoryRoot,
+      env: { AML_SIGNAL_TEST_PID_FILE: pidFile },
+    })
+    let stderr = ""
+    let stdout = ""
+    child.stderr.setEncoding("utf8").on("data", chunk => (stderr += chunk))
+    child.stdout.setEncoding("utf8").on("data", chunk => (stdout += chunk))
+
+    try {
+      const sandboxChildPid = Number((await waitForFile(pidFile)).trim())
+      expect(sandboxChildPid).toBeGreaterThan(0)
+
+      child.kill("SIGINT")
+      const completion = await waitForExit(child)
+
+      expect(completion).toEqual({ code: 130, signal: null })
+      expect(stdout).toBe("")
+      expect(stderr).toContain("aml: starting run")
+      expect(() => kill(sandboxChildPid, 0)).toThrow(expect.objectContaining({ code: "ESRCH" }))
+    } finally {
+      if (child.exitCode === null && child.signalCode === null) child.kill("SIGKILL")
+      await rm(temporaryDirectory, { force: true, recursive: true })
+    }
+  })
+
+  it.skipIf(platform === "win32")("reaps the active ACP Agent and Sandbox MCP relay before exiting", async () => {
+    const temporaryDirectory = await mkdtemp(join(tmpdir(), "aml-cli-acp-signal-"))
+    const acpPidFile = join(temporaryDirectory, "acp.pid")
+    const promptFile = join(temporaryDirectory, "prompt.ready")
+    const child = spawnCli(["run", resolve(fixtures, "signal-local-acp.tsx")], {
+      cwd: repositoryRoot,
+      env: {
+        AML_SIGNAL_TEST_ACP_PID_FILE: acpPidFile,
+        AML_SIGNAL_TEST_PROMPT_FILE: promptFile,
+      },
+    })
+
+    try {
+      await waitForFile(promptFile)
+      const acpPid = Number((await readFile(acpPidFile, "utf8")).trim())
+      const descendantPids = await readLinuxChildPids(child.pid)
+
+      expect(descendantPids).toContain(acpPid)
+      expect(descendantPids.length).toBeGreaterThanOrEqual(2)
+
+      child.kill("SIGINT")
+      await expect(waitForExit(child)).resolves.toEqual({ code: 130, signal: null })
+
+      for (const pid of descendantPids) {
+        expect(() => kill(pid, 0)).toThrow(expect.objectContaining({ code: "ESRCH" }))
+      }
+    } finally {
+      if (child.exitCode === null && child.signalCode === null) child.kill("SIGKILL")
+      await rm(temporaryDirectory, { force: true, recursive: true })
+    }
+  })
+
   it.each([
     {
       args: ["unknown"],
@@ -172,3 +238,39 @@ describe("compiled aml command", () => {
     expect(result.stderr).toContain(error)
   })
 })
+
+async function waitForFile(filePath: string): Promise<string> {
+  const deadline = Date.now() + 10_000
+
+  while (Date.now() < deadline) {
+    try {
+      return await readFile(filePath, "utf8")
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error
+      await delay(25)
+    }
+  }
+
+  throw new Error(`timed out waiting for ${filePath}`)
+}
+
+async function readLinuxChildPids(parentPid: number | undefined): Promise<number[]> {
+  if (parentPid === undefined) throw new Error("aml child process has no pid")
+  // Linux exposes direct descendants atomically here, which lets this test
+  // capture the ACP process and MCP relay before cancellation reaps them.
+  const children = await readFile(`/proc/${parentPid}/task/${parentPid}/children`, "utf8")
+  return children.trim().split(/\s+/u).filter(Boolean).map(Number)
+}
+
+async function waitForExit(
+  child: ReturnType<typeof spawnCli>
+): Promise<Readonly<{ code: number | null; signal: NodeJS.Signals | null }>> {
+  return await new Promise((resolveExit, reject) => {
+    const timeout = setTimeout(() => reject(new Error("timed out waiting for aml to exit after SIGINT")), 10_000)
+    child.once("error", reject)
+    child.once("close", (code, signal) => {
+      clearTimeout(timeout)
+      resolveExit({ code, signal })
+    })
+  })
+}

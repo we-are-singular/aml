@@ -42,6 +42,8 @@ The Sandbox contract acquires a lease for a validated portable policy: `access`,
 - `kill()` is safe to repeat, and `wait()` returns the same captured exit result.
 - `release()` relinquishes every resource owned by the lease.
 
+AML passes the evaluation `AbortSignal` into acquisition and runtime operations. For every successfully acquired outer lease, runtime cleanup memoizes `release()` so success, failure, and cancellation converge on one provider call. Providers must still make `release()` idempotent and ensure it cancels or destroys all evaluation-owned commands, processes, containers, or remote environments. Intentionally persistent or shared infrastructure is the exception to destruction: release the evaluation lease and terminate evaluation-owned executions without tearing down the shared resource itself.
+
 Providers map AML's logical paths to host, container, or remote paths. They must preserve literal command/argument semantics and safely encode any provider-specific shell or transport representation. Local is explicitly trusted host execution; Docker, Daytona, and Modal provide different execution environments whose isolation still depends on image, daemon/platform, identity, network, and resource configuration. Read the provider guide before treating any Sandbox as an enforcing security boundary.
 
 Source: [`SandboxProvider`](https://github.com/we-are-singular/aml/blob/main/sdk/src/components/sandbox/sandbox-provider.ts), [`SandboxRuntime`](https://github.com/we-are-singular/aml/blob/main/sdk/src/components/sandbox/sandbox-runtime.ts), and [`supportsSandboxRuntime`](https://github.com/we-are-singular/aml/blob/main/sdk/src/components/sandbox/sandbox-runtime.ts).
@@ -83,7 +85,7 @@ Use the public provider contract and keep vendor details behind it. A provider s
 2. Propagate the evaluation signal to every asynchronous operation.
 3. Preserve logical paths, access policy, and literal command arguments.
 4. Return opaque handles and non-authoritative references to descendants.
-5. Make release and repeated process cleanup safe when possible.
+5. Make release idempotent and repeated process cleanup safe.
 6. Preserve the original failure when cleanup also fails.
 
 Use the deterministic fixtures and conformance helpers in `@aml-jsx/sdk/testing` while developing a provider, then validate the actual executable, image, credentials, and vendor service separately. The testing helpers do not prove deployment compatibility.

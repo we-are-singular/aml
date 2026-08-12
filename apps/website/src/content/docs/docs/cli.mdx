@@ -21,6 +21,7 @@ The CLI deliberately owns only process-level concerns:
 - applying Vite-style environment files before the module is evaluated;
 - selecting the default, `main`, or requested named export;
 - creating an [`AmlRuntime`](/docs/reference/runtime/), evaluating the exported AML value, and formatting the result;
+- translating process interruption into runtime cancellation so active resources can be released;
 - writing lifecycle and optional trace diagnostics to standard error.
 
 Provider selection and provider-specific options belong in the workflow file. The CLI does not have `--agent-provider`, `--sandbox-provider`, model, credential, or Workspace configuration flags.
@@ -216,6 +217,21 @@ aml run ./workflow.tsx --trace --capture-content
 ```
 
 Treat `--capture-content` output as sensitive. It can include prompts, model output, [`<Tool />`](/docs/reference/primitives/tool/) input and output, and filesystem context. See [Observability](/docs/observability/) for the runtime event and redaction contract.
+
+## Interrupting a run
+
+`aml run` translates `SIGINT` (usually <kbd>Ctrl</kbd>+<kbd>C</kbd>) and `SIGTERM` into cancellation of the active runtime evaluation. The signal reaches Agent sessions, ACP requests, MCP relays, and Sandbox operations through the evaluation's `AbortSignal`. AML then closes active sessions and releases acquired resource scopes before the CLI exits.
+
+The first signal starts graceful cancellation and allows up to 10 seconds for cleanup. When cleanup settles, the CLI exits with the conventional signal status: `130` for `SIGINT` or `143` for `SIGTERM`. A second `SIGINT` or `SIGTERM` exits immediately instead of continuing to wait. If cleanup has not settled after 10 seconds, the CLI also forces termination with the first signal's status.
+
+<Aside type="caution" title="Forced termination cannot run JavaScript cleanup">
+  `SIGKILL`, process crashes, host failure, and power loss bypass the runtime completely. Remote providers should use
+  platform-side TTLs or reapers, and operators should monitor for local processes, containers, or remote environments
+  left behind after an ungraceful exit. See [Operations](/docs/production/operations/) and [Incident
+  response](/docs/production/incident-response/).
+</Aside>
+
+Cleanup follows provider ownership. AML orchestrates cancellation and invokes the acquired lease's release boundary; the Sandbox provider decides how to stop its platform-specific resources. Local kills tracked process groups, Docker removes its leased container, and disposable remote providers terminate or delete their remote environment. A provider backed by intentionally persistent infrastructure should terminate evaluation-owned executions and release only the evaluation lease, not destroy the shared infrastructure.
 
 ## Current command reference
 
