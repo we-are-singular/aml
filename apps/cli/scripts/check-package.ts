@@ -8,6 +8,7 @@ import { env, execPath, platform } from "node:process"
 interface PackageManifest {
   readonly bin: Readonly<Record<string, string>>
   readonly dependencies: Readonly<Record<string, string>>
+  readonly devDependencies: Readonly<Record<string, string>>
   readonly files: readonly string[]
   readonly peerDependencies: Readonly<Record<string, string>>
   readonly publishConfig: {
@@ -27,6 +28,9 @@ interface PackResult {
 
 const packageDirectory = resolve(import.meta.dirname, "..")
 const packageJson = JSON.parse(readFileSync(resolve(packageDirectory, "package.json"), "utf8")) as PackageManifest
+const sdkPackageJson = JSON.parse(readFileSync(resolve(packageDirectory, "../../sdk/package.json"), "utf8")) as {
+  readonly version: string
+}
 const temporaryDirectory = mkdtempSync(join(tmpdir(), "aml-cli-package-"))
 
 function npmInvocation(args: readonly string[]): readonly [string, string[]] {
@@ -66,8 +70,15 @@ try {
   if (packageJson.dependencies["@aml-jsx/sdk"] !== undefined) {
     throw new Error("CLI must not install a second private copy of @aml-jsx/sdk")
   }
-  if (packageJson.peerDependencies["@aml-jsx/sdk"] !== "^0.5.0") {
-    throw new Error("CLI must declare its reviewed @aml-jsx/sdk compatibility range")
+
+  // Keep the workspace link and published peer range aligned with the SDK release
+  // without duplicating its version in this validation script.
+  const expectedSdkRange = `^${sdkPackageJson.version}`
+  if (
+    packageJson.devDependencies["@aml-jsx/sdk"] !== expectedSdkRange ||
+    packageJson.peerDependencies["@aml-jsx/sdk"] !== expectedSdkRange
+  ) {
+    throw new Error(`CLI SDK development and peer ranges must both be ${expectedSdkRange}`)
   }
   if (
     packageJson.publishConfig.access !== "public" ||
