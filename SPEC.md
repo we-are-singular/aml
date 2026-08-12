@@ -1409,14 +1409,14 @@ The transfer implementation cannot enforce a read-only guest tree. Like Local, D
 ### 13.7 `<Script>`
 
 `<Script>` executes through the runtime of an active Sandbox when one exists. Without an active Sandbox it executes as
-a trusted host process from `AmlRuntimeOptions.cwd`, which defaults to `process.cwd()`:
+a trusted host process. Its working directory defaults to `AmlRuntimeOptions.cwd`, which defaults to `process.cwd()`:
 
 ```tsx
-<Script command="git" args={["status", "--short"]} />
+<Script cwd="apps/cli" command="npm" args={["test"]} />
 
 <Sandbox provider={docker} access="read-write">
   <Script command="git" args={["clone", repository, "."]} />
-  <Script shell="sh">npm test</Script>
+  <Script cwd="packages/api" shell="sh">npm test</Script>
 </Sandbox>
 ```
 
@@ -1424,6 +1424,11 @@ Exactly one execution form is required:
 
 - `command` accepts an optional string `args` array, rejects children, and executes without shell interpolation
 - `shell` is `"sh"`, `"bash"`, or `"node"` and executes its fully resolved child text
+
+Both forms accept an optional portable relative `cwd`. On the host it resolves from `AmlRuntimeOptions.cwd`; inside a
+Sandbox it resolves from the active Sandbox root. Without the prop, Script uses the host runtime cwd or the effective
+Sandbox cwd respectively. Absolute paths, backslashes, and parent traversal are rejected. `cwd` selects the process
+starting directory; it does not create that directory or confine a trusted host process.
 
 `timeoutMs`, when present, is a positive safe integer passed to the selected process runtime. Interpreted source must
 resolve to non-empty text. Child Agents may generate that source because Script executes after post-order child
@@ -1433,8 +1438,8 @@ Sandbox whose provider enforces the required filesystem, process, network, and c
 
 Standard output becomes the Script result and can feed later AML. A non-zero exit rejects with its code and trimmed
 standard-error detail. AML bounds, cancels, and reaps an unsandboxed host process directly. An active Sandbox instead
-owns cwd, confinement, executable availability, output bounds, cancellation, and cleanup; AML never falls back from
-that selected Sandbox to the host.
+owns logical path mapping, confinement, executable availability, output bounds, cancellation, and cleanup; AML never
+falls back from that selected Sandbox to the host.
 
 ## 14. `<Workspace>`
 

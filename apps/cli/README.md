@@ -101,8 +101,8 @@ the trusted module, and closes the environment before evaluating the selected AM
 compiler-selection flag.
 
 Workflow modules execute as trusted code in the CLI process. An unsandboxed `<Script />` runs as a trusted host process
-from the CLI working directory. An AML `<Sandbox />` constrains its descendants; it does not sandbox top-level
-JavaScript in the workflow module.
+from the CLI working directory, and its optional relative `cwd` resolves from that directory. An AML `<Sandbox />`
+constrains its descendants; it does not sandbox top-level JavaScript in the workflow module.
 
 Read the [complete CLI guide](https://agent-markup-language.com/docs/cli/) for named exports, environment precedence,
 JSON output, tracing, and the runtime ownership boundary.

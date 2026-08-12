@@ -258,13 +258,13 @@ const [codexReview, openCodeReview] = await Promise.all([
     group: "Components",
     name: "<Script />",
     docsPath: "docs/reference/primitives/script/",
-    signature: '<Script command="…" /> | <Script shell="sh">',
+    signature: '<Script cwd="…" command="…" /> | <Script shell="sh">',
     description:
-      "Runs an argument vector or resolved sh, bash, or node source on the trusted host or through the active <Sandbox /> runtime. Successful standard output becomes AML text for later composition.",
-    note: "<Script /> is deliberately dangerous. Without a <Sandbox /> it inherits the AML host's authority; an active Sandbox owns its execution and never falls back to the host.",
+      "Runs an argument vector or resolved sh, bash, or node source on the trusted host or through the active <Sandbox /> runtime. Relative cwd resolves from the host runtime cwd or active Sandbox root.",
+    note: "<Script /> is deliberately dangerous. A cwd selects a starting directory, not a confinement boundary; an active Sandbox owns execution and never falls back to the host.",
     file: "script.tsx",
     code: `<Sandbox access="read-write" provider={Docker}>
-  <Script command="npm" args={["test"]} timeoutMs={120_000} />
+  <Script cwd="packages/api" command="npm" args={["test"]} timeoutMs={120_000} />
 
   <Script shell="sh">
     <Agent provider={Planner}>Write a script that checks report.md.</Agent>

@@ -27,17 +27,17 @@ Nested [`evaluate()`](/docs/reference/runtime/#component-local-evaluation) calls
 
 ## Runtime options
 
-| Option              |         Default | Scope      | What it bounds or configures                                                                                                                                 |
-| ------------------- | --------------: | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `agentProvider`     |            none | runtime    | Default Agent provider for [`<Agent />`](/docs/reference/primitives/agent/) components without `provider`                                                    |
-| `sandboxProvider`   |            none | runtime    | Default provider for outer [`<Sandbox />`](/docs/reference/primitives/sandbox/) components                                                                   |
-| `workspaceProvider` |            none | evaluation | Default provider for the one top-level [`<Workspace />`](/docs/reference/primitives/workspace/)                                                              |
-| `system`            |            none | runtime    | First system fragment supplied to every `<Agent />`                                                                                                          |
-| `cwd`               | `process.cwd()` | runtime    | Base directory for local [`<Skill />`](/docs/reference/primitives/skill/) files and unsandboxed [`<Script />`](/docs/reference/primitives/script/) execution |
-| `allowedTools`      |    unrestricted | runtime    | Exact names of JavaScript [`<Tool />`](/docs/reference/primitives/tool/) capabilities that may be granted                                                    |
-| `allowedMcpServers` |    unrestricted | runtime    | Exact names of [`<Mcp />`](/docs/reference/primitives/mcp/) servers that may be granted                                                                      |
-| `trace`             |            none | runtime    | Trace sink captured when the runtime is constructed                                                                                                          |
-| `onTraceError`      |            none | runtime    | Receives trace-consumer failures without joining them to workflow failure                                                                                    |
+| Option              |         Default | Scope      | What it bounds or configures                                                                                                                                                              |
+| ------------------- | --------------: | ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `agentProvider`     |            none | runtime    | Default Agent provider for [`<Agent />`](/docs/reference/primitives/agent/) components without `provider`                                                                                 |
+| `sandboxProvider`   |            none | runtime    | Default provider for outer [`<Sandbox />`](/docs/reference/primitives/sandbox/) components                                                                                                |
+| `workspaceProvider` |            none | evaluation | Default provider for the one top-level [`<Workspace />`](/docs/reference/primitives/workspace/)                                                                                           |
+| `system`            |            none | runtime    | First system fragment supplied to every `<Agent />`                                                                                                                                       |
+| `cwd`               | `process.cwd()` | runtime    | Base directory for local [`<Skill />`](/docs/reference/primitives/skill/) files, unsandboxed [`<Script />`](/docs/reference/primitives/script/) execution, and its relative cwd overrides |
+| `allowedTools`      |    unrestricted | runtime    | Exact names of JavaScript [`<Tool />`](/docs/reference/primitives/tool/) capabilities that may be granted                                                                                 |
+| `allowedMcpServers` |    unrestricted | runtime    | Exact names of [`<Mcp />`](/docs/reference/primitives/mcp/) servers that may be granted                                                                                                   |
+| `trace`             |            none | runtime    | Trace sink captured when the runtime is constructed                                                                                                                                       |
+| `onTraceError`      |            none | runtime    | Receives trace-consumer failures without joining them to workflow failure                                                                                                                 |
 
 Provider options remain on provider factories. Runtime defaults do not install executables, credentials, Docker images, or remote resources.
 

@@ -137,7 +137,7 @@ Process telemetry uses an opaque `execution.id` for local and remote providers. 
 - `<Workspace>` materializes durable files and may publish revision-backed state.
 - `<File>` writes resolved content beneath the active Workspace.
 - `<Sandbox>` acquires ephemeral execution and scopes filesystem policy.
-- `<Script>` executes a literal command or resolved script on the trusted host or through the active Sandbox.
+- `<Script>` executes a literal command or resolved script on the trusted host or through the active Sandbox, with an optional portable relative cwd.
 - `AmlRuntime` owns complete root evaluation, limits, cancellation, events, tracing, and cleanup.
 - Component-local `evaluate()` starts nested evaluation inside an active AML function component and can validate structured output.
 

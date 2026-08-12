@@ -186,7 +186,8 @@ The JSON result containing `Review the release-candidate release.` is written to
     <code>&lt;Script /&gt;</code>
   </a>{" "}
   execution. An unsandboxed <code>&lt;Script /&gt;</code> also runs as a trusted host process from the CLI working
-  directory. The CLI does not sandbox top-level JavaScript in the workflow module.
+  directory; its optional relative <code>cwd</code> resolves from that directory. The CLI does not sandbox top-level
+  JavaScript in the workflow module.
 </Aside>
 
 ## Source execution

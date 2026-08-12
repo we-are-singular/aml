@@ -218,11 +218,12 @@ materializations, while conditional index publication prevents a stale save from
 adapter—owns selection, `.gitignore`, tar handling, folder manifests, retention, and revision publication.
 
 `File` can turn a child Agent result into a durable handoff without duplicating that text into the surrounding
-prompt. An unsandboxed `Script` runs as a trusted host process from the runtime cwd. `Workspace` supplies the default
-logical cwd for descendant Sandboxes, and a Script inside one always uses that Sandbox runtime:
+prompt. An unsandboxed `Script` runs as a trusted host process from the runtime cwd. Its optional portable `cwd`
+resolves from that runtime cwd; inside a Sandbox it resolves from the active Sandbox root. `Workspace` supplies the
+default logical cwd for descendant Sandboxes, and a Script inside one always uses that Sandbox runtime:
 
 ```tsx
-const status = await new AmlRuntime().evaluate(<Script command="git" args={["status", "--short"]} />)
+const status = await new AmlRuntime().evaluate(<Script cwd="apps/cli" command="git" args={["status", "--short"]} />)
 ```
 
 ```tsx
@@ -276,6 +277,7 @@ Every example is one self-contained AML component. Run one with `npm run example
 | [`skill`](./examples/src/capabilities/skill.tsx)                         | Adds reusable inline instructions to an Agent.                                                         |
 | [`mcp`](./examples/src/capabilities/mcp.tsx)                             | Grants one Agent an MCP server while proving sibling capability isolation.                             |
 | [`sandbox`](./examples/src/resources/sandbox.tsx)                        | Narrows nested Sandbox access while sharing one deterministic outer lease.                             |
+| [`script`](./examples/src/resources/script.tsx)                          | Selects a Script working directory relative to the active Sandbox root.                                |
 | [`workspace`](./examples/src/resources/workspace.tsx)                    | Shares one durable materialization across disposable Sandbox leases.                                   |
 | [`opencode`](./examples/src/integrations/opencode.tsx)                   | Uses a credentialed OpenCode model to call a process-local JavaScript Tool.                            |
 | [`pi`](./examples/src/integrations/pi.tsx)                               | Embeds Pi with an OpenCode Go model and calls a process-local JavaScript Tool.                         |

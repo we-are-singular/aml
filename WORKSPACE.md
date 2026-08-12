@@ -1010,12 +1010,13 @@ dependencies, running tests, or preparing input for a later Agent. Its captured 
 component's text output and therefore feed a following Agent in normal AML evaluation order.
 
 It is an execution primitive, not a Workspace storage or materialization primitive. With an active Sandbox it always
-executes through that Sandbox's runtime. Without one it executes as a trusted host process from the AML runtime cwd:
+executes through that Sandbox's runtime. Without one it executes as a trusted host process from the AML runtime cwd.
+Both forms may select a portable relative working directory:
 
 ```tsx
 <Workspace id="review-42" provider={workspaceStore} cwd="repo">
   <Sandbox provider={sandbox}>
-    <Script command="git" args={["clone", repository, "."]} />
+    <Script cwd="repo" command="git" args={["status", "--short"]} />
     <Agent>Review the repository.</Agent>
   </Sandbox>
 </Workspace>
@@ -1029,6 +1030,10 @@ interpreter selected by the author:
 <Script shell="bash">{bashScript}</Script>
 <Script shell="node">{javascriptSource}</Script>
 ```
+
+On the host, `cwd` resolves from the AML runtime cwd. In a Sandbox it resolves from the active Sandbox root. Omitting
+the prop uses the host runtime cwd or effective Sandbox cwd respectively. Absolute paths, backslashes, and parent
+traversal are rejected. This working directory is process configuration, not a confinement boundary.
 
 Each supported interpreter needs documented invocation semantics. Providers reject a missing executable; AML does
 not install it or silently choose another interpreter. Interpolated AML text no longer preserves which bytes came
@@ -1361,7 +1366,8 @@ Add authored execution through the host or active Sandbox runtime:
 - use the trusted local process transport when no Sandbox is active
 - support explicit `sh`, `bash`, and `node` interpreters
 - retain literal executable and argument-vector execution for data-driven commands
-- use the runtime cwd on the host and the effective Sandbox cwd inside a Sandbox
+- default to the runtime cwd on the host and the effective Sandbox cwd inside a Sandbox
+- support a portable relative `cwd` from the host runtime cwd or active Sandbox root
 - bound runtime, standard output, and standard error
 - define non-zero exit, cancellation, and trace-redaction behavior
 - allow resolved child text, including Agent output, to become Script source
@@ -1372,6 +1378,7 @@ Proof:
 - Script changes are visible to later Agents in the same Sandbox
 - Script output can feed a later Agent
 - Script outside Sandbox executes on the host from the runtime cwd
+- Script-local cwd resolves against the correct host or Sandbox base
 - a missing interpreter rejects without fallback
 - Script inside a Sandbox runs only through the selected Sandbox provider
 

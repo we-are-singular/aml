@@ -9,17 +9,17 @@ description: Execute one literal command or resolved shell source on the host or
 import { AmlRuntime, Script } from "@aml-jsx/sdk"
 
 const runtime = new AmlRuntime({ cwd: "/absolute/path/to/project" })
-const output = await runtime.evaluate(<Script command="node" args={["--version"]} timeoutMs={10_000} />)
+const output = await runtime.evaluate(<Script cwd="apps/cli" command="node" args={["--version"]} timeoutMs={10_000} />)
 ```
 
 ## Execution location
 
-| Placement          | Execution owner      | Working directory                                      |
-| ------------------ | -------------------- | ------------------------------------------------------ |
-| No active Sandbox  | AML local process    | `AmlRuntimeOptions.cwd`, defaulting to `process.cwd()` |
-| Inside `<Sandbox>` | Its `SandboxRuntime` | The effective Sandbox cwd                              |
+| Placement          | Default cwd                                            | Explicit `cwd` base     |
+| ------------------ | ------------------------------------------------------ | ----------------------- |
+| No active Sandbox  | `AmlRuntimeOptions.cwd`, defaulting to `process.cwd()` | `AmlRuntimeOptions.cwd` |
+| Inside `<Sandbox>` | The effective Sandbox cwd                              | The active Sandbox root |
 
-Host execution is deliberately unconfined: the process inherits the AML host identity and environment and may access paths outside the cwd. Use it only for trusted authored automation. Add an enforcing Sandbox whenever the command or resolved source is model-generated, user-supplied, or otherwise untrusted.
+`cwd` is a portable relative forward-slash path shared by both forms. AML rejects absolute paths, backslashes, and parent traversal. The target directory must already exist. Host execution is deliberately unconfined: `cwd` changes the process starting directory, but the process still inherits the AML host identity and environment and may access paths outside it. Use host execution only for trusted authored automation. Add an enforcing Sandbox whenever the command or resolved source is model-generated, user-supplied, or otherwise untrusted.
 
 ## Two forms
 
@@ -28,11 +28,11 @@ Host execution is deliberately unconfined: the process inherits the AML host ide
 | Literal command    | `command`, optional `args`       | not allowed                 | `exec(command, args)` without shell interpolation |
 | Interpreted source | `shell="sh" \| "bash" \| "node"` | required non-empty AML text | `exec(shell, interpreter arguments)`              |
 
-Both forms accept `timeoutMs`, which must be a positive safe integer. `args` is valid only with `command`; command form accepts no children.
+Both forms accept `cwd` and `timeoutMs`; `timeoutMs` must be a positive safe integer. `args` is valid only with `command`; command form accepts no children. TypeScript models these as disjoint prop forms, and the runtime preserves the same validation for plain JavaScript.
 
 ```tsx
 <Sandbox provider={sandbox} access="read-write">
-  <Script shell="node" timeoutMs={30_000}>
+  <Script cwd="packages/worker" shell="node" timeoutMs={30_000}>
     {`console.log(JSON.stringify({ ok: true }))`}
   </Script>
 </Sandbox>
