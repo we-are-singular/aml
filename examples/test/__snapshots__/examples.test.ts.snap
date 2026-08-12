@@ -16,6 +16,8 @@ exports[`examples > mcp 1`] = `"MCP attached. Sibling isolated."`;
 
 exports[`examples > sandbox 1`] = `"Inspected repository/packages/api/src through deterministic-sandbox-1."`;
 
+exports[`examples > script 1`] = `"npm test from repository/packages/api"`;
+
 exports[`examples > skill 1`] = `"Skill resolved."`;
 
 exports[`examples > structured 1`] = `"synthesized:Explain this high finding: authorization is checked after mutation"`;
