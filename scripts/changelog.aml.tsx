@@ -1,7 +1,7 @@
 import process from "node:process"
 import { URL } from "node:url"
 
-import { Agent, FollowUp, System, evaluate, opencodeAgent } from "@aml-jsx/sdk"
+import { Agent, FollowUp, Script, System, evaluate, opencodeAgent } from "@aml-jsx/sdk"
 import { z } from "zod"
 
 type ReleaseLane = "cli" | "sdk"
@@ -49,10 +49,14 @@ export async function Changelog({ lane }: ChangelogProps) {
         Write factual, reader-focused AML changelog entries from repository evidence. Never invent behavior, commits,
         versions, or documentation routes.
       </System>
-      Draft the next {packageName} changelog entry. First run:
-      {`\n\nnode scripts/release-notes.ts ${lane} "$(git describe --tags --match '${tagMatch}' --abbrev=0)" HEAD\n\n`}
-      Its output is the complete release inventory. Read {packagePath} and {changelogPath}. Inspect commits and diffs as
-      needed to explain their user impact. Verify any documentation route before linking it.
+      Draft the next {packageName} changelog entry from this complete release inventory:
+      {`\n\n`}
+      <Script shell="sh">
+        {`node scripts/release-notes.ts ${lane} "$(git describe --tags --match '${tagMatch}' --abbrev=0)" HEAD`}
+      </Script>
+      {`\n\n`}
+      Read {packagePath} and {changelogPath}. Inspect commits and diffs as needed to explain their user impact. Verify
+      any documentation route before linking it.
       <FollowUp>
         Return the requested draft: a concise title without the version, an overall summary, and a few reader-oriented
         highlights. Group related commits instead of listing one highlight per commit.
