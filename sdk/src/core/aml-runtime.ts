@@ -227,7 +227,7 @@ export interface AmlRuntimeOptions {
   readonly agentProvider?: AgentProvider
 
   /**
-   * Base directory for relative local Skill files.
+   * Base directory for relative local Skill files and host Script execution.
    */
   readonly cwd?: string
 
@@ -364,8 +364,9 @@ export class AmlRuntime {
     }
     this.#loopAgentSelector = new LoopAgentSelector(maxDepth)
     this.#sandboxEvaluator = new SandboxEvaluator(options.sandboxProvider)
-    this.#scriptEvaluator = new ScriptEvaluator()
-    this.#skillEvaluator = new SkillEvaluator(options.cwd ?? process.cwd())
+    const cwd = options.cwd ?? process.cwd()
+    this.#scriptEvaluator = new ScriptEvaluator(cwd)
+    this.#skillEvaluator = new SkillEvaluator(cwd)
     this.#workspaceEvaluator = new WorkspaceEvaluator(options.workspaceProvider)
   }
 
@@ -1085,13 +1086,14 @@ export class AmlRuntime {
             continue
           }
 
-          // <Script> resolves dynamic child text before executing it through
-          // the active Sandbox runtime. It never falls back to host execution.
+          // <Script> resolves dynamic child text before selecting the host or
+          // active Sandbox runtime captured in its execution plan.
           if (primitiveKind === "script") {
             const props = current.props as Readonly<ScriptProps>
             const plan = this.#scriptEvaluator.prepare(props, frame.target.sandbox)
             const trace = context.createTrace(frame.target.parentSpanId)
             const span = context.startTraceSpan(trace, "script", "Script", {
+              environment: plan.sandbox === undefined ? "host" : "sandbox",
               mode: plan.kind,
               ...(plan.kind === "command" ? { command: plan.command } : { shell: plan.shell }),
             })

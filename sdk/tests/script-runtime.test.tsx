@@ -1,3 +1,8 @@
+import { mkdtemp, rm } from "node:fs/promises"
+import { tmpdir } from "node:os"
+import { join } from "node:path"
+import process from "node:process"
+
 import { describe, expect, it, vi } from "vitest"
 
 import { Agent, AmlRuntime, Sandbox, Script, Workspace } from "../src/index.js"
@@ -8,6 +13,20 @@ import {
 } from "../src/testing.js"
 
 describe("<Script>", () => {
+  it("executes on the host from the runtime cwd when no Sandbox is active", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "aml-script-host-"))
+
+    try {
+      await expect(
+        new AmlRuntime({ cwd: directory }).evaluate(
+          <Script command={process.execPath} args={["-e", "process.stdout.write(process.cwd())"]} />
+        )
+      ).resolves.toBe(directory)
+    } finally {
+      await rm(directory, { force: true, recursive: true })
+    }
+  })
+
   it("executes Agent-generated source in the active Sandbox and returns stdout", async () => {
     const commands: Array<Readonly<{ args: readonly string[]; command: string; cwd: string }>> = []
     const workspace = new DeterministicWorkspaceProvider()
@@ -73,7 +92,7 @@ describe("<Script>", () => {
     )
   })
 
-  it("requires a Sandbox and validates execution mode before resolving children", async () => {
+  it("validates execution mode before resolving children", async () => {
     const child = vi.fn(() => "not evaluated")
 
     function Child() {
@@ -82,11 +101,11 @@ describe("<Script>", () => {
 
     await expect(
       new AmlRuntime().evaluate(
-        <Script shell="sh">
+        <Script command="git" shell="sh">
           <Child />
         </Script>
       )
-    ).rejects.toThrow("<Script> requires an enclosing <Sandbox>")
+    ).rejects.toThrow("<Script> requires exactly one of command or shell")
 
     const sandbox = new DeterministicSandboxProvider()
     await expect(

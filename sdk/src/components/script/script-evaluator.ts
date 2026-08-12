@@ -1,19 +1,25 @@
+import { resolve } from "node:path"
+
+import { spawnLocalProcess } from "../agent/spawn-local-process.js"
 import type { SandboxSession } from "../sandbox/sandbox-provider.js"
+import type { SandboxExecResult } from "../sandbox/sandbox-runtime.js"
 import { EvaluationError } from "../../core/evaluation-error.js"
 import { supportsSandboxRuntime } from "../sandbox/sandbox-runtime.js"
 import type { ScriptProps, ScriptShell } from "./script.js"
+
+const MAX_HOST_OUTPUT_BYTES = 4 * 1024 * 1024
 
 interface CommandScriptEvaluation {
   readonly args: readonly string[]
   readonly command: string
   readonly kind: "command"
-  readonly sandbox: Readonly<SandboxSession>
+  readonly sandbox: Readonly<SandboxSession> | undefined
   readonly timeoutMs: number | undefined
 }
 
 interface InterpretedScriptEvaluation {
   readonly kind: "interpreted"
-  readonly sandbox: Readonly<SandboxSession>
+  readonly sandbox: Readonly<SandboxSession> | undefined
   readonly shell: ScriptShell
   readonly timeoutMs: number | undefined
 }
@@ -21,18 +27,27 @@ interface InterpretedScriptEvaluation {
 export type ScriptEvaluation = CommandScriptEvaluation | InterpretedScriptEvaluation
 
 /**
- * Validates and executes one explicitly sandboxed authored command.
+ * Validates and executes one authored command on the host or in the active Sandbox.
  */
 export class ScriptEvaluator {
+  readonly #cwd: string
+
+  /**
+   * Captures the host working directory used when no Sandbox is active.
+   */
+  constructor(cwd: unknown) {
+    if (typeof cwd !== "string" || cwd.length === 0) {
+      throw new TypeError("cwd must be a non-empty string")
+    }
+
+    this.#cwd = resolve(cwd)
+  }
+
   /**
    * Captures execution configuration before resolving dynamic Script children.
    */
   prepare(props: Readonly<ScriptProps>, sandbox: Readonly<SandboxSession> | undefined): Readonly<ScriptEvaluation> {
-    if (sandbox === undefined) {
-      throw new EvaluationError("<Script> requires an enclosing <Sandbox>")
-    }
-
-    if (!supportsSandboxRuntime(sandbox)) {
+    if (sandbox !== undefined && !supportsSandboxRuntime(sandbox)) {
       throw new EvaluationError(
         `<Script> cannot execute because Sandbox provider "${sandbox.provider.name}" does not enforce the effective scope`
       )
@@ -109,10 +124,13 @@ export class ScriptEvaluator {
       args = plan.shell === "node" ? ["--input-type=module", "--eval", source] : ["-c", source]
     }
 
-    const result = await plan.sandbox.lease.runtime.exec(command, args, {
-      signal,
-      ...(plan.timeoutMs === undefined ? {} : { timeoutMs: plan.timeoutMs }),
-    })
+    const result =
+      plan.sandbox === undefined
+        ? await executeHost(command, args, this.#cwd, signal, plan.timeoutMs)
+        : await plan.sandbox.lease.runtime.exec(command, args, {
+            signal,
+            ...(plan.timeoutMs === undefined ? {} : { timeoutMs: plan.timeoutMs }),
+          })
 
     if (result.exitCode !== 0) {
       const detail = result.stderr.trim()
@@ -123,6 +141,57 @@ export class ScriptEvaluator {
 
     return result
   }
+}
+
+/**
+ * Runs one trusted local command with the same process-tree cleanup used by local Agents.
+ */
+async function executeHost(
+  command: string,
+  args: readonly string[],
+  cwd: string,
+  signal: AbortSignal,
+  timeoutMs: number | undefined
+): Promise<Readonly<SandboxExecResult>> {
+  const process = await spawnLocalProcess(command, args, {
+    cwd,
+    signal,
+    ...(timeoutMs === undefined ? {} : { timeoutMs }),
+  })
+  try {
+    const writer = process.stdin.getWriter()
+
+    try {
+      await writer.close()
+    } finally {
+      writer.releaseLock()
+    }
+
+    const budget = { bytes: 0 }
+    const [stdout, stderr, exit] = await Promise.all([
+      readBoundedText(process.stdout, budget),
+      readBoundedText(process.stderr, budget),
+      process.wait(),
+    ])
+    return Object.freeze({ exitCode: exit.exitCode, stderr, stdout })
+  } catch (error) {
+    await process.kill()
+    throw error
+  }
+}
+
+async function readBoundedText(stream: ReadableStream<Uint8Array>, budget: { bytes: number }): Promise<string> {
+  const chunks: Uint8Array[] = []
+
+  for await (const chunk of stream) {
+    budget.bytes += chunk.byteLength
+    if (budget.bytes > MAX_HOST_OUTPUT_BYTES) {
+      throw new RangeError(`<Script> host output exceeded ${MAX_HOST_OUTPUT_BYTES} bytes`)
+    }
+    chunks.push(chunk)
+  }
+
+  return Buffer.concat(chunks).toString("utf8")
 }
 
 function validateTimeout(value: unknown): number | undefined {

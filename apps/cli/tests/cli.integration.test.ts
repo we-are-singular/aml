@@ -133,6 +133,14 @@ describe("compiled aml command", () => {
     expect(result.stderr).not.toContain("trace fixture prompt")
   })
 
+  it("runs an unsandboxed Script on the host from the CLI working directory", () => {
+    const result = runCli(["run", resolve(fixtures, "script.tsx"), "--trace"], { cwd: repositoryRoot })
+
+    expectSuccess(result)
+    expect(result.stdout).toBe(`${repositoryRoot}\n`)
+    expect(result.stderr).toContain('environment="host"')
+  })
+
   it("prints the provider cause when an Agent fails", () => {
     const result = runCli(["run", resolve(fixtures, "agent-error.tsx")], { cwd: repositoryRoot })
 
