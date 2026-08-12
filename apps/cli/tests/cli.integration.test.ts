@@ -138,7 +138,9 @@ describe("compiled aml command", () => {
     expect(result.stderr).toContain("caused by: provider stderr: model request failed")
   })
 
-  it.each([
+  // Windows child.kill() terminates the process directly instead of delivering
+  // a catchable POSIX signal, so it cannot exercise graceful CLI cancellation.
+  it.skipIf(platform === "win32").each([
     { exitCode: 130, signal: "SIGINT" as const },
     { exitCode: 143, signal: "SIGTERM" as const },
   ])(
@@ -173,7 +175,7 @@ describe("compiled aml command", () => {
     }
   )
 
-  it.skipIf(platform === "win32")("reaps the active ACP Agent and Sandbox MCP relay before exiting", async () => {
+  it.skipIf(platform !== "linux")("reaps the active ACP Agent and Sandbox MCP relay before exiting", async () => {
     const temporaryDirectory = await mkdtemp(join(tmpdir(), "aml-cli-acp-signal-"))
     const acpPidFile = join(temporaryDirectory, "acp.pid")
     const promptFile = join(temporaryDirectory, "prompt.ready")
