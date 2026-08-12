@@ -37,6 +37,8 @@ const result = await runtime.evaluate(
 - The same Agent-scoped Tools, MCP servers, model, permissions, Sandbox view, and provider session apply to every turn.
 - When structured output is requested, the schema applies to the final turn.
 
+With tracing enabled, AML starts and ends each `agent.turn` around actual execution. A later follow-up cannot appear as started before the preceding turn ends. The initial turn has `kind="initial"`; later turns have `kind="follow-up"`, and all carry a one-based `index`. ACP messages, Tool updates, plans, and usage emitted during that prompt stay ordered inside its turn. See [Observability](/docs/observability/#agent-lifecycle-events).
+
 `<FollowUp />` is appropriate when later instructions depend on the model's own session history. Use separate `<Agent />` components and ordinary TypeScript data flow when work needs independent providers, models, capabilities, failure handling, or concurrency.
 
 See the [editorial passes recipe](/docs/cookbook/follow-up-editorial-passes/) for a complete session and [Runtime and evaluation](/docs/reference/runtime/) for turn budgets.

@@ -101,7 +101,7 @@ Remote providers transfer Workspace files into a disposable environment and reco
 
 ## Tracing without leakage
 
-AML trace sinks receive redacted events by default. A sink must explicitly set `captureContent` to receive sensitive prompt, Tool, and result fields. Keep it false for normal production telemetry and send only scalar attributes to an approved sink.
+AML trace sinks receive redacted events by default. A sink must explicitly set `captureContent` to receive sensitive prompts, Agent messages or thoughts, raw ACP updates, Tool data, plans, commands, errors, and structured results. Keep it false for normal production telemetry and send only scalar attributes to an approved sink.
 
 ```ts
 const trace = createConsoleTracer({ captureContent: false })

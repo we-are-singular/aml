@@ -42,6 +42,15 @@ Record:
 - trace sink errors separately from workflow errors;
 - provider and storage request IDs, object keys, ETags, timestamps, and HTTP status codes where available.
 
+For an Agent incident, also preserve the `agent.session` span, the last `agent.turn` span, ACP `sessionId`, final `sessionUpdate` discriminants, `stopReason` when present, and every `sandbox.process` state. Keep these claims separate:
+
+- `kill_requested`: AML asked the process boundary to terminate;
+- `kill_completed`: the termination request resolved;
+- `exited`: `wait()` returned an exit code;
+- `wait_failed`: AML could not observe completion and does not know that the process exited.
+
+The opaque `execution.id` may identify a host process, container execution, remote command, or provider session. Do not parse it as a PID. Use it to query the owning provider's control plane.
+
 The runtime can combine a workflow error with release errors in an `AggregateError`; do not discard secondary causes because they often identify the leaked resource.
 
 ## Leftover Docker container
@@ -150,6 +159,18 @@ const runtime = new AmlRuntime({
 If the workflow finished `ok` but `onTraceError` fired, preserve the workflow result and repair the telemetry path independently: inspect sink serialization, queue/network health, backpressure, and redaction. Do not re-run a side-effecting workflow only to recreate traces unless the application explicitly supports idempotent replay.
 
 Trace events are discriminated: `span.end` has `status` and `durationMs`; point events do not. A sink that assumes every event has duration can fail while the actual evaluation remains successful.
+
+## Agent appears frozen or skipped a turn
+
+Use `sequence`, not wall-clock timestamp alone, to inspect the active Agent lifecycle:
+
+1. Find the open `agent.session` span and its latest `agent.turn` start.
+2. Confirm `acp.session.prompt.submitted` exists for that turn.
+3. Inspect later `acp.session.update` events. Repeated updates prove ACP progress even when no final Agent message is available yet.
+4. Look for `acp.session.prompt.completed`, then the matching successful `agent.turn` end. The next turn must not start before that end.
+5. If the turn failed, inspect `error.type`, the approved error channel, process states, and the later `agent.cleanup` result.
+
+A lack of updates does not prove the provider made no progress: ACP only carries updates the Agent implementation emits. Conversely, several internal model requests may appear as one ACP prompt turn. Escalate model-call, retry, fallback, queue, cache, or billing questions to provider telemetry rather than inferring them from AML turn counts.
 
 ## Recovery checklist
 

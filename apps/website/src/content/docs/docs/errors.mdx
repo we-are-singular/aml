@@ -72,6 +72,8 @@ Keep Tool implementations idempotent where possible, validate authorization insi
 
 Provider errors are wrapped at AML boundaries while preserving the original `cause` where the adapter supplies one. The underlying error may be a process launch error, ACP/session error, Sandbox acquisition/release error, network error, or Workspace storage error. Log the provider name, run ID, span ID, class/name, message, and cause without logging prompt content by default.
 
+Agent traces separate the failed boundary from cleanup: `agent.turn` reports the active turn failure, `agent.cleanup` reports session teardown independently, and `agent.session` closes only after cleanup. On the shared ACP process path, `sandbox.process state="wait_failed"` means AML could not observe completion; it does not prove the process exited. Likewise, `kill_completed` proves only that the provider's termination request resolved. Use the provider control plane when an actual remote terminal state matters.
+
 Retry only when all of these are true:
 
 - the failure is classified as transient;
@@ -83,7 +85,7 @@ Do not retry invalid placement, schema, path, allowlist, read-only policy, or ex
 
 ## Cancellation and cleanup
 
-Cancellation rejects the evaluation after propagating the signal to active work. It does not roll back files, Tool calls, provider mutations, or network requests that already completed. `finish` remains the request-level place to record `status: "error"`; trace `span.end` events expose the closing span status and duration.
+Cancellation rejects the evaluation after propagating the signal to active work. It does not roll back files, Tool calls, provider mutations, or network requests that already completed. `finish` remains the request-level place to record `status: "error"`; trace `span.end` events expose the closing span status and duration. `agent.session state="cancellation_requested"` records when cancellation reached the provider session, while `acp.session.cancel` records the ACP notification attempt.
 
 <Aside type="caution" title="A failed run can still have side effects">
   Design Tools and Scripts as real operations. If a workflow needs transactional behavior, implement that transaction in

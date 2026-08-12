@@ -118,6 +118,14 @@ npx aml run ./workflow.tsx --entry namedExport --json --trace
 
 The workflow file is positional; `--entry` selects an export inside it. Results go to stdout. Lifecycle events, errors, and metadata-only traces go to stderr. Do not create and evaluate another `AmlRuntime` inside the exported function; that bypasses CLI runtime ownership for the nested Agent work. Read https://agent-markup-language.com/docs/cli/ for environment precedence, export resolution, content-capture policy, and the trusted-code boundary.
 
+## Agent and ACP observability
+
+AML traces actual `agent.session`, ordered `agent.turn`, and `agent.cleanup` spans. Each shared-ACP turn is one ACP `session/prompt` request, not necessarily one underlying model API call. Every ACP notification is exposed as one `acp.session.update` with ACP-supplied `sessionId` and `sessionUpdate`; AML does not translate Tool, message, thought, plan, usage, or future update variants into a parallel event schema.
+
+Metadata-only tracing is the default. The AML SDK's `captureContent` sink option and the CLI's `--capture-content` flag can additionally expose prompts, Agent messages and thoughts emitted through ACP, unchanged serialized ACP updates, raw Tool data, plans, structured results, commands, and failure messages. The option belongs to AML, not ACP, and must be treated as a sensitive data-handling decision.
+
+Process telemetry uses an opaque `execution.id` for local and remote providers. `kill_requested`, `kill_completed`, `exited`, and `wait_failed` are distinct facts; AML never claims exit merely because termination was requested. See https://agent-markup-language.com/docs/observability/ for the complete event union, lifecycle tree, redaction rules, examples, and portable limitations.
+
 ## Core surface
 
 - `<Agent>` runs one provider-owned session after its prompt, system content, capabilities, and child Agent results resolve.

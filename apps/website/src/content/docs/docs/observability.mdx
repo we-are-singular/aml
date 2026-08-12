@@ -1,112 +1,264 @@
 ---
 title: Observability
-description: Trace AML evaluations with stable correlation fields and an explicit content policy.
+description: Trace AML evaluations, Agent turns, ACP updates, and process lifecycle without capturing content by default.
 ---
 
-import { Aside, Card, CardGrid, Tabs, TabItem } from "@astrojs/starlight/components"
+import { Aside, TabItem, Tabs } from "@astrojs/starlight/components"
 
 AML exposes two observability layers:
 
-1. Runtime lifecycle events: `start` and `finish`, useful for request-level status and run identity.
-2. Trace events: immutable spans and point events for the evaluation tree, Agent turns, and capabilities.
+1. Runtime lifecycle events: `start` and `finish`, for request-level status and run identity.
+2. Trace events: immutable spans and point events for the evaluation tree, Agent sessions and turns, ACP activity, capabilities, processes, and cleanup.
 
-This page is the operational guide to consuming those signals. For runtime listener behavior and evaluation lifecycle decisions, use the [runtime reference](/docs/reference/runtime/#errors-and-lifecycle-events).
+This page defines the portable trace contract. For listener timing and evaluation lifecycle decisions, use the [runtime reference](/docs/reference/runtime/#errors-and-lifecycle-events).
 
-## Console tracing
+## Start tracing
+
+<Tabs>
+  <TabItem label="SDK">
 
 ```tsx
 import { AmlRuntime, createConsoleTracer } from "@aml-jsx/sdk"
 
-const runtime = new AmlRuntime()
-runtime.on("trace", createConsoleTracer({ captureContent: false }))
+const runtime = new AmlRuntime({
+  trace: createConsoleTracer({ captureContent: false }),
+  onTraceError: (error, event) => {
+    console.error("AML trace sink failed", { error, sequence: event.sequence })
+  },
+})
 ```
 
-The tracer writes a compact tree to `console.log` by default. Supply `write` to route lines to a logger or file:
+The tracer writes a compact tree to `console.log`. Supply `write` to send complete lines to another destination:
 
 ```tsx
 const trace = createConsoleTracer({
   captureContent: false,
   write: line => process.stderr.write(`${line}\n`),
 })
-
-runtime.on("trace", trace)
 ```
 
-When an exported workflow runs through the [experimental CLI](/docs/cli/), `--trace` attaches the same console tracer
-and sends its metadata-only output to standard error. Content stays redacted unless the operator supplies
-`--capture-content` explicitly.
+  </TabItem>
+  <TabItem label="CLI">
 
-Trace sinks are captured when the runtime is constructed. Trace-consumer errors go to `onTraceError` when configured and do not become workflow failures merely because a logger rejected a line.
+```sh
+aml run ./workflow.tsx --trace
+```
+
+The [experimental CLI](/docs/cli/) writes metadata-only traces to standard error and keeps the workflow result on standard output.
+
+```sh
+# Explicitly includes supported sensitive content.
+aml run ./workflow.tsx --trace --capture-content
+```
+
+`--capture-content` is an AML CLI option. It is not part of ACP and is not sent to the Agent.
+
+  </TabItem>
+</Tabs>
+
+Trace sinks are captured when the runtime is constructed. AML does not await a sink's returned promise. Synchronous throws and rejected promises go to `onTraceError` when configured; telemetry failure does not change the workflow result.
+
+## What an Agent trace represents
+
+AML traces the lifecycle it owns and the events that cross its ACP connection. One ACP `session/prompt` request is one **Agent turn**. It is not necessarily one model API call.
+
+```text
+agent Agent
+└─ agent.session                    one provider session
+   ├─ sandbox.process               process lifecycle facts
+   ├─ acp.session.created           ACP session established
+   ├─ agent.turn kind=initial       first session/prompt request
+   │  ├─ acp.session.prompt.submitted
+   │  ├─ acp.session.update         zero or more streamed ACP updates
+   │  └─ acp.session.prompt.completed
+   ├─ agent.turn kind=follow-up     next authored <FollowUp />
+   │  └─ ...
+   └─ agent.cleanup                 session and process cleanup
+```
+
+Turn spans start immediately before provider execution and end before the next turn begins. A two-turn Agent therefore never reports turn two as started while turn one is still running. ACP updates are emitted in the order AML consumes them from `ActiveSession.nextUpdate()`.
+
+An illustrative console trace looks like this:
+
+```text
+▶ agent Agent
+  ▶ agent.session provider="opencode"
+  • sandbox.process state="spawn_requested"
+  • sandbox.process execution.id="remote-or-local-id" state="started"
+  • acp.session.created sessionId="session-1"
+    ▶ agent.turn index=1 kind="initial"
+    • acp.session.prompt.submitted sessionId="session-1"
+    • acp.session.update sessionId="session-1" sessionUpdate="agent_message_chunk"
+    • acp.session.prompt.completed sessionId="session-1" stopReason="end_turn"
+    ✓ agent.turn 1.2s sessionId="session-1" stopReason="end_turn"
+    ▶ agent.turn index=2 kind="follow-up"
+    • acp.session.prompt.submitted sessionId="session-1"
+    • acp.session.update sessionId="session-1" sessionUpdate="tool_call"
+    • acp.session.update sessionId="session-1" sessionUpdate="tool_call_update"
+    • acp.session.prompt.completed sessionId="session-1" stopReason="end_turn"
+    ✓ agent.turn 2.4s sessionId="session-1" stopReason="end_turn"
+    ▶ agent.cleanup
+    • sandbox.process execution.id="remote-or-local-id" state="kill_requested"
+    • sandbox.process execution.id="remote-or-local-id" state="kill_completed"
+    ✓ agent.cleanup 8.1ms
+  ✓ agent.session 3.6s
+✓ agent Agent 3.6s
+```
+
+Exact updates depend on the Agent implementation. A provider that emits no ACP updates still produces the prompt-submitted event, the turn result or failure, cleanup, and enclosing span completion.
+
+## The ACP boundary
+
+Every ACP session notification becomes one `acp.session.update` point event. AML deliberately does not translate each ACP update variant into a second AML schema.
+
+Metadata-only tracing includes:
+
+```ts
+{
+  name: "acp.session.update",
+  attributes: {
+    sessionId: "session-1",
+    sessionUpdate: "tool_call",
+  },
+  type: "event",
+}
+```
+
+`sessionId` and `sessionUpdate` come directly from the ACP notification. Message chunks, thought chunks, Tool lifecycle, plans, usage, configuration, session information, and future ACP variants all use this same event shape when the Agent emits them.
+
+With content capture enabled, AML adds an `update` attribute containing the serialized ACP update object unchanged. Consumers that need `toolCallId`, Tool status, plan entries, usage details, or another variant-specific field can parse that captured ACP object according to the ACP version they support. AML does not copy those fields into a parallel portable schema.
+
+<Aside type="note" title="Portable ACP telemetry, not model-call telemetry">
+  AML can report what crosses ACP. It cannot universally observe model retries, fallbacks, provider queue time, internal
+  sub-agents, dynamically selected model names, vendor cache or billing metrics, or Tool work the Agent does not report.
+  A provider may add its own telemetry for those details, but it should label them as provider telemetry rather than an
+  AML Agent turn or portable ACP event.
+</Aside>
+
+## Agent lifecycle events
+
+### Spans
+
+| Span name       | Important metadata                                                                          | Boundary                                                                 |
+| --------------- | ------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------ |
+| `agent.session` | `provider`, optional configured `model`                                                     | Provider session setup through completed cleanup                         |
+| `agent.turn`    | `index`, `kind`; on success, ACP `sessionId`, `stopReason`, and optional serialized `usage` | One actual `runTurn()` / ACP prompt request                              |
+| `agent.cleanup` | normal span status and duration                                                             | Provider session close, process termination, and session-owned resources |
+
+Failed span ends include `error.type`. `error.message` is sensitive and appears only for content-capturing sinks.
+
+### Point events
+
+| Event                          | Metadata-only attributes                                     | Meaning                                                        |
+| ------------------------------ | ------------------------------------------------------------ | -------------------------------------------------------------- |
+| `acp.session.created`          | `sessionId`                                                  | ACP session creation completed                                 |
+| `acp.session.prompt.submitted` | `sessionId`                                                  | AML submitted one turn                                         |
+| `acp.session.update`           | `sessionId`, `sessionUpdate`                                 | One unchanged ACP update crossed the connection                |
+| `acp.session.prompt.completed` | `sessionId`, `stopReason`, optional serialized `usage`       | ACP returned the final prompt response                         |
+| `acp.session.cancel`           | `sessionId`                                                  | AML sent ACP session cancellation                              |
+| `agent.session`                | `state="cancellation_requested"`                             | Evaluation cancellation reached the provider session           |
+| `agent.output`                 | submission `call`, `status`                                  | Structured output was `accepted`, `ignored`, or `invalid`      |
+| `sandbox.process`              | `state`, optional opaque `execution.id`, optional `exitCode` | Process spawn, termination request, observation, or completion |
+| `capability.tool` / `.mcp`     | capability metadata                                          | AML granted a Tool or MCP capability                           |
+| `loop.transition`              | loop transition metadata                                     | AML advanced a Loop                                            |
+
+Process states currently emitted by the shared ACP path are:
+
+| State             | What AML knows                                                                 |
+| ----------------- | ------------------------------------------------------------------------------ |
+| `spawn_requested` | AML asked the selected local or Sandbox runtime to start the command           |
+| `started`         | The runtime returned an opaque process handle                                  |
+| `kill_requested`  | AML called the process handle's termination boundary                           |
+| `kill_completed`  | That termination request resolved                                              |
+| `exited`          | `wait()` resolved with an exit code                                            |
+| `wait_failed`     | `wait()` rejected before AML requested termination; process exit is not proven |
+
+`execution.id` is opaque. A local provider may use a PID-backed value; Docker or a remote Sandbox may use a lease, session, or provider execution identifier. Consumers must not parse it as a Unix PID. `kill_completed` does not mean `exited`, and AML does not synthesize an exit merely because cancellation was requested.
+
+## Content capture and redaction
+
+Metadata-only tracing is the default. It retains lifecycle, correlation, update discriminants, stop reasons, token usage supplied by ACP, durations, provider/model configuration, and opaque process identity.
+
+Content capture can additionally expose:
+
+- initial and follow-up prompt text;
+- Agent message and thought content inside serialized ACP updates;
+- raw ACP Tool input, output, titles, and progress;
+- plans and repository information carried by ACP;
+- structured-result submissions;
+- executable commands and failure messages;
+- Tool input/output and other runtime fields explicitly marked sensitive by AML.
+
+```tsx
+// Diagnostic-only choice. Approve the destination and retention policy first.
+runtime.on("trace", createConsoleTracer({ captureContent: true }))
+```
+
+Each trace sink chooses its own `captureContent` policy. Treat captured content as customer data. The option is consent to receive supported fields, not a general-purpose redactor and not a guarantee that every external provider action becomes observable.
+
+<Aside type="caution" title="Thoughts require explicit content capture">
+  AML never includes Agent thought or reasoning content in metadata-only traces. When capture is enabled, thought
+  updates are present only if the Agent emitted them through ACP. Review whether storing reasoning is permitted before
+  enabling capture in any shared or production destination.
+</Aside>
 
 ## The discriminated event union
 
-Every trace event contains immutable correlation data: `runId`, `spanId`, optional `parentSpanId`, `sequence`, `timestamp`, and scalar `attributes`.
+Every event contains immutable `runId`, `spanId`, optional `parentSpanId`, `sequence`, `timestamp`, and scalar `attributes`.
 
-| `type`       | Shape-specific fields                  | Meaning                                              |
-| ------------ | -------------------------------------- | ---------------------------------------------------- |
-| `span.start` | `kind`, `name`                         | Opens an execution boundary                          |
-| `span.end`   | `kind`, `name`, `status`, `durationMs` | Closes the matching span                             |
-| `event`      | `name`                                 | Records a point-in-time fact inside an existing span |
+| `type`       | Shape-specific fields                  | Meaning                      |
+| ------------ | -------------------------------------- | ---------------------------- |
+| `span.start` | `kind`, `name`                         | Opens an execution boundary  |
+| `span.end`   | `kind`, `name`, `status`, `durationMs` | Closes the matching span     |
+| `event`      | `name`                                 | Records a point-in-time fact |
 
-Do not read `status` or `durationMs` from a point event. They are not part of `AmlTracePointEvent`. TypeScript narrowing is the safest way to consume traces:
+TypeScript narrowing is the safest way to adapt the stream to OpenTelemetry, PostHog, LangChain telemetry, or an application logger:
 
 ```ts
 runtime.on("trace", event => {
   if (event.type === "span.end") {
-    metrics.observe(`aml.${event.kind}`, event.durationMs, { status: event.status })
+    telemetry.recordSpan({
+      durationMs: event.durationMs,
+      name: event.name,
+      parentSpanId: event.parentSpanId,
+      runId: event.runId,
+      spanId: event.spanId,
+      status: event.status,
+    })
     return
   }
 
   if (event.type === "event") {
-    metrics.increment(`aml.event.${event.name}`)
+    telemetry.recordEvent(event.name, event.attributes)
   }
 })
 ```
 
-The current point-event names are `agent.output`, `agent.turn`, `capability.mcp`, `capability.tool`, and `loop.transition`. `agent.output` records the structured submission call number and whether AML marked it `invalid`, `accepted`, or `ignored`; it does not include the submitted payload. Span kinds include `evaluation`, `component`, `agent`, `file`, `system`, `skill`, `tool`, `loop`, `sandbox`, `script`, and `workspace`.
-
-## Content capture is opt-in
-
-AML trace attributes are scalar by design and do not expose live workflow, provider, Tool, or resource objects. Content such as prompts and outputs is sensitive and is omitted by the console tracer unless `captureContent: true` is selected by the sink:
-
-```tsx
-// Development-only diagnostic choice. Review data handling before enabling it.
-runtime.on("trace", createConsoleTracer({ captureContent: true }))
-```
-
-Treat captured prompts, Tool arguments, MCP data, file paths, and Agent output as customer data. Redaction belongs in the sink or downstream logger; turning capture on is not a redaction policy.
-
-<Aside type="caution" title="Trace metadata is not an audit log">
-  Trace events describe AML execution. They do not guarantee that external provider effects, network requests, or
-  host-side Tool effects can be reconstructed. Record business-level audit events separately.
-</Aside>
+AML attributes are scalars (`boolean`, `number`, `string`, or `readonly string[]`) so observers do not receive live workflow, provider, Tool, or resource objects. Serialized ACP `usage` and content-captured `update` values are strings for the same reason.
 
 ## Correlation and ordering
 
-Use `runId` to correlate one root evaluation, `spanId`/`parentSpanId` to reconstruct nesting, and `sequence` for event ordering within a run. `timestamp` is an epoch-millisecond timestamp. A point event belongs to the active span but does not open or close one.
+Use:
 
-```ts
-type SpanEnd = Extract<AmlTraceEvent, { type: "span.end" }>
+- `runId` for one root evaluation;
+- `spanId` and `parentSpanId` to reconstruct nesting;
+- `sequence` for the authoritative event order within a run;
+- `timestamp` for wall-clock correlation;
+- `durationMs` on `span.end` for elapsed time.
 
-function recordSpan(event: SpanEnd) {
-  return {
-    runId: event.runId,
-    spanId: event.spanId,
-    parentSpanId: event.parentSpanId,
-    durationMs: event.durationMs,
-    status: event.status,
-  }
-}
-```
+Do not infer ordering from timestamps when `sequence` is available. Do not assume a point event has `status` or `durationMs`.
 
-## Operational questions traces can answer
+## What traces can answer
 
-| Question                              | Useful fields                                       |
-| ------------------------------------- | --------------------------------------------------- |
-| Which run failed?                     | `runId`, `spanId`, `status` on `span.end`           |
-| Which provider boundary was slow?     | `kind`, `name`, `durationMs` on `span.end`          |
-| Did a Tool or MCP capability execute? | `type: "event"`, `name`, scalar `attributes`        |
-| Where did a nested operation sit?     | `parentSpanId`, `sequence`                          |
-| Did cleanup finish?                   | closing `span.end` for Sandbox/Workspace/evaluation |
+| Question                                     | Evidence                                                                 |
+| -------------------------------------------- | ------------------------------------------------------------------------ |
+| Did turn two start before turn one ended?    | ordered `agent.turn` span starts/ends and `sequence`                     |
+| Is a slow Agent still producing progress?    | `acp.session.update` events inside the active turn                       |
+| Did ACP report Tool or plan activity?        | `sessionUpdate` on `acp.session.update`; captured `update` when approved |
+| Why did the turn stop?                       | `stopReason` on prompt completion and the successful turn end            |
+| Did ACP supply token usage?                  | serialized `usage` on prompt completion and the successful turn end      |
+| Was structured output accepted?              | `agent.output` `call` and `status`                                       |
+| Was process termination requested or proven? | distinct `sandbox.process` states                                        |
+| Did cleanup finish?                          | `agent.cleanup` span end and enclosing `agent.session` end               |
 
-For request-level success and failure, also subscribe to `start`/`finish`; for sensitive content, keep tracing metadata-only and emit a separate approved audit record when needed.
+Trace metadata is execution telemetry, not a business audit log. External effects, provider billing, and internal model calls require their own authoritative records.

@@ -84,6 +84,8 @@ Implement an **Agent provider** when the external system owns a model or coding-
 
 Do not label a plain chat-completions call as a coding-agent integration unless it really provides the session, tools, permissions, and execution behavior the provider claims.
 
+The shared ACP adapter also owns the portable observability boundary. It forwards ACP update discriminants without translating each variant into an AML-specific schema, and it calls one ACP prompt one Agent turn. Provider-internal model requests, retries, fallbacks, and billing remain provider telemetry. See [Observability](/docs/observability/#the-acp-boundary).
+
 ### Adding an execution environment
 
 Implement a **Sandbox provider** when the external system owns ephemeral processes or containers.

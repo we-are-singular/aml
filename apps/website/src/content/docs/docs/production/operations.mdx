@@ -91,7 +91,7 @@ S3 lock heartbeats run every five minutes and use a twenty-minute stale boundary
 
 ## Observability
 
-AML trace events are immutable and contain scalar attributes, correlation ids, sequence numbers, and timestamps. Span start and end events carry lifecycle boundaries; only span-end events carry `durationMs` and `status`. Point events include `agent.output`, `agent.turn`, `capability.tool`, `capability.mcp`, and `loop.transition`. `agent.output` exposes structured submission status without including the submitted payload.
+AML trace events are immutable and contain scalar attributes, correlation ids, sequence numbers, and timestamps. Span start and end events carry lifecycle boundaries; only span-end events carry `durationMs` and `status`. Actual Agent execution appears as nested `agent.session`, `agent.turn`, and `agent.cleanup` spans. ACP progress remains one thin `acp.session.update` event carrying the ACP `sessionId` and `sessionUpdate` discriminant. Process events use an opaque `execution.id`, so the same operational schema works for local, container, and remote providers.
 
 ```ts
 import { AmlRuntime, createConsoleTracer } from "@aml-jsx/sdk"
@@ -104,7 +104,9 @@ const runtime = new AmlRuntime({
 })
 ```
 
-Trace listeners are not part of workflow completion. Their failures go through `onTraceError`; do not make provider cleanup depend on a telemetry backend. Keep content capture disabled unless prompts, Tool inputs, results, and file-derived text are approved for the destination.
+Trace listeners are not part of workflow completion. Their failures go through `onTraceError`; do not make provider cleanup depend on a telemetry backend. Keep content capture disabled unless prompts, Agent messages or thoughts, raw ACP updates, Tool inputs/results, plans, structured results, commands, and failure messages are approved for the destination.
+
+Treat `agent.turn` as an ACP prompt turn, not an underlying LLM request. Provider retries, fallbacks, sub-agents, and model calls are invisible unless the provider supplies separate provider telemetry. For process incidents, distinguish `kill_requested`, `kill_completed`, `exited`, and `wait_failed`; none is a substitute for another.
 
 Useful operational dimensions include `runId`, `spanId`, `parentSpanId`, provider name, Workspace id, Sandbox id, outcome, and cleanup status. Keep customer content out of metric labels.
 

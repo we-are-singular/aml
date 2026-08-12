@@ -216,7 +216,7 @@ aml run ./workflow.tsx --trace
 aml run ./workflow.tsx --trace --capture-content
 ```
 
-Treat `--capture-content` output as sensitive. It can include prompts, model output, [`<Tool />`](/docs/reference/primitives/tool/) input and output, and filesystem context. See [Observability](/docs/observability/) for the runtime event and redaction contract.
+`--capture-content` is an AML CLI option, not an ACP option or Agent capability. Treat its output as sensitive. It can include prompts, Agent messages and thoughts exposed through ACP, raw Tool activity, plans, structured results, [`<Tool />`](/docs/reference/primitives/tool/) input and output, commands, errors, and filesystem context. See [Observability](/docs/observability/) for the complete event and redaction contract.
 
 ## Interrupting a run
 

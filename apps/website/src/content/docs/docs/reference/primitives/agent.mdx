@@ -50,6 +50,12 @@ The provider returns an `AgentResponse`. Normal evaluation contributes its `text
 - Child `<Agent />` results become parent input at their authored position; they are separate provider sessions.
 - `cwd` does not create a Sandbox. It only narrows the cwd of an already active Sandbox session.
 
+## Observability
+
+An Agent trace contains one `agent.session` span, one ordered `agent.turn` span for the initial prompt and each [`<FollowUp />`](/docs/reference/primitives/follow-up/), and one `agent.cleanup` span. Built-in ACP providers stream `acp.session.update` events inside the active turn and attach the final ACP stop reason and optional usage to the successful turn end.
+
+One Agent turn is one provider `runTurn()` call and, on the shared ACP path, one ACP `session/prompt` request. It must not be interpreted as one underlying model API call. See [Observability](/docs/observability/#what-an-agent-trace-represents) for the lifecycle tree, content policy, and ACP limitations.
+
 <Aside type="caution" title="Agent permissions are not confinement">
   Native provider permissions are best-effort harness controls. Use a Sandbox provider with an appropriate isolation
   model when model-controlled commands or filesystem access require an enforcing boundary.

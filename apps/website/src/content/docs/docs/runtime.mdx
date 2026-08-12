@@ -131,7 +131,7 @@ runtime.on("finish", ({ runId, status, error }) => {
 
 `finish` is emitted after cleanup. Its `status` is `"ok"` or `"error"`; on error, inspect `error` and correlate it with the run ID. Unsubscribe with the function returned by `on()` when a listener is temporary.
 
-Trace events are a separate stream and are intentionally dispatched without blocking workflow completion. See [Observability](/docs/observability/) for their discriminated shapes.
+Trace events are a separate stream and are intentionally dispatched without blocking workflow completion. Agent sessions add actual turn and cleanup spans; the shared ACP path adds ordered session updates and process lifecycle facts without claiming visibility into internal model calls. See [Observability](/docs/observability/) for the discriminated shapes and content policy.
 
 ## Cleanup is part of the result
 

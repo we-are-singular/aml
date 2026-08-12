@@ -177,11 +177,13 @@ MCP server identity, allowlists, transport configuration, and lifecycle belong t
 
 `evaluate(value, schema)` asks for one structured `<Agent />` result. Built-in ACP profiles submit candidates through the invocation-owned `aml_submit_result` MCP tool. AML validates each candidate immediately with the supplied Standard Schema: an invalid candidate is returned to the Agent as a tool error, the first valid candidate is accepted, and later submissions are ignored. A turn that ends without a valid candidate rejects the evaluation.
 
-With tracing enabled, AML emits `agent.output` for every submission with its call number and `invalid`, `accepted`, or `ignored` status. Payloads are not included in these events. See the [structured-output cookbook](/docs/cookbook/structured-output/) for the complete pattern.
+With tracing enabled, AML emits `agent.output` for every submission with its call number and `invalid`, `accepted`, or `ignored` status. Payloads are excluded from metadata-only traces and included only for a sink that explicitly enables content capture. See the [structured-output cookbook](/docs/cookbook/structured-output/) for the complete pattern.
 
 ### Follow-up turns
 
 [`<FollowUp />`](/docs/reference/primitives/follow-up/) stays in the same provider session. Tools and MCP capabilities remain fixed for the session; later turns cannot widen access. A failure stops subsequent turns and rejects the evaluation.
+
+The shared engine exposes each real turn as an `agent.turn` span and forwards every ACP notification as one `acp.session.update` event without translating ACP variants into AML-specific Tool, message, or plan schemas. Read [Agent and ACP observability](/docs/observability/#the-acp-boundary) for the portable contract and its limits.
 
 ## Security checklist
 
