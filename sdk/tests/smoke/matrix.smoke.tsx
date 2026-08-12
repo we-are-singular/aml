@@ -26,7 +26,7 @@ import {
   type SmokeAgentInstance,
   type SmokeAgentName,
   type SmokeSandboxName,
-} from "./smoke-matrix.js"
+} from "./smoke-config.js"
 
 const command = parseSmokeCommand([
   ...(process.env.AML_SMOKE_AGENT === undefined ? [] : ["--agent", process.env.AML_SMOKE_AGENT]),
@@ -57,40 +57,42 @@ async function runFileProof(agentName: SmokeAgentName, sandboxName: SmokeSandbox
     name: "aml_smoke_proof",
     execute: async () => toolProof,
   })
-  const agentRegistration = SMOKE_AGENTS[agentName]
-  const agent: SmokeAgentInstance = agentRegistration.create()
-  const sandboxRegistration = SMOKE_SANDBOXES[sandboxName]
-  const sandboxProvider = sandboxRegistration.create()
   const proofCommand = `test "$(cat input.txt)" = "${input}" && printf %s "${output}" > output.txt && test "$(cat output.txt)" = "${output}"`
   const startedAt = performance.now()
+  let agent: SmokeAgentInstance | undefined
   let response: unknown
 
-  await writeFile(path.join(directory, "input.txt"), input)
-  console.log(
-    `[smoke:start] agent=${agentName} model=${agentRegistration.model} sandbox=${sandboxName} environment=${sandboxRegistration.environment}`
-  )
-
-  const runtime = new AmlRuntime({ agentProvider: agent.provider })
-  runtime.on(
-    "trace",
-    createConsoleTracer({
-      write: line => console.log(`[smoke:trace] ${line}`),
-    })
-  )
-
-  async function StructuredProof() {
-    const result = await evaluate(
-      <Agent model={agentRegistration.model}>
-        <Tool use={proofTool} />
-        Run this exact shell command in the current Workspace: {proofCommand}. Call aml_smoke_proof, then return the
-        requested structured result with status "done" and proof set to the exact Tool result.
-      </Agent>,
-      Result
-    )
-    return JSON.stringify(result)
-  }
-
   try {
+    await writeFile(path.join(directory, "input.txt"), input)
+    const agentRegistration = SMOKE_AGENTS[agentName]
+    agent = agentRegistration.create()
+    const sandboxRegistration = SMOKE_SANDBOXES[sandboxName]
+    const sandboxProvider = sandboxRegistration.create()
+
+    console.log(
+      `[smoke:start] agent=${agentName} model=${agentRegistration.model} sandbox=${sandboxName} environment=${sandboxRegistration.environment}`
+    )
+
+    const runtime = new AmlRuntime({ agentProvider: agent.provider })
+    runtime.on(
+      "trace",
+      createConsoleTracer({
+        write: line => console.log(`[smoke:trace] ${line}`),
+      })
+    )
+
+    async function StructuredProof() {
+      const result = await evaluate(
+        <Agent model={agentRegistration.model}>
+          <Tool use={proofTool} />
+          Run this exact shell command in the current Workspace: {proofCommand}. Call aml_smoke_proof, then return the
+          requested structured result with status "done" and proof set to the exact Tool result.
+        </Agent>,
+        Result
+      )
+      return JSON.stringify(result)
+    }
+
     response = await runtime.evaluate(
       <Workspace id={`smoke-${agentName}-${sandboxName}-${randomUUID()}`} provider={localWorkspace({ directory })}>
         <Sandbox access="read-write" provider={sandboxProvider}>
@@ -113,7 +115,7 @@ async function runFileProof(agentName: SmokeAgentName, sandboxName: SmokeSandbox
     throw error
   } finally {
     try {
-      await agent.release?.()
+      await agent?.release?.()
     } finally {
       await rm(directory, { force: true, recursive: true })
     }

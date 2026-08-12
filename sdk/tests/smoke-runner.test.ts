@@ -1,14 +1,18 @@
 import { describe, expect, it } from "vitest"
 
 import {
+  DEFAULT_KITCHEN_SINK_SELECTION,
+  KITCHEN_SINK_MCP_NAMES,
+  KITCHEN_SINK_WORKSPACE_NAMES,
+  parseKitchenSinkCommand,
   parseSmokeCommand,
   requiredCopilotGithubToken,
   selectSmokeCases,
   SMOKE_AGENT_NAMES,
   SMOKE_SANDBOX_NAMES,
-} from "./smoke/smoke-matrix.js"
+} from "./smoke/smoke-config.js"
 
-describe("smoke matrix runner", () => {
+describe("smoke configuration", () => {
   it("derives the complete Cartesian product from both registries", () => {
     expect(SMOKE_AGENT_NAMES).toEqual(["codex", "copilot", "opencode", "pi"])
     expect(SMOKE_SANDBOX_NAMES).toEqual(["daytona", "docker", "local", "modal"])
@@ -66,5 +70,37 @@ describe("smoke matrix runner", () => {
     expect(requiredCopilotGithubToken({ GH_TOKEN: "gh-token", GITHUB_TOKEN: "github-token" })).toBe("gh-token")
     expect(requiredCopilotGithubToken({ GITHUB_TOKEN: "github-token" })).toBe("github-token")
     expect(() => requiredCopilotGithubToken({})).toThrow("Copilot smoke requires COPILOT_GITHUB_TOKEN")
+  })
+
+  it("defaults the kitchen sink to R2, OpenCode, Modal, and Context7", () => {
+    expect(parseKitchenSinkCommand([])).toEqual({
+      kind: "run",
+      selection: DEFAULT_KITCHEN_SINK_SELECTION,
+    })
+  })
+
+  it("parses every kitchen-sink provider boundary", () => {
+    expect(
+      parseKitchenSinkCommand(["--agent", "codex", "--sandbox", "docker", "--workspace", "local", "--mcp", "none"])
+    ).toEqual({
+      kind: "run",
+      selection: {
+        agent: "codex",
+        mcp: "none",
+        sandbox: "docker",
+        workspace: "local",
+      },
+    })
+    expect(parseKitchenSinkCommand(["--help"])).toEqual({ kind: "help" })
+  })
+
+  it("rejects unknown and missing kitchen-sink selections", () => {
+    expect(KITCHEN_SINK_WORKSPACE_NAMES).toEqual(["local", "r2"])
+    expect(KITCHEN_SINK_MCP_NAMES).toEqual(["context7", "none"])
+    expect(() => parseKitchenSinkCommand(["--workspace", "missing"])).toThrow(
+      'Unknown kitchen-sink Workspace "missing"'
+    )
+    expect(() => parseKitchenSinkCommand(["--mcp"])).toThrow("--mcp requires a value")
+    expect(() => parseKitchenSinkCommand(["--wat", "value"])).toThrow('Unknown kitchen-sink argument "--wat"')
   })
 })

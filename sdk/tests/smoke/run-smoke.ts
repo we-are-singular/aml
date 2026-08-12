@@ -3,21 +3,22 @@ import path from "node:path"
 
 import { execa } from "execa"
 
-import { parseSmokeCommand, selectSmokeCases, SMOKE_AGENT_NAMES, SMOKE_SANDBOX_NAMES } from "./smoke-matrix.js"
+import {
+  loadSmokeEnvironment,
+  parseSmokeCommand,
+  selectSmokeCases,
+  SMOKE_AGENT_NAMES,
+  SMOKE_SANDBOX_NAMES,
+} from "./smoke-config.js"
 
-try {
-  process.loadEnvFile(path.resolve(import.meta.dirname, "../../../.env"))
-} catch (error) {
-  if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
-    throw error
-  }
-}
+loadSmokeEnvironment()
 
 /**
  * Owns CLI selection and delegates test execution to the dedicated smoke
  * configuration so application flags never collide with Vitest flags.
  */
 async function main(): Promise<void> {
+  const startedAt = performance.now()
   const command = parseSmokeCommand(process.argv.slice(2))
 
   if (command.kind === "help") {
@@ -55,7 +56,7 @@ async function main(): Promise<void> {
       "verbose",
       "--disableConsoleIntercept",
       "--no-file-parallelism",
-      "tests/smoke/sandbox-matrix.smoke.tsx",
+      "tests/smoke/matrix.smoke.tsx",
     ],
     {
       cwd: sdkDirectory,
@@ -68,6 +69,12 @@ async function main(): Promise<void> {
       stdio: "inherit",
     }
   )
+
+  if (result.exitCode === 0) {
+    console.log(
+      `\n✅ Matrix smoke completed successfully. cells=${cases.length} durationMs=${Math.round(performance.now() - startedAt)}`
+    )
+  }
 
   process.exitCode = result.exitCode
 }

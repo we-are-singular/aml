@@ -26,6 +26,7 @@
     "release:check": "npm run format:check && npm run lint && npm run test && npm run build && npm run pack:check",
     "release:sdk": "npm run release --workspace=@aml-jsx/sdk --",
     "smoke": "vite-node sdk/tests/smoke/run-smoke.ts",
+    "smoke:kitchen-sink": "vite-node sdk/tests/smoke/kitchen-sink.smoke.tsx",
     "test": "turbo test"
   },
   "devDependencies": {

@@ -1,3 +1,5 @@
+import path from "node:path"
+
 import {
   codexAgent,
   copilotAgent,
@@ -10,6 +12,15 @@ import {
   type AgentProvider,
   type SandboxProvider,
 } from "../../src/index.js"
+
+/** Loads the repository-local smoke credentials when an untracked .env exists. */
+export function loadSmokeEnvironment(): void {
+  try {
+    process.loadEnvFile(path.resolve(import.meta.dirname, "../../../.env"))
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error
+  }
+}
 
 const CODEX_ACP_VERSION = "1.1.7"
 const CODEX_VERSION = "0.145.0"
@@ -167,6 +178,30 @@ export const SMOKE_SANDBOXES = {
 
 export type SmokeSandboxName = keyof typeof SMOKE_SANDBOXES
 
+export const KITCHEN_SINK_WORKSPACE_NAMES = ["local", "r2"] as const
+export const KITCHEN_SINK_MCP_NAMES = ["context7", "none"] as const
+
+export type KitchenSinkWorkspaceName = (typeof KITCHEN_SINK_WORKSPACE_NAMES)[number]
+export type KitchenSinkMcpName = (typeof KITCHEN_SINK_MCP_NAMES)[number]
+
+export interface KitchenSinkSelection {
+  readonly agent: SmokeAgentName
+  readonly mcp: KitchenSinkMcpName
+  readonly sandbox: SmokeSandboxName
+  readonly workspace: KitchenSinkWorkspaceName
+}
+
+export type KitchenSinkCommand =
+  | { readonly kind: "help" }
+  | { readonly kind: "run"; readonly selection: KitchenSinkSelection }
+
+export const DEFAULT_KITCHEN_SINK_SELECTION: KitchenSinkSelection = Object.freeze({
+  agent: "opencode",
+  mcp: "context7",
+  sandbox: "modal",
+  workspace: "r2",
+})
+
 export const SMOKE_AGENT_NAMES = Object.keys(SMOKE_AGENTS).sort() as SmokeAgentName[]
 export const SMOKE_SANDBOX_NAMES = Object.keys(SMOKE_SANDBOXES).sort() as SmokeSandboxName[]
 
@@ -239,6 +274,66 @@ export function parseSmokeCommand(args: readonly string[]): SmokeCommand {
     ...(sandbox === undefined ? {} : { sandbox }),
   }
   return list ? { kind: "list", selection } : { kind: "run", selection }
+}
+
+/**
+ * Parses the independently runnable kitchen-sink application selection.
+ */
+export function parseKitchenSinkCommand(args: readonly string[]): KitchenSinkCommand {
+  let agent = DEFAULT_KITCHEN_SINK_SELECTION.agent
+  let mcp = DEFAULT_KITCHEN_SINK_SELECTION.mcp
+  let sandbox = DEFAULT_KITCHEN_SINK_SELECTION.sandbox
+  let workspace = DEFAULT_KITCHEN_SINK_SELECTION.workspace
+
+  for (let index = 0; index < args.length; index += 1) {
+    const argument = args[index]
+
+    if (argument === "--help" || argument === "-h") return { kind: "help" }
+
+    const value = args[++index]
+    if (value === undefined) throw new TypeError(`${argument} requires a value`)
+
+    if (argument === "--agent") {
+      if (!SMOKE_AGENT_NAMES.includes(value as SmokeAgentName)) {
+        throw new TypeError(`Unknown kitchen-sink Agent "${value}". Available: ${SMOKE_AGENT_NAMES.join(", ")}`)
+      }
+      agent = value as SmokeAgentName
+      continue
+    }
+
+    if (argument === "--sandbox") {
+      if (!SMOKE_SANDBOX_NAMES.includes(value as SmokeSandboxName)) {
+        throw new TypeError(`Unknown kitchen-sink Sandbox "${value}". Available: ${SMOKE_SANDBOX_NAMES.join(", ")}`)
+      }
+      sandbox = value as SmokeSandboxName
+      continue
+    }
+
+    if (argument === "--workspace") {
+      if (!KITCHEN_SINK_WORKSPACE_NAMES.includes(value as KitchenSinkWorkspaceName)) {
+        throw new TypeError(
+          `Unknown kitchen-sink Workspace "${value}". Available: ${KITCHEN_SINK_WORKSPACE_NAMES.join(", ")}`
+        )
+      }
+      workspace = value as KitchenSinkWorkspaceName
+      continue
+    }
+
+    if (argument === "--mcp") {
+      if (!KITCHEN_SINK_MCP_NAMES.includes(value as KitchenSinkMcpName)) {
+        throw new TypeError(`Unknown kitchen-sink MCP "${value}". Available: ${KITCHEN_SINK_MCP_NAMES.join(", ")}`)
+      }
+      mcp = value as KitchenSinkMcpName
+      continue
+    }
+
+    throw new TypeError(`Unknown kitchen-sink argument "${argument}"`)
+  }
+
+  return {
+    kind: "run",
+    selection: { agent, mcp, sandbox, workspace },
+  }
 }
 
 function requiredOpenAiApiKey(agent: string): string {
