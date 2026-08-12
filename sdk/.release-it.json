@@ -3,11 +3,11 @@
   "verbose": true,
   "hooks": {
     "after:bump": [
-      "npm install --package-lock-only --ignore-scripts --prefix ..",
-      "git add ../package-lock.json",
-      "npm run changelog:sdk --prefix ..",
+      "timeout --signal=INT --kill-after=15s 10m npm run changelog:sdk --prefix ..",
       "npm run format --prefix .. -- apps/website/src/content/docs/docs/reference/changelog/sdk.mdx",
-      "git add ../apps/website/src/content/docs/docs/reference/changelog/sdk.mdx"
+      "git add ../apps/website/src/content/docs/docs/reference/changelog/sdk.mdx",
+      "npm install --package-lock-only --ignore-scripts --prefix ..",
+      "git add ../package-lock.json"
     ],
     "before:release": "npm run release:check --prefix .."
   },
