@@ -185,7 +185,8 @@ The JSON result containing `Review the release-candidate release.` is written to
   <a href="/docs/reference/primitives/script/">
     <code>&lt;Script /&gt;</code>
   </a>{" "}
-  execution, but it does not sandbox top-level JavaScript in the workflow module.
+  execution. An unsandboxed <code>&lt;Script /&gt;</code> also runs as a trusted host process from the CLI working
+  directory. The CLI does not sandbox top-level JavaScript in the workflow module.
 </Aside>
 
 ## Source execution

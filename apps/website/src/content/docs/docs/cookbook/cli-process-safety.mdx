@@ -26,7 +26,7 @@ This example is intentionally credential-free. It uses [`localSandbox()`](/docs/
 
 ## Building block: one explicit resource owner
 
-[`<Script />`](/docs/reference/primitives/script/) requires a Sandbox with an enforcing runtime. The local provider needs `read-write` because a host process cannot enforce read-only filesystem access.
+This recipe places [`<Script />`](/docs/reference/primitives/script/) inside a Sandbox so the example covers both process cancellation and Sandbox release. The local provider needs `read-write` because a host process cannot enforce read-only filesystem access. For a trusted command that does not need a Sandbox lifecycle, Script can execute directly on the host.
 
 ```tsx
 const LongRunningProcess = (

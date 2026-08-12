@@ -260,8 +260,8 @@ const [codexReview, openCodeReview] = await Promise.all([
     docsPath: "docs/reference/primitives/script/",
     signature: '<Script command="…" /> | <Script shell="sh">',
     description:
-      "Runs an argument vector or resolved sh, bash, or node source only through the active <Sandbox /> runtime. Successful standard output becomes AML text for later composition.",
-    note: "<Script /> is deliberately dangerous. <Sandbox /> supplies confinement; AML never falls back to a host child process.",
+      "Runs an argument vector or resolved sh, bash, or node source on the trusted host or through the active <Sandbox /> runtime. Successful standard output becomes AML text for later composition.",
+    note: "<Script /> is deliberately dangerous. Without a <Sandbox /> it inherits the AML host's authority; an active Sandbox owns its execution and never falls back to the host.",
     file: "script.tsx",
     code: `<Sandbox access="read-write" provider={Docker}>
   <Script command="npm" args={["test"]} timeoutMs={120_000} />

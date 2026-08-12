@@ -26,21 +26,21 @@ const answer = await runtime.evaluate(<Agent>Summarize the repository.</Agent>)
 
 Choose the provider defaults and safety budgets at construction time. The input options are captured; mutating the original object later does not change the runtime. Every numeric limit is a non-negative safe integer. A limit of `0` disables that limit.
 
-| Option                |         Default | Decide this when…                                                       |
-| --------------------- | --------------: | ----------------------------------------------------------------------- |
-| `agentProvider`       |               — | `<Agent />` nodes should use one default Agent provider.                |
-| `sandboxProvider`     |               — | Outer `<Sandbox />` nodes should use one default execution provider.    |
-| `workspaceProvider`   |               — | The evaluation may use one top-level durable `<Workspace />`.           |
-| `cwd`                 | `process.cwd()` | Relative `<Skill />` sources need a controlled base directory.          |
-| `system`              |               — | Every `<Agent />` should receive a shared system instruction.           |
-| `allowedTools`        |    unrestricted | The application must allow only named Tool capabilities.                |
-| `allowedMcpServers`   |    unrestricted | The application must allow only named MCP servers.                      |
-| `trace`               |               — | The application needs immutable, metadata-only-by-default trace events. |
-| `onTraceError`        |               — | Trace consumer failures need a dedicated policy.                        |
-| `maxAgentCalls`       |            `32` | Total Agent sessions must be bounded.                                   |
-| `maxConcurrentAgents` |             `4` | Parallel Agent work must be bounded.                                    |
-| `maxTurnsPerAgent`    |            `16` | Follow-ups and authored `<Agent />` inputs must be bounded.             |
-| `maxDepth`            |            `16` | Recursive semantic JSX needs a depth budget.                            |
+| Option                |         Default | Decide this when…                                                                              |
+| --------------------- | --------------: | ---------------------------------------------------------------------------------------------- |
+| `agentProvider`       |               — | `<Agent />` nodes should use one default Agent provider.                                       |
+| `sandboxProvider`     |               — | Outer `<Sandbox />` nodes should use one default execution provider.                           |
+| `workspaceProvider`   |               — | The evaluation may use one top-level durable `<Workspace />`.                                  |
+| `cwd`                 | `process.cwd()` | Relative `<Skill />` sources and host `<Script />` execution need a controlled base directory. |
+| `system`              |               — | Every `<Agent />` should receive a shared system instruction.                                  |
+| `allowedTools`        |    unrestricted | The application must allow only named Tool capabilities.                                       |
+| `allowedMcpServers`   |    unrestricted | The application must allow only named MCP servers.                                             |
+| `trace`               |               — | The application needs immutable, metadata-only-by-default trace events.                        |
+| `onTraceError`        |               — | Trace consumer failures need a dedicated policy.                                               |
+| `maxAgentCalls`       |            `32` | Total Agent sessions must be bounded.                                                          |
+| `maxConcurrentAgents` |             `4` | Parallel Agent work must be bounded.                                                           |
+| `maxTurnsPerAgent`    |            `16` | Follow-ups and authored `<Agent />` inputs must be bounded.                                    |
+| `maxDepth`            |            `16` | Recursive semantic JSX needs a depth budget.                                                   |
 
 ## Evaluation options and cancellation
 

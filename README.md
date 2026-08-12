@@ -127,7 +127,7 @@ workflows with `@aml-jsx/sdk`.
 | `<Mcp>`       | Grants the owning Agent a provider-native MCP server by name or an explicit server created with `defineMcpServer()`. |
 | `<FollowUp>`  | Adds a later turn to the same Agent session. FollowUps are flat, ordered, and resolved before the session starts.    |
 | `<Sandbox>`   | Acquires an ephemeral execution environment and scopes a narrowed filesystem policy to descendant Agents.            |
-| `<Script>`    | Executes resolved source or one literal command through the enclosing Sandbox runtime and returns standard output.   |
+| `<Script>`    | Executes resolved source or one literal command on the host or in the active Sandbox and returns standard output.    |
 | `<Workspace>` | Materializes durable files that can survive and be shared across disposable Sandbox leases.                          |
 | `<>...</>`    | Groups AML values without adding prompt text or another runtime boundary.                                            |
 
@@ -218,8 +218,12 @@ materializations, while conditional index publication prevents a stale save from
 adapter—owns selection, `.gitignore`, tar handling, folder manifests, retention, and revision publication.
 
 `File` can turn a child Agent result into a durable handoff without duplicating that text into the surrounding
-prompt. `Workspace` supplies the default logical cwd for descendant Sandboxes. `Script` always executes through that
-active Sandbox and never falls back to a host child process:
+prompt. An unsandboxed `Script` runs as a trusted host process from the runtime cwd. `Workspace` supplies the default
+logical cwd for descendant Sandboxes, and a Script inside one always uses that Sandbox runtime:
+
+```tsx
+const status = await new AmlRuntime().evaluate(<Script command="git" args={["status", "--short"]} />)
+```
 
 ```tsx
 <Workspace

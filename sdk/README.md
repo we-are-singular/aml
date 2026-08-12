@@ -41,6 +41,8 @@ const result = await new AmlRuntime().evaluate(<Agent provider={Pi}>Say hello.</
 
 Codex, GitHub Copilot, OpenCode, and Pi use the same ACP lifecycle on the trusted local host and inside supported Sandboxes. Agents optimistically receive their native filesystem, shell, and network capabilities unless `<Agent permissions>` narrows them; the enclosing Sandbox remains authoritative. `<Tool>` is reserved for JavaScript functions created with `defineTool()`. The selected environment must contain the compatible ACP Agent executable; AML does not install it implicitly. Provider-specific options remain on each factory.
 
+An unsandboxed `<Script />` runs as a trusted host process from `AmlRuntimeOptions.cwd`, defaulting to `process.cwd()`. Inside an active `<Sandbox />`, it runs only through that Sandbox runtime and never falls back to the host.
+
 The public factory names are `codexAgent()`, `copilotAgent()`, `opencodeAgent()`, and `piAgent()`.
 
 ## Coding agents

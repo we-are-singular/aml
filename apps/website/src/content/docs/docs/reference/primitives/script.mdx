@@ -1,29 +1,25 @@
 ---
 title: "<Script />"
-description: Execute one literal command or resolved shell source through the active Sandbox runtime.
+description: Execute one literal command or resolved shell source on the host or through the active Sandbox runtime.
 ---
 
-`<Script />` runs authored execution through its enclosing [`<Sandbox />`](/docs/reference/primitives/sandbox/). AML never falls back to a host child process when no `<Sandbox />` exists.
+`<Script />` runs a trusted host process from the runtime cwd when no [`<Sandbox />`](/docs/reference/primitives/sandbox/) is active. Inside a Sandbox, it uses that Sandbox runtime and never falls back to the host.
 
 ```tsx
-import { AmlRuntime, Sandbox, Script } from "@aml-jsx/sdk"
-import { DeterministicSandboxProvider } from "@aml-jsx/sdk/testing"
+import { AmlRuntime, Script } from "@aml-jsx/sdk"
 
-const sandbox = new DeterministicSandboxProvider({
-  exec: (command, args) => ({
-    exitCode: 0,
-    stderr: "",
-    stdout: [command, ...args].join(" "),
-  }),
-})
-
-const runtime = new AmlRuntime({ sandboxProvider: sandbox })
-const output = await runtime.evaluate(
-  <Sandbox>
-    <Script command="node" args={["--version"]} timeoutMs={10_000} />
-  </Sandbox>
-)
+const runtime = new AmlRuntime({ cwd: "/absolute/path/to/project" })
+const output = await runtime.evaluate(<Script command="node" args={["--version"]} timeoutMs={10_000} />)
 ```
+
+## Execution location
+
+| Placement          | Execution owner      | Working directory                                      |
+| ------------------ | -------------------- | ------------------------------------------------------ |
+| No active Sandbox  | AML local process    | `AmlRuntimeOptions.cwd`, defaulting to `process.cwd()` |
+| Inside `<Sandbox>` | Its `SandboxRuntime` | The effective Sandbox cwd                              |
+
+Host execution is deliberately unconfined: the process inherits the AML host identity and environment and may access paths outside the cwd. Use it only for trusted authored automation. Add an enforcing Sandbox whenever the command or resolved source is model-generated, user-supplied, or otherwise untrusted.
 
 ## Two forms
 
@@ -44,8 +40,8 @@ Both forms accept `timeoutMs`, which must be a positive safe integer. `args` is 
 
 ## Result and failures
 
-Successful standard output becomes AML text for later composition. A non-zero exit code rejects with `EvaluationError` and includes trimmed stderr detail when available. The provider owns output bounds, process termination, and the exact meaning of timeout and cancellation.
+Successful standard output becomes AML text for later composition. A non-zero exit code rejects with `EvaluationError` and includes trimmed stderr detail when available. AML bounds, cancels, and reaps host execution directly; inside a Sandbox, its provider owns those runtime details. Trace spans report `environment="host"` or `environment="sandbox"`.
 
-Generated source is still executable authority. If [`<Agent />`](/docs/reference/primitives/agent/) produces the children of `<Script />`, treat that output as untrusted and select an enforcing Sandbox with tight credentials, filesystem access, network policy, and resource limits.
+Generated source is executable authority. If [`<Agent />`](/docs/reference/primitives/agent/) produces the children of `<Script />`, treat that output as untrusted and select an enforcing Sandbox with tight credentials, filesystem access, network policy, and resource limits.
 
 See the [generated diagnostic recipe](/docs/cookbook/generated-diagnostic/) and the [Sandbox provider guides](/docs/providers/sandboxes/).

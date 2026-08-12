@@ -109,7 +109,7 @@ export function Review() {
 }
 ```
 
-In a real application supply the providers through the runtime or explicit props. [`<File />`](/docs/reference/primitives/file/) is shown at the [`<Workspace />`](/docs/reference/primitives/workspace/) boundary because it persists text through the Workspace provider; use [`<Agent />`](/docs/reference/primitives/agent/) or [`<Script />`](/docs/reference/primitives/script/) inside [`<Sandbox />`](/docs/reference/primitives/sandbox/) for process writes.
+In a real application supply the providers through the runtime or explicit props. [`<File />`](/docs/reference/primitives/file/) is shown at the [`<Workspace />`](/docs/reference/primitives/workspace/) boundary because it persists text through the Workspace provider. Host-backed [`<Agent />`](/docs/reference/primitives/agent/) providers and [`<Script />`](/docs/reference/primitives/script/) can use trusted local execution; place them inside [`<Sandbox />`](/docs/reference/primitives/sandbox/) when their processes must run in that selected environment.
 
 ## Integration checklist
 

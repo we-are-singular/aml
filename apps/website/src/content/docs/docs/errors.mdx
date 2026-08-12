@@ -43,7 +43,6 @@ The class is intentionally broad because the error message identifies the invali
 
 - `evaluate() is only available while an AML component is active` — move the call into an async AML component.
 - `<Tool> is only valid inside <Agent>` or `<Mcp> is only valid inside <Agent>` — move the capability under its owning [`<Agent />`](/docs/reference/primitives/agent/).
-- `<Script> requires an enclosing <Sandbox>` — configure an outer [`<Sandbox />`](/docs/reference/primitives/sandbox/); [`<Script />`](/docs/reference/primitives/script/) never falls back to `child_process` on the host.
 - `<File> requires an enclosing <Workspace>` — write through [`<Workspace />`](/docs/reference/primitives/workspace/).
 - `A nested <Sandbox> cannot widen read-only access to read-write` — narrow the child [`<Sandbox />`](/docs/reference/primitives/sandbox/) policy or change the parent policy.
 - `AML evaluation exceeded maxAgentCalls ...` or `maxDepth ...` — increase a deliberate budget or reduce workflow breadth/depth.

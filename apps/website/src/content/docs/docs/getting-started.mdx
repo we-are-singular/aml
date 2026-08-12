@@ -292,7 +292,7 @@ This follows the repository smoke path with an OpenAI-backed model. If you selec
 
 ## 4. Add files and command execution
 
-[`<File />`](/docs/reference/primitives/file/) requires [`<Workspace />`](/docs/reference/primitives/workspace/), and [`<Script />`](/docs/reference/primitives/script/) requires [`<Sandbox />`](/docs/reference/primitives/sandbox/). This example creates a fresh temporary directory so it cannot overwrite your repository.
+[`<File />`](/docs/reference/primitives/file/) requires [`<Workspace />`](/docs/reference/primitives/workspace/). [`<Script />`](/docs/reference/primitives/script/) can run directly on the trusted host, but this example deliberately adds a Sandbox around a fresh temporary directory so it cannot overwrite your repository.
 
 ```tsx title="src/resources.tsx"
 import { mkdtemp } from "node:fs/promises"

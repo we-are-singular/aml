@@ -48,7 +48,7 @@ A nested `<Sandbox />` reuses the outer lease. It may narrow `root`, change `cwd
 
 ## Descendant behavior
 
-- [`<Script />`](/docs/reference/primitives/script/) executes only through the active Sandbox runtime.
+- A descendant [`<Script />`](/docs/reference/primitives/script/) executes only through the active Sandbox runtime; it never falls back to the host from inside this scope.
 - A compatible [`<Agent />`](/docs/reference/primitives/agent/) receives the effective Sandbox session; its native permissions cannot widen it.
 - An enclosing [`<Workspace />`](/docs/reference/primitives/workspace/) supplies the materialized directory. The Sandbox provider maps logical paths into its host, container, or remote environment.
 - [`<File />`](/docs/reference/primitives/file/) is deliberately invalid inside `<Sandbox />` because it writes through the host Workspace materialization rather than the guest runtime.

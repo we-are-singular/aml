@@ -222,7 +222,7 @@ AML cannot automatically roll back arbitrary effects already performed by an Age
 | `<File>`                           | Materialize resolved text inside an active Workspace                 | No text                    |
 | `<Sandbox>`                        | Scope an ephemeral execution lease and restrictive filesystem policy | Descendant execution scope |
 | `defineSandboxProvider()`          | Define an ephemeral execution adapter                                | `SandboxProvider`          |
-| `<Script>`                         | Execute an authored command through an active Sandbox                | Standard output            |
+| `<Script>`                         | Execute an authored command on the host or in an active Sandbox      | Standard output            |
 | `<Workspace>`                      | Load and save one durable working directory                          | Descendant filesystem root |
 | `defineWorkspaceProvider()`        | Define a durable workspace adapter                                   | `WorkspaceProvider`        |
 | `<Mcp>`                            | Grant a provider-native or explicitly configured MCP server          | MCP server descriptor      |
@@ -239,18 +239,18 @@ AML cannot automatically roll back arbitrary effects already performed by an Age
 
 The normative surface is delivered in phases so the public API grows only after each earlier boundary has deterministic proof.
 
-| Phase                  | Surface                                                        | Purpose                                                                              |
-| ---------------------- | -------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
-| Foundation             | JSX values, Fragments, async components, `AmlRuntime`          | Prove single-invocation asynchronous evaluation                                      |
-| MVP 1                  | `<Agent>`, `<System>`, `defineAgentProvider()`                 | Establish the provider-neutral execution and message-channel boundary                |
-| MVP 2                  | `<Tool>`, `defineTool()`                                       | Add scoped JavaScript capabilities                                                   |
-| MVP 3                  | `<Skill>`                                                      | Add reusable instruction resolution                                                  |
-| MVP 4                  | `<Sandbox>`, `defineSandboxProvider()`                         | Add ephemeral execution scope                                                        |
-| MVP 5                  | `<Workspace>`, `defineWorkspaceProvider()`                     | Add durable filesystem scope and complete the MVP                                    |
-| Post-MVP capabilities  | `<Mcp>`, `defineMcpServer()`                                   | Attach MCP servers without making the SDK own an Agent harness                       |
-| Filesystem composition | `<File>`, `<Script>`                                           | Materialize resolved text and run explicit commands within resource scopes           |
-| Post-MVP orchestration | `evaluate()`, structured output, `<FollowUp>`; draft: `<Loop>` | Add richer dataflow and same-session or iterative execution                          |
-| Draft late surface     | `createContext()`, `useContext()`, `<Context.Provider>`        | Add immutable dependency scope only after the execution and resource model is stable |
+| Phase                  | Surface                                                        | Purpose                                                                               |
+| ---------------------- | -------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| Foundation             | JSX values, Fragments, async components, `AmlRuntime`          | Prove single-invocation asynchronous evaluation                                       |
+| MVP 1                  | `<Agent>`, `<System>`, `defineAgentProvider()`                 | Establish the provider-neutral execution and message-channel boundary                 |
+| MVP 2                  | `<Tool>`, `defineTool()`                                       | Add scoped JavaScript capabilities                                                    |
+| MVP 3                  | `<Skill>`                                                      | Add reusable instruction resolution                                                   |
+| MVP 4                  | `<Sandbox>`, `defineSandboxProvider()`                         | Add ephemeral execution scope                                                         |
+| MVP 5                  | `<Workspace>`, `defineWorkspaceProvider()`                     | Add durable filesystem scope and complete the MVP                                     |
+| Post-MVP capabilities  | `<Mcp>`, `defineMcpServer()`                                   | Attach MCP servers without making the SDK own an Agent harness                        |
+| Filesystem composition | `<File>`, `<Script>`                                           | Materialize resolved text and run explicit commands on the host or in resource scopes |
+| Post-MVP orchestration | `evaluate()`, structured output, `<FollowUp>`; draft: `<Loop>` | Add richer dataflow and same-session or iterative execution                           |
+| Draft late surface     | `createContext()`, `useContext()`, `<Context.Provider>`        | Add immutable dependency scope only after the execution and resource model is stable  |
 
 This is a delivery order, not a hierarchy of importance. Later primitives remain normative desired state, but they must not shape earlier implementations beyond the explicit extension points in their contracts.
 
@@ -1300,7 +1300,7 @@ AML:
 
 Nested Sandboxes emit their own spans but do not acquire or release another lease. If subtree evaluation and release both fail, AML rejects with an `AggregateError` that preserves both errors.
 
-`SandboxLease.handle` remains opaque provider data for Workspace attachment and provider-specific optimization. Built-in Agent profiles use the lease's narrow `SandboxRuntime.spawn()` to launch one long-lived ACP process with an effective logical working directory. `<Script>`, trusted setup, and provider implementation details may use `exec()` for bounded literal commands. Agent turns must not use `exec()` as a second protocol. AML deliberately does not standardize files, images, snapshots, ports, or the union of provider SDK features.
+`SandboxLease.handle` remains opaque provider data for Workspace attachment and provider-specific optimization. Built-in Agent profiles use the lease's narrow `SandboxRuntime.spawn()` to launch one long-lived ACP process with an effective logical working directory. Sandboxed `<Script>`, trusted setup, and provider implementation details may use `exec()` for bounded literal commands. Agent turns must not use `exec()` as a second protocol. AML deliberately does not standardize files, images, snapshots, ports, or the union of provider SDK features.
 
 Descendants receive only the immutable lease identity, handle, and runtime shown by `SandboxSession`; they never receive `release()` or the provider's `acquire()` method. AML retains both lifecycle capabilities privately because it alone owns acquisition and exactly-once release. The captured provider name is descriptive identity, not an authority-bearing provider object.
 
@@ -1366,7 +1366,7 @@ const local = localSandbox({
 
 An active Workspace supersedes the optional standalone `workspace`. The provider resolves the selected root and each starting cwd through real paths, then executes literal commands with bounded output. Its optional trusted `setup` follows the same every-acquisition and fail-before-descendants semantics as Docker.
 
-Local execution is explicitly non-isolating. A child process can access anything allowed to the AML host identity, including paths outside the logical Workspace. The provider rejects runtime execution under `"read-only"` because it cannot enforce that policy for arbitrary host processes. Applications use it only for trusted local development and common-API testing; Docker or a remote provider is required for untrusted model-controlled commands.
+Local execution is explicitly non-isolating. A child process can access anything allowed to the AML host identity, including paths outside the logical Workspace. The provider rejects runtime execution under `"read-only"` because it cannot enforce that policy for arbitrary host processes. Unsandboxed `<Script>` uses the same trusted host-process boundary. Applications use either form only for trusted local development and automation; Docker or an enforcing remote provider is required for untrusted model-controlled commands.
 
 ### 13.6 Daytona provider requirements
 
@@ -1408,9 +1408,12 @@ The transfer implementation cannot enforce a read-only guest tree. Like Local, D
 
 ### 13.7 `<Script>`
 
-`<Script>` executes only through the runtime of an active Sandbox. AML never falls back to a host process:
+`<Script>` executes through the runtime of an active Sandbox when one exists. Without an active Sandbox it executes as
+a trusted host process from `AmlRuntimeOptions.cwd`, which defaults to `process.cwd()`:
 
 ```tsx
+<Script command="git" args={["status", "--short"]} />
+
 <Sandbox provider={docker} access="read-write">
   <Script command="git" args={["clone", repository, "."]} />
   <Script shell="sh">npm test</Script>
@@ -1422,14 +1425,16 @@ Exactly one execution form is required:
 - `command` accepts an optional string `args` array, rejects children, and executes without shell interpolation
 - `shell` is `"sh"`, `"bash"`, or `"node"` and executes its fully resolved child text
 
-`timeoutMs`, when present, is a positive safe integer passed to the Sandbox runtime. Interpreted source must resolve
-to non-empty text. Child Agents may generate that source because Script executes after post-order child resolution.
-Choosing Script accepts execution of the complete resolved text; AML does not distinguish trusted literals from
-model-produced fragments.
+`timeoutMs`, when present, is a positive safe integer passed to the selected process runtime. Interpreted source must
+resolve to non-empty text. Child Agents may generate that source because Script executes after post-order child
+resolution. Choosing Script accepts execution of the complete resolved text; AML does not distinguish trusted
+literals from model-produced fragments. Applications must place generated or otherwise untrusted source inside a
+Sandbox whose provider enforces the required filesystem, process, network, and credential policy.
 
 Standard output becomes the Script result and can feed later AML. A non-zero exit rejects with its code and trimmed
-standard-error detail. Cancellation, cwd, confinement, and executable availability remain owned by the active
-Sandbox runtime.
+standard-error detail. AML bounds, cancels, and reaps an unsandboxed host process directly. An active Sandbox instead
+owns cwd, confinement, executable availability, output bounds, cancellation, and cleanup; AML never falls back from
+that selected Sandbox to the host.
 
 ## 14. `<Workspace>`
 
@@ -1930,7 +1935,7 @@ Defaults:
 | `onTraceError`        |     stderr once | Out-of-band trace failure handler                     |
 | `allowedMcpServers`   |    unrestricted | Optional MCP-server-name allowlist                    |
 | `allowedTools`        |    unrestricted | Optional Tool-name allowlist                          |
-| `cwd`                 | `process.cwd()` | Base directory for relative local Skill files         |
+| `cwd`                 | `process.cwd()` | Base directory for local Skill files and host Scripts |
 | `system`              |           empty | First system fragment for every Agent                 |
 | `trace`               |            none | Synchronous execution-event callback                  |
 

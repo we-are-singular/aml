@@ -1009,9 +1009,8 @@ Workspace to AML.
 dependencies, running tests, or preparing input for a later Agent. Its captured standard output could become the
 component's text output and therefore feed a following Agent in normal AML evaluation order.
 
-It is an execution primitive, not a Workspace storage or materialization primitive. `<Script>` is valid only inside
-an active Sandbox and always executes through that Sandbox's runtime. AML must never fall back to host
-`child_process` execution:
+It is an execution primitive, not a Workspace storage or materialization primitive. With an active Sandbox it always
+executes through that Sandbox's runtime. Without one it executes as a trusted host process from the AML runtime cwd:
 
 ```tsx
 <Workspace id="review-42" provider={workspaceStore} cwd="repo">
@@ -1046,10 +1045,11 @@ AML's post-order evaluation also makes an Agent-authored script possible:
 </Sandbox>
 ```
 
-This is intentionally powerful and dangerous. Generated Script remains sandbox-only and needs explicit timeout,
-output limits, exit-code semantics, cancellation, environment and credential policy, network policy, and trace
-redaction. The Sandbox is the security boundary; `<Script>` itself does not claim to make authored or generated code
-safe. Git commands can initially run through Script without a first-class Git component.
+This is intentionally powerful and dangerous. Unsandboxed Script has the AML host's authority and is appropriate only
+for trusted authored automation. Generated Script needs an enforcing Sandbox plus explicit timeout, output limits,
+exit-code semantics, cancellation, environment and credential policy, network policy, and trace redaction.
+`<Script>` itself does not claim to make authored or generated code safe. Git commands can initially run through
+Script without a first-class Git component.
 
 ## Concurrency and publication
 
@@ -1110,7 +1110,7 @@ that were not reconciled into the active materialization.
 - A working directory is not a security boundary.
 - Local staged execution protects the application checkout from accidental materialization and copy-back; it does not
   confine a trusted host process from accessing other host paths.
-- Untrusted Agent commands require a Sandbox that enforces filesystem and process isolation.
+- Untrusted Agent commands and generated Script source require a Sandbox that enforces filesystem and process isolation.
 - Every authored destination and persisted path must remain beneath the physical materialization root.
 - Input sources should default to the application's configured source root and require explicit grants for external
   paths.
@@ -1352,28 +1352,28 @@ Proof:
 - selected deletion, retention, and failure behavior
 - S3 adapter conformance contains no archive or glob implementation
 
-### Phase 7: Sandboxed `<Script>`
+### Phase 7: Host and sandboxed `<Script>`
 
 Status: initial implementation complete.
 
-Add authored execution through the active Sandbox runtime:
+Add authored execution through the host or active Sandbox runtime:
 
-- require an enclosing Sandbox
+- use the trusted local process transport when no Sandbox is active
 - support explicit `sh`, `bash`, and `node` interpreters
 - retain literal executable and argument-vector execution for data-driven commands
-- use the effective Sandbox cwd
+- use the runtime cwd on the host and the effective Sandbox cwd inside a Sandbox
 - bound runtime, standard output, and standard error
 - define non-zero exit, cancellation, and trace-redaction behavior
 - allow resolved child text, including Agent output, to become Script source
-- never fall back to host execution
+- never fall back from an active Sandbox to host execution
 
 Proof:
 
 - Script changes are visible to later Agents in the same Sandbox
 - Script output can feed a later Agent
-- Script outside Sandbox rejects
+- Script outside Sandbox executes on the host from the runtime cwd
 - a missing interpreter rejects without fallback
-- generated Script runs only through the selected Sandbox provider
+- Script inside a Sandbox runs only through the selected Sandbox provider
 
 ### Phase 8: Folder persistence and second storage adapter
 

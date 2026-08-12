@@ -74,6 +74,8 @@ Use ordinary TypeScript for composition, branching, dependencies, and explicit p
 
 JavaScript Tools and MCP servers are invocation-scoped grants. Native filesystem, shell, and network access is requested through optimistic `<Agent permissions>` defaults rather than repetitive Tool declarations. The active Sandbox, not ACP permission prompts, is the security boundary for model-controlled operations.
 
+Without an active Sandbox, `<Agent>` runs according to its provider and `<Script>` uses trusted local process execution. An active Sandbox supplies the execution environment for compatible descendant Agents and Scripts and must never silently fall back to the host.
+
 ### Typed boundaries
 
 Unknown provider and Tool data is validated at the boundary where it enters AML. Model-facing structured data must also provide JSON Schema.
@@ -324,7 +326,7 @@ These remain product questions until resolved into `SPEC.md`:
 - remote Sandbox fleets
 - volume-mounted and network-mounted Workspace storage
 - SFTP and Google Drive Workspace providers
-- first-class Git workflows if sandboxed Script proves insufficient
+- first-class Git workflows if Script proves insufficient
 - Agent-as-Tool with explicit resource and budget semantics
 
 Items in this section are not commitments and must not shape implementation until promoted into `SPEC.md` and the delivery roadmap in this document.

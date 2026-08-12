@@ -18,15 +18,16 @@ Most AML workflows are easier to reason about when you separate three responsibi
 | [`<Sandbox />`](/docs/reference/primitives/sandbox/)     | Processes, working directory, filesystem permissions, and cleanup      | [Local, Docker, Daytona, and Modal](/docs/providers/sandboxes/)    |
 | [`<Workspace />`](/docs/reference/primitives/workspace/) | Durable files, revisions, locks, materialization, and publication      | [Local directory, filesystem, and S3](/docs/providers/workspaces/) |
 
-`<Agent />` may run without an explicit `<Sandbox />` or `<Workspace />` when its provider can do so, but `<Script />`, `<File />`, and provider features that require a resource must have the appropriate active boundary. AML never silently executes `<Script />` on the host because no `<Sandbox />` was configured.
+`<Agent />` may run without an explicit `<Sandbox />` according to its provider. An unsandboxed `<Script />` uses trusted host execution. `<File />` and provider features that require a resource must still have the appropriate active boundary.
 
 ### Choose the smallest boundary
 
-| The work needs to…                                      | Use                                                      | Decision rule                                                                  |
-| ------------------------------------------------------- | -------------------------------------------------------- | ------------------------------------------------------------------------------ |
-| ask a model or coding harness to reason, plan, or edit  | [`<Agent />`](/docs/reference/primitives/agent/)         | The result depends on a provider session rather than deterministic code.       |
-| run a command or long-lived process in a controlled cwd | [`<Sandbox />`](/docs/reference/primitives/sandbox/)     | The operation needs execution authority, limits, cancellation, or isolation.   |
-| preserve or publish files across evaluations            | [`<Workspace />`](/docs/reference/primitives/workspace/) | The files need durable identity, locking, revisions, or an explicit save rule. |
+| The work needs to…                                     | Use                                                      | Decision rule                                                                  |
+| ------------------------------------------------------ | -------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| ask a model or coding harness to reason, plan, or edit | [`<Agent />`](/docs/reference/primitives/agent/)         | The result depends on a provider session rather than deterministic code.       |
+| run one trusted local command                          | [`<Script />`](/docs/reference/primitives/script/)       | The application owns the command and accepts host execution.                   |
+| run work in a selected or isolated environment         | [`<Sandbox />`](/docs/reference/primitives/sandbox/)     | The operation needs a container, remote runtime, or enforcement boundary.      |
+| preserve or publish files across evaluations           | [`<Workspace />`](/docs/reference/primitives/workspace/) | The files need durable identity, locking, revisions, or an explicit save rule. |
 
 Compose boundaries only when the task needs them. A text-only Agent does not need an empty Workspace; a deterministic file transform does not become safer or clearer merely because a model performs it.
 
@@ -56,7 +57,7 @@ Here TypeScript owns selection, the empty case, and concurrency. AML owns each p
 | `<Agent />`                                               | The selected Agent provider and its ACP/native process; a compatible active Sandbox supplies its cwd and process runtime | Owns model turns and returns an `AgentResponse`. Agent-native permissions cannot widen the Sandbox.                                                  |
 | JavaScript [`<Tool />`](/docs/reference/primitives/tool/) | AML application process                                                                                                  | Calls the function captured by [`defineTool()`](/docs/reference/primitives/tool/). It is an application capability, not code moved into the Sandbox. |
 | `<Mcp />`                                                 | The location chosen by the provider integration and transport                                                            | A stdio command or remote HTTP URL remains privileged deployment configuration. Do not assume it shares the Tool or Sandbox process.                 |
-| `<Script />`                                              | Active Sandbox runtime                                                                                                   | Executes only through `SandboxRuntime.exec()` or `spawn()` with that lease's cwd, access, timeout, and cancellation behavior.                        |
+| `<Script />`                                              | AML host, or the active Sandbox runtime                                                                                  | Uses the runtime cwd on the host; an enclosing Sandbox instead owns cwd, access, timeout, cancellation, and cleanup.                                 |
 | `<File />`                                                | Active Workspace materialization                                                                                         | Writes a validated logical Workspace path before descendants consume it. It does not write through an active Sandbox.                                |
 | Workspace load/save                                       | Workspace provider and its storage service                                                                               | Materializes before descendants, publishes according to save policy, and releases locks/temporary state after the subtree settles.                   |
 
@@ -66,6 +67,7 @@ Here TypeScript owns selection, the empty case, and concurrency. AML owns each p
 - The outer `<Sandbox provider={...} />` selects the lease. Nested `<Sandbox />` components reuse it and may narrow access or root, but cannot switch providers or widen authority.
 - The top-level `<Workspace provider={...} />` wins over the runtime default. AML supports one top-level `<Workspace />` for an evaluation.
 - Workspace paths are logical. Each Sandbox provider must map the Workspace materialization into its host, container, or remote cwd; application code should not guess the provider's physical path.
+- An unsandboxed `<Script />` starts from `AmlRuntimeOptions.cwd`, which defaults to `process.cwd()`. This cwd is convenience, not confinement.
 - `read-only` is a requested policy with provider-specific enforcement. It never grants writes, but the exact handling of process execution and mounted files differs by Sandbox.
 
 These are the canonical execution-direction rules. Provider guides add vendor prerequisites and path mappings; they do not redefine the evaluation model.

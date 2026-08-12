@@ -108,7 +108,7 @@ The final `<Agent />` receives that line as ordinary prompt data. Docker Sandbox
 <Steps>
 
 1. The application authors the order in TypeScript. The first `<Agent />` returns source text; it does not create AML nodes or change the workflow.
-2. `<Script />` requires an enclosing `<Sandbox />`. Its `shell="node"` form invokes Node with the resolved source, and `timeoutMs` bounds that execution request.
+2. The enclosing `<Sandbox />` makes `<Script />` invoke Node inside Docker. Without that boundary the same Script would run on the AML host, and `timeoutMs` would still bound the execution request.
 3. The Docker adapter mounts the configured workspace at `/workspace` and applies the requested read-only mount. The image must already contain the interpreter; AML does not build images or install tools.
 4. The second `<Agent />` gets the script's stdout as data. It is not given an implicit tool, filesystem access, or permission to execute the generated source again.
 
