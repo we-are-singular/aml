@@ -144,9 +144,9 @@ describe("AcpMcpBridge", () => {
       expect(bridge.structuredResult()).toEqual({ proof: "accepted" })
       expect(validateOutput).toHaveBeenCalledTimes(2)
       expect(traceSubmission.mock.calls).toEqual([
-        [1, "invalid"],
-        [2, "accepted"],
-        [3, "ignored"],
+        [1, "invalid", { proof: 1 }],
+        [2, "accepted", { proof: "accepted" }],
+        [3, "ignored", { result: { proof: "ignored" } }],
       ])
     } finally {
       await client.close()
@@ -192,8 +192,8 @@ describe("AcpMcpBridge", () => {
       expect(bridge.structuredResult()).toEqual({ proof: "first" })
       expect(validate).toHaveBeenCalledOnce()
       expect(traceSubmission.mock.calls).toEqual([
-        [1, "accepted"],
-        [2, "ignored"],
+        [1, "accepted", { proof: "first" }],
+        [2, "ignored", { result: { proof: "second" } }],
       ])
     } finally {
       await client.close()
@@ -234,8 +234,8 @@ describe("AcpMcpBridge", () => {
 
       expect(bridge.structuredResult()).toEqual({ proof: "accepted" })
       expect(traceSubmission.mock.calls).toEqual([
-        [1, "invalid"],
-        [2, "accepted"],
+        [1, "invalid", { result: { proof: "early" } }],
+        [2, "accepted", { proof: "accepted" }],
       ])
     } finally {
       await client.close()

@@ -14,7 +14,7 @@ export type AgentOutputSubmissionStatus = "accepted" | "ignored" | "invalid"
  * arbitrary AML trace events or invoke application schemas directly.
  */
 export interface AgentStructuredOutputServices {
-  traceSubmission(call: number, status: AgentOutputSubmissionStatus): void
+  traceSubmission(call: number, status: AgentOutputSubmissionStatus, value?: unknown): void
   validate(value: unknown): Promise<void>
 }
 

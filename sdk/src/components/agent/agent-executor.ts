@@ -153,20 +153,6 @@ export class AgentExecutor {
       response = await input.context.scheduleAgent(() => {
         providerStarted = true
 
-        // AML cannot observe provider-internal per-turn timing, so publish
-        // the complete authored order at the exact provider handoff.
-        for (const [index, turn] of [plan.prompt, ...plan.followUps].entries()) {
-          input.context.traceEvent(
-            input.trace,
-            "agent.turn",
-            {
-              index: index + 1,
-              kind: index === 0 ? "initial" : "follow-up",
-            },
-            { content: turn }
-          )
-        }
-
         // The async wrapper is created inside exit(), so Promise/thenable
         // assimilation and every provider-created continuation remain masked.
         return ComponentEvaluationContext.withoutAccess(

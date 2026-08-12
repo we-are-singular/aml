@@ -1,6 +1,7 @@
 import type { AgentExecutionContext } from "./agent-execution-context.js"
 import type { AgentProviderSession, AgentProviderTurn } from "./agent-provider-session.js"
 import type { AgentResponse } from "./agent-response.js"
+import { agentObservabilityServices } from "./agent-observability-services.js"
 
 /**
  * Executes a captured provider session and preserves lifecycle failures in
@@ -32,6 +33,8 @@ export async function executeAgentProviderSession(
   const closeSession = async () => {
     await Reflect.apply(close as AgentProviderSession["close"], value, [])
   }
+  const observability = agentObservabilityServices(context)
+  const sessionTrace = observability.currentTrace()
 
   let abort: unknown
   let runTurn: unknown
@@ -66,7 +69,12 @@ export async function executeAgentProviderSession(
   let abortError: unknown
   let abortFailed = false
   let abortPromise: Promise<void> | undefined
+
+  // Cancellation notification is observable immediately, but the caller's
+  // AbortSignal reason remains authoritative over any provider abort failure.
   const requestAbort = () => {
+    observability.event(sessionTrace, "agent.session", { state: "cancellation_requested" })
+
     if (abort === undefined) {
       return
     }
@@ -94,8 +102,35 @@ export async function executeAgentProviderSession(
   try {
     for (const turn of turns) {
       context.signal.throwIfAborted()
-      response = await Reflect.apply(runTurn as AgentProviderSession["runTurn"], value, [turn, context])
-      context.signal.throwIfAborted()
+
+      // Create the span immediately before runTurn(). This is deliberately not
+      // derived from the authored plan earlier, because that produced traces
+      // claiming later turns had started while the current turn was still busy.
+      const turnTrace = observability.createTrace(sessionTrace.spanId)
+      const turnSpan = observability.startSpan(
+        turnTrace,
+        "agent.turn",
+        {
+          index: turn.index + 1,
+          kind: turn.index === 0 ? "initial" : "follow-up",
+        },
+        { prompt: turn.prompt }
+      )
+
+      // ACP updates and structured-output callbacks arrive asynchronously
+      // during runTurn(), so route them to this exact turn until it settles.
+      observability.setCurrentTrace(turnTrace)
+
+      try {
+        response = await Reflect.apply(runTurn as AgentProviderSession["runTurn"], value, [turn, context])
+        context.signal.throwIfAborted()
+        observability.endSpan(turnSpan, "ok")
+      } catch (error) {
+        observability.failSpan(turnSpan, error)
+        throw error
+      } finally {
+        observability.setCurrentTrace(sessionTrace)
+      }
     }
   } catch (error) {
     executionFailed = true
@@ -106,16 +141,28 @@ export async function executeAgentProviderSession(
     context.signal.removeEventListener("abort", requestAbort)
   }
 
+  // Provider cancellation must settle before cleanup touches the same session.
+  // Both failures are retained below in their actual lifecycle order.
   await abortPromise
 
   let cleanupError: unknown
   let cleanupFailed = false
 
+  // Cleanup is its own child span because it can remain active after a failed
+  // or cancelled turn and can independently fail.
+  const cleanupTrace = observability.createTrace(sessionTrace.spanId)
+  const cleanupSpan = observability.startSpan(cleanupTrace, "agent.cleanup")
+  observability.setCurrentTrace(cleanupTrace)
+
   try {
     await closeSession()
+    observability.endSpan(cleanupSpan, "ok")
   } catch (error) {
+    observability.failSpan(cleanupSpan, error)
     cleanupFailed = true
     cleanupError = error
+  } finally {
+    observability.setCurrentTrace(sessionTrace)
   }
 
   const errors: unknown[] = []

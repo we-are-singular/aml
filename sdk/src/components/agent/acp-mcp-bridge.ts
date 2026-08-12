@@ -308,12 +308,12 @@ export class AcpMcpBridge implements AcpStructuredOutputController {
 
     if (!this.#acceptStructuredOutput) {
       const message = "ACP Agent submitted structured output before the final authored turn"
-      this.#outputServices?.traceSubmission(call, "invalid")
+      this.#outputServices?.traceSubmission(call, "invalid", argumentsValue)
       return toolError(message)
     }
 
     if (this.#structuredAccepted) {
-      this.#outputServices?.traceSubmission(call, "ignored")
+      this.#outputServices?.traceSubmission(call, "ignored", argumentsValue)
       return {
         content: [
           {
@@ -330,7 +330,7 @@ export class AcpMcpBridge implements AcpStructuredOutputController {
       !Object.prototype.hasOwnProperty.call(argumentsValue, "result")
     ) {
       const message = `${ACP_STRUCTURED_OUTPUT_TOOL_NAME} requires a result property`
-      this.#outputServices?.traceSubmission(call, "invalid")
+      this.#outputServices?.traceSubmission(call, "invalid", argumentsValue)
       return toolError(message)
     }
 
@@ -339,13 +339,13 @@ export class AcpMcpBridge implements AcpStructuredOutputController {
     try {
       await this.#outputServices?.validate(result)
     } catch (error) {
-      this.#outputServices?.traceSubmission(call, "invalid")
+      this.#outputServices?.traceSubmission(call, "invalid", result)
       return toolError(validationErrorMessage(error))
     }
 
     this.#structuredAccepted = true
     this.#structuredValue = result
-    this.#outputServices?.traceSubmission(call, "accepted")
+    this.#outputServices?.traceSubmission(call, "accepted", result)
     return {
       content: [{ text: "Structured result accepted.", type: "text" as const }],
     }

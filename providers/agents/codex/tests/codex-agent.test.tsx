@@ -1,4 +1,4 @@
-import { Agent, AmlRuntime, Sandbox, type SandboxProcess } from "@aml-jsx/sdk"
+import { Agent, AmlRuntime, Sandbox, type AmlTraceEvent, type SandboxProcess } from "@aml-jsx/sdk"
 import { DeterministicSandboxProvider } from "@aml-jsx/sdk/testing"
 import { describe, expect, it } from "vitest"
 
@@ -11,6 +11,7 @@ describe("codexAgent()", () => {
       command: string
       options: Readonly<{ cwd?: string; env?: Readonly<Record<string, string>> }>
     }> = []
+    const traceEvents: AmlTraceEvent[] = []
     const process = completedProcess()
     const sandboxProvider = new DeterministicSandboxProvider({
       exec: command => ({
@@ -35,7 +36,7 @@ describe("codexAgent()", () => {
     })
 
     await expect(
-      new AmlRuntime({ agentProvider: provider }).evaluate(
+      new AmlRuntime({ agentProvider: provider, trace: event => traceEvents.push(event) }).evaluate(
         <Sandbox access="read-write" cwd="repository" provider={sandboxProvider}>
           <Agent model="gpt-test" system="Follow the system.">
             Initial
@@ -68,6 +69,19 @@ describe("codexAgent()", () => {
       model: "gpt-test",
       model_reasoning_effort: "high",
     })
+    expect(
+      traceEvents.find(
+        event => event.type === "event" && event.name === "sandbox.process" && event.attributes.state === "started"
+      )
+    ).toMatchObject({
+      attributes: { "execution.id": "codex-acp-process", state: "started" },
+    })
+    expect(
+      traceEvents
+        .filter(event => event.type === "event" && event.name === "sandbox.process")
+        .map(event => event.attributes.state)
+    ).toEqual(["spawn_requested", "started", "kill_requested", "kill_completed", "exited"])
+    expect(JSON.stringify(traceEvents)).not.toContain("custom-codex-acp")
   })
 
   it("uses the provider model when the Agent does not override it", async () => {

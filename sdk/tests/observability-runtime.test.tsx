@@ -140,10 +140,6 @@ describe("observability", () => {
     expect(systemStart).toMatchObject({
       parentSpanId: agentStart?.spanId,
     })
-    expect(events.filter(event => event.type === "event" && event.name === "agent.turn")).toMatchObject([
-      { attributes: { index: 1, kind: "initial" } },
-      { attributes: { index: 2, kind: "follow-up" } },
-    ])
     expect(events.find(event => event.type === "event" && event.name === "capability.tool")).toMatchObject({
       attributes: { kind: "javascript", name: "lookup" },
       spanId: agentStart?.spanId,

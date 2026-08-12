@@ -12,6 +12,7 @@ import {
 } from "@agentclientprotocol/sdk"
 
 import type { AgentExecutionContext } from "./agent-execution-context.js"
+import { agentObservabilityServices, type AgentObservabilityServices } from "./agent-observability-services.js"
 import type { AgentProviderSession, AgentProviderTurn } from "./agent-provider-session.js"
 import type { AgentResponse } from "./agent-response.js"
 import type { SandboxProcess } from "../sandbox/sandbox-runtime.js"
@@ -22,6 +23,7 @@ export interface AcpSessionOpenInput {
   readonly cwd: string
   readonly initialPromptPrefix?: string
   readonly mcpServers?: readonly McpServer[]
+  readonly observability: AgentObservabilityServices
   readonly permissionPolicy?: AcpPermissionPolicy
   readonly process: Readonly<SandboxProcess>
   readonly signal: AbortSignal
@@ -74,24 +76,30 @@ export type AcpSessionTextTransform = (text: string, session: ActiveSession) => 
  * shared ACP initialization, prompting, cancellation, streaming, and cleanup.
  */
 export async function openAcpSession(input: Readonly<AcpSessionOpenInput>): Promise<AgentProviderSession> {
-  input.signal.throwIfAborted()
-  const stderr = drainStderr(input.process.stderr)
-  const app = client({ name: "aml" }).onRequest(
-    methods.client.session.requestPermission,
-    ({ params }): RequestPermissionResponse => {
-      const policy = input.permissionPolicy ?? "reject_once"
-      const selected =
-        params.options.find(option => option.kind === policy) ??
-        params.options.find(option => option.kind === permissionFallback(policy))
-
-      return selected === undefined
-        ? { outcome: { outcome: "cancelled" } }
-        : { outcome: { optionId: selected.optionId, outcome: "selected" } }
-    }
-  )
-  const connection = app.connect(ndJsonStream(input.process.stdin, input.process.stdout))
+  const observability = input.observability
+  const sessionTrace = observability.currentTrace()
+  let connection: ClientConnection | undefined
+  let stderr: Promise<string> | undefined
 
   try {
+    // From this point onward the ACP boundary owns the already-started process.
+    // Even a pre-aborted signal must pass through the same termination path.
+    input.signal.throwIfAborted()
+    stderr = drainStderr(input.process.stderr)
+    const app = client({ name: "aml" }).onRequest(
+      methods.client.session.requestPermission,
+      ({ params }): RequestPermissionResponse => {
+        const policy = input.permissionPolicy ?? "reject_once"
+        const selected =
+          params.options.find(option => option.kind === policy) ??
+          params.options.find(option => option.kind === permissionFallback(policy))
+
+        return selected === undefined
+          ? { outcome: { outcome: "cancelled" } }
+          : { outcome: { optionId: selected.optionId, outcome: "selected" } }
+      }
+    )
+    connection = app.connect(ndJsonStream(input.process.stdin, input.process.stdout))
     const initialized = await connection.agent.request(
       methods.agent.initialize,
       {
@@ -121,27 +129,41 @@ export async function openAcpSession(input: Readonly<AcpSessionOpenInput>): Prom
         mcpServers: [...(input.mcpServers ?? [])],
       })
       .start({ cancellationSignal: input.signal })
+    observability.event(sessionTrace, "acp.session.created", { sessionId: session.sessionId })
     await configureSession(connection, session, input.configuration ?? [], input.signal)
-    return new AcpProviderSession(
+    return new AcpProviderSession({
       connection,
+      initialPromptPrefix: input.initialPromptPrefix,
+      observability,
+      process: input.process,
       session,
-      input.process,
       stderr,
-      input.initialPromptPrefix,
-      input.structuredOutput,
-      input.structuredOutputInstruction,
-      input.transformText
-    )
+      structuredOutput: input.structuredOutput,
+      structuredOutputInstruction: input.structuredOutputInstruction,
+      transformText: input.transformText,
+    })
   } catch (error) {
-    connection.close(error)
-    await input.process.kill().catch(() => undefined)
-    await stderr.catch(() => undefined)
+    connection?.close(error)
+    await Promise.allSettled([input.process.kill(), input.process.wait(), ...(stderr === undefined ? [] : [stderr])])
     throw error
   }
 }
 
+interface AcpProviderSessionOptions {
+  readonly connection: ClientConnection
+  readonly initialPromptPrefix: string | undefined
+  readonly observability: AgentObservabilityServices
+  readonly process: Readonly<SandboxProcess>
+  readonly session: ActiveSession
+  readonly stderr: Promise<string>
+  readonly structuredOutput: AcpStructuredOutputController | undefined
+  readonly structuredOutputInstruction: string | undefined
+  readonly transformText: AcpSessionTextTransform | undefined
+}
+
 class AcpProviderSession implements AgentProviderSession {
   readonly #connection: ClientConnection
+  readonly #observability: AgentObservabilityServices
   readonly #process: Readonly<SandboxProcess>
   readonly #session: ActiveSession
   readonly #stderr: Promise<string>
@@ -151,24 +173,16 @@ class AcpProviderSession implements AgentProviderSession {
   #initialPromptPrefix: string | undefined
   #closePromise: Promise<void> | undefined
 
-  constructor(
-    connection: ClientConnection,
-    session: ActiveSession,
-    process: Readonly<SandboxProcess>,
-    stderr: Promise<string>,
-    initialPromptPrefix: string | undefined,
-    structuredOutput: AcpStructuredOutputController | undefined,
-    structuredOutputInstruction: string | undefined,
-    transformText: AcpSessionTextTransform | undefined
-  ) {
-    this.#connection = connection
-    this.#session = session
-    this.#process = process
-    this.#stderr = stderr
-    this.#initialPromptPrefix = initialPromptPrefix
-    this.#structuredOutput = structuredOutput
-    this.#structuredOutputInstruction = structuredOutputInstruction
-    this.#transformText = transformText
+  constructor(options: Readonly<AcpProviderSessionOptions>) {
+    this.#connection = options.connection
+    this.#session = options.session
+    this.#process = options.process
+    this.#stderr = options.stderr
+    this.#observability = options.observability
+    this.#initialPromptPrefix = options.initialPromptPrefix
+    this.#structuredOutput = options.structuredOutput
+    this.#structuredOutputInstruction = options.structuredOutputInstruction
+    this.#transformText = options.transformText
   }
 
   async runTurn(turn: Readonly<AgentProviderTurn>, context: AgentExecutionContext): Promise<AgentResponse> {
@@ -185,14 +199,10 @@ class AcpProviderSession implements AgentProviderSession {
       prompt = `${prompt}\n\n${this.#structuredOutputInstruction ?? this.#structuredOutput.instruction}`
     }
 
-    const turnAttempt = (async () => {
-      const completion = this.#session.prompt(prompt, {
-        cancellationSignal: context.signal,
-      })
-      const receivedText = await this.#session.readText()
-      await completion
-      return receivedText
-    })()
+    const turnAttempt = runAcpPrompt(this.#session, prompt, context)
+
+    // A silent Agent process exit would otherwise leave nextUpdate() waiting
+    // forever. Preserve stderr only for the failure surfaced to the caller.
     const exited = this.#process.wait().then(async result => {
       const stderr = await this.#stderr.catch(() => "")
       const detail = stderr.trim().length === 0 ? "" : `: ${stderr.trim()}`
@@ -208,6 +218,9 @@ class AcpProviderSession implements AgentProviderSession {
   }
 
   async abort(): Promise<void> {
+    this.#observability.event(this.#observability.currentTrace(), "acp.session.cancel", {
+      sessionId: this.#session.sessionId,
+    })
     await this.#connection.agent.notify(methods.agent.session.cancel, {
       sessionId: this.#session.sessionId,
     })
@@ -219,6 +232,8 @@ class AcpProviderSession implements AgentProviderSession {
   }
 
   async #close(): Promise<void> {
+    // Stop accepting session updates before process cleanup. dispose() and
+    // connection.close() do not claim the underlying process has exited.
     this.#session.dispose()
     this.#connection.close()
     const errors: unknown[] = []
@@ -229,11 +244,74 @@ class AcpProviderSession implements AgentProviderSession {
       errors.push(error)
     }
 
-    await this.#stderr.catch(error => errors.push(error))
+    // wait() may reject because kill() intentionally ended the process. The
+    // turn already owns unexpected exit failures, so cleanup only adds stderr
+    // drain failures to its result.
+    const [, stderr] = await Promise.allSettled([this.#process.wait(), this.#stderr])
+    if (stderr.status === "rejected") errors.push(stderr.reason)
 
     if (errors.length === 1) throw errors[0]
     if (errors.length > 1) throw new AggregateError(errors, "ACP session cleanup failed")
   }
+}
+
+/**
+ * Consumes one ACP prompt turn without dropping progress updates.
+ *
+ * ActiveSession has one ordered update queue. This function must remain its
+ * only consumer for the turn: mixing readText() and nextUpdate() would split
+ * messages between consumers and make trace order nondeterministic.
+ */
+export async function runAcpPrompt(
+  session: Pick<ActiveSession, "nextUpdate" | "prompt" | "sessionId">,
+  prompt: string,
+  context: AgentExecutionContext
+): Promise<string> {
+  const observability = agentObservabilityServices(context)
+  const trace = observability.currentTrace()
+  observability.event(trace, "acp.session.prompt.submitted", { sessionId: session.sessionId }, { prompt })
+
+  const completion = session.prompt(prompt, { cancellationSignal: context.signal }).then(
+    response => ({ response }),
+    error => ({ error })
+  )
+  let text = ""
+
+  let message = await session.nextUpdate()
+
+  while (message.kind !== "stop") {
+    observability.event(
+      trace,
+      "acp.session.update",
+      {
+        sessionId: message.notification.sessionId,
+        sessionUpdate: message.update.sessionUpdate,
+      },
+      observability.sensitiveAttribute("update", message.update)
+    )
+
+    if (message.update.sessionUpdate === "agent_message_chunk" && message.update.content.type === "text") {
+      text += message.update.content.text
+    }
+
+    message = await session.nextUpdate()
+  }
+
+  // The SDK queues the same prompt completion as the terminal stop message.
+  // Await the request promise so transport rejection keeps its original error.
+  const outcome = await completion
+  if ("error" in outcome) throw outcome.error
+  const response = outcome.response
+
+  const attributes = {
+    ...(response.usage === undefined || response.usage === null ? {} : { usage: JSON.stringify(response.usage) }),
+    sessionId: session.sessionId,
+    stopReason: response.stopReason,
+  }
+  observability.event(trace, "acp.session.prompt.completed", attributes)
+  observability.addSpanEndAttributes(trace, attributes)
+
+  return text
 }
 
 async function configureSession(

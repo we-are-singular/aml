@@ -43,10 +43,12 @@ export function createConsoleTracer(options: ConsoleTracerOptions = {}): TraceSi
     let line: string
 
     if (event.type === "span.start") {
-      line = `${indent}▶ ${event.kind} ${event.name}${attributes}`
+      const label = event.name.startsWith(`${event.kind}.`) ? event.name : `${event.kind} ${event.name}`
+      line = `${indent}▶ ${label}${attributes}`
     } else if (event.type === "span.end") {
       const marker = event.status === "ok" ? "✓" : "✗"
-      line = `${indent}${marker} ${event.kind} ${event.name} ${formatDuration(event.durationMs)}${attributes}`
+      const label = event.name.startsWith(`${event.kind}.`) ? event.name : `${event.kind} ${event.name}`
+      line = `${indent}${marker} ${label} ${formatDuration(event.durationMs)}${attributes}`
     } else {
       line = `${indent}• ${event.name}${attributes}`
     }

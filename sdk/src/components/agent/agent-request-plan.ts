@@ -7,6 +7,7 @@ import type { AgentTool } from "../tool/agent-tool.js"
 import { instrumentAgentTools } from "../tool/instrument-agent-tools.js"
 import type { AgentProps } from "./agent.js"
 import type { AgentExecutionContext } from "./agent-execution-context.js"
+import { attachAgentObservabilityServices, agentObservabilityServices } from "./agent-observability-services.js"
 import { attachAgentStructuredOutputServices } from "./agent-structured-output-services.js"
 import type { ModelSchema } from "./model-schema.js"
 import type { AgentRequest } from "./agent-request.js"
@@ -115,10 +116,22 @@ export class AgentRequestPlan {
       signal: input.context.signal,
       trace: input.trace,
     })
+    attachAgentObservabilityServices(context, input.context)
 
     if (input.output !== undefined) {
       attachAgentStructuredOutputServices(context, {
-        traceSubmission: (call, status) => input.context.traceEvent(input.trace, "agent.output", { call, status }),
+        traceSubmission: (call, status, value) => {
+          const observability = agentObservabilityServices(context)
+
+          // Structured output can contain the complete model result. Do not
+          // even serialize it until a listener explicitly accepts content.
+          observability.event(
+            observability.currentTrace(),
+            "agent.output",
+            { call, status },
+            value === undefined ? {} : observability.sensitiveAttribute("output", value)
+          )
+        },
         validate: async value => {
           await input.output?.validate(value)
         },

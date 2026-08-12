@@ -5,14 +5,16 @@ import path from "node:path"
 
 import type { McpServer } from "@agentclientprotocol/sdk"
 
+import type { AmlTraceIdentity } from "../../core/trace-identity.js"
 import type { AgentMcpServer } from "../mcp/aml-mcp-server.js"
-import type { SandboxProcess } from "../sandbox/sandbox-runtime.js"
+import type { SandboxProcess, SandboxProcessExit } from "../sandbox/sandbox-runtime.js"
 import { supportsSandboxRuntime } from "../sandbox/sandbox-runtime.js"
 import type { AgentExecutionContext } from "./agent-execution-context.js"
 import type { AgentProvider } from "./agent-provider.js"
 import type { AgentProviderSession, AgentProviderTurn } from "./agent-provider-session.js"
 import type { AgentRequest } from "./agent-request.js"
 import type { AgentResponse } from "./agent-response.js"
+import { agentObservabilityServices, type AgentObservabilityServices } from "./agent-observability-services.js"
 import { agentStructuredOutputServices } from "./agent-structured-output-services.js"
 import { AbstractAgentProvider } from "./abstract-agent-provider.js"
 import { defineAgentProvider } from "./define-agent-provider.js"
@@ -94,6 +96,7 @@ class AcpAgentProvider<Name extends string> extends AbstractAgentProvider<Name> 
   }
 
   protected async openSession(request: AgentRequest, context: AgentExecutionContext): Promise<AgentProviderSession> {
+    const observability = agentObservabilityServices(context)
     const mcpServers = [...mapMcpServers(request.mcpServers, this.#profile)]
     const javaScriptTools = request.tools
     let amlMcpServerName: string | undefined
@@ -137,6 +140,7 @@ class AcpAgentProvider<Name extends string> extends AbstractAgentProvider<Name> 
           ? {}
           : { initialPromptPrefix: execution.launch.initialPromptPrefix }),
         mcpServers: execution.launch.sessionMcpServers ?? mcpServers,
+        observability,
         permissionPolicy: execution.launch.permissionPolicy,
         process: execution.process,
         signal: context.signal,
@@ -148,7 +152,6 @@ class AcpAgentProvider<Name extends string> extends AbstractAgentProvider<Name> 
       })
       return new OwnedAcpSession(session, invocationCleanup(execution.cleanup, bridge, relay), this.name)
     } catch (error) {
-      await execution?.process.kill().catch(() => undefined)
       await invocationCleanup(execution?.cleanup, bridge, relay)().catch(() => undefined)
       throw error
     }
@@ -178,6 +181,7 @@ async function prepareExecution<Name extends string>(
   context: AgentExecutionContext,
   amlMcpServerName: string | undefined
 ): Promise<Readonly<AcpExecution>> {
+  const observability = agentObservabilityServices(context)
   const sandbox = context.sandbox
 
   if (sandbox === undefined) {
@@ -195,12 +199,22 @@ async function prepareExecution<Name extends string>(
         stateDirectory,
       })
       await writeLocalLaunchFiles(stateDirectory, launch.files ?? [])
+
+      // Process identity is deliberately opaque. Local currently returns a PID-
+      // backed id, but traces and consumers must treat it like any remote id.
+      traceProcess(context, "spawn_requested", undefined, launch.command)
       const processHandle = await spawnLocalProcess(launch.command, launch.args ?? [], {
         cwd,
         ...(launch.env === undefined ? {} : { env: launch.env }),
         signal: context.signal,
       })
-      return Object.freeze({ cleanup, cwd, launch, process: processHandle })
+      traceProcess(context, "started", processHandle.id, launch.command)
+      return Object.freeze({
+        cleanup,
+        cwd,
+        launch,
+        process: new TracedSandboxProcess(processHandle, observability),
+      })
     } catch (error) {
       await cleanup().catch(() => undefined)
       throw error
@@ -247,16 +261,118 @@ async function prepareExecution<Name extends string>(
       stateDirectory,
     })
     await materializeSandboxFiles(sandbox.lease.runtime, stateDirectory, launch.files ?? [], context.signal)
+
+    // The Sandbox provider decides whether this process is local, containerized,
+    // or remote; the portable trace contract only records its opaque handle.
+    traceProcess(context, "spawn_requested", undefined, launch.command)
     const processHandle = await sandbox.lease.runtime.spawn(launch.command, launch.args ?? [], {
       cwd: sandbox.cwd,
       ...(launch.env === undefined ? {} : { env: launch.env }),
       signal: context.signal,
     })
-    return Object.freeze({ cleanup, cwd, launch, process: processHandle })
+    traceProcess(context, "started", processHandle.id, launch.command)
+    return Object.freeze({
+      cleanup,
+      cwd,
+      launch,
+      process: new TracedSandboxProcess(processHandle, observability),
+    })
   } catch (error) {
     await cleanup().catch(() => undefined)
     throw error
   }
+}
+
+/**
+ * Preserves the SandboxProcess boundary while tracing its provider-owned
+ * lifecycle. Repeated wait() and kill() calls share the same underlying work.
+ */
+class TracedSandboxProcess implements SandboxProcess {
+  readonly #observability: AgentObservabilityServices
+  readonly #process: Readonly<SandboxProcess>
+  readonly #sessionTrace: AmlTraceIdentity
+  #completion: Promise<Readonly<SandboxProcessExit>> | undefined
+  #killRequest: Promise<void> | undefined
+  readonly id: string
+  readonly stdin: WritableStream<Uint8Array>
+  readonly stderr: ReadableStream<Uint8Array>
+  readonly stdout: ReadableStream<Uint8Array>
+
+  constructor(process: Readonly<SandboxProcess>, observability: AgentObservabilityServices) {
+    this.#observability = observability
+    this.#process = process
+    this.#sessionTrace = observability.currentTrace()
+    this.id = process.id
+    this.stdin = process.stdin
+    this.stderr = process.stderr
+    this.stdout = process.stdout
+  }
+
+  kill(): Promise<void> {
+    this.#killRequest ??= this.#requestKill()
+    return this.#killRequest
+  }
+
+  wait(): Promise<Readonly<SandboxProcessExit>> {
+    this.#completion ??= this.#observeExit()
+    return this.#completion
+  }
+
+  async #requestKill(): Promise<void> {
+    const trace = this.#observability.currentTrace()
+    this.#observability.event(trace, "sandbox.process", {
+      "execution.id": this.id,
+      state: "kill_requested",
+    })
+
+    await this.#process.kill()
+
+    this.#observability.event(trace, "sandbox.process", {
+      "execution.id": this.id,
+      state: "kill_completed",
+    })
+  }
+
+  async #observeExit(): Promise<Readonly<SandboxProcessExit>> {
+    try {
+      const result = await this.#process.wait()
+      this.#observability.event(this.#sessionTrace, "sandbox.process", {
+        "execution.id": this.id,
+        exitCode: result.exitCode,
+        state: "exited",
+      })
+      return result
+    } catch (error) {
+      // A failed wait cannot prove the process exited. Report unexpected
+      // observation failures, but do not turn an intentional kill into noise.
+      if (this.#killRequest === undefined) {
+        this.#observability.event(this.#sessionTrace, "sandbox.process", {
+          "execution.id": this.id,
+          state: "wait_failed",
+        })
+      }
+
+      throw error
+    }
+  }
+}
+
+function traceProcess(
+  context: AgentExecutionContext,
+  state: "spawn_requested" | "started",
+  executionId: string | undefined,
+  command: string
+): void {
+  const observability = agentObservabilityServices(context)
+
+  // Executable names can disclose private infrastructure, so metadata-only
+  // traces retain lifecycle state and identity but redact the command.
+  observability.event(
+    observability.currentTrace(),
+    "sandbox.process",
+    { ...(executionId === undefined ? {} : { "execution.id": executionId }), state },
+    { command }
+  )
 }
 
 async function writeLocalLaunchFiles(stateDirectory: string, files: readonly AcpAgentLaunchFile[]): Promise<void> {
