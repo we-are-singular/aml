@@ -3,7 +3,24 @@ title: Reference
 description: A concise map of AML's runtime options, workflow boundaries, and provider contracts.
 ---
 
+import { CardGrid, LinkCard } from "@astrojs/starlight/components"
+
 Reference is for decisions and stable boundaries. It explains what AML owns, what a provider owns, and which option or provider guide to choose. It is intentionally not a generated API catalogue: the published package declarations remain the exact TypeScript contract, while the guides under [Providers](/docs/providers/) explain configuration and vendor behavior.
+
+AML publishes the SDK and CLI independently, so each package keeps its own version history.
+
+<CardGrid>
+  <LinkCard
+    title="SDK changelog"
+    href="/docs/reference/changelog/sdk/"
+    description="Runtime, primitives, providers, Sandboxes, and Workspaces."
+  />
+  <LinkCard
+    title="CLI changelog"
+    href="/docs/reference/changelog/cli/"
+    description="Direct TypeScript and TSX workflow execution through the aml command."
+  />
+</CardGrid>
 
 ## Start with the question
 

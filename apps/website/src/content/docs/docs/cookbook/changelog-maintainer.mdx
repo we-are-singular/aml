@@ -1,81 +1,60 @@
 ---
 title: Auto-author a changelog with AML
-description: "Build a reusable AML workflow that collects commits, investigates the diff with one <Agent />, writes with another, and updates a changelog safely."
+description: "Compose release evidence, structured authoring, publication, and review as an AML workflow."
 ---
 
 import { Aside, Steps } from "@astrojs/starlight/components"
 
-This recipe builds an auto-authored changelog: deterministic code selects the release evidence, one Agent investigates
-what changed, another turns that analysis into useful release notes, and a validated writer updates the document.
+AML maintains its own [SDK and CLI changelogs](/docs/reference/changelog/) with the workflow in
+[`scripts/changelog.aml.tsx`](https://github.com/we-are-singular/aml/blob/main/scripts/changelog.aml.tsx).
 
-It is also how AML writes [its own SDK and CLI changelogs](/docs/reference/changelog/). The complete maintained workflow
-lives in
-[`scripts/changelog.aml.tsx`](https://github.com/we-are-singular/aml/blob/main/scripts/changelog.aml.tsx)—AML is quite
-literally building AML.
-
-The workflow is intentionally split between deterministic code and model work:
+The workflow is two AML trees joined by one typed draft:
 
 ```text
-release range + target document
-            ↓
-     <ReleaseNotes /> ─── trusted <Script /> collects scoped commits
-            ↓
-     <AnalyzeRelease /> ─ repository-aware <Agent /> investigates the diff
-            ↓ structured analysis
-    <WriteChangelog /> ── second <Agent /> writes from supplied evidence
-            ↓ structured draft
-updateChangelogDocument() ─ validates links, then writes the authored Markdown
+<Agent read-write>
+  gather authoritative commits and investigate them
+  <FollowUp>return DraftSchema</FollowUp>
+</Agent>
+             ↓ structured draft
+<Agent read-write>
+  publish the draft
+  <FollowUp>review, correct, and format</FollowUp>
+</Agent>
 ```
 
-<Aside type="tip" title="A real AML workflow, not a showcase fixture">
-  AML uses these exact components to author the changelog you can read in this documentation. The example stays useful
-  outside this repository: swap the release collector and document writer while keeping the same collect → analyze →
-  write composition.
+<Aside type="tip" title="The tree performs the work">
+  JavaScript does not inspect Git, parse versions, render Markdown, manipulate markers, or write files. The Agents run
+  the repository-owned evidence command and inspect and edit the repository directly.
 </Aside>
 
-## Goal
+## Author from repository evidence
 
-Build a reusable workflow that:
-
-- wraps an existing release-notes script in reusable AML components;
-- lets one [`<Agent />`](/docs/reference/primitives/agent/) inspect repository evidence;
-- passes schema-validated analysis into a second, more restricted [`<Agent />`](/docs/reference/primitives/agent/);
-- keeps prompts beside the components that own them;
-- leaves filesystem mutation and MDX validation in deterministic application code;
-- exposes the final composition as a small AML entrypoint.
-
-## The maintained example
-
-AML's implementation uses:
-
-- `release-notes.ts` as the deterministic commit collector;
-- OpenCode as the repository-aware Agent provider;
-- Zod schemas for the two model boundaries;
-- a deterministic TypeScript writer for validated MDX output.
-
-Those are implementation choices, not requirements of the pattern. Another project can provide a different Script,
-Agent provider, schema library implementing Standard Schema, or document writer without changing the workflow shape.
-
-## Start with typed boundaries
-
-The first [`<Agent />`](/docs/reference/primitives/agent/) does not return loose prose. Its result must describe the
-release as an overview and one or more grounded changes. The writer has a separate schema matching the data the MDX
-renderer accepts:
+The first Agent has repository access and begins with the exact deterministic evidence command:
 
 ```tsx
-const AnalysisSchema = z.object({
-  overview: z.string().trim().min(1),
-  changes: z
-    .array(
-      z.object({
-        explanation: z.string().trim().min(1),
-        name: z.string().trim().min(1),
-        relevantDocs: z.array(z.string().trim().min(1)),
-      })
-    )
-    .min(1),
-})
+const draft = await evaluate(
+  <Agent provider={provider} permissions={{ filesystem: "read-write", network: false, shell: true }}>
+    <System>
+      You maintain AML's public changelog. Be factual, specific, and useful to readers. Never invent behavior, commits,
+      versions, or documentation routes.
+    </System>
+    Author the next package changelog entry. Begin by running the supplied `release-notes.ts` command exactly as
+    written, then inspect commits whose subjects do not explain their user impact.
+    <FollowUp>
+      Return the structured changelog draft with a title, overall summary, and reader-oriented highlights.
+    </FollowUp>
+  </Agent>,
+  DraftSchema
+)
+```
 
+The repository-owned script keeps commit selection deterministic. The Agent owns its invocation, investigation, and
+editorial judgment. `<FollowUp />` keeps investigation and authoring in one provider-owned session, and its final
+response is validated by `DraftSchema`.
+
+## Keep one useful authoring schema
+
+```tsx
 const DraftSchema = z.object({
   title: z.string().trim().min(1),
   summary: z.string().trim().min(1),
@@ -96,189 +75,57 @@ const DraftSchema = z.object({
 })
 ```
 
-These schemas create a typed handoff between investigation, writing, and rendering. They do not prove that the model's
-claims are true, which is why the workflow also carries the authoritative commit list through every stage.
+The schema defines the editorial handoff. It does not create a document parser or restrict Markdown inside the authored
+fields.
 
-## Make the existing script composable
+## Publish and review in a second tree
 
-AML already has a [`<Script />`](/docs/reference/primitives/script/) primitive, so the existing deterministic
-`release-notes.ts` collector becomes a small component:
-
-```tsx
-export function ReleaseNotes({ lane, previousTag }: Pick<ReleaseFacts, "lane" | "previousTag">): AmlRenderable {
-  // localSandbox executes a trusted host process and therefore requires read-write access; no model controls this Script.
-  return (
-    <Sandbox provider={localSandbox({ workspace: REPO_ROOT })} access="read-write">
-      <Script command="node" args={["scripts/release-notes.ts", lane, previousTag, "HEAD"]} timeoutMs={30_000} />
-    </Sandbox>
-  )
-}
-```
-
-The component is reusable because it describes one responsibility: collect commits belonging to a release lane between
-the previous tag and `HEAD`. The command and arguments are application-authored; an Agent cannot replace them.
-
-<Aside type="caution" title="Why the local Sandbox says read-write">
-  [`localSandbox()`](/docs/providers/sandboxes/local/) launches a trusted process on the host and cannot enforce a
-  read-only filesystem. AML rejects that false boundary. The workflow therefore declares `read-write` honestly while
-  keeping model-authored input out of the command. Use a genuinely isolated Sandbox provider when the command itself is
-  untrusted.
-</Aside>
-
-## Give investigation to one Agent
-
-Commit subjects are the authoritative release inventory, but they are rarely enough to explain public impact. The
-analysis component grants read-only repository inspection and shell access so its [`<Agent />`](/docs/reference/primitives/agent/)
-can inspect the actual diff:
+The second Agent receives the structured draft and the exact target paths:
 
 ```tsx
-export function AnalyzeRelease({
-  provider,
-  release,
-}: {
-  readonly provider: AgentProvider
-  readonly release: ReleaseContext
-}): AmlRenderable {
-  return (
-    <Agent provider={provider} permissions={{ filesystem: "read-only", network: false, shell: true }}>
-      <System>
-        Analyze release evidence. Be factual, user-oriented, and specific. Inspect the repository when commit subjects
-        are insufficient.
-      </System>
-      Analyze the {release.lane.toUpperCase()} release {release.currentTag}. Previous tag: {release.previousTag}
-      Git range: {release.previousTag}..HEAD Authoritative included commits:
-      {release.commitList}
-      Use read-only repository inspection to understand the actual diff and public impact. Separate user-visible
-      behavior from internal maintenance. Suggest only existing public /docs/ routes in relevantDocs. Public routes do
-      not include source extensions such as .mdx.
-    </Agent>
-  )
-}
+return (
+  <Agent provider={provider} permissions={{ filesystem: "read-write", network: false, shell: true }}>
+    <System>
+      Work only on the requested changelog. Preserve its frontmatter, introduction, existing entries, and newest-first
+      ordering. Do not change package versions, tags, or other files.
+    </System>
+    Publish the supplied draft for the current package version.
+    <FollowUp>
+      Review the entry against the draft, package version, authoritative commits, existing style, and MDX syntax.
+      Correct issues, run Oxfmt, and inspect the final diff.
+    </FollowUp>
+  </Agent>
+)
 ```
 
-The prompt is inline because it belongs to this component's contract. A reader can see the evidence, permissions, and
-instructions without following a prompt-builder abstraction to another file.
-
-## Restrict the writing pass
-
-The second Agent receives the structured analysis and the same commit list. It cannot use the shell, so it must write
-from the supplied evidence rather than beginning another independent investigation:
-
-```tsx
-export function WriteChangelog({
-  analysis,
-  provider,
-  release,
-}: {
-  readonly analysis: z.infer<typeof AnalysisSchema>
-  readonly provider: AgentProvider
-  readonly release: ReleaseContext
-}): AmlRenderable {
-  return (
-    <Agent provider={provider} permissions={{ filesystem: "read-only", network: false, shell: false }}>
-      <System>
-        Write concise technical release notes from supplied evidence. Return only the requested structured result. Never
-        invent documentation routes.
-      </System>
-      Prepare the changelog entry for {release.currentTag}. Editorial analysis:
-      {JSON.stringify(analysis, null, 2)}
-      Authoritative commit list:
-      {release.commitList}
-      Write a short title without the version, a summary, and a small set of explanatory highlights. Markdown and inline
-      HTML are allowed in the authored text. Put links only in the structured links arrays, and only when an existing
-      AML docs page materially helps the reader.
-    </Agent>
-  )
-}
-```
-
-This separation makes the roles legible: one component gathers evidence; another edits it for readers. It also makes
-each stage independently replaceable if the repository later needs a different investigation or editorial policy.
-
-## Compose the complete workflow
-
-The parent component is ordinary async TypeScript. It evaluates each AML component with the schema appropriate to that
-stage, then passes the final draft into deterministic code:
-
-```tsx
-export async function MaintainChangelog({ lane }: { readonly lane: ReleaseLane }): Promise<string> {
-  const facts = await readReleaseFacts(lane)
-  const commitList = (await evaluate(<ReleaseNotes {...facts} />)).trim()
-
-  if (commitList.length === 0) {
-    throw new Error(`No ${lane.toUpperCase()} commits found after ${facts.previousTag}`)
-  }
-
-  const release = { ...facts, commitList }
-  const provider = createChangelogAgent()
-  const analysis = await evaluate(<AnalyzeRelease provider={provider} release={release} />, AnalysisSchema)
-  const draft = await evaluate(
-    <WriteChangelog analysis={analysis} provider={provider} release={release} />,
-    DraftSchema
-  )
-
-  const outputPath = await updateChangelogDocument({
-    commitList,
-    date: new Date().toISOString().slice(0, 10),
-    draft,
-    lane,
-    repoRoot: REPO_ROOT,
-    version: release.version,
-  })
-
-  return `Updated ${path.relative(REPO_ROOT, outputPath)} for ${release.currentTag}`
-}
-```
+It inserts the entry for the manifest's current version after the changelog's single insertion marker, formats the file,
+reviews the result, and corrects issues before returning. Published entries remain ordinary MDX with visible version
+headings rather than hidden per-release delimiters.
 
 <Steps>
 
-1. Read the package version and latest matching tag before starting a provider.
-2. Evaluate `<ReleaseNotes />` and reject an empty lane-specific commit list.
-3. Evaluate `<AnalyzeRelease />` against `AnalysisSchema`.
-4. Feed that typed result into `<WriteChangelog />` and validate it against `DraftSchema`.
-5. Validate every docs link and idempotently insert the authored Markdown as a versioned entry.
+1. The Agent runs `release-notes.ts` to collect lane-specific commits from the latest matching tag.
+2. The authoring Agent investigates the package and repository.
+3. Its `<FollowUp />` returns `DraftSchema`.
+4. The publication Agent writes the draft.
+5. Its `<FollowUp />` reviews, corrects, and formats the result.
 
 </Steps>
 
-The deterministic writer deliberately remains outside an Agent. Models propose content; application code owns output
-paths, markers, escaping, validation, and filesystem mutation.
+## Run before release
 
-## Expose a small entrypoint
-
-The maintained file exports one AML tree for each changelog it owns:
-
-```tsx
-/** AML CLI entrypoint for maintaining the SDK changelog during an SDK release. */
-export const sdk = <MaintainChangelog lane="sdk" />
-
-/** AML CLI entrypoint for maintaining the CLI changelog during a CLI release. */
-export const cli = <MaintainChangelog lane="cli" />
+```sh
+OPENCODE_API_KEY=... npm run changelog:sdk
+OPENCODE_API_KEY=... npm run changelog:cli
 ```
 
-The caller only chooses the target. The component owns the reusable workflow, and the application keeps control of when
-to evaluate it. The exact title, summary, and highlights remain model-dependent; the schemas, commit inventory, route
-checks and versioned document placement remain deterministic.
+These are the same commands used by the release hooks, so running one manually exercises the real workflow. Review or
+discard the changelog diff afterward. During a release, changelog authoring runs immediately after release-it changes
+the package version. A ten-minute deadline stops a stalled provider before release commit, tag, push, npm publication,
+or GitHub release.
 
-## Failure and security notes
-
-- An invalid or empty release range stops before analysis.
-- An empty lane-specific commit list never reaches an Agent.
-- Missing OpenCode credentials stop provider construction.
-- A response that fails either Zod schema fails the workflow instead of writing partial prose.
-- Documentation links must resolve to real Starlight content routes.
-- Markdown and inline HTML in titles, summaries, and highlights are preserved.
-- Re-running the same version replaces its marked entry instead of appending a duplicate.
-- The local release-notes process is trusted host code. Do not pass model-authored commands or arguments into it.
-
-## API and source links
+## References
 
 - [`<Agent />`](/docs/reference/primitives/agent/)
-- [`<System />`](/docs/reference/primitives/system/)
-- [`<Sandbox />`](/docs/reference/primitives/sandbox/)
-- [`<Script />`](/docs/reference/primitives/script/)
+- [`<FollowUp />`](/docs/reference/primitives/follow-up/)
 - [`evaluate()`](/docs/reference/runtime/#component-local-evaluation)
-- [`opencodeAgent()`](/docs/providers/agents/opencode/)
-- [`localSandbox()`](/docs/providers/sandboxes/local/)
-- [Maintained AML workflow](https://github.com/we-are-singular/aml/blob/main/scripts/changelog.aml.tsx)
-- [Deterministic document writer](https://github.com/we-are-singular/aml/blob/main/scripts/changelog-document.ts)
-- [Release notes collector](https://github.com/we-are-singular/aml/blob/main/scripts/release-notes.ts)

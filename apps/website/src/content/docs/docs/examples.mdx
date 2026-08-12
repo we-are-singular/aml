@@ -10,9 +10,10 @@ The examples package is the executable companion to these docs. Each example exp
 <Aside type="tip" title="AML builds AML">
   **Auto-author a changelog with AML**
 
-AML's own changelogs are written by a real AML workflow: a [`<Script />`](/docs/reference/primitives/script/) gathers
-the commits, two structured [`<Agent />`](/docs/reference/primitives/agent/) passes investigate and write, and
-deterministic code validates the final document.
+AML's own changelogs are written by a real AML workflow. One repository-aware
+[`<Agent />`](/docs/reference/primitives/agent/) runs the authoritative commit collector, investigates the changes, and
+returns a typed draft. A second Agent publishes that draft, then reviews and formats the result in a
+[`<FollowUp />`](/docs/reference/primitives/follow-up/).
 
 [Explore the auto-authored changelog workflow →](/docs/cookbook/changelog-maintainer/)
 

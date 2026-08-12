@@ -1,13 +1,14 @@
 ---
 title: SDK changelog
 description: Human-readable release history for @aml-jsx/sdk.
+tableOfContents:
+  minHeadingLevel: 2
+  maxHeadingLevel: 2
 ---
 
 This page tracks `@aml-jsx/sdk`. Entries are newest first. See [GitHub Releases](https://github.com/we-are-singular/aml/releases) for tags and complete release artifacts.
 
 {/* changelog:entries */}
-
-{/* changelog:sdk:v0.4.4:start */}
 
 ## SDK v0.4.4 — Add GitHub Copilot as built-in agent provider
 
@@ -26,10 +27,6 @@ This release adds GitHub Copilot to the AML SDK as a first-class agent provider 
 ### Commits
 
 - feat(sdk): add github copilot agent provider (cbbe572)
-
-{/* changelog:sdk:v0.4.4:end */}
-
-{/* changelog:sdk:v0.4.3:start */}
 
 ## SDK v0.4.3 — Recoverable structured output submissions
 
@@ -55,10 +52,6 @@ Agents now receive actionable validation errors when submitting invalid structur
 - fix(sdk): format generated changelog entries (09be3c1)
 - feat(sdk): add aml-authored changelog workflow (a8e9e60)
 
-{/* changelog:sdk:v0.4.3:end */}
-
-{/* changelog:sdk:v0.4.2:start */}
-
 ## SDK v0.4.2 — Independent package release lanes
 
 Released 2026-08-10.
@@ -72,9 +65,6 @@ SDK and CLI publishing gained independent release lanes, allowing each package t
 ### Commits
 
 - tools: isolate package release lanes (21bca45)
-  {/* changelog:sdk:v0.4.2:end */}
-
-{/* changelog:sdk:v0.4.1:start */}
 
 ## SDK v0.4.1 — Unified workspace builds
 
@@ -89,9 +79,6 @@ The repository consolidated its Turbo task graph so SDK builds and package check
 ### Commits
 
 - build: unify turbo workspace tasks (4522d7a)
-  {/* changelog:sdk:v0.4.1:end */}
-
-{/* changelog:sdk:v0.4.0:start */}
 
 ## SDK v0.4.0 — A sharper ACP execution boundary
 
@@ -112,9 +99,6 @@ Agent execution was standardized around Agent Client Protocol sessions, with cle
 - refactor(sdk): standardize agent execution on acp (6b2c758)
 - test(workspace): allow cross-process lock startup (6b235ec)
 - fix(workspace): resolve local sandbox in clean tests (9290668)
-  {/* changelog:sdk:v0.4.0:end */}
-
-{/* changelog:sdk:v0.3.1:start */}
 
 ## SDK v0.3.1 — S3 Workspace type resolution
 
@@ -129,9 +113,6 @@ This patch corrected how the SDK resolves the S3 Workspace implementation during
 ### Commits
 
 - fix(sdk): resolve s3 workspace during typecheck (2d81fdd)
-  {/* changelog:sdk:v0.3.1:end */}
-
-{/* changelog:sdk:v0.3.0:start */}
 
 ## SDK v0.3.0 — S3-compatible durable Workspaces
 
@@ -146,9 +127,6 @@ AML added durable Workspace persistence backed by S3-compatible object storage, 
 ### Commits
 
 - feature(workspace): add s3-compatible persistence (29f6426)
-  {/* changelog:sdk:v0.3.0:end */}
-
-{/* changelog:sdk:v0.2.0:start */}
 
 ## SDK v0.2.0 — Portable provider lifecycles
 
@@ -167,9 +145,6 @@ Provider lifecycle contracts were standardized and the Sandbox catalog expanded 
 - refactor(sandbox-daytona): move environment selection to root (2bf27cb)
 - feature(sandbox-modal): add modal sandbox provider (d0fe6c8)
 - refactor(sdk): standardize provider lifecycle contracts (6f2882a)
-  {/* changelog:sdk:v0.2.0:end */}
-
-{/* changelog:sdk:v0.1.3:start */}
 
 ## SDK v0.1.3 — Pi and the portable Sandbox matrix
 
@@ -187,9 +162,6 @@ The Agent catalog gained Pi support and AML established a portable Sandbox runti
 - feature(sandbox): run all agents across sandbox providers (a7353de)
 - feature(sandbox): add portable runtime and smoke matrix (e3383ca)
 - feature(sdk): add pi agent integration (47fadd2)
-  {/* changelog:sdk:v0.1.3:end */}
-
-{/* changelog:sdk:v0.1.2:start */}
 
 ## SDK v0.1.2 — Reliable OpenCode process output
 
@@ -206,9 +178,6 @@ OpenCode process streams are now piped through the provider boundary correctly, 
 
 - fix(agent-opencode): pipe opencode process output (00cd62f)
 - fix(sdk): keep release lockfile synchronized (6712a41)
-  {/* changelog:sdk:v0.1.2:end */}
-
-{/* changelog:sdk:v0.1.1:start */}
 
 ## SDK v0.1.1 — The first public AML SDK
 
@@ -246,4 +215,3 @@ The first public package established AML's asynchronous JSX runtime and its core
 - feature(tool): add scoped JavaScript capabilities (f0c96e6)
 - feature(agent-opencode): add OpenCode provider adapter (5be0e73)
 - feature(sdk): establish AML evaluation and Agent boundaries (1e5bbfd)
-  {/* changelog:sdk:v0.1.1:end */}

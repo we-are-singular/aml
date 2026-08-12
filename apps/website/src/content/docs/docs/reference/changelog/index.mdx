@@ -24,6 +24,6 @@ AML publishes the SDK and CLI independently, so each package keeps its own versi
 
 ## How entries are maintained
 
-AML authors its own changelog. The workflow gathers the authoritative commits with [`<Script />`](/docs/reference/primitives/script/), asks one [`<Agent />`](/docs/reference/primitives/agent/) to investigate the changes, and gives that structured analysis to a second [`<Agent />`](/docs/reference/primitives/agent/) for the reader-facing summary. Deterministic TypeScript validates the result and owns the final document update.
+AML authors its own changelog with two repository-aware [`<Agent />`](/docs/reference/primitives/agent/) trees. The first runs the authoritative commit collector, investigates the changes, and returns a typed draft. The second publishes that draft, then uses a [`<FollowUp />`](/docs/reference/primitives/follow-up/) to review, correct, and format the entry.
 
 [See the complete auto-authored changelog workflow →](/docs/cookbook/changelog-maintainer/)
