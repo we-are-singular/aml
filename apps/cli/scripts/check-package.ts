@@ -66,7 +66,7 @@ try {
   if (packageJson.dependencies["@aml-jsx/sdk"] !== undefined) {
     throw new Error("CLI must not install a second private copy of @aml-jsx/sdk")
   }
-  if (packageJson.peerDependencies["@aml-jsx/sdk"] !== "^0.4.1") {
+  if (packageJson.peerDependencies["@aml-jsx/sdk"] !== "^0.5.0") {
     throw new Error("CLI must declare its reviewed @aml-jsx/sdk compatibility range")
   }
   if (
