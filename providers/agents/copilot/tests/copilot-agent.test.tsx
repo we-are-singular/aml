@@ -172,7 +172,7 @@ describe("copilotAgent()", () => {
     ).rejects.toThrow('Agent "copilot"')
 
     expect(mcpServerName).toMatch(/^aml_[a-f0-9]{32}$/)
-    expect(prompt).toContain("System instructions for this AML session:\nFollow the authored system.")
+    expect(prompt).toContain("<SYSTEM>\nFollow the authored system.\n</SYSTEM>")
     expect(prompt).toContain(`- copilot_proof: ${mcpServerName}-copilot_proof`)
     expect(prompt).toContain(`Call the Copilot MCP tool "${mcpServerName}-aml_submit_result" once`)
   })

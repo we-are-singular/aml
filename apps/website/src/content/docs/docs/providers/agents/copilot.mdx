@@ -139,7 +139,8 @@ Precedence is deliberate:
 
 1. `<Agent model="..." />` overrides the factory `model`.
 2. The factory defaults to `auto`, which lets Copilot select from the models available to the authenticated account.
-3. Authored AML system content becomes an explicit first-turn prelude because ACP has no portable system-message field.
+3. Authored AML system content becomes an explicit first-turn prelude inside literal `<SYSTEM>` tags because ACP has no
+   portable system-message field.
 4. AML-owned launch flags are appended after `args`, so factory arguments cannot replace ACP mode, private state,
    capability isolation, or portable permission policy.
 5. An active Sandbox supplies the effective cwd; otherwise `workingDirectory` or the application cwd is used.

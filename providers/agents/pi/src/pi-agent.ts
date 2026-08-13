@@ -133,9 +133,7 @@ class PiAcpProfile implements AcpAgentProfile<"pi"> {
             // ACP has no system-instruction field and pi-acp does not expose
             // Pi's CLI flag, so retain the authored priority as first-turn text.
             initialPromptPrefix: [
-              ...(context.request.system.length === 0
-                ? []
-                : [`System instructions for this AML session:\n${context.request.system}`]),
+              ...(context.request.system.length === 0 ? [] : [`<SYSTEM>\n${context.request.system}\n</SYSTEM>`]),
               ...(usesMcp
                 ? [
                     "AML JavaScript Tools and MCP capabilities use Pi's mcp proxy. Call mcp with the exact tool name and an args object.",

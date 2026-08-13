@@ -13,7 +13,7 @@ import ProviderHero from "../../../../../components/docs/ProviderHero.astro"
   factory="piAgent()"
   summary="An ACP profile for Pi that isolates adapter state per evaluation, translates AML permissions into Pi's tool list, and uses the Pi MCP extension for AML Tools and MCP servers."
   bestFor="Extensible Pi workflows that need AML's typed orchestration and capability model."
-  caution="Pi has no ACP system-instruction field in this integration, so AML prefixes system instructions into the first turn. MCP and restricted permissions require a generated wrapper."
+  caution="Pi has no ACP system-instruction field in this integration, so AML prefixes system instructions inside literal SYSTEM tags in the first turn. MCP and restricted permissions require a generated wrapper."
 />
 
 <Badge text="Built-in" variant="success" /> <Badge text="ACP" /> <Badge text="MCP extension" />
@@ -195,8 +195,9 @@ The wrapper is a policy mapping, not a host security boundary. Use a Sandbox to 
 Pi ACP does not expose a native system-instruction field in this profile. AML therefore prefixes the first turn with:
 
 ```text
-System instructions for this AML session:
+<SYSTEM>
 <your system text>
+</SYSTEM>
 ```
 
 When MCP is enabled, AML also explains that Tools and MCP use Pi's `mcp` proxy. This is intentionally different from providers with native system fields; treat the first-turn prefix as part of the authored prompt budget.

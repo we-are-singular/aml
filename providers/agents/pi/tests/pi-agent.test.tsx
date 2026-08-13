@@ -1,3 +1,4 @@
+import { agent, methods, ndJsonStream, type SessionConfigOption } from "@agentclientprotocol/sdk"
 import { Agent, AmlRuntime, Sandbox, type SandboxProcess } from "@aml-jsx/sdk"
 import { DeterministicSandboxProvider } from "@aml-jsx/sdk/testing"
 import { describe, expect, it } from "vitest"
@@ -6,6 +7,7 @@ import { piAgent } from "../src/index.js"
 
 describe("piAgent()", () => {
   it("launches pi-acp and configures the underlying Agent through ACP", async () => {
+    const prompts: string[] = []
     const executed: Array<{
       readonly args: readonly string[]
       readonly command: string
@@ -27,7 +29,7 @@ describe("piAgent()", () => {
       },
       spawn(command, args, _request, options) {
         spawned.push({ args, command, options })
-        return completedProcess()
+        return acpFixtureProcess(prompt => prompts.push(prompt))
       },
     })
     const provider = piAgent({
@@ -47,7 +49,7 @@ describe("piAgent()", () => {
           </Agent>
         </Sandbox>
       )
-    ).rejects.toThrow()
+    ).resolves.toBe("")
     expect(executed).toContainEqual({
       args: [
         "-c",
@@ -77,6 +79,7 @@ describe("piAgent()", () => {
         }),
       },
     })
+    expect(prompts).toEqual(["<SYSTEM>\nFollow the system.\n</SYSTEM>\n\nInitial"])
   })
 
   it("validates adapter configuration without external work", () => {
@@ -85,14 +88,50 @@ describe("piAgent()", () => {
   })
 })
 
-function completedProcess(): Readonly<SandboxProcess> {
+function acpFixtureProcess(onPrompt: (prompt: string) => void): Readonly<SandboxProcess> {
+  const clientToAgent = new TransformStream<Uint8Array, Uint8Array>()
+  const agentToClient = new TransformStream<Uint8Array, Uint8Array>()
+  const configOptions: SessionConfigOption[] = [
+    {
+      category: "model",
+      currentValue: "opencode-go/glm-5.1",
+      id: "model",
+      name: "Model",
+      options: [{ name: "GLM 5.1", value: "opencode-go/glm-5.1" }],
+      type: "select",
+    },
+    {
+      category: "thought_level",
+      currentValue: "high",
+      id: "thinking-level",
+      name: "Thinking level",
+      options: [{ name: "High", value: "high" }],
+      type: "select",
+    },
+  ]
+  const app = agent({ name: "pi-test" })
+    .onRequest(methods.agent.initialize, ({ params }) => ({
+      agentCapabilities: {},
+      protocolVersion: params.protocolVersion,
+    }))
+    .onRequest(methods.agent.session.new, () => ({ configOptions, sessionId: "pi-test-session" }))
+    .onRequest(methods.agent.session.setConfigOption, () => ({ configOptions }))
+    .onRequest(methods.agent.session.prompt, ({ params }) => {
+      onPrompt(params.prompt.flatMap(block => (block.type === "text" ? [block.text] : [])).join(""))
+      return { stopReason: "end_turn" }
+    })
+  const connection = app.connect(ndJsonStream(agentToClient.writable, clientToAgent.readable))
+
   return Object.freeze({
-    id: "pi-acp-process",
-    async kill() {},
-    stdin: new WritableStream(),
+    id: "pi-acp-fixture",
+    async kill() {
+      connection.close()
+    },
+    stdin: clientToAgent.writable,
     stderr: emptyStream(),
-    stdout: emptyStream(),
+    stdout: agentToClient.readable,
     async wait() {
+      await connection.closed
       return { exitCode: 0 }
     },
   })

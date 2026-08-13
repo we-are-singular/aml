@@ -82,7 +82,7 @@ class CopilotAcpProfile implements AcpAgentProfile<"copilot"> {
     if (context.request.system.length > 0) {
       // ACP has no system-message field. Preserve authored priority as an
       // explicit first-turn prelude while custom instructions remain disabled.
-      initialPromptSections.push(`System instructions for this AML session:\n${context.request.system}`)
+      initialPromptSections.push(`<SYSTEM>\n${context.request.system}\n</SYSTEM>`)
     }
 
     if (context.amlMcpServerName !== undefined && context.request.tools.length > 0) {
