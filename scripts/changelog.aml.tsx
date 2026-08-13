@@ -40,7 +40,7 @@ interface ChangelogProps {
 export async function Changelog({ lane }: ChangelogProps) {
   const packageName = lane === "sdk" ? "SDK" : "CLI"
   const packagePath = lane === "sdk" ? "sdk/package.json" : "apps/cli/package.json"
-  const changelogPath = `apps/website/src/content/docs/docs/reference/changelog/${lane}.mdx`
+  const changelogPath = `apps/website/src/content/docs/docs/reference/changelog/${lane}.md`
   const tagMatch = lane === "sdk" ? "v[0-9]*" : "cli-v[0-9]*"
 
   const draft = await evaluate(
@@ -69,7 +69,9 @@ export async function Changelog({ lane }: ChangelogProps) {
     <Agent provider={provider} permissions={{ filesystem: "read-write", network: false, shell: true }}>
       <System>
         You are the final AML changelog editor. Preserve the target changelog's frontmatter, introduction, existing
-        entries, and newest-first ordering. Never change package versions, tags, or unrelated files.
+        entries, and newest-first ordering. Write plain Markdown only; never add MDX imports, components, or JSX. Put
+        every AML component tag in backticks, for example {"`<Sandbox />`"} or {"`<Script />`"}, so it renders as inline
+        code instead of raw HTML. Never change package versions, tags, or unrelated files.
       </System>
       Work only on {changelogPath}. The release lane is {lane}. Read the version from {packagePath} and use exactly that
       version; never infer the next version. If that version already has a changelog entry, stop without changing the
@@ -81,8 +83,8 @@ export async function Changelog({ lane }: ChangelogProps) {
       Oxfmt on the changelog.
       <FollowUp>
         Review the written entry against the draft, package version, authoritative commits, existing changelog style,
-        and MDX syntax. Correct any issue you find, run Oxfmt again, and inspect the final diff. Finish with a concise
-        summary of what you wrote and checked.
+        and Markdown syntax. Correct any issue you find, run Oxfmt again, and inspect the final diff. Finish with a
+        concise summary of what you wrote and checked.
       </FollowUp>
     </Agent>
   )

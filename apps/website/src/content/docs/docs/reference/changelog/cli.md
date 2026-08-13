@@ -8,7 +8,7 @@ tableOfContents:
 
 This page tracks `@aml-jsx/cli`. Entries are newest first. See [GitHub Releases](https://github.com/we-are-singular/aml/releases) for tags and complete release artifacts.
 
-{/* changelog:entries */}
+<!-- changelog:entries -->
 
 ## CLI v0.2.0 — Graceful cancellation of interrupted runs
 

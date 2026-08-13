@@ -8,7 +8,7 @@ tableOfContents:
 
 This page tracks `@aml-jsx/sdk`. Entries are newest first. See [GitHub Releases](https://github.com/we-are-singular/aml/releases) for tags and complete release artifacts.
 
-{/* changelog:entries */}
+<!-- changelog:entries -->
 
 ## SDK v0.5.0 — Trace the Agent lifecycle and cancel on process signals
 

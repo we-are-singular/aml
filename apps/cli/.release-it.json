@@ -4,8 +4,8 @@
   "hooks": {
     "after:bump": [
       "timeout --signal=INT --kill-after=15s 10m npm run changelog:cli --prefix ../..",
-      "npm run format --prefix ../.. -- apps/website/src/content/docs/docs/reference/changelog/cli.mdx",
-      "git add ../../apps/website/src/content/docs/docs/reference/changelog/cli.mdx",
+      "npm run format --prefix ../.. -- apps/website/src/content/docs/docs/reference/changelog/cli.md",
+      "git add ../../apps/website/src/content/docs/docs/reference/changelog/cli.md",
       "npm install --package-lock-only --ignore-scripts --prefix ../..",
       "git add ../../package-lock.json"
     ],

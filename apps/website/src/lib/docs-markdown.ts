@@ -36,9 +36,9 @@ export function markdownPathForDocsRoute(pathname: string): string {
   return `${route}.md`
 }
 
-/** Converts documentation MDX presentation components into portable Markdown. */
-export function normalizeMdxForMarkdown(source: string): string {
-  const tree = createProcessor().parse(source) as SourceNode
+/** Converts documentation source and MDX presentation components into portable Markdown. */
+export function normalizeMdxForMarkdown(source: string, format: "md" | "mdx" = "mdx"): string {
+  const tree = createProcessor({ format }).parse(source) as SourceNode
   const replacements = collectTransforms(tree, source).sort((left, right) => right.start - left.start)
 
   return replacements
@@ -302,7 +302,8 @@ const providerCatalogMarkdown = `
 export function renderDocMarkdown(entry: CollectionEntry<"docs">, site: URL): string {
   const canonicalUrl = new URL(docsRouteFor(entry), site)
   const description = entry.data.description ? `${entry.data.description}\n\n` : ""
-  const body = absoluteMarkdownLinks(normalizeMdxForMarkdown(entry.body ?? ""), canonicalUrl, site)
+  const format = entry.filePath?.endsWith(".md") ? "md" : "mdx"
+  const body = absoluteMarkdownLinks(normalizeMdxForMarkdown(entry.body ?? "", format), canonicalUrl, site)
 
   return [
     `# ${entry.data.title}`,
