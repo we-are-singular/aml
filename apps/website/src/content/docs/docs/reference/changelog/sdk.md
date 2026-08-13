@@ -10,6 +10,27 @@ This page tracks `@aml-jsx/sdk`. Entries are newest first. See [GitHub Releases]
 
 <!-- changelog:entries -->
 
+## SDK v0.5.1 — Run Scripts on the trusted host with a compacted console tree
+
+Released 2026-08-13.
+
+This release makes `<Script />` usable without a Sandbox by executing on the trusted host, adds a per-execution working directory, and keeps the interactive console trace focused on lifecycle boundaries by omitting repetitive ACP chunk updates. New kitchen-sink smoke coverage exercises the full public surface together.
+
+### Highlights
+
+- **Host execution for `<Script />`** `<Script />` no longer requires an enclosing `<Sandbox />`. When no Sandbox is active, it runs the authored command or interpreted source on the trusted host from the runtime working directory, reusing the same process-tree cleanup, abort signaling, timeout, and cancellation semantics as local Agents. Host output is bounded to 4 MiB per stream. Host runs are deliberately unconfined — they inherit the AML host identity and environment — so AML surfaces them as `environment="host"` and reserves them for trusted authored automation; model-generated or untrusted source should still select an enforcing Sandbox. [Script reference](/docs/reference/primitives/script/)
+- **Per-execution working directory** Both `<Script />` forms accept a `cwd` prop, a portable relative forward-slash path resolved against the runtime cwd on the host or the active Sandbox root inside a Sandbox. AML rejects absolute paths, backslashes, and parent traversal. TypeScript now models the literal-`command` and `shell`-source variants as two disjoint prop forms, so `args` is valid only with `command` and the shell form requires child source. [Script reference](/docs/reference/primitives/script/)
+- **Compacted ACP console traces** The console tracer omits the repetitive `agent_message_chunk`, `agent_thought_chunk`, and `tool_call_update` ACP point events so the interactive tree stays focused on lifecycle boundaries; these events remain in the trace stream for custom sinks. The initial `tool_call` stays visible and reports the optional programmatic `toolName`. [Observability](/docs/observability)
+- **Kitchen sink smoke coverage** The SDK smoke suite gained an end-to-end workflow exercising Agents, Sandboxes, Workspaces, MCP servers, Tools, Skills, Scripts, and structured output together, giving release automation a single pass over the public surface.
+
+### Commits
+
+- fix(sdk): suppress thought chunks in console traces (902906b)
+- test(sdk): add kitchen sink smoke workflow (1bb3f3e)
+- feat(sdk): compact acp console traces (b164f57)
+- feat(sdk): add script working directory (cb49c16)
+- feat(sdk): run script on the trusted host (348f27b)
+
 ## SDK v0.5.0 — Trace the Agent lifecycle and cancel on process signals
 
 Released 2026-08-12.
