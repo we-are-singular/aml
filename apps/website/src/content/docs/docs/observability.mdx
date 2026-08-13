@@ -105,7 +105,7 @@ An illustrative console trace looks like this:
 
 Exact updates depend on the Agent implementation. A provider that emits no ACP updates still produces the prompt-submitted event, the turn result or failure, cleanup, and enclosing span completion.
 
-The console tracer omits `agent_message_chunk` and `tool_call_update` events to keep the interactive tree compact, even when content capture is enabled. These events remain in the trace stream for custom sinks. The initial `tool_call` remains visible and includes `toolName` when the ACP Agent supplies its optional programmatic name.
+The console tracer omits `agent_message_chunk`, `agent_thought_chunk`, and `tool_call_update` events to keep the interactive tree compact, even when content capture is enabled. These events remain in the trace stream for custom sinks. The initial `tool_call` remains visible and includes `toolName` when the ACP Agent supplies its optional programmatic name.
 
 ## The ACP boundary
 

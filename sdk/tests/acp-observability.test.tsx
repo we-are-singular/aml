@@ -396,6 +396,10 @@ describe("ACP Agent observability", () => {
             sessionUpdate: "agent_message_chunk",
           }),
           update({
+            content: { text: "thinking", type: "text" },
+            sessionUpdate: "agent_thought_chunk",
+          }),
+          update({
             kind: "execute",
             name: "shell",
             sessionUpdate: "tool_call",
@@ -423,11 +427,12 @@ describe("ACP Agent observability", () => {
       events
         .filter(event => event.type === "event" && event.name === "acp.session.update")
         .map(event => event.attributes.sessionUpdate)
-    ).toEqual(["agent_message_chunk", "tool_call", "tool_call_update"])
+    ).toEqual(["agent_message_chunk", "agent_thought_chunk", "tool_call", "tool_call_update"])
 
     const output = lines.join("\n")
     expect(output).toContain('sessionUpdate="tool_call" toolName="shell"')
     expect(output).not.toContain("agent_message_chunk")
+    expect(output).not.toContain("agent_thought_chunk")
     expect(output).not.toContain("tool_call_update")
   })
 })

@@ -39,6 +39,7 @@ export function createConsoleTracer(options: ConsoleTracerOptions = {}): TraceSi
       event.type === "event" &&
       event.name === "acp.session.update" &&
       (event.attributes.sessionUpdate === "agent_message_chunk" ||
+        event.attributes.sessionUpdate === "agent_thought_chunk" ||
         event.attributes.sessionUpdate === "tool_call_update")
     ) {
       return
