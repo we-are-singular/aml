@@ -33,6 +33,17 @@ export function createConsoleTracer(options: ConsoleTracerOptions = {}): TraceSi
 
   const runs = new Map<string, Map<string, number>>()
   const sink = ((event: AmlTraceEvent) => {
+    // Stream chunks and Tool progress remain available to other trace sinks,
+    // while the interactive console tree stays focused on lifecycle boundaries.
+    if (
+      event.type === "event" &&
+      event.name === "acp.session.update" &&
+      (event.attributes.sessionUpdate === "agent_message_chunk" ||
+        event.attributes.sessionUpdate === "tool_call_update")
+    ) {
+      return
+    }
+
     const depths = runs.get(event.runId) ?? new Map<string, number>()
     runs.set(event.runId, depths)
     const depth = event.parentSpanId === undefined ? 0 : (depths.get(event.parentSpanId) ?? 0) + 1

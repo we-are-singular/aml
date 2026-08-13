@@ -384,6 +384,52 @@ describe("ACP Agent observability", () => {
     )
     expect(lines.join("\n")).not.toContain("agent agent.")
   })
+
+  it("keeps streamed ACP updates in traces while suppressing repetitive console lines", async () => {
+    const events: AmlTraceEvent[] = []
+    const lines: string[] = []
+    const provider = new ScriptedAcpProvider([
+      script(
+        [
+          update({
+            content: { text: "done", type: "text" },
+            sessionUpdate: "agent_message_chunk",
+          }),
+          update({
+            kind: "execute",
+            name: "shell",
+            sessionUpdate: "tool_call",
+            status: "in_progress",
+            title: "Run command",
+            toolCallId: "tool-1",
+          }),
+          update({
+            sessionUpdate: "tool_call_update",
+            status: "completed",
+            toolCallId: "tool-1",
+          }),
+        ],
+        { stopReason: "end_turn" }
+      ),
+    ])
+    const runtime = new AmlRuntime({
+      trace: createConsoleTracer({ captureContent: true, write: line => lines.push(line) }),
+    })
+    runtime.on("trace", event => events.push(event))
+
+    await runtime.evaluate(<Agent provider={provider}>work</Agent>)
+
+    expect(
+      events
+        .filter(event => event.type === "event" && event.name === "acp.session.update")
+        .map(event => event.attributes.sessionUpdate)
+    ).toEqual(["agent_message_chunk", "tool_call", "tool_call_update"])
+
+    const output = lines.join("\n")
+    expect(output).toContain('sessionUpdate="tool_call" toolName="shell"')
+    expect(output).not.toContain("agent_message_chunk")
+    expect(output).not.toContain("tool_call_update")
+  })
 })
 
 class ScriptedAcpProvider extends AbstractAgentProvider<"scripted-acp"> {

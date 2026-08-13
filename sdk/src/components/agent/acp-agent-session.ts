@@ -286,6 +286,9 @@ export async function runAcpPrompt(
       {
         sessionId: message.notification.sessionId,
         sessionUpdate: message.update.sessionUpdate,
+        ...(message.update.sessionUpdate === "tool_call" && typeof message.update.name === "string"
+          ? { toolName: message.update.name }
+          : {}),
       },
       observability.sensitiveAttribute("update", message.update)
     )
