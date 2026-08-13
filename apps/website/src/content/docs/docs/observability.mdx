@@ -88,13 +88,11 @@ An illustrative console trace looks like this:
   • acp.session.created sessionId="session-1"
     ▶ agent.turn index=1 kind="initial"
     • acp.session.prompt.submitted sessionId="session-1"
-    • acp.session.update sessionId="session-1" sessionUpdate="agent_message_chunk"
     • acp.session.prompt.completed sessionId="session-1" stopReason="end_turn"
     ✓ agent.turn 1.2s sessionId="session-1" stopReason="end_turn"
     ▶ agent.turn index=2 kind="follow-up"
     • acp.session.prompt.submitted sessionId="session-1"
-    • acp.session.update sessionId="session-1" sessionUpdate="tool_call"
-    • acp.session.update sessionId="session-1" sessionUpdate="tool_call_update"
+    • acp.session.update sessionId="session-1" sessionUpdate="tool_call" toolName="shell"
     • acp.session.prompt.completed sessionId="session-1" stopReason="end_turn"
     ✓ agent.turn 2.4s sessionId="session-1" stopReason="end_turn"
     ▶ agent.cleanup
@@ -106,6 +104,8 @@ An illustrative console trace looks like this:
 ```
 
 Exact updates depend on the Agent implementation. A provider that emits no ACP updates still produces the prompt-submitted event, the turn result or failure, cleanup, and enclosing span completion.
+
+The console tracer omits `agent_message_chunk` and `tool_call_update` events to keep the interactive tree compact, even when content capture is enabled. These events remain in the trace stream for custom sinks. The initial `tool_call` remains visible and includes `toolName` when the ACP Agent supplies its optional programmatic name.
 
 ## The ACP boundary
 
@@ -119,14 +119,15 @@ Metadata-only tracing includes:
   attributes: {
     sessionId: "session-1",
     sessionUpdate: "tool_call",
+    toolName: "shell",
   },
   type: "event",
 }
 ```
 
-`sessionId` and `sessionUpdate` come directly from the ACP notification. Message chunks, thought chunks, Tool lifecycle, plans, usage, configuration, session information, and future ACP variants all use this same event shape when the Agent emits them.
+`sessionId` and `sessionUpdate` come directly from the ACP notification. An initial `tool_call` also includes `toolName` when ACP supplies its optional programmatic name. Message chunks, thought chunks, the rest of the Tool lifecycle, plans, usage, configuration, session information, and future ACP variants otherwise use this same event shape when the Agent emits them.
 
-With content capture enabled, AML adds an `update` attribute containing the serialized ACP update object unchanged. Consumers that need `toolCallId`, Tool status, plan entries, usage details, or another variant-specific field can parse that captured ACP object according to the ACP version they support. AML does not copy those fields into a parallel portable schema.
+With content capture enabled, AML adds an `update` attribute containing the serialized ACP update object unchanged. Consumers that need `toolCallId`, Tool status, plan entries, usage details, or another variant-specific field can parse that captured ACP object according to the ACP version they support. Apart from the optional programmatic Tool name, AML does not copy those fields into a parallel portable schema.
 
 <Aside type="note" title="Portable ACP telemetry, not model-call telemetry">
   AML can report what crosses ACP. It cannot universally observe model retries, fallbacks, provider queue time, internal
@@ -177,7 +178,7 @@ Process states currently emitted by the shared ACP path are:
 
 ## Content capture and redaction
 
-Metadata-only tracing is the default. It retains lifecycle, correlation, update discriminants, stop reasons, token usage supplied by ACP, durations, provider/model configuration, and opaque process identity.
+Metadata-only tracing is the default. It retains lifecycle, correlation, update discriminants, optional programmatic Tool names, stop reasons, token usage supplied by ACP, durations, provider/model configuration, and opaque process identity.
 
 Content capture can additionally expose:
 
@@ -188,6 +189,8 @@ Content capture can additionally expose:
 - structured-result submissions;
 - executable commands and failure messages;
 - Tool input/output and other runtime fields explicitly marked sensitive by AML.
+
+The console tracer still suppresses `agent_message_chunk` and `tool_call_update` lines. Attach a custom content-capturing sink when those streamed payloads are required.
 
 ```tsx
 // Diagnostic-only choice. Approve the destination and retention policy first.

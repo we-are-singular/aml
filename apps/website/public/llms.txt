@@ -120,7 +120,7 @@ The workflow file is positional; `--entry` selects an export inside it. Results 
 
 ## Agent and ACP observability
 
-AML traces actual `agent.session`, ordered `agent.turn`, and `agent.cleanup` spans. Each shared-ACP turn is one ACP `session/prompt` request, not necessarily one underlying model API call. Every ACP notification is exposed as one `acp.session.update` with ACP-supplied `sessionId` and `sessionUpdate`; AML does not translate Tool, message, thought, plan, usage, or future update variants into a parallel event schema.
+AML traces actual `agent.session`, ordered `agent.turn`, and `agent.cleanup` spans. Each shared-ACP turn is one ACP `session/prompt` request, not necessarily one underlying model API call. Every ACP notification is exposed as one `acp.session.update` with ACP-supplied `sessionId` and `sessionUpdate`; an initial Tool call also includes `toolName` when ACP supplies its optional programmatic name. AML does not otherwise translate Tool, message, thought, plan, usage, or future update variants into a parallel event schema. The console tracer omits repetitive `agent_message_chunk` and `tool_call_update` lines while custom trace sinks continue to receive those events.
 
 Metadata-only tracing is the default. The AML SDK's `captureContent` sink option and the CLI's `--capture-content` flag can additionally expose prompts, Agent messages and thoughts emitted through ACP, unchanged serialized ACP updates, raw Tool data, plans, structured results, commands, and failure messages. The option belongs to AML, not ACP, and must be treated as a sensitive data-handling decision.
 

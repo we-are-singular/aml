@@ -121,8 +121,7 @@ The requested five-line update goes to `/tmp/incident-update.txt`. Standard erro
 ▶ agent Agent
   ▶ agent.session provider="opencode"
     ▶ agent.turn index=1 kind="initial"
-    • acp.session.update sessionUpdate="tool_call" update="{...}"
-    • acp.session.update sessionUpdate="tool_call_update" update="{...}"
+    • acp.session.update sessionUpdate="tool_call" toolName="shell" update="{...}"
     ✓ agent.turn 1.8s
     ▶ agent.turn index=2 kind="follow-up"
     ...
