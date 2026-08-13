@@ -10,6 +10,26 @@ This page tracks `@aml-jsx/cli`. Entries are newest first. See [GitHub Releases]
 
 <!-- changelog:entries -->
 
+## CLI v0.2.1 — Independent SDK releases with an aligned compatibility range
+
+Released 2026-08-13.
+
+The CLI is no longer coupled to in-development SDK releases. Package validation no longer forces the CLI's SDK dev and peer ranges to match the workspace SDK version, and the declared compatibility range now targets `@aml-jsx/sdk` ^0.5.0, so the CLI and SDK can publish independently.
+
+### Highlights
+
+- **Independent SDK and CLI releases.** The CLI and SDK can now release on their own schedules. Release validation no longer requires the CLI's SDK dev and peer ranges to equal the workspace SDK's in-development version; instead the packed tarball is installed into an empty consumer to verify the declared SDK peer range. Covers: allow independent sdk releases (220c85e), derive sdk package range (26cc5a6). [CLI reference](/docs/cli/#run-the-package)
+- **Aligned SDK compatibility range.** The CLI's dev and peer dependency range for `@aml-jsx/sdk` moved from ^0.4.1 to ^0.5.0, matching the SDK line the CLI is developed and reviewed against, so consumers pairing the CLI with SDK ^0.5.0 now satisfy the peer requirement. Covers: align sdk compatibility range (d0b8897). [CLI reference](/docs/cli/#run-the-package)
+
+### Commits
+
+- fix(cli): allow independent sdk releases (220c85e)
+- fix(cli): derive sdk package range (26cc5a6)
+- fix(cli): align sdk compatibility range (d0b8897)
+- test(cli): cover script working directory (384660e)
+- test(cli): allow named export startup time (0c1c3f9)
+- test(cli): split export integration cases (8d1c36a)
+
 ## CLI v0.2.0 — Graceful cancellation of interrupted runs
 
 Released 2026-08-12.
