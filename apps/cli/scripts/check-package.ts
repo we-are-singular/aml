@@ -8,9 +8,7 @@ import { env, execPath, platform } from "node:process"
 interface PackageManifest {
   readonly bin: Readonly<Record<string, string>>
   readonly dependencies: Readonly<Record<string, string>>
-  readonly devDependencies: Readonly<Record<string, string>>
   readonly files: readonly string[]
-  readonly peerDependencies: Readonly<Record<string, string>>
   readonly publishConfig: {
     readonly access: string
     readonly registry: string
@@ -28,9 +26,6 @@ interface PackResult {
 
 const packageDirectory = resolve(import.meta.dirname, "..")
 const packageJson = JSON.parse(readFileSync(resolve(packageDirectory, "package.json"), "utf8")) as PackageManifest
-const sdkPackageJson = JSON.parse(readFileSync(resolve(packageDirectory, "../../sdk/package.json"), "utf8")) as {
-  readonly version: string
-}
 const temporaryDirectory = mkdtempSync(join(tmpdir(), "aml-cli-package-"))
 
 function npmInvocation(args: readonly string[]): readonly [string, string[]] {
@@ -70,16 +65,6 @@ try {
   if (packageJson.dependencies["@aml-jsx/sdk"] !== undefined) {
     throw new Error("CLI must not install a second private copy of @aml-jsx/sdk")
   }
-
-  // Keep the workspace link and published peer range aligned with the SDK release
-  // without duplicating its version in this validation script.
-  const expectedSdkRange = `^${sdkPackageJson.version}`
-  if (
-    packageJson.devDependencies["@aml-jsx/sdk"] !== expectedSdkRange ||
-    packageJson.peerDependencies["@aml-jsx/sdk"] !== expectedSdkRange
-  ) {
-    throw new Error(`CLI SDK development and peer ranges must both be ${expectedSdkRange}`)
-  }
   if (
     packageJson.publishConfig.access !== "public" ||
     packageJson.publishConfig.registry !== "https://registry.npmjs.org/"
@@ -87,6 +72,9 @@ try {
     throw new Error("CLI publishConfig must target the public npm registry")
   }
 
+  // SDK and CLI releases are independent. Installing the tarball into an
+  // empty consumer below validates the CLI's declared SDK peer range without
+  // coupling it to the workspace SDK version currently being released.
   const packOutput = requireSuccess(
     runNpm(["pack", "--ignore-scripts", "--json", "--pack-destination", temporaryDirectory], packageDirectory),
     "npm pack"
