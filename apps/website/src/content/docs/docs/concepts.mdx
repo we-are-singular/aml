@@ -12,11 +12,11 @@ AML is an execution model for agent workflows written as TypeScript and JSX. It 
 
 Most AML workflows are easier to reason about when you separate three responsibilities:
 
-| Boundary                                                 | Owns                                                                   | Provider guides                                                    |
-| -------------------------------------------------------- | ---------------------------------------------------------------------- | ------------------------------------------------------------------ |
-| [`<Agent />`](/docs/reference/primitives/agent/)         | A provider session, prompts, turns, capabilities, and the final result | [Codex, GitHub Copilot, OpenCode, and Pi](/docs/providers/agents/) |
-| [`<Sandbox />`](/docs/reference/primitives/sandbox/)     | Processes, working directory, filesystem permissions, and cleanup      | [Local, Docker, Daytona, and Modal](/docs/providers/sandboxes/)    |
-| [`<Workspace />`](/docs/reference/primitives/workspace/) | Durable files, revisions, locks, materialization, and publication      | [Local directory, filesystem, and S3](/docs/providers/workspaces/) |
+| Boundary                                                 | Owns                                                                   | Provider guides                                                         |
+| -------------------------------------------------------- | ---------------------------------------------------------------------- | ----------------------------------------------------------------------- |
+| [`<Agent />`](/docs/reference/primitives/agent/)         | A provider session, prompts, turns, capabilities, and the final result | [Codex, GitHub Copilot, GLM, OpenCode, and Pi](/docs/providers/agents/) |
+| [`<Sandbox />`](/docs/reference/primitives/sandbox/)     | Processes, working directory, filesystem permissions, and cleanup      | [Local, Docker, Daytona, and Modal](/docs/providers/sandboxes/)         |
+| [`<Workspace />`](/docs/reference/primitives/workspace/) | Durable files, revisions, locks, materialization, and publication      | [Local directory, filesystem, and S3](/docs/providers/workspaces/)      |
 
 `<Agent />` may run without an explicit `<Sandbox />` according to its provider. An unsandboxed `<Script />` uses trusted host execution. `<File />` and provider features that require a resource must still have the appropriate active boundary.
 
@@ -187,7 +187,7 @@ Nested `<Sandbox />` components reuse the outer lease. They may narrow `read-wri
 
 ## Provider neutrality has limits
 
-AML keeps the workflow tree stable while provider factories own vendor behavior: executable discovery, credentials, model names, transport, capability translation, and environment setup. The same `<Agent />` tree can use Codex, GitHub Copilot, OpenCode, or Pi, but their options and prerequisites are not interchangeable. Read the [compatibility guide](/docs/compatibility/) and the relevant [provider guide](/docs/providers/) before treating a combination as supported.
+AML keeps the workflow tree stable while provider factories own vendor behavior: executable discovery, credentials, model names, transport, capability translation, and environment setup. The same `<Agent />` tree can use Codex, GitHub Copilot, GLM, OpenCode, or Pi, but their options and prerequisites are not interchangeable. Read the [compatibility guide](/docs/compatibility/) and the relevant [provider guide](/docs/providers/) before treating a combination as supported.
 
 ## Cancellation and failure
 

@@ -27,11 +27,13 @@ const symbol = (name: Extract<ProviderIcon, { type: "symbol" }>["name"]): Provid
 /**
  * Canonical provider visuals shared by the marketing site and documentation.
  * The AI brand marks are vendored from `@lobehub/icons-static-svg` so the static
- * build does not depend on a third-party CDN at runtime.
+ * build does not depend on a third-party CDN at runtime. The GLM mark is the
+ * Z.ai brand icon vendored from the ACP registry's glm-acp-agent entry.
  */
 export const providerVisuals = {
   codex: { label: "Codex", icon: asset("providers/codex.svg") },
   copilot: { label: "GitHub Copilot", icon: asset("providers/github-copilot.svg") },
+  glm: { label: "GLM", icon: asset("providers/glm.svg") },
   opencode: { label: "OpenCode", icon: asset("providers/opencode.svg") },
   pi: { label: "Pi", icon: asset("providers/pi.svg") },
   "local-sandbox": { label: "Local Sandbox", icon: symbol("terminal") },
@@ -146,6 +148,7 @@ export const integrationGroups: readonly IntegrationGroup[] = [
       { label: "OpenCode", icon: providerVisuals.opencode.icon, href: "docs/providers/agents/opencode/" },
       { label: "Codex", icon: providerVisuals.codex.icon, href: "docs/providers/agents/codex/" },
       { label: "GitHub Copilot", icon: providerVisuals.copilot.icon, href: "docs/providers/agents/copilot/" },
+      { label: "GLM", icon: providerVisuals.glm.icon, href: "docs/providers/agents/glm/" },
       { label: "Pi", icon: providerVisuals.pi.icon, href: "docs/providers/agents/pi/" },
       { label: "Claude Code", icon: asset("providers/claude-code.svg"), status: "roadmap" },
       { label: "Cursor", icon: asset("providers/cursor.svg"), status: "roadmap" },
@@ -153,7 +156,6 @@ export const integrationGroups: readonly IntegrationGroup[] = [
       { label: "Gemini CLI", icon: asset("providers/gemini-cli.svg"), status: "roadmap" },
       { label: "Cline", icon: asset("providers/cline.svg"), status: "roadmap" },
       { label: "Goose", icon: asset("providers/goose.svg"), status: "roadmap" },
-      { label: "OpenHands", icon: asset("providers/openhands.svg"), status: "roadmap" },
       { label: "Amp", icon: asset("providers/amp.svg"), status: "exploring" },
       { label: "Devin", icon: asset("providers/devin.svg"), status: "exploring" },
     ],
@@ -291,6 +293,13 @@ export const agentOptions: readonly AgentOption[] = [
     fn: "copilotAgent",
     construction: 'copilotAgent({ model: "gpt-5-mini" })',
     icon: providerVisuals.copilot.icon,
+  },
+  {
+    id: "glm",
+    label: "GLM",
+    fn: "glmAgent",
+    construction: 'glmAgent({ model: "glm-5.3" })',
+    icon: providerVisuals.glm.icon,
   },
   {
     id: "pi",

@@ -1,0 +1,221 @@
+---
+title: GLM Agent
+description: Run Z.ai GLM Coding Plan models through the registry-listed glm-acp-agent adapter.
+---
+
+import { Aside, Badge, Card, CardGrid, LinkCard, Steps } from "@astrojs/starlight/components"
+import ProviderHero from "../../../../../components/docs/ProviderHero.astro"
+
+<ProviderHero
+  name="glm"
+  eyebrow="Built-in Agent provider"
+  title="GLM Agent"
+  factory="glmAgent()"
+  summary="A thin AML profile over the registry-listed glm-acp-agent ACP adapter. AML owns the evaluation, session, Tool bridge, structured result, and cleanup lifecycle; the adapter owns the GLM model loop, its seven coding tools, and Z.AI Coding Plan access."
+  bestFor="GLM Coding Plan workflows that need an ACP-compatible coding Agent with Z.ai credentials."
+  caution="glm-acp-agent is community-maintained and is not the Z.ai ZCode harness. AML does not install the adapter, and its tools run inside the process AML launches — contain them with a Sandbox."
+/>
+
+<Badge text="Built-in" variant="success" /> <Badge text="ACP" /> <Badge text="Credentialed" />
+
+## What this provider launches
+
+`glmAgent()` launches the command configured by `command`, defaulting to `glm-acp-agent`. The adapter is a standalone ACP coding agent: it calls the GLM Coding Plan endpoint directly and provides `read_file`, `write_file`, `list_files`, `run_command`, `web_search`, `web_reader`, and `image_analysis` tools. It is listed in the [ACP registry](https://agentclientprotocol.com/get-started/registry) and is community-maintained, not published by Z.ai.
+
+```text
+<Agent>
+  AML normalizes model, system instructions, permissions, Tools, and MCP
+        ↓
+  glm-acp-agent (or your configured command)
+        ↓
+  GLM Coding Plan endpoint (api.z.ai)
+```
+
+Every acquisition receives a private `ACP_GLM_SESSION_DIR` under AML's temporary session state, so the adapter's resumable session files never leak between concurrent evaluations. The state directory is released when the Agent session finishes.
+
+## Prerequisites
+
+<CardGrid>
+  <Card title="Install the adapter" icon="download">
+    Install `glm-acp-agent` globally or provide an equivalent launcher through `command`. AML does not download it at
+    runtime.
+  </Card>
+  <Card title="Provide credentials" icon="seti:lock">
+    Supply a Z.AI API key through `apiKey` (or `Z_AI_API_KEY` in `env`). Coding Plan keys bill against your plan quota,
+    including the free Lite tier and the free trial period; no pay-as-you-go API balance is required.
+  </Card>
+  <Card title="Choose a runtime" icon="laptop">
+    Run on a trusted host or inside a Sandbox whose image contains Node.js 20+, the adapter, and network access to
+    `api.z.ai`.
+  </Card>
+</CardGrid>
+
+Install the repository baseline and verify the command from the environment where AML will launch it:
+
+```sh title="Terminal"
+npm install --global glm-acp-agent@1.5.0
+glm-acp-agent --help
+```
+
+This version is a repeatable repository baseline, not a guarantee that every newer adapter is compatible. Re-run the live provider path when it changes.
+
+<Aside type="caution" title="This is not ZCode">
+  Z.ai does not currently publish or document a ZCode ACP entrypoint, so `glmAgent()` launches the separate community
+  adapter instead. Its toolset is intentionally small (no native skills, a 20-turn loop bound, an 8192-token default
+  completion cap raised through `maxTokens`). If you need Z.ai-supported GLM models through a full harness today,
+  [OpenCode](/docs/providers/agents/opencode/#glm-models-through-the-zai-coding-plan) is an officially supported Coding
+  Plan client, and its page includes a complete Z.ai provider configuration.
+</Aside>
+
+## Complete example
+
+This example uses the public SDK entrypoint and makes the Workspace/Sandbox boundary explicit. A real `glm-acp-agent` executable must be available in the selected environment. Local Sandbox requires `read-write` access to start any host process, including the adapter; the instruction not to modify files is therefore advisory. Use an enforcing Sandbox such as Docker when read-only access is a security requirement.
+
+```tsx
+import { Agent, AmlRuntime, Sandbox, Workspace, glmAgent, localSandbox, localWorkspace } from "@aml-jsx/sdk"
+
+const workspace = localWorkspace({ directory: "/absolute/path/to/repository" })
+const sandbox = localSandbox()
+const provider = glmAgent({
+  apiKey: process.env.Z_AI_API_KEY,
+  command: "glm-acp-agent",
+  model: "glm-5.3",
+})
+
+const result = await new AmlRuntime({
+  agentProvider: provider,
+}).evaluate(
+  <Workspace id="glm-review" provider={workspace} load={false} save={false}>
+    <Sandbox provider={sandbox} access="read-write">
+      <Agent system="Inspect files but do not modify them.">
+        Summarize the repository structure and identify the highest-risk module.
+      </Agent>
+    </Sandbox>
+  </Workspace>
+)
+
+console.log(result)
+```
+
+## Options and precedence
+
+| Option             | Type                     | Default           | Semantics                                                                                |
+| ------------------ | ------------------------ | ----------------- | ---------------------------------------------------------------------------------------- |
+| `apiKey`           | `string`                 | —                 | Adds `Z_AI_API_KEY` and selects the adapter's `z-ai-api-key` authentication method.      |
+| `command`          | `string`                 | `"glm-acp-agent"` | ACP executable or launcher. It must be a non-empty, trimmed string without null bytes.   |
+| `args`             | `readonly string[]`      | `[]`              | Appended to the launch command exactly as supplied. Arguments cannot contain null bytes. |
+| `baseUrl`          | `string`                 | —                 | Writes `ACP_GLM_BASE_URL`; overrides the default Coding Plan endpoint.                   |
+| `env`              | `Record<string, string>` | `{}`              | Additional launch environment. Use it for adapter-specific configuration.                |
+| `maxTokens`        | `number`                 | —                 | Writes `ACP_GLM_MAX_TOKENS`; must be a positive integer.                                 |
+| `model`            | `string`                 | —                 | Provider-level model fallback written as `ACP_GLM_MODEL`.                                |
+| `workingDirectory` | `string`                 | —                 | Fallback working directory when no Sandbox supplies the effective directory.             |
+
+The effective values are resolved as follows:
+
+1. `<Agent model="..." />` overrides the factory `model` as `ACP_GLM_MODEL`.
+2. The Agent's normalized `system` text is prepended to the first prompt inside `<SYSTEM>` markers; the adapter also loads the project's `AGENTS.md` itself.
+3. AML spreads the provider's `env`, then writes its session-owned `Z_AI_API_KEY`, `ACP_GLM_BASE_URL`, `ACP_GLM_MAX_TOKENS`, `ACP_GLM_MODEL`, and `ACP_GLM_SESSION_DIR`. Do not rely on overriding those variables through `env`; they are owned by the AML launch profile.
+4. An active Sandbox supplies the effective working directory. `workingDirectory` is used when the Agent is not running inside one.
+5. `apiKey` is explicit provider configuration. Otherwise `env.Z_AI_API_KEY` can satisfy the credential while skipping the advertised authentication method.
+
+<Aside type="note" title="Models">
+  The adapter advertises Coding Plan models such as `glm-5.3` (default, thinking always on), `glm-5-turbo`, and
+  `glm-4.7`; older ids resolve as aliases. Non-reasoning completions need `glm-4.7`.
+</Aside>
+
+## Permissions and capabilities
+
+| AML request                | GLM launch behavior                                   | Boundary that still matters                                                 |
+| -------------------------- | ----------------------------------------------------- | --------------------------------------------------------------------------- |
+| `filesystem: "read-write"` | `permissionPolicy="allow_always"`                     | The host or Sandbox still controls actual process and filesystem authority. |
+| `filesystem: "read-only"`  | `permissionPolicy="allow_once"`                       | The adapter has no read-only tool mode; use an enforcing Sandbox.           |
+| `shell: false`             | No adapter-native mapping is claimed by this profile. | Use a Sandbox that rejects shell execution.                                 |
+| `network: false`           | No adapter-native mapping is claimed by this profile. | Use a Sandbox or deployment network policy that enforces it.                |
+
+## Failure modes and troubleshooting
+
+<Steps>
+
+1. **`command not found` or ACP startup failure**
+
+   Confirm that `glm-acp-agent` exists in the same host or Sandbox where AML calls `spawn()`. If you use a custom `command`, run that exact command with its `args` outside AML first.
+
+2. **Authentication errors**
+
+   Create a Coding Plan API key at z.ai and pass it through `apiKey` or `Z_AI_API_KEY`. Keys from the general Z.ai Open Platform are a different billing surface and are out of scope for this adapter.
+
+3. **Truncated results**
+
+   The adapter caps completions at 8192 tokens by default. Raise the ceiling with `maxTokens` when structured outputs are cut off.
+
+4. **The Agent starts but should not edit or execute**
+
+   The adapter's `write_file` and `run_command` tools cannot be disabled through ACP. Run the Agent inside a Sandbox whose filesystem access and process policy enforce the restriction.
+
+5. **Configuration is rejected before launch**
+
+   Remove leading/trailing whitespace and null bytes from strings. `maxTokens` must be a positive safe integer.
+
+</Steps>
+
+## Provider references
+
+<CardGrid>
+  <LinkCard
+    title="glm-acp-agent"
+    href="https://github.com/stefandevo/glm-acp-agent"
+    description="The community ACP adapter this profile launches."
+  />
+  <LinkCard
+    title="ACP registry entry"
+    href="https://agentclientprotocol.com/get-started/registry"
+    description="Registry-listed distribution metadata for GLM Agent."
+  />
+  <LinkCard
+    title="Z.ai Coding Plan"
+    href="https://zcode.z.ai/en/docs/configuration"
+    description="Official Z.ai documentation for Coding Plan keys and endpoints."
+  />
+  <LinkCard
+    title="Agent Client Protocol"
+    href="https://agentclientprotocol.com/"
+    description="The protocol boundary used by AML's shared Agent session engine."
+  />
+  <LinkCard
+    title="AML GLM profile source"
+    href="https://github.com/we-are-singular/aml/tree/main/providers/agents/glm/src"
+    description="Executable mapping, environment, and option validation."
+  />
+  <LinkCard
+    title="AML GLM tests"
+    href="https://github.com/we-are-singular/aml/tree/main/providers/agents/glm/tests"
+    description="Launch, precedence, and live integration coverage."
+  />
+</CardGrid>
+
+## Related AML documentation
+
+These capabilities use AML's shared Agent lifecycle and do not require GLM-specific setup:
+
+<CardGrid>
+  <LinkCard
+    title="JavaScript Tools"
+    href="/docs/cookbook/tools/"
+    description="Define, scope, validate, and operate an application-owned Tool."
+  />
+  <LinkCard
+    title="Model Context Protocol"
+    href="/docs/cookbook/mcp/"
+    description="Declare MCP servers, transports, allowlists, and runtime requirements."
+  />
+  <LinkCard
+    title="Runtime configuration"
+    href="/docs/runtime/"
+    description="Configure limits, cancellation, lifecycle events, tracing, and cleanup."
+  />
+  <LinkCard
+    title="Agent component reference"
+    href="/docs/reference/primitives/agent/"
+    description="Review Agent props, resolution, capability scope, and result behavior."
+  />
+</CardGrid>
