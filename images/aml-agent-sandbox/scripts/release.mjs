@@ -1,5 +1,5 @@
 import { mkdtempSync, readFileSync, rmSync } from "node:fs"
-import { homedir, tmpdir } from "node:os"
+import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { spawnSync } from "node:child_process"
 import process from "node:process"
@@ -31,9 +31,8 @@ try {
 function release() {
   const recoveryVersion = recoversRelease ? readRecoveryVersion() : undefined
 
-  // Reading the active account locally keeps a GitHub API outage from blocking
-  // Docker Hub authentication or the release preflight.
-  const githubUsername = readActiveGithubUsername()
+  // Release It uses the active CLI token for the source tag's GitHub Release.
+  // Stable image publication itself authenticates only with Docker Hub.
   const githubToken = output("gh", ["auth", "token"], process.env)
 
   // Each release gets isolated registry credentials. This avoids mutating the
@@ -43,12 +42,6 @@ function release() {
 
   try {
     runOrThrow("docker", ["login"], releaseEnvironment)
-    runOrThrow(
-      "docker",
-      ["login", "ghcr.io", "--username", githubUsername, "--password-stdin"],
-      releaseEnvironment,
-      `${githubToken}\n`
-    )
 
     if (recoveryVersion) {
       runOrThrow("node", ["scripts/publish.mjs", recoveryVersion], releaseEnvironment)
@@ -109,41 +102,6 @@ function ensureGithubRelease(version, environment) {
   )
 }
 
-function readActiveGithubUsername() {
-  const configDirectory =
-    process.env.GH_CONFIG_DIR ?? join(process.env.XDG_CONFIG_HOME ?? join(homedir(), ".config"), "gh")
-  const hostsPath = join(configDirectory, "hosts.yml")
-  let hosts
-
-  try {
-    hosts = readFileSync(hostsPath, "utf8")
-  } catch {
-    throw new Error(`GitHub CLI authentication was not found; run gh auth login`)
-  }
-
-  const lines = hosts.split(/\r?\n/)
-  const hostIndex = lines.findIndex(line => line === "github.com:")
-  if (hostIndex === -1) {
-    throw new Error(`GitHub CLI is not authenticated with github.com; run gh auth login`)
-  }
-
-  // `user` is a direct child of the host. Restricting the indentation prevents
-  // accidentally reading keys from the nested accounts or OAuth-token entries.
-  const directChild = lines.slice(hostIndex + 1).find(line => /^\s+\S/.test(line))
-  const directIndent = directChild?.match(/^\s+/)?.[0]
-  if (!directIndent) {
-    throw new Error(`GitHub CLI has no active github.com account; run gh auth login`)
-  }
-
-  for (const line of lines.slice(hostIndex + 1)) {
-    if (/^\S/.test(line)) break
-    const match = line.match(new RegExp(`^${directIndent}user:\\s*([A-Za-z0-9-]+)\\s*$`))
-    if (match) return match[1]
-  }
-
-  throw new Error(`GitHub CLI has no active github.com account; run gh auth switch`)
-}
-
 function output(command, args, environment) {
   const result = spawnSync(command, args, { encoding: "utf8", env: environment })
   if (result.error?.code === "ENOENT") {
@@ -164,11 +122,10 @@ function run(command, args, environment) {
   return result.status ?? 1
 }
 
-function runOrThrow(command, args, environment, input) {
+function runOrThrow(command, args, environment) {
   const result = spawnSync(command, args, {
     env: environment,
-    input,
-    stdio: input === undefined ? "inherit" : ["pipe", "inherit", "inherit"],
+    stdio: "inherit",
   })
   if (result.error?.code === "ENOENT") {
     throw new Error(`${command} is required to release the image`)

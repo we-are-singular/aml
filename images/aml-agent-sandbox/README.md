@@ -2,14 +2,20 @@
 
 AML Agent Sandbox is a ready-to-use Debian image for running AI agents with AML. Codex, GitHub Copilot, GLM, OpenCode, Pi, Node.js, Python, Git, and common command-line tools are already installed.
 
-Pull it from Docker Hub or GitHub Container Registry:
+Pull stable releases from Docker Hub:
 
 ```sh
 docker pull wearesingular/aml-agent-sandbox:0.1.0
-docker pull ghcr.io/we-are-singular/aml-agent-sandbox:0.1.0
 ```
 
-Both references point to the same image. Use whichever registry is more convenient for your deployment.
+Docker Hub is the canonical release registry for semantic versions and `latest`. The mutable development image built
+from the latest relevant `main` revision is available separately from GHCR:
+
+```sh
+docker pull ghcr.io/we-are-singular/aml-agent-sandbox:dev
+```
+
+The development channel is not a mirror of a Docker Hub release. Its contents and digest can change without a release.
 
 ## Included runtime
 
@@ -85,13 +91,17 @@ The conformance check verifies the runtime user, writable paths, required utilit
 
 ## Releasing
 
-Image releases run locally, not in GitHub Actions. Start from a clean `main` checkout that matches `origin/main`, authenticate the GitHub CLI, install [Cosign](https://docs.sigstore.dev/cosign/system_config/installation/), and run this from the repository root:
+Stable image releases run locally, not in GitHub Actions. Start from a clean `main` checkout that matches `origin/main`, authenticate the GitHub CLI, install [Cosign](https://docs.sigstore.dev/cosign/system_config/installation/), and run this from the repository root:
 
 ```sh
 npm run release:docker
 ```
 
-The command opens Docker Hub's browser login in a temporary Docker configuration and uses the active `gh` account to authenticate GHCR. The temporary credentials are deleted when the command exits. Release It then prompts for the version, runs the image audit/build/conformance checks, creates a `docker-vX.Y.Z` release commit and tag, and publishes the image from the local machine. Docker Hub receives the build first; the publisher copies that exact manifest to GHCR, verifies both digests, and signs both registry references.
+The command opens Docker Hub's browser login in a temporary Docker configuration. The temporary credentials are
+deleted when the command exits. Release It then prompts for the version, runs the image audit/build/conformance checks,
+creates a `docker-vX.Y.Z` release commit and tag, publishes the image to Docker Hub, verifies its digest, and signs that
+digest. The active `gh` account authorizes the source tag's GitHub Release; it is not used to publish a stable GHCR
+image.
 
 If image publication fails after Release It creates the release commit and tag, recover that same version from a clean `main` checkout:
 
@@ -107,14 +117,15 @@ Preview the versioning and Git release flow without publishing:
 npm run release:docker -- --dry-run
 ```
 
-## Tags and platforms
+## Channels, tags, and platforms
 
-- `0.1.0`: immutable image release
-- `sha-<commit>`: source revision build
-- `latest`: newest fully validated stable release
+- Docker Hub `0.1.0`: immutable image release
+- Docker Hub `sha-<commit>`: source revision build
+- Docker Hub `latest`: newest fully validated stable release
+- GHCR `dev`: mutable image built after relevant changes reach `main`
 - initial platform: `linux/amd64`
 
-Pin an immutable version or digest in production. `latest` is provided for evaluation and local development.
+Pin an immutable Docker Hub version or digest in production. GHCR `dev` is for repository and integration development.
 
 ## Security and licensing
 
