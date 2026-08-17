@@ -24,7 +24,7 @@ export function loadSmokeEnvironment(): void {
 }
 
 const SMOKE_AGENT_PATH = `/tmp/aml-agents/bin:/opt/aml-agent-sandbox/node_modules/.bin:${process.env.PATH ?? "/usr/local/bin:/usr/bin:/bin"}`
-const SMOKE_SANDBOX_IMAGE = "docker.io/wearesingular/aml-agent-sandbox:dev"
+const SMOKE_SANDBOX_IMAGE = "ghcr.io/we-are-singular/aml-agent-sandbox:dev"
 const ALL_AGENTS_PRESENT =
   "test -f input.txt && command -v codex-acp && command -v codex && command -v copilot && command -v glm-acp-agent && command -v opencode && command -v pi-acp && command -v pi && command -v pi-mcp-adapter"
 
