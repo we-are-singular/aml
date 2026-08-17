@@ -7,6 +7,7 @@
     "paths": {
       "@aml-jsx/agent-codex": ["../providers/agents/codex/src/index.ts"],
       "@aml-jsx/agent-copilot": ["../providers/agents/copilot/src/index.ts"],
+      "@aml-jsx/agent-glm": ["../providers/agents/glm/src/index.ts"],
       "@aml-jsx/agent-opencode": ["../providers/agents/opencode/src/index.ts"],
       "@aml-jsx/agent-pi": ["../providers/agents/pi/src/index.ts"],
       "@aml-jsx/sandbox-docker": ["../providers/sandboxes/docker/src/index.ts"],

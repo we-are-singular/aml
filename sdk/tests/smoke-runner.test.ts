@@ -14,11 +14,12 @@ import {
 
 describe("smoke configuration", () => {
   it("derives the complete Cartesian product from both registries", () => {
-    expect(SMOKE_AGENT_NAMES).toEqual(["codex", "copilot", "opencode", "pi"])
+    expect(SMOKE_AGENT_NAMES).toEqual(["codex", "copilot", "glm", "opencode", "pi"])
     expect(SMOKE_SANDBOX_NAMES).toEqual(["daytona", "docker", "local", "modal"])
     expect(selectSmokeCases()).toHaveLength(SMOKE_AGENT_NAMES.length * SMOKE_SANDBOX_NAMES.length)
     expect(selectSmokeCases()).toContainEqual({ agent: "codex", sandbox: "daytona" })
     expect(selectSmokeCases()).toContainEqual({ agent: "copilot", sandbox: "local" })
+    expect(selectSmokeCases()).toContainEqual({ agent: "glm", sandbox: "local" })
     expect(selectSmokeCases()).toContainEqual({ agent: "pi", sandbox: "local" })
   })
 

@@ -1,0 +1,29 @@
+{
+  "name": "@aml-jsx/agent-glm",
+  "version": "0.0.0",
+  "private": true,
+  "files": [
+    "dist"
+  ],
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "vite build && tsc --project tsconfig.build.json",
+    "lint": "tsc --noEmit && oxlint .",
+    "package:check": "node ../../../scripts/check-agent-provider-package.ts glm glmAgent",
+    "test": "vitest run",
+    "test:integration": "vitest run tests/glm-agent.integration.test.tsx"
+  },
+  "dependencies": {
+    "@aml-jsx/sdk": "*"
+  },
+  "devDependencies": {
+    "@aml-jsx/sandbox-local": "*"
+  }
+}

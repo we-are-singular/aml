@@ -55,6 +55,7 @@ interface BuiltSdk {
   readonly daytonaSandbox: unknown
   readonly dockerSandbox: unknown
   readonly filesystemWorkspace: unknown
+  readonly glmAgent: unknown
   readonly localSandbox: unknown
   readonly localWorkspace: unknown
   readonly s3Workspace: unknown
@@ -179,6 +180,7 @@ const {
   defineWorkspaceProvider,
   dockerSandbox,
   filesystemWorkspace,
+  glmAgent,
   evaluate: componentEvaluate,
   File: publicFile,
   Fragment: publicFragment,
@@ -206,6 +208,7 @@ const {
 
 if (
   typeof codexAgent !== "function" ||
+  typeof glmAgent !== "function" ||
   typeof opencodeAgent !== "function" ||
   typeof piAgent !== "function" ||
   typeof daytonaSandbox !== "function" ||
