@@ -22,18 +22,21 @@ docker.io/wearesingular/aml-agent-sandbox:<tag>
 Stable releases include provenance and an SBOM. The manual release process publishes semantic-version, source-revision,
 and `latest` tags to Docker Hub, verifies the published digest, and signs that digest.
 
-GHCR is a separate development channel:
+GHCR hosts the public development (`dev`) channel, also referred to as the nightly or edge build:
 
 ```text
 ghcr.io/we-are-singular/aml-agent-sandbox:dev
 ```
 
-| Reference                 | Purpose                                                                |
-| ------------------------- | ---------------------------------------------------------------------- |
-| Docker Hub `latest`       | Newest validated stable release and provider-factory default.          |
-| Docker Hub `X.Y.Z`        | Immutable semantic version for reproducible deployments.               |
-| Docker Hub `sha-<commit>` | Source-revision reference produced by a manual release.                |
-| GHCR `dev`                | Mutable build from the latest relevant `main` revision; not a release. |
+| Reference                 | Purpose                                                                       |
+| ------------------------- | ----------------------------------------------------------------------------- |
+| Docker Hub `latest`       | Newest validated stable release and provider-factory default.                 |
+| Docker Hub `X.Y.Z`        | Immutable semantic version for reproducible deployments.                      |
+| Docker Hub `sha-<commit>` | Source-revision reference produced by a manual release.                       |
+| GHCR `dev`                | Public mutable build from the latest relevant `main` revision; not a release. |
+
+GitHub Actions replaces `dev` after relevant image changes land on `main`. It may therefore update more than once in a
+day or remain unchanged on days without image changes. GHCR does not mirror Docker Hub's stable tags or digests.
 
 ```tsx title="Provider default"
 import { AmlRuntime, dockerSandbox } from "@aml-jsx/sdk"
@@ -169,7 +172,7 @@ Modal documents support for [loading existing public registry images](https://mo
 
 ## Verify an image before recommending it
 
-Check the exact tag or digest, not `latest`. AML's image includes a repository-owned conformance probe:
+For repository development, run the conformance probe against the current GHCR `dev` build:
 
 ```bash
 docker run --rm \
@@ -177,6 +180,9 @@ docker run --rm \
   ghcr.io/we-are-singular/aml-agent-sandbox:dev \
   /verify.sh
 ```
+
+For release or deployment evaluation, replace `dev` with the exact Docker Hub semantic version or digest being
+validated. Do not treat either `latest` or `dev` as an immutable input.
 
 For another image, probe its required commands directly:
 

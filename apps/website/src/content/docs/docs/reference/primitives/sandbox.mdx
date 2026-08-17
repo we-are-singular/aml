@@ -38,6 +38,9 @@ Docker, Daytona, and Modal use `wearesingular/aml-agent-sandbox:latest` when the
 override. The default contains AML's tested Agent executables and common coding tools. It does not contain application
 credentials or project-specific dependencies.
 
+That default comes from AML's canonical stable releases on Docker Hub. The repository smoke matrix instead follows the
+public, mutable `ghcr.io/we-are-singular/aml-agent-sandbox:dev` nightly/edge channel.
+
 ```tsx title="Use AML's default image"
 const sandbox = dockerSandbox()
 
