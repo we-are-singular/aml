@@ -69,6 +69,7 @@ describe("copilotAgent()", () => {
           COPILOT_HOME: expect.stringMatching(/^\/tmp\/aml-acp-/),
           EXTRA: "value",
           GH_TOKEN: "explicit-gh-token",
+          HOME: expect.stringMatching(/^\/tmp\/aml-acp-/),
         },
       },
     })
