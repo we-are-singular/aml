@@ -115,6 +115,46 @@ console.log(result)
 
 Do not use an empty credential value as a production configuration. The example keeps the environment shape visible; your deployment should fail early or inject a real provider credential according to OpenCode's documentation.
 
+## GLM models through the Z.ai Coding Plan
+
+Z.ai officially supports OpenCode as a [GLM Coding Plan](https://docs.z.ai/devpack/overview) client, which makes this
+profile the officially supported route to GLM models in AML — unlike the community
+[GLM agent adapter](/docs/providers/agents/glm/). Create a Coding Plan API key at z.ai and pass an OpenCode provider
+configuration through the typed `config` option. The key bills against your plan quota (including free tiers), not
+pay-as-you-go API credit:
+
+```tsx
+import { Agent, AmlRuntime, opencodeAgent } from "@aml-jsx/sdk"
+
+const provider = opencodeAgent({
+  config: {
+    provider: {
+      "zai-coding": {
+        npm: "@ai-sdk/openai-compatible",
+        options: {
+          baseURL: "https://api.z.ai/api/coding/paas/v4",
+          apiKey: "{env:Z_AI_API_KEY}",
+        },
+        models: {
+          "glm-5.3": { name: "GLM-5.3" },
+          "glm-5-turbo": { name: "GLM-5-Turbo" },
+          "glm-4.7": { name: "GLM-4.7" },
+        },
+      },
+    },
+  },
+  model: "zai-coding/glm-5.3",
+})
+
+const answer = await new AmlRuntime({ agentProvider: provider }).evaluate(
+  <Agent system="Be concise and cite the files you inspected.">Summarize the highest-risk module.</Agent>
+)
+```
+
+`Z_AI_API_KEY` must be present in the environment that launches OpenCode; the `{env:…}` reference is OpenCode's own
+interpolation. Confirm the current endpoint, model ids, and key management on
+[Z.ai's Coding Plan documentation](https://docs.z.ai/devpack/overview) when upgrading either side.
+
 ## Options and precedence
 
 | Option      | Type                     | Default      | Semantics                                                                            |

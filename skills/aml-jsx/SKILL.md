@@ -1,6 +1,6 @@
 ---
 name: aml-jsx
-description: Build, explain, test, or debug TypeScript agent workflows with Agent Markup Language and the @aml-jsx/sdk package. Use when a coding task involves AML, AML JSX/TSX trees, Agent/System/Tool/Skill/Mcp/FollowUp components, provider-agnostic multi-agent orchestration, explicit parallel agents, structured agent output, Sandboxes, Workspaces, OpenCode, Codex, GitHub Copilot, or Pi providers, or custom AML providers.
+description: Build, explain, test, or debug TypeScript agent workflows with Agent Markup Language and the @aml-jsx/sdk package. Use when a coding task involves AML, AML JSX/TSX trees, Agent/System/Tool/Skill/Mcp/FollowUp components, provider-agnostic multi-agent orchestration, explicit parallel agents, structured agent output, Sandboxes, Workspaces, OpenCode, Codex, GitHub Copilot, GLM, or Pi providers, or custom AML providers.
 ---
 
 # Build with AML JSX
@@ -103,10 +103,11 @@ Fetch the focused public guide when the task depends on a specific boundary: [To
 The public package currently exports built-in factories from one entry point:
 
 ```tsx
-import { codexAgent, copilotAgent, modalSandbox, opencodeAgent, piAgent } from "@aml-jsx/sdk"
+import { codexAgent, copilotAgent, glmAgent, modalSandbox, opencodeAgent, piAgent } from "@aml-jsx/sdk"
 
 const Codex = codexAgent({})
 const Copilot = copilotAgent({ model: "gpt-5-mini" })
+const Glm = glmAgent({ model: "glm-5.3" })
 const OpenCode = opencodeAgent({})
 const Pi = piAgent({ model: "opencode-go/glm-5.1" })
 const Modal = modalSandbox({ image: "node:26" })
@@ -114,7 +115,7 @@ const Modal = modalSandbox({ image: "node:26" })
 
 Keep provider selection outside reusable workflow components when practical. Use `Agent` props such as `model` and `cwd` only for invocation-level overrides; keep provider-owned credentials and defaults in the provider factory.
 
-Codex, GitHub Copilot, OpenCode, and Pi are thin profiles over AML's shared ACP session engine. Keep provider configuration on the selected factory and preserve vendor-native concepts where the profile exposes them. Copilot uses invocation-private state and does not import the interactive user's Copilot configuration. The selected local or Sandbox environment must contain the compatible ACP Agent executable; AML does not install one implicitly.
+Codex, GitHub Copilot, GLM, OpenCode, and Pi are thin profiles over AML's shared ACP session engine. GLM launches the community glm-acp-agent adapter with a Z.AI Coding Plan API key; it is not the ZCode harness. Keep provider configuration on the selected factory and preserve vendor-native concepts where the profile exposes them. Copilot uses invocation-private state and does not import the interactive user's Copilot configuration. The selected local or Sandbox environment must contain the compatible ACP Agent executable; AML does not install one implicitly.
 
 Read [providers-and-testing.md](references/providers-and-testing.md) for runtime defaults, tracing, deterministic tests, and provider conformance.
 
