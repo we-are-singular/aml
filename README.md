@@ -297,7 +297,6 @@ sdk/        @aml-jsx/sdk, the AML runtime and public API
 providers/  optional Agent, Sandbox, and Workspace provider implementations
 apps/       runnable products built on AML (website: the project site)
 examples/   human-readable client workflows
-poc/        archived Phase 0 experiments and research
 ```
 
 [`SPEC.md`](./SPEC.md) is the normative behavior contract. [`PRD.md`](./PRD.md) records product decisions, architecture, and delivery status. [`PROVIDERS.md`](./PROVIDERS.md) tracks the provider implementation wishlist.
@@ -425,7 +424,7 @@ apps/website/src/
   data/                        typed navigation, provider, and homepage content
   content/docs/                Starlight documentation source
   components/docs/             shared Starlight layout, provider, and page-action UI
-  pages/docs/[...path].md.ts    per-page Markdown alternatives
+  plugins/docs-markdown/        per-page Markdown route and rendering
   pages/docs/llms.txt.ts        complete concatenated documentation
   styles/                      global Starlight layout and content rhythm
 ```
