@@ -1,7 +1,6 @@
 import { fileURLToPath, URL } from "node:url"
 
 const MARKDOWN_ENDPOINT = fileURLToPath(new URL("./endpoint.ts", import.meta.url))
-const DEV_MIDDLEWARE = fileURLToPath(new URL("./dev-middleware.ts", import.meta.url))
 
 /** Adds the static `/<docs-route>.md` representation for every Starlight entry. */
 export function docsMarkdownPlugin() {
@@ -13,9 +12,8 @@ export function docsMarkdownPlugin() {
         addIntegration({
           name: "aml-docs-markdown-route",
           hooks: {
-            "astro:config:setup"({ addMiddleware, command, injectRoute }) {
+            "astro:config:setup"({ injectRoute }) {
               injectRoute({ pattern: "/[...path].md", entrypoint: MARKDOWN_ENDPOINT })
-              if (command === "dev") addMiddleware({ entrypoint: DEV_MIDDLEWARE, order: "pre" })
             },
           },
         })

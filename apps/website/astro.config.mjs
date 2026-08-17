@@ -1,4 +1,5 @@
 import { defineConfig } from "astro/config"
+import { unified } from "@astrojs/markdown-remark"
 import starlight from "@astrojs/starlight"
 import sitemap from "@astrojs/sitemap"
 import tailwindcss from "@tailwindcss/vite"
@@ -17,7 +18,9 @@ export default defineConfig({
   output: "static",
   trailingSlash: "always",
   markdown: {
-    remarkPlugins: [[remarkBasePath, { base }]],
+    processor: unified({
+      remarkPlugins: [[remarkBasePath, { base }]],
+    }),
   },
   vite: {
     plugins: [tailwindcss()],
