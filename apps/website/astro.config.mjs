@@ -18,6 +18,8 @@ export default defineConfig({
   output: "static",
   trailingSlash: "always",
   markdown: {
+    // Astro 7 defaults to the Sätteri pipeline; keep the unified remark pipeline so
+    // remarkBasePath (base-aware links) keeps applying on subpath deploys like GitHub Pages.
     processor: unified({
       remarkPlugins: [[remarkBasePath, { base }]],
     }),
