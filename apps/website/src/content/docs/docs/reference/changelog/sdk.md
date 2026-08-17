@@ -10,6 +10,23 @@ This page tracks `@aml-jsx/sdk`. Entries are newest first. See [GitHub Releases]
 
 <!-- changelog:entries -->
 
+## SDK v0.5.2 — Add GLM as a community agent provider
+
+Released 2026-08-17.
+
+GLM joins Codex, Copilot, OpenCode, and Pi as a fifth built-in agent provider. The new `glmAgent()` factory launches Z.ai GLM Coding Plan models through the registry-listed, community-maintained `glm-acp-agent` ACP adapter, with Z.AI Coding Plan authentication and invocation-private session state.
+
+### Highlights
+
+- **New `glmAgent()` factory function** Exported from `@aml-jsx/sdk`, `glmAgent()` creates a GLM agent provider with options for command, args, environment overlay, apiKey, model, baseUrl, maxTokens, and working directory. It launches the configured command (default `glm-acp-agent`), which calls the GLM Coding Plan endpoint directly and provides file, shell, web, and image tools. [GLM Agent reference](/docs/providers/agents/glm/)
+- **Z.AI Coding Plan authentication** Passing `apiKey` adds `Z_AI_API_KEY` and selects the adapter's `z-ai-api-key` authentication method; Coding Plan keys bill against plan quota rather than pay-as-you-go API credit. [GLM Agent reference](/docs/providers/agents/glm/)
+- **Invocation-private adapter state** The adapter's resumable sessions are kept inside AML's session directory via `ACP_GLM_SESSION_DIR`, so adapter state stays private to each evaluation alongside the rest of the run. [GLM Agent reference](/docs/providers/agents/glm/)
+- **Sandbox remains the permission boundary** Because `glm-acp-agent` exposes no portable permission surface beyond ACP protocol requests, the enclosing `<Sandbox />` stays the boundary for filesystem, shell, and network restrictions. The adapter is community-maintained, not the Z.ai ZCode harness (which has no ACP implementation), and AML does not install it implicitly. [GLM Agent reference](/docs/providers/agents/glm/)
+
+### Commits
+
+- feat(agent-glm): add community glm acp provider (c50c865)
+
 ## SDK v0.5.1 — Run Scripts on the trusted host with a compacted console tree
 
 Released 2026-08-13.
