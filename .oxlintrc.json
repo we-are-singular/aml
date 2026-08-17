@@ -10,7 +10,7 @@
   "env": {
     "es2024": true
   },
-  "ignorePatterns": ["**/node_modules/**", "**/.turbo/**", "**/dist/**", "**/coverage/**", "poc/**"],
+  "ignorePatterns": ["**/node_modules/**", "**/.turbo/**", "**/dist/**", "**/coverage/**"],
   "rules": {
     "eslint/no-unused-vars": "warn",
     "typescript/no-unused-vars": "warn",

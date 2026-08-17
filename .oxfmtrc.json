@@ -10,14 +10,7 @@
   "bracketSameLine": false,
   "arrowParens": "avoid",
   "endOfLine": "lf",
-  "ignorePatterns": [
-    "**/node_modules/**",
-    "**/.turbo/**",
-    "**/dist/**",
-    "**/coverage/**",
-    "**/package-lock.json",
-    "poc/**"
-  ],
+  "ignorePatterns": ["**/node_modules/**", "**/.turbo/**", "**/dist/**", "**/coverage/**", "**/package-lock.json"],
   "overrides": [
     {
       "files": ["*.json"],
