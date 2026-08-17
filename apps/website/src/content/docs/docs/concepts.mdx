@@ -98,7 +98,8 @@ These are the canonical execution-direction rules. Provider guides add vendor pr
   </Card>
   <Card title="Sandbox" icon="setting">
     An ephemeral execution lease. Nested scopes can narrow access, but cannot widen a read-only parent or select another
-    provider.
+    provider. Docker, Daytona, and Modal create that lease from a [Sandbox image](/docs/sandbox-images/); Local uses the
+    trusted host.
   </Card>
   <Card title="Workspace" icon="open-book">
     A durable file identity. It materializes before descendants run, publishes according to its save policy, and

@@ -5,6 +5,7 @@ import sitemap from "@astrojs/sitemap"
 import tailwindcss from "@tailwindcss/vite"
 import { agentSkillsPlugin } from "./src/plugins/agent-skills.mjs"
 import { docsMarkdownPlugin } from "./src/plugins/docs-markdown/plugin.mjs"
+import remarkAgentSandboxChangelog from "./src/plugins/remark-agent-sandbox-changelog.mjs"
 import remarkBasePath from "./src/plugins/remark-base-path.mjs"
 import { sitemapAliasPlugin } from "./src/plugins/sitemap-alias.mjs"
 
@@ -21,7 +22,7 @@ export default defineConfig({
     // Astro 7 defaults to the Sätteri pipeline; keep the unified remark pipeline so
     // remarkBasePath (base-aware links) keeps applying on subpath deploys like GitHub Pages.
     processor: unified({
-      remarkPlugins: [[remarkBasePath, { base }]],
+      remarkPlugins: [remarkAgentSandboxChangelog, [remarkBasePath, { base }]],
     }),
   },
   vite: {
@@ -90,6 +91,7 @@ export default defineConfig({
               label: "Understand AML",
               items: [
                 { slug: "docs/concepts" },
+                { slug: "docs/sandbox-images" },
                 { slug: "docs/ast" },
                 { slug: "docs/runtime" },
                 { slug: "docs/observability" },
@@ -178,6 +180,7 @@ export default defineConfig({
                 { slug: "docs/cookbook/tools" },
                 { slug: "docs/cookbook/mcp" },
                 { slug: "docs/cookbook/tool-or-mcp" },
+                { slug: "docs/cookbook/sandbox-image" },
                 { slug: "docs/cookbook/sandboxes-and-workspaces" },
                 { slug: "docs/cookbook/generated-diagnostic" },
               ],
@@ -232,6 +235,7 @@ export default defineConfig({
                 { label: "Changelog overview", slug: "docs/reference/changelog" },
                 { label: "SDK releases", slug: "docs/reference/changelog/sdk" },
                 { label: "CLI releases", slug: "docs/reference/changelog/cli" },
+                { label: "Docker image releases", slug: "docs/reference/changelog/docker" },
               ],
             },
           ],

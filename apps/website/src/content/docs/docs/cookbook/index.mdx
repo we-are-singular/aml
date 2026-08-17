@@ -95,6 +95,11 @@ source links section.
     description="Materialize files in a temporary local Workspace, narrow an execution Sandbox, and understand trusted-host boundaries."
   />
   <LinkCard
+    title="Run AML in a Sandbox image"
+    href="/docs/cookbook/sandbox-image/"
+    description="Start AML's recommended image through Docker, run commands inside it, and pin or replace the image deliberately."
+  />
+  <LinkCard
     title="Choose between a Tool and MCP"
     href="/docs/cookbook/tool-or-mcp/"
     description="Compare ownership, transport, credentials, failure modes, and host-process security with complete examples of both."
@@ -106,6 +111,7 @@ source links section.
 | [Testing AML workflows](/docs/cookbook/testing/)                     | Deterministic                                 | Node, SDK/testing, Vitest                                                        | Replacing runtime defaults and asserting capability/resource behavior |
 | [MCP capabilities](/docs/cookbook/mcp/)                              | Deterministic fixture                         | Node, SDK/testing; no MCP server or credentials                                  | Capability isolation without pretending to run an external server     |
 | [Tool or MCP?](/docs/cookbook/tool-or-mcp/)                          | Deterministic Tool + credentialed MCP example | Node and SDK; OpenCode, credentials, and an operated MCP server for the MCP path | Choosing the correct capability boundary                              |
+| [Sandbox image](/docs/cookbook/sandbox-image/)                       | Resource-backed                               | Node, SDK, Docker, and AML Agent Sandbox                                         | Understanding image defaults and overrides                            |
 | [Sandboxes and Workspaces](/docs/cookbook/sandboxes-and-workspaces/) | Deterministic + resource-backed               | Node, SDK/testing, writable temp directory                                       | Local file materialization and execution-scope composition            |
 | [Generated diagnostics](/docs/cookbook/generated-diagnostic/)        | Deterministic Agent + resource-backed         | Node, SDK/testing, Docker, and the selected interpreter image                    | Treating generated code as data before explicit execution             |
 

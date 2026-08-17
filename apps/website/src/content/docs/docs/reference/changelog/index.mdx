@@ -1,13 +1,13 @@
 ---
 title: Changelog
-description: Human-readable release histories for the AML SDK and CLI.
+description: Human-readable release histories for the AML SDK, CLI, and Agent Sandbox image.
 ---
 
 import { LinkCard, CardGrid } from "@astrojs/starlight/components"
 
 The changelog explains what changed and why. GitHub Releases remains the exhaustive release artifact and source-commit record; these pages turn that history into a shorter guide with links back into the documentation.
 
-AML publishes the SDK and CLI independently, so each package keeps its own version history.
+AML publishes the SDK, CLI, and Agent Sandbox image independently, so each artifact keeps its own version history.
 
 <CardGrid>
   <LinkCard
@@ -20,10 +20,18 @@ AML publishes the SDK and CLI independently, so each package keeps its own versi
     href="/docs/reference/changelog/cli/"
     description="Direct TypeScript and TSX workflow execution through the aml command."
   />
+  <LinkCard
+    title="Docker image changelog"
+    href="/docs/reference/changelog/docker/"
+    description="The Debian runtime, installed Agents and tools, image contract, and release metadata."
+  />
 </CardGrid>
 
 ## How entries are maintained
 
 AML authors its own changelog with two repository-aware [`<Agent />`](/docs/reference/primitives/agent/) trees. The first runs the authoritative commit collector, investigates the changes, and returns a typed draft. The second publishes that draft, then uses a [`<FollowUp />`](/docs/reference/primitives/follow-up/) to review, correct, and format the entry.
+
+The Docker image page is rendered directly from the image package's `CHANGELOG.md`, so an image release updates one
+history rather than copying entries into the website.
 
 [See the complete auto-authored changelog workflow →](/docs/cookbook/changelog-maintainer/)
