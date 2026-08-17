@@ -23,31 +23,8 @@ export function loadSmokeEnvironment(): void {
   }
 }
 
-const CODEX_ACP_VERSION = "1.1.7"
-const CODEX_VERSION = "0.145.0"
-const COPILOT_VERSION = "1.0.79"
-const GLM_ACP_VERSION = "1.5.0"
-const OPENCODE_VERSION = "1.18.9"
-const PI_ACP_VERSION = "0.0.33"
-const PI_MCP_ADAPTER_VERSION = "2.26.0"
-const PI_VERSION = "0.84.2"
-const SMOKE_AGENT_PATH = `/tmp/aml-agents/bin:${process.env.PATH ?? "/usr/local/bin:/usr/bin:/bin"}`
-const ALL_AGENTS_SETUP =
-  "test -f input.txt && " +
-  `npm install --global --prefix /tmp/aml-agents @agentclientprotocol/codex-acp@${CODEX_ACP_VERSION} ` +
-  `@github/copilot@${COPILOT_VERSION} @openai/codex@${CODEX_VERSION} glm-acp-agent@${GLM_ACP_VERSION} ` +
-  `opencode-ai@${OPENCODE_VERSION} ` +
-  `pi-acp@${PI_ACP_VERSION} ` +
-  `pi-mcp-adapter@${PI_MCP_ADAPTER_VERSION} ` +
-  `@earendil-works/pi-coding-agent@${PI_VERSION} && ` +
-  "PATH=/tmp/aml-agents/bin:$PATH command -v codex-acp && " +
-  "PATH=/tmp/aml-agents/bin:$PATH command -v codex && " +
-  "PATH=/tmp/aml-agents/bin:$PATH command -v copilot && " +
-  "PATH=/tmp/aml-agents/bin:$PATH command -v glm-acp-agent && " +
-  "PATH=/tmp/aml-agents/bin:$PATH command -v opencode && " +
-  "PATH=/tmp/aml-agents/bin:$PATH command -v pi-acp && " +
-  "PATH=/tmp/aml-agents/bin:$PATH command -v pi && " +
-  "PATH=/tmp/aml-agents/bin:$PATH command -v pi-mcp-adapter"
+const SMOKE_AGENT_PATH = `/tmp/aml-agents/bin:/opt/aml-agent-sandbox/node_modules/.bin:${process.env.PATH ?? "/usr/local/bin:/usr/bin:/bin"}`
+const SMOKE_SANDBOX_IMAGE = "docker.io/wearesingular/aml-agent-sandbox:dev"
 const ALL_AGENTS_PRESENT =
   "test -f input.txt && command -v codex-acp && command -v codex && command -v copilot && command -v glm-acp-agent && command -v opencode && command -v pi-acp && command -v pi && command -v pi-mcp-adapter"
 
@@ -149,20 +126,23 @@ export const SMOKE_SANDBOXES = {
       if (apiKey === undefined) throw new Error("Daytona smoke requires DAYTONA_API_KEY")
       return daytonaSandbox({
         config: { apiKey },
-        image: "node:26",
-        setup: ALL_AGENTS_SETUP,
+        image: SMOKE_SANDBOX_IMAGE,
       })
     },
-    environment: "node:26",
+    environment: SMOKE_SANDBOX_IMAGE,
   },
   docker: {
     create() {
       return dockerSandbox({
-        image: "node:26",
-        setup: ALL_AGENTS_SETUP,
+        image: SMOKE_SANDBOX_IMAGE,
+        // Match the owner of the bind-mounted local Workspace while keeping
+        // the container and its coding Agents unprivileged.
+        ...(typeof process.getuid === "function" && typeof process.getgid === "function"
+          ? { user: `${process.getuid()}:${process.getgid()}` }
+          : {}),
       })
     },
-    environment: "node:26",
+    environment: SMOKE_SANDBOX_IMAGE,
   },
   local: {
     create() {
@@ -181,11 +161,10 @@ export const SMOKE_SANDBOXES = {
         appName: "aml-jsx-smoke",
         config: { tokenId, tokenSecret },
         create: { memoryMiB: 2_048, timeoutMs: 300_000 },
-        image: "node:26",
-        setup: ALL_AGENTS_SETUP,
+        image: SMOKE_SANDBOX_IMAGE,
       })
     },
-    environment: "node:26",
+    environment: SMOKE_SANDBOX_IMAGE,
   },
 } satisfies Record<string, SmokeSandboxRegistration>
 
