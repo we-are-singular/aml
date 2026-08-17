@@ -25,6 +25,7 @@ import {
 } from "@aml-jsx/sdk"
 
 const DEFAULT_APP_NAME = "aml-jsx"
+const DEFAULT_IMAGE = "wearesingular/aml-agent-sandbox:latest"
 const DEFAULT_MAX_OUTPUT_BYTES = 4 * 1024 * 1024
 const GUEST_ROOT = "/workspace"
 const execFileAsync = promisify(execFile)
@@ -37,7 +38,7 @@ export interface ModalSandboxOptions {
   readonly client?: ModalClient
   readonly config?: ModalClientParams
   readonly create?: SandboxCreateParams
-  readonly image: string
+  readonly image?: string
   readonly maxOutputBytes?: number
   readonly setup?: string
   readonly workspace?: string
@@ -45,6 +46,7 @@ export interface ModalSandboxOptions {
 
 interface ParsedModalSandboxOptions extends ModalSandboxOptions {
   readonly appName: string
+  readonly image: string
   readonly maxOutputBytes: number
 }
 
@@ -63,7 +65,7 @@ interface ModalSandboxResource {
  * Creates disposable Modal environments and transfers one Workspace into
  * `/workspace` for each acquisition.
  */
-export function modalSandbox(options: ModalSandboxOptions): Readonly<SandboxProvider<ModalSandboxHandle>> {
+export function modalSandbox(options: ModalSandboxOptions = {}): Readonly<SandboxProvider<ModalSandboxHandle>> {
   return defineSandboxProvider(new ModalSandboxProvider(parseOptions(options)))
 }
 
@@ -597,7 +599,9 @@ function parseOptions(value: ModalSandboxOptions): Readonly<ParsedModalSandboxOp
     throw new TypeError("Modal Sandbox accepts either client or config, not both")
   }
 
-  if (typeof value.image !== "string" || value.image.length === 0) {
+  const image = value.image ?? DEFAULT_IMAGE
+
+  if (typeof image !== "string" || image.length === 0) {
     throw new TypeError("Modal Sandbox image must be a non-empty string")
   }
 
@@ -624,6 +628,7 @@ function parseOptions(value: ModalSandboxOptions): Readonly<ParsedModalSandboxOp
   return Object.freeze({
     ...value,
     appName,
+    image,
     maxOutputBytes,
   })
 }

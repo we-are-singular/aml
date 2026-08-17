@@ -18,15 +18,17 @@ import {
 } from "@aml-jsx/sdk"
 
 const DEFAULT_MAX_OUTPUT_BYTES = 4 * 1024 * 1024
+const DEFAULT_IMAGE = "wearesingular/aml-agent-sandbox:latest"
 const KEEPALIVE_COMMAND = "trap 'exit 0' TERM INT; while :; do sleep 3600 & wait $!; done"
 
 /**
  * Image-first configuration for the local Docker CLI adapter.
  */
 export interface DockerSandboxOptions {
-  readonly image: string
+  readonly image?: string
   readonly maxOutputBytes?: number
   readonly setup?: string
+  readonly user?: string
   readonly workspace?: string
 }
 
@@ -34,6 +36,7 @@ interface ParsedDockerSandboxOptions {
   readonly image: string
   readonly maxOutputBytes: number
   readonly setup?: string
+  readonly user?: string
   readonly workspace?: string
 }
 
@@ -61,7 +64,7 @@ interface CommandRunner {
  *
  * AML does not build the image or install its Agent dependencies.
  */
-export function dockerSandbox(options: DockerSandboxOptions): Readonly<SandboxProvider<DockerSandboxHandle>> {
+export function dockerSandbox(options: DockerSandboxOptions = {}): Readonly<SandboxProvider<DockerSandboxHandle>> {
   return createDockerSandboxProvider(options, new NodeCommandRunner())
 }
 
@@ -94,6 +97,7 @@ class DockerSandboxProvider
     const source = await this.#resolveSource(request)
     const containerName = `aml-${request.evaluationId.slice(0, 12)}-${randomUUID().slice(0, 8)}`
     const mount = `${source}:/workspace${request.access === "read-only" ? ":ro" : ""}`
+    const user = this.#options.user
     const start = await this.#runner
       .run(
         "docker",
@@ -103,6 +107,7 @@ class DockerSandboxProvider
           "--rm",
           "--name",
           containerName,
+          ...(user === undefined ? [] : ["--user", user]),
           "--volume",
           mount,
           "--workdir",
@@ -378,8 +383,9 @@ function parseOptions(value: DockerSandboxOptions): Readonly<ParsedDockerSandbox
     throw new TypeError("Docker Sandbox options must be an object")
   }
 
-  const image = normalizedString(value.image, "Docker Sandbox image")
+  const image = normalizedString(value.image ?? DEFAULT_IMAGE, "Docker Sandbox image")
   const setup = optionalNormalizedString(value.setup, "Docker Sandbox setup")
+  const user = optionalNormalizedString(value.user, "Docker Sandbox user")
   const workspace = optionalNormalizedString(value.workspace, "Docker Sandbox workspace")
   const maxOutputBytes = value.maxOutputBytes ?? DEFAULT_MAX_OUTPUT_BYTES
 
@@ -391,6 +397,7 @@ function parseOptions(value: DockerSandboxOptions): Readonly<ParsedDockerSandbox
     image,
     maxOutputBytes,
     ...(setup === undefined ? {} : { setup }),
+    ...(user === undefined ? {} : { user }),
     ...(workspace === undefined ? {} : { workspace: path.resolve(workspace) }),
   })
 }

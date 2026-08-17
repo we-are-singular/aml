@@ -21,6 +21,24 @@ afterEach(async () => {
 })
 
 describe("daytonaSandbox()", () => {
+  it("uses the AML Agent Sandbox image by default", async () => {
+    const workspace = await temporaryDirectory("aml-daytona-default-image-")
+    await mkdir(path.join(workspace, "repository"), { recursive: true })
+    const fake = await FakeDaytona.create()
+    const lease = await daytonaSandbox({ client: fake.client, workspace }).acquire(request())
+
+    expect(fake.createCalls).toEqual([
+      {
+        options: undefined,
+        params: {
+          image: "wearesingular/aml-agent-sandbox:latest",
+        },
+      },
+    ])
+
+    await lease.release()
+  })
+
   it("uses native creation config and reconciles the complete Workspace", async () => {
     const workspace = await temporaryDirectory("aml-daytona-workspace-")
     const repository = path.join(workspace, "repository")
