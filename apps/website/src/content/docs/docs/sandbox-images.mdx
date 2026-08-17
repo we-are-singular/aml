@@ -1,0 +1,75 @@
+---
+title: Sandbox images
+description: Understand how AML's container-backed Sandbox providers use images and what the recommended default contains.
+---
+
+import { Aside, Card, CardGrid } from "@astrojs/starlight/components"
+
+A [`<Sandbox />`](/docs/reference/primitives/sandbox/) chooses where descendant Agents and Scripts execute. With Local,
+that place is the AML host. Docker, Daytona, and Modal instead create a disposable environment from a container image—
+often called a Docker image even when a remote provider runs it.
+
+The image is the filesystem and toolset available inside that environment. It supplies the operating system, shell,
+language runtimes, Agent executables, and command-line tools. The Sandbox provider starts the environment, attaches or
+transfers the Workspace, runs processes, and releases it. These are separate responsibilities.
+
+## How each provider gets its environment
+
+| Provider                                                 | Execution environment               | Image selection                                                         |
+| -------------------------------------------------------- | ----------------------------------- | ----------------------------------------------------------------------- |
+| [`localSandbox()`](/docs/providers/sandboxes/local/)     | Trusted processes on the AML host   | No image. Host-installed programs and files are used directly.          |
+| [`dockerSandbox()`](/docs/providers/sandboxes/docker/)   | A local disposable Docker container | OCI image reference; AML's recommended image is the default.            |
+| [`daytonaSandbox()`](/docs/providers/sandboxes/daytona/) | A remote disposable Daytona Sandbox | OCI image or Daytona snapshot; AML's recommended image is the default.  |
+| [`modalSandbox()`](/docs/providers/sandboxes/modal/)     | A remote disposable Modal Sandbox   | Registry image loaded by Modal; AML's recommended image is the default. |
+
+Docker, Daytona, and Modal select `wearesingular/aml-agent-sandbox:latest` when their factory receives no `image` or
+Daytona `snapshot` override. That image contains the exact Codex, GitHub Copilot, GLM, OpenCode, Pi, ACP, Node.js,
+Python, Git, and common command-line versions exercised by AML's Agent × Sandbox smoke matrix.
+
+```ts title="Use AML's default image"
+import { dockerSandbox } from "@aml-jsx/sdk"
+
+const sandbox = dockerSandbox()
+```
+
+The default is a convenient tested starting point, not hidden installation. The provider passes the image reference to
+the selected runtime; it does not build an image or download Agent packages during Sandbox acquisition.
+
+<Aside type="caution" title="Pin deployments that must be reproducible">
+  `latest` moves when AML publishes a validated image release. Production applications should override it with an
+  immutable semantic version or digest after validating that release with their credentials, network policy, provider,
+  and project workload.
+</Aside>
+
+```ts title="Pin or replace the image"
+const sandbox = dockerSandbox({
+  image: "wearesingular/aml-agent-sandbox:0.1.0",
+})
+```
+
+## The image is not the Sandbox policy
+
+<CardGrid>
+  <Card title="The image supplies software" icon="seti:docker">
+    Operating-system files, Agent executables, interpreters, package managers, and ordinary command-line tools.
+  </Card>
+  <Card title="The provider supplies execution" icon="setting">
+    Container or remote-environment creation, Workspace attachment, process transport, cancellation, and cleanup.
+  </Card>
+  <Card title="The application supplies policy" icon="approve-check-circle">
+    Credentials, network access, resource limits, project dependencies, image pinning, and provider-specific hardening.
+  </Card>
+</CardGrid>
+
+`aml-agent-sandbox` intentionally omits credentials, Agent login state, project dependencies, Docker-in-Docker, browsers,
+cloud CLIs, compilers, and unrelated language ecosystems. Extend it when a project needs more software, or replace it
+with another compatible image. An override must still provide the shell and transfer tools required by its Sandbox
+provider plus the executable chain required by the selected Agent.
+
+The image is configured on `dockerSandbox({ image })`, `daytonaSandbox({ image })`, or `modalSandbox({ image })`—not as
+an `<Sandbox image="…" />` prop. Keeping that choice on the provider preserves provider-native options such as Daytona
+snapshots and Modal registry loading while the AML tree keeps portable `access`, `root`, and `cwd` intent.
+
+Continue with [Recommended Sandbox images](/docs/providers/sandboxes/images/) for exact contents, tags, extension and
+verification guidance, upstream alternatives, licensing, and provider-specific constraints. For a runnable walkthrough,
+use [Run AML in a Sandbox image](/docs/cookbook/sandbox-image/).

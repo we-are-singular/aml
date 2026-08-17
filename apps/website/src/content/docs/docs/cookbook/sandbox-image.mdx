@@ -1,0 +1,127 @@
+---
+title: Run AML in a Sandbox image
+description: Start AML's recommended image through Docker, execute commands inside it, and pin or replace the image deliberately.
+---
+
+import { Aside, Badge, Steps } from "@astrojs/starlight/components"
+
+<Badge text="Resource-backed Docker workflow" variant="note" />
+
+## Goal
+
+Run a deterministic [`<Script />`](/docs/reference/primitives/script/) inside the image selected by
+[`dockerSandbox()`](/docs/providers/sandboxes/docker/), then read the file it created after the disposable container is
+released.
+
+This recipe deliberately omits `image` first. Docker Sandbox therefore uses AML's recommended
+`wearesingular/aml-agent-sandbox:latest` image. The same default applies to Daytona and Modal when their provider factory
+receives no image or snapshot override.
+
+## Prerequisites
+
+- Node.js `>=26`, ESM TypeScript/TSX execution, and `@aml-jsx/sdk`;
+- Docker running locally and able to pull `wearesingular/aml-agent-sandbox:latest`;
+- no model credentials—the recipe executes a deterministic Script rather than an Agent session.
+
+## Complete source
+
+```tsx
+import { mkdtemp, readFile } from "node:fs/promises"
+import { tmpdir } from "node:os"
+import { join } from "node:path"
+
+import { AmlRuntime, Sandbox, Script, Workspace, dockerSandbox, localWorkspace } from "@aml-jsx/sdk"
+
+const directory = await mkdtemp(join(tmpdir(), "aml-image-cookbook-"))
+const user =
+  typeof process.getuid === "function" && typeof process.getgid === "function"
+    ? `${process.getuid()}:${process.getgid()}`
+    : undefined
+
+const sandbox = dockerSandbox({
+  // Docker bind mounts retain host ownership. Use the host identity when the
+  // platform exposes one; the image itself remains non-root by default.
+  ...(user === undefined ? {} : { user }),
+})
+
+await new AmlRuntime({
+  sandboxProvider: sandbox,
+  workspaceProvider: localWorkspace({ directory }),
+}).evaluate(
+  <Workspace id="image-cookbook" load={false} save={false}>
+    <Sandbox access="read-write">
+      <Script
+        command="sh"
+        args={[
+          "-lc",
+          "python --version > runtime.txt 2>&1 && git --version >> runtime.txt && jq --version >> runtime.txt",
+        ]}
+      />
+    </Sandbox>
+  </Workspace>
+)
+
+console.log(await readFile(join(directory, "runtime.txt"), "utf8"))
+```
+
+## Run it
+
+Save the source as `recipe.tsx` in a project configured as shown in [Getting started](/docs/getting-started/), then run:
+
+```sh title="Terminal"
+npx vite-node recipe.tsx
+```
+
+The first run may pull the image. A successful run prints the installed Python, Git, and jq versions from inside the
+container. `runtime.txt` survives because Docker bind-mounts the local Workspace; the container itself is removed.
+
+## How image selection works
+
+<Steps>
+
+1. `dockerSandbox()` receives no `image`, so it selects `wearesingular/aml-agent-sandbox:latest`.
+2. `<Workspace />` materializes the temporary host directory and the Docker provider mounts it at `/workspace`.
+3. `<Sandbox />` acquires a disposable container and `<Script />` runs only through that active runtime.
+4. Docker removes the container after the subtree settles. The local Workspace remains application-owned.
+
+</Steps>
+
+The `<Sandbox />` component has no `image` prop. Image identity belongs to the provider factory because Local has no
+image, Daytona can use a snapshot, and Modal loads images through its registry integration.
+
+## Pin or replace the image
+
+`latest` is useful for evaluation and examples. Pin a stable version or digest for repeatable deployments:
+
+```ts
+const sandbox = dockerSandbox({
+  image: "wearesingular/aml-agent-sandbox:0.1.0",
+  ...(user === undefined ? {} : { user }),
+})
+```
+
+An application can instead extend AML's image with project dependencies or replace it entirely:
+
+```ts
+const sandbox = dockerSandbox({
+  image: "ghcr.io/your-organization/project-agent@sha256:IMAGE_DIGEST",
+  ...(user === undefined ? {} : { user }),
+})
+```
+
+The override must contain the programs the workflow launches. An Agent workflow also needs its ACP/native Agent
+executable chain; a generic Node or Python image is not automatically Agent-ready.
+
+<Aside type="caution" title="An image is not a complete security boundary">
+  The image controls the initial filesystem and runtime software. The Docker daemon and application still own user
+  identity, network policy, capabilities, seccomp/AppArmor, resource limits, secrets, and mounted files. Validate the
+  complete deployment before running untrusted code.
+</Aside>
+
+## API and source links
+
+- [Sandbox images mental model](/docs/sandbox-images/)
+- [Recommended Sandbox images](/docs/providers/sandboxes/images/)
+- [`<Sandbox />`](/docs/reference/primitives/sandbox/)
+- [Docker Sandbox provider](/docs/providers/sandboxes/docker/)
+- [AML Agent Sandbox source](https://github.com/we-are-singular/aml/tree/main/images/aml-agent-sandbox)

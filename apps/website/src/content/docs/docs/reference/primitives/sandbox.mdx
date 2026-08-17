@@ -24,6 +24,43 @@ await runtime.evaluate(
 
 The deterministic providers make this example credential-free. For actual process execution, use [Local](/docs/providers/sandboxes/local/), [Docker](/docs/providers/sandboxes/docker/), [Daytona](/docs/providers/sandboxes/daytona/), or [Modal](/docs/providers/sandboxes/modal/).
 
+## Images and providers
+
+`<Sandbox />` expresses portable execution intent: provider, access, logical root, cwd, and descendants. It does not have
+an `image` prop. The outer Sandbox provider owns the physical environment:
+
+- `localSandbox()` runs trusted processes on the AML host and uses no image;
+- `dockerSandbox()` starts a local container from an OCI image;
+- `daytonaSandbox()` creates a remote environment from an OCI image or Daytona snapshot;
+- `modalSandbox()` creates a remote environment from a registry image.
+
+Docker, Daytona, and Modal use `wearesingular/aml-agent-sandbox:latest` when their factory receives no image or snapshot
+override. The default contains AML's tested Agent executables and common coding tools. It does not contain application
+credentials or project-specific dependencies.
+
+```tsx title="Use AML's default image"
+const sandbox = dockerSandbox()
+
+await runtime.evaluate(
+  <Sandbox provider={sandbox} access="read-write">
+    <Agent>Inspect the project.</Agent>
+  </Sandbox>
+)
+```
+
+Configure an immutable or application-owned image on the provider factory when required:
+
+```ts
+const sandbox = dockerSandbox({
+  image: "wearesingular/aml-agent-sandbox:0.1.0",
+})
+```
+
+The image supplies software; the provider supplies process transport, Workspace mapping, cancellation, and cleanup;
+the application still supplies credentials, network and resource policy, project dependencies, and deployment
+hardening. Read [Sandbox images](/docs/sandbox-images/) for the mental model and
+[Recommended Sandbox images](/docs/providers/sandboxes/images/) for exact contents and pinning guidance.
+
 ## Props
 
 | Prop       | Type                          | Default                       | Meaning                                                    |
@@ -59,4 +96,4 @@ A nested `<Sandbox />` reuses the outer lease. It may narrow `root`, change `cwd
   your deployment before running untrusted work.
 </Aside>
 
-See [Sandbox and Workspace composition](/docs/cookbook/sandboxes-and-workspaces/), [compatibility](/docs/compatibility/), and [production security](/docs/production/security/).
+See [Run AML in a Sandbox image](/docs/cookbook/sandbox-image/), [Sandbox and Workspace composition](/docs/cookbook/sandboxes-and-workspaces/), [compatibility](/docs/compatibility/), and [production security](/docs/production/security/).
