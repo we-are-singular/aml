@@ -424,7 +424,7 @@ apps/website/src/
   data/                        typed navigation, provider, and homepage content
   content/docs/                Starlight documentation source
   components/docs/             shared Starlight layout, provider, and page-action UI
-  plugins/docs-markdown/        per-page Markdown route and rendering
+  plugins/docs-markdown/        injected /[...path].md endpoint (per-page Markdown alternatives)
   pages/docs/llms.txt.ts        complete concatenated documentation
   styles/                      global Starlight layout and content rhythm
 ```

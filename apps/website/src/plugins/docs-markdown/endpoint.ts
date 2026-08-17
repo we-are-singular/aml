@@ -18,15 +18,12 @@ export const getStaticPaths: GetStaticPaths = async () => {
 }
 
 export function GET({ props, site }: APIContext<Props>): Response {
-  if (!props.entry) {
-    return new Response("Documentation page not found.\n", {
-      status: 404,
-      headers: { "Content-Type": "text/plain; charset=utf-8" },
-    })
-  }
+  // getStaticPaths only emits existing entries and the router rejects unknown params before
+  // GET in both dev and static builds, so a missing entry here is an impossible state.
+  const entry = props.entry as CollectionEntry<"docs">
 
   const canonicalSite = site ?? new URL("https://agent-markup-language.com")
-  const markdown = renderDocMarkdown(props.entry, canonicalSite)
+  const markdown = renderDocMarkdown(entry, canonicalSite)
 
   return new Response(markdown, {
     headers: {
