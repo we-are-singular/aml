@@ -130,9 +130,12 @@ jobs:
           cache-dependency-path: package-lock.json
 
       - name: Set up npm
+        # PowerShell cannot run the POSIX npm version assertion; Git Bash is preinstalled on windows-latest.
         shell: bash
         run: |
           npm install --global npm@11.19.0
+          command -v npm
+          npm ls -g npm --json
           test "$(npm --version)" = "11.19.0"
 
       - name: Install dependencies
