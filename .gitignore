@@ -5,7 +5,6 @@ coverage/
 .turbo/
 *.log
 *.tgz
-poc/
 .env
 !apps/cli/tests/fixtures/env/.env
 
