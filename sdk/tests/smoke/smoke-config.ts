@@ -29,8 +29,8 @@ const COPILOT_VERSION = "1.0.79"
 const GLM_ACP_VERSION = "1.5.0"
 const OPENCODE_VERSION = "1.18.9"
 const PI_ACP_VERSION = "0.0.33"
-const PI_MCP_ADAPTER_VERSION = "2.16.0"
-const PI_VERSION = "0.82.1"
+const PI_MCP_ADAPTER_VERSION = "2.26.0"
+const PI_VERSION = "0.84.2"
 const SMOKE_AGENT_PATH = `/tmp/aml-agents/bin:${process.env.PATH ?? "/usr/local/bin:/usr/bin:/bin"}`
 const ALL_AGENTS_SETUP =
   "test -f input.txt && " +

@@ -60,7 +60,7 @@ Install the ACP bridge and native Pi executable in the environment where AML wil
 ```sh title="Terminal"
 npm install --global \
   pi-acp@0.0.33 \
-  @earendil-works/pi-coding-agent@0.82.1
+  @earendil-works/pi-coding-agent@0.84.2
 
 pi --version
 command -v pi-acp
@@ -82,7 +82,7 @@ const mcpAdapterPath = fileURLToPath(import.meta.resolve("pi-mcp-adapter"))
 const provider = piAgent({ mcpAdapterPath })
 ```
 
-The AML repository currently exercises `pi-acp@0.0.33`, `@earendil-works/pi-coding-agent@0.82.1`, and `pi-mcp-adapter@2.16.x`. Treat that set as a reproducible verification baseline, not an open-ended compatibility promise.
+The AML repository currently exercises `pi-acp@0.0.33`, `@earendil-works/pi-coding-agent@0.84.2`, and `pi-mcp-adapter@2.26.x`. Treat that set as a reproducible verification baseline, not an open-ended compatibility promise.
 
 No official public Pi image has passed AML's complete Agent/Sandbox path yet. See [Recommended Sandbox images](/docs/providers/sandboxes/images/#pi-no-recommended-public-image-yet) before building an application-owned image from these versions.
 
