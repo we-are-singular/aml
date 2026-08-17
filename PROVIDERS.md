@@ -70,7 +70,7 @@ second coding-agent lifecycle.
 
 ### Provider direction
 
-Sandbox factories retain provider-native environment configuration. Applications select an image, snapshot, package set, or provider environment containing the ACP Agents and supporting tools. AML owns acquisition, Workspace attachment, optional explicit setup, command execution, safe process spawning, and release.
+Sandbox factories retain provider-native environment configuration. Docker, Daytona, and Modal use `wearesingular/aml-agent-sandbox:latest` when an application does not select another image or snapshot. AML owns acquisition, Workspace attachment, optional explicit setup, command execution, safe process spawning, and release.
 
 The common runtime exposes bounded literal `exec()` plus a streaming `spawn()` handle with queued output, input, repeatable completion, and process-tree termination. Provider-native files, ports, and snapshots remain outside the baseline until a concrete requirement proves them.
 

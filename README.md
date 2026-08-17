@@ -169,9 +169,9 @@ The public SDK includes the runtime, built-in integrations, and testing utilitie
 | Agent     | [GLM adapter](./providers/agents/glm)            | `glmAgent()`            | Community `glm-acp-agent` profile for Z.ai Coding Plan models; this is not the ZCode harness.                                                                                                        |
 | Agent     | [Pi adapter](./providers/agents/pi)              | `piAgent()`             | Pi ACP profile using the maintained Pi ACP adapter.                                                                                                                                                  |
 | Sandbox   | [Local adapter](./providers/sandboxes/local)     | `localSandbox()`        | Runs the common Sandbox runtime as trusted host processes for development; it is explicitly non-isolating.                                                                                           |
-| Sandbox   | [Docker adapter](./providers/sandboxes/docker)   | `dockerSandbox()`       | Starts a user-selected image, mounts the Workspace, and exposes the common bounded command runtime without building or provisioning the image.                                                       |
-| Sandbox   | [Daytona adapter](./providers/sandboxes/daytona) | `daytonaSandbox()`      | Creates a Daytona image or snapshot, transfers the Workspace, runs bounded commands, reconciles writable changes, and deletes the remote Sandbox.                                                    |
-| Sandbox   | [Modal adapter](./providers/sandboxes/modal)     | `modalSandbox()`        | Creates a Modal Sandbox from a registry image, transfers the Workspace, runs bounded commands, reconciles writable changes, and terminates it.                                                       |
+| Sandbox   | [Docker adapter](./providers/sandboxes/docker)   | `dockerSandbox()`       | Starts AML's default Agent image or an override, mounts the Workspace, and exposes the common bounded command runtime without building the image.                                                    |
+| Sandbox   | [Daytona adapter](./providers/sandboxes/daytona) | `daytonaSandbox()`      | Creates AML's default Agent image or an explicit Daytona image/snapshot, transfers the Workspace, reconciles writable changes, and deletes the remote Sandbox.                                       |
+| Sandbox   | [Modal adapter](./providers/sandboxes/modal)     | `modalSandbox()`        | Creates a Modal Sandbox from AML's default Agent image or a registry override, transfers the Workspace, reconciles writable changes, and terminates it.                                              |
 | Workspace | [Local adapter](./providers/workspaces/local)    | `localWorkspace()`      | Uses an existing local directory as a durable Workspace with cross-process writer locking.                                                                                                           |
 | Workspace | [Local adapter](./providers/workspaces/local)    | `filesystemWorkspace()` | Stages archive or folder revisions from a durable local filesystem store into a safe temporary materialization.                                                                                      |
 | Workspace | [S3 adapter](./providers/workspaces/s3)          | `s3Workspace()`         | Restores and publishes immutable archive or folder revisions through S3-compatible storage. R2 has repository smoke evidence; other backends require deployment-specific compatibility verification. |
@@ -188,11 +188,13 @@ The credentialed smoke runner exercises the complete built-in Agent × Sandbox m
 
 Every cell launches its Agent through the same shared ACP engine and `SandboxRuntime.spawn()`. These proofs use read-write Workspaces where a provider cannot enforce read-only access. The selected host, image, or snapshot must contain the required executable. Sandbox providers do not install Agents implicitly.
 
+Docker, Daytona, and Modal smoke cells use `docker.io/wearesingular/aml-agent-sandbox:dev`, which contains the matrix's pinned Agent executables. Provider factories default to `wearesingular/aml-agent-sandbox:latest`; applications can override that mutable convenience tag with their own image, snapshot, immutable version, or digest.
+
 `<System>`, `<Skill>`, `<FollowUp>`, Context, and tree evaluation are runtime-owned. JavaScript Tools use one AML-owned invocation MCP bridge, and structured output uses one AML-owned final-turn submission Tool. Agent permissions default to read-write filesystem, shell, and network access; the active Sandbox remains the security boundary for model-controlled operations.
 
 Provider factories retain typed vendor configuration and process environment inputs. Credentials normally remain in the selected host or Sandbox environment; an application may also pass explicit invocation environment variables without changing the AML tree.
 
-Sandbox factories keep environment identity at the factory root: Docker and Modal accept `image`, while Daytona accepts either `image` or `snapshot`. Daytona's `create` retains its remaining image- or snapshot-specific creation parameters, and Modal's `create` retains its native Sandbox creation options. Docker accepts only an existing image name; AML does not build images or silently install Agents. Each Sandbox may run an explicit trusted `setup` command after its Workspace is visible.
+Sandbox factories keep environment identity at the factory root: Docker and Modal accept an optional `image`, while Daytona accepts either `image` or `snapshot`. Omitting those selectors uses `wearesingular/aml-agent-sandbox:latest`. Daytona's `create` retains its remaining image- or snapshot-specific creation parameters, and Modal's `create` retains its native Sandbox creation options. AML does not build images or silently install Agents. Each Sandbox may run an explicit trusted `setup` command after its Workspace is visible.
 
 The S3 Workspace factory accepts an injected `S3Client` or its native client configuration. A local MinIO instance uses the same provider with an endpoint and path-style addressing:
 
@@ -375,20 +377,22 @@ contract enforced by GitHub Actions.
 
 ## Releasing
 
-SDK and CLI releases are manual and independent. Complete the [manual smoke tests](#smoke-tests), start from a clean
-`main` that matches `origin/main`, authenticate with npm and GitHub, then run the interactive release for the intended
-package:
+SDK, CLI, and image releases are manual and independent. Complete the [manual smoke tests](#smoke-tests), start from a
+clean `main` that matches `origin/main`, authenticate with the required registries and GitHub, then run the interactive
+release for the intended package:
 
 ```sh
 npm login
 GITHUB_TOKEN="$(gh auth token)" npm run release:sdk
 GITHUB_TOKEN="$(gh auth token)" npm run release:cli
+npm run release:docker
 ```
 
-`npm run release` remains an alias for `release:sdk`. Release It runs the full release checks, prompts for the next
-version, updates the selected package and lockfile, publishes it to npm, pushes the release, and creates the matching
-GitHub release. SDK releases use `vX.Y.Z`; CLI releases use the non-colliding `cli-vX.Y.Z` tag. npm prompts for OTP or
-passkey approval when required.
+`npm run release` remains an alias for `release:sdk`. Release It runs the release checks, prompts for the next version,
+updates the selected package and lockfile, pushes the release, and creates the matching GitHub release. SDK and CLI
+releases publish to npm and use `vX.Y.Z` and `cli-vX.Y.Z` tags. Image releases publish the same signed manifest to Docker
+Hub and GHCR and use `docker-vX.Y.Z`. npm prompts for OTP or passkey approval when required. Image publication uses a
+temporary Docker Hub browser login, the active GitHub CLI account for GHCR, and a local Cosign installation.
 
 Release notes follow those package lanes instead of including every repository commit. CLI notes include commits scoped
 to `cli`. SDK notes include commits scoped to `sdk` or an SDK-owned runtime, primitive, Agent, Sandbox, Workspace, or
@@ -403,7 +407,10 @@ Preview the flow without changing Git, npm, or GitHub:
 ```sh
 GITHUB_TOKEN="$(gh auth token)" npm run release:sdk -- --dry-run
 GITHUB_TOKEN="$(gh auth token)" npm run release:cli -- --dry-run
+npm run release:docker -- --dry-run
 ```
+
+If registry publication fails after the release commit and `docker-vX.Y.Z` tag are created, rerun that exact release from a clean `main` checkout with `npm run release:docker -- --recover`.
 
 The Astro website and Starlight documentation run locally at `http://localhost:5321/` from the repository root:
 

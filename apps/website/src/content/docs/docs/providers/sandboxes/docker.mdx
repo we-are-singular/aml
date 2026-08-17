@@ -9,7 +9,7 @@ import ProviderHero from "../../../../../components/docs/ProviderHero.astro"
   name="docker"
   eyebrow="Sandbox provider"
   title="Docker Sandbox"
-  factory="dockerSandbox(options)"
+  factory="dockerSandbox(options?)"
   summary="The Docker provider starts one disposable container, bind-mounts the effective Workspace at /workspace, and exposes AML’s command and process runtime through docker exec."
   bestFor="Local containerized workflows where you own the Docker daemon and image."
   caution="AML starts a named image; it does not build or harden it. A lightweight docker run adapter is not a complete hostile-code security boundary."
@@ -17,20 +17,23 @@ import ProviderHero from "../../../../../components/docs/ProviderHero.astro"
 
 ## What Docker owns
 
-Docker owns the disposable container and the process transport. The application owns the image, Docker daemon, host configuration, identity, network policy, resource limits, and Agent installation. AML does not build a Dockerfile, install an ACP executable, or infer which Agent an image should run.
+Docker owns the disposable container and the process transport. AML selects `wearesingular/aml-agent-sandbox:latest` when `image` is omitted; the application decides whether to accept that convenience default or override it. The application still owns the Docker daemon, host configuration, identity, network policy, resource limits, project dependencies, and credential delivery. AML does not build a Dockerfile or install an ACP executable during acquisition.
 
 The Workspace is a same-host bind mount, not an archive transfer. The mount target is always `/workspace`; AML maps logical `root` and `cwd` below that path. With `access="read-only"`, AML adds `:ro` to the bind mount. The container can still execute commands, but writes to the mounted Workspace should fail at the mount boundary.
 
 ## Options
 
-| Option           | Type     | Default           | Contract                                                                                    |
-| ---------------- | -------- | ----------------- | ------------------------------------------------------------------------------------------- |
-| `image`          | `string` | Required          | Named image reference passed to `docker run`. Must be a non-empty normalized string.        |
-| `maxOutputBytes` | `number` | `4 * 1024 * 1024` | Shared byte budget for provider command output and transfer/setup output. Must be positive. |
-| `setup`          | `string` | None              | Runs through `sh -lc` after the container starts and the Workspace is mounted.              |
-| `workspace`      | `string` | None              | Fallback host Workspace path. An active `<Workspace />` materialization takes precedence.   |
+| Option           | Type     | Default                                  | Contract                                                                                                        |
+| ---------------- | -------- | ---------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| `image`          | `string` | `wearesingular/aml-agent-sandbox:latest` | Named image reference passed to `docker run`. Must be a non-empty normalized string.                            |
+| `maxOutputBytes` | `number` | `4 * 1024 * 1024`                        | Shared byte budget for provider command output and transfer/setup output. Must be positive.                     |
+| `setup`          | `string` | None                                     | Runs through `sh -lc` after the container starts and the Workspace is mounted.                                  |
+| `user`           | `string` | Image default                            | Optional Docker user or `UID:GID` passed through `--user`. Must be a non-empty normalized string when supplied. |
+| `workspace`      | `string` | None                                     | Fallback host Workspace path. An active `<Workspace />` materialization takes precedence.                       |
 
 Per-command `timeoutMs` is supplied through the AML runtime command API, not the factory options. It must be a positive timer-safe integer. The provider passes command environment values to `docker exec` and maps the logical cwd to `/workspace/...`.
+
+`latest` follows the newest validated stable AML image. Pin an immutable version or digest when reproducibility matters.
 
 ## Image requirements
 
@@ -45,7 +48,7 @@ The image must already contain everything the workflow needs:
 
 `node:26-alpine` is a valid smoke-test image for basic shell/Node commands, but it is not a complete Codex, GitHub Copilot, GLM, OpenCode, or Pi Agent image merely because it contains Node. Build and publish a deliberate image for a real Agent workflow, or use the trusted `setup` hook for experiments.
 
-See [Recommended Sandbox images](/docs/providers/sandboxes/images/) for the verified Cloudflare OpenCode image, current Codex build baseline, Modal recipe status, and an image verification checklist.
+See [Recommended Sandbox images](/docs/providers/sandboxes/images/) for AML's tested multi-Agent runtime, extension guidance, upstream alternatives, and an image verification checklist.
 
 ## Complete safe example
 
@@ -83,7 +86,7 @@ For a real Agent, replace the image with one that contains the ACP executable an
 ## Lifecycle
 
 1. AML resolves the active Workspace directory or the configured fallback.
-2. Docker starts a named detached container with `--rm`, the selected image, `/workspace` bind mount, logical guest cwd, and a keepalive `sh` process.
+2. Docker starts a named detached container with `--rm`, the selected image, optional runtime user, `/workspace` bind mount, logical guest cwd, and a keepalive `sh` process.
 3. If startup fails, AML attempts to remove the named container and aggregates startup and cleanup failures when both fail.
 4. The optional setup command runs after the mount is ready. A non-zero result rejects acquisition and triggers container cleanup.
 5. `exec()` invokes `docker exec` with the logical guest cwd and explicit environment values.
@@ -103,7 +106,7 @@ The adapter invokes `docker run` with an image, `--detach`, `--rm`, a bind mount
 
 - network isolation or egress policy;
 - Linux capabilities, seccomp, AppArmor, or SELinux policy;
-- rootless mode or a non-root user;
+- rootless daemon mode or automatic container-user selection; `user` only passes an explicit identity to Docker;
 - CPU, memory, PID, or disk limits;
 - a read-only root filesystem;
 - secret injection or credential redaction at the Docker daemon boundary.
@@ -119,6 +122,7 @@ Treat the Docker daemon and selected image as part of your security boundary. Pi
 | Container exits before acquisition   | Image lacks `sh`, cannot start, or has incompatible architecture/permissions.                                  | Run the image manually with the expected user and shell.                             |
 | Agent executable not found           | The image does not contain the selected ACP command.                                                           | Install it in the image or use a trusted setup hook; AML does not install it.        |
 | `Workspace` mount fails              | Host source is missing, not a directory, or inaccessible to the Docker daemon.                                 | Verify the active/fallback path and daemon access to the host filesystem.            |
+| Workspace permission denied          | The image user cannot access the host-owned bind mount.                                                        | Set `user` to the Workspace owner's `UID:GID`, or align ownership in the image.      |
 | `exec` exits with code 126/127       | Command is not executable or not found inside the image.                                                       | Check image PATH, executable permissions, architecture, and runtime dependencies.    |
 | Output limit exceeded                | Combined command output exceeded `maxOutputBytes`.                                                             | Reduce output, use `spawn()`, or raise the limit deliberately.                       |
 | Remote command survives cancellation | Docker exec cannot always clean up the child independently.                                                    | AML removes the disposable container; inspect daemon logs if termination is delayed. |

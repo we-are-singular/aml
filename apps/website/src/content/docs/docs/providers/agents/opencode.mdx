@@ -61,7 +61,7 @@ Loaded rules remain OpenCode system instructions. AML-authored System content is
 Install OpenCode through its published CLI package, verify the executable, and configure at least one model provider:
 
 ```sh title="Terminal"
-npm install --global opencode-ai@1.18.9
+npm install --global opencode-ai@1.18.18
 opencode --version
 opencode auth login
 opencode auth list
@@ -69,9 +69,11 @@ opencode auth list
 
 `opencode auth login` stores provider credentials in OpenCode's own data directory. `opencode auth list` also reports provider credentials discovered through environment variables. AML does not copy those credentials into a Workspace or infer which model provider you intended.
 
-The AML repository currently pins `opencode-ai@1.18.9` for its integration toolchain and `@opencode-ai/sdk@1.18.5` for the typed provider configuration. These versions are the repository's verification baseline, not a claim that every newer OpenCode release is compatible. Re-run the provider integration path when changing either side.
+The AML repository currently pins `opencode-ai@1.18.18` for its integration toolchain and `@opencode-ai/sdk@1.18.5` for the typed provider configuration. These versions are the repository's verification baseline, not a claim that every newer OpenCode release is compatible. Re-run the provider integration path when changing either side.
 
-For container execution, [Recommended Sandbox images](/docs/providers/sandboxes/images/#opencode-cloudflare-sandbox) documents the official Cloudflare OpenCode image we inspected and the narrower compatibility it proves.
+For container execution, [AML Agent Sandbox](/docs/providers/sandboxes/images/#aml-agent-sandbox) includes this OpenCode
+baseline and is the default image for Docker, Daytona, and Modal. The image guide also documents Cloudflare's
+OpenCode-specific image as an alternative.
 
 <Aside type="caution" title="Install it where the Agent process runs">
   A host-global installation is available to [`localSandbox()`](/docs/providers/sandboxes/local/). Docker, Daytona,

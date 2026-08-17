@@ -9,7 +9,7 @@ This document records the architecture and current direction for connecting AML 
 The current design deliberately avoids turning AML into a generic filesystem, process, image-build, or container-security layer:
 
 - AML coordinates Sandboxes; it does not provision their software.
-- Applications select a provider-native image, snapshot, package set, or host environment that already contains the required ACP Agent and tools.
+- AML supplies a tested default Agent image for Docker, Daytona, and Modal; applications may select another provider-native image, snapshot, package set, or host environment.
 - An explicit `setup` hook may install missing software after acquisition as a convenience, but hidden installation is forbidden.
 - `SandboxRuntime.spawn()` is the process transport beneath the shared ACP session engine. `exec()` remains for bounded Scripts, setup, and provider internals; it is not an alternative Agent protocol.
 - Every built-in coding Agent uses the same ACP lifecycle on the trusted local host and inside every supported Sandbox.
@@ -41,19 +41,19 @@ Provider factories remain provider-specific. Applications construct `dockerSandb
 
 ### Application and environment author
 
-The application selects the execution environment:
+The application accepts AML's default image or selects another execution environment:
 
 - Docker image
 - Daytona snapshot or image
-- Modal named image
+- Modal registry image
 - Cloudflare container configuration
 - another provider-native environment reference
 
 That environment is responsible for containing its operating-system dependencies, language runtimes, ACP Agent executables, and supporting tools. The environment author owns their versions and update policy.
 
-For example, choosing Codex for a Modal Sandbox means selecting a Modal image that already contains the compatible Codex ACP adapter and runtime. AML does not detect that choice and install Codex automatically.
+For example, choosing Codex for a Modal Sandbox requires an image that already contains the compatible Codex ACP adapter and runtime. AML's default image satisfies that executable contract; an override must do the same. AML does not inspect an arbitrary image and install Codex automatically.
 
-AML may later publish a convenient, versioned image containing supported Agents and useful coding tools. That would be a separate distribution artifact, not a responsibility of the Sandbox runtime.
+AML publishes `aml-agent-sandbox` as a separate, versioned distribution artifact containing the supported Agents and useful coding tools. Provider factories select its `latest` tag by default, but image construction, project dependencies, credentials, and deployment hardening remain outside the Sandbox runtime.
 
 ### AML coordinator
 
@@ -287,7 +287,7 @@ AML should learn from those provider boundaries without copying the complete fea
 
 The credentialed smoke matrix exercises the Cartesian product of supported Agent and Sandbox providers. It is separate from default unit tests because it may require credentials, containers, network access, remote infrastructure, and real model calls.
 
-Each Agent has one canonical registration. Each Sandbox supplies the concrete environment needed for every registered Agent, including its image or snapshot, optional setup, and environment-specific configuration. Adding either axis therefore requires an explicit compatibility decision for the other axis rather than silently skipping unknown combinations.
+Each Agent has one canonical registration. Docker, Daytona, and Modal matrix cells use the same `aml-agent-sandbox:dev` image; Local uses the matching host-installed executables. Adding either axis therefore requires an explicit compatibility decision for the other axis rather than silently skipping unknown combinations.
 
 Every selected cell runs the same end-to-end behavior:
 
@@ -308,7 +308,7 @@ The matrix supports selecting one Agent, one Sandbox, either complete axis, or t
 
 These are possible extensions, not implementation phases:
 
-- publish a convenient, versioned AML Agent image after the environment contract is stable
+- evaluate narrower or multi-architecture image variants only after provider evidence justifies their additional release cost
 - add Sandbox providers only when they preserve provider-native environment configuration
 - evaluate snapshots, warm starts, retries, and forks as control-plane capabilities
 - add authenticated service access only when an Agent requires it
