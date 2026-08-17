@@ -1,0 +1,31 @@
+{
+  "name": "@aml-jsx/agent-sandbox-image",
+  "version": "0.0.0",
+  "private": true,
+  "description": "AML's portable, tested runtime image for ACP coding Agents",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/we-are-singular/aml.git",
+    "directory": "images/aml-agent-sandbox"
+  },
+  "scripts": {
+    "build": "docker build --platform linux/amd64 --tag aml-agent-sandbox:dev .",
+    "check": "docker run --rm --platform linux/amd64 --volume $PWD/verify.sh:/verify.sh:ro aml-agent-sandbox:dev /verify.sh",
+    "release": "node scripts/release.mjs",
+    "release:check": "npm audit --omit=dev && npm run build && npm run check"
+  },
+  "dependencies": {
+    "@agentclientprotocol/codex-acp": "1.4.0",
+    "@earendil-works/pi-coding-agent": "0.84.2",
+    "@github/copilot": "1.0.80",
+    "@openai/codex": "0.147.0",
+    "glm-acp-agent": "1.5.0",
+    "opencode-ai": "1.18.18",
+    "pi-acp": "0.0.33",
+    "pi-mcp-adapter": "2.26.0"
+  },
+  "devDependencies": {
+    "release-it": "^21.0.0"
+  }
+}
