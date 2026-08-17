@@ -1334,9 +1334,9 @@ await runtime.evaluate(
 )
 ```
 
-The factory requires one normalized `image` name. Its optional `workspace` is the host-directory fallback for a standalone Sandbox. An active `<Workspace>` materialization supersedes that fallback; acquisition rejects if neither exists. `setup` is an optional trusted shell program and `maxOutputBytes` bounds command output. AML does not accept Dockerfiles, build contexts, Docker SDK clients, Agent packages, or installation policy.
+The factory accepts an optional normalized `image` name and defaults to `wearesingular/aml-agent-sandbox:latest`. Its optional `workspace` is the host-directory fallback for a standalone Sandbox. An active `<Workspace>` materialization supersedes that fallback; acquisition rejects if neither exists. `setup` is an optional trusted shell program and `maxOutputBytes` bounds command output. AML does not accept Dockerfiles, build contexts, Docker SDK clients, Agent packages, or installation policy.
 
-The selected image owns its operating system, language runtimes, Agent SDKs and CLIs, development tools, user identity, and versions. It must contain POSIX `sh` and `sleep` for this first adapter. AML may document or publish useful images separately, but `dockerSandbox()` never builds one.
+The selected image owns its operating system, language runtimes, Agent SDKs and CLIs, development tools, user identity, and versions. It must contain POSIX `sh` and `sleep` for this first adapter. AML publishes its default image separately, but `dockerSandbox()` never builds one.
 
 The provider uses the local Docker CLI to:
 
@@ -1386,7 +1386,7 @@ const daytona = daytonaSandbox({
 })
 ```
 
-`config` is Daytona's `DaytonaConfig`. The mutually exclusive root `image` and `snapshot` options select the environment consistently with other Sandbox factories. `create` retains Daytona's remaining image- or snapshot-specific creation parameters, and `createOptions` preserves its creation timeout and image-build log callback. Applications may inject an already configured Daytona client instead of `config`, but not both. AML reconstructs Daytona's native request at the adapter boundary rather than translating these values into generic Sandbox configuration.
+`config` is Daytona's `DaytonaConfig`. The mutually exclusive root `image` and `snapshot` options select the environment consistently with other Sandbox factories; omitting both selects `wearesingular/aml-agent-sandbox:latest`. `create` retains Daytona's remaining image- or snapshot-specific creation parameters, and `createOptions` preserves its creation timeout and image-build log callback. Applications may inject an already configured Daytona client instead of `config`, but not both. AML reconstructs Daytona's native request at the adapter boundary rather than translating these values into generic Sandbox configuration.
 
 For each acquisition the provider:
 

@@ -18,25 +18,25 @@ import ProviderHero from "../../../../../components/docs/ProviderHero.astro"
 
 ## When to use it
 
-Choose Daytona when you want Daytona-managed remote environments and are prepared to provide its credentials/client, image or snapshot configuration, and a compatible image runtime. It is a transfer-based provider: AML archives the local Workspace, uploads it, runs the workflow remotely, downloads the complete remote tree on writable release, and then destroys the Sandbox.
+Choose Daytona when you want Daytona-managed remote environments and are prepared to provide its credentials/client and validate the selected image or snapshot. It is a transfer-based provider: AML archives the local Workspace, uploads it, runs the workflow remotely, downloads the complete remote tree on writable release, and then destroys the Sandbox.
 
 Daytona starts commands in the Sandbox user’s writable home. AML therefore uses the relative guest root `workspace`, not `/workspace`. The absolute location of that relative directory is provider/runtime dependent; do not hard-code filesystem-root assumptions into Agent prompts.
 
 ## Options
 
-| Option           | Type                                  | Default           | Contract                                                                                            |
-| ---------------- | ------------------------------------- | ----------------- | --------------------------------------------------------------------------------------------------- |
-| `image`          | Daytona image reference               | None              | Selects image-based creation. Mutually exclusive with `snapshot`; may be omitted.                   |
-| `snapshot`       | Daytona snapshot reference            | None              | Selects snapshot-based creation. Mutually exclusive with `image`; may be omitted.                   |
-| `client`         | `Daytona`                             | None              | Inject an initialized Daytona client. Mutually exclusive with `config`.                             |
-| `config`         | `DaytonaConfig`                       | None              | Configuration used to construct a Daytona client lazily.                                            |
-| `create`         | Provider-native create fields         | None              | Additional creation parameters. Must not contain `image` or `snapshot`; those are AML root options. |
-| `createOptions`  | `{ timeout?, onSnapshotCreateLogs? }` | None              | Daytona creation timeout and optional snapshot-create log callback.                                 |
-| `maxOutputBytes` | `number`                              | `4 * 1024 * 1024` | Shared output/transfer budget. Must be a positive safe integer.                                     |
-| `setup`          | `string`                              | None              | Runs through `sh -lc` after hydration and before the lease is returned.                             |
-| `workspace`      | `string`                              | None              | Fallback local Workspace path. An active `<Workspace />` materialization takes precedence.          |
+| Option           | Type                                  | Default                                  | Contract                                                                                            |
+| ---------------- | ------------------------------------- | ---------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| `image`          | Daytona image reference               | `wearesingular/aml-agent-sandbox:latest` | Selects image-based creation. Mutually exclusive with `snapshot`; may be omitted.                   |
+| `snapshot`       | Daytona snapshot reference            | None                                     | Selects snapshot-based creation. Mutually exclusive with `image`; may be omitted.                   |
+| `client`         | `Daytona`                             | None                                     | Inject an initialized Daytona client. Mutually exclusive with `config`.                             |
+| `config`         | `DaytonaConfig`                       | None                                     | Configuration used to construct a Daytona client lazily.                                            |
+| `create`         | Provider-native create fields         | None                                     | Additional creation parameters. Must not contain `image` or `snapshot`; those are AML root options. |
+| `createOptions`  | `{ timeout?, onSnapshotCreateLogs? }` | None                                     | Daytona creation timeout and optional snapshot-create log callback.                                 |
+| `maxOutputBytes` | `number`                              | `4 * 1024 * 1024`                        | Shared output/transfer budget. Must be a positive safe integer.                                     |
+| `setup`          | `string`                              | None                                     | Runs through `sh -lc` after hydration and before the lease is returned.                             |
+| `workspace`      | `string`                              | None                                     | Fallback local Workspace path. An active `<Workspace />` materialization takes precedence.          |
 
-`image` and `snapshot` are mutually exclusive, but both may be omitted. With neither root option, the Daytona client uses its default creation behavior. Do not put either field inside `create`; the provider rejects that configuration to keep environment identity explicit.
+`image` and `snapshot` are mutually exclusive, but both may be omitted. With neither root option, AML selects `wearesingular/aml-agent-sandbox:latest`. Do not put either field inside `create`; the provider rejects that configuration to keep environment identity explicit.
 
 ## Network egress and firewall tiers
 
@@ -63,7 +63,7 @@ file](https://github.com/radisicc/sandbox-network-whitelist/blob/add-github-copi
 
 ## Remote image and environment requirements
 
-The selected image or default environment must provide:
+The selected image or snapshot must provide:
 
 - a shell capable of running AML’s quoted setup/transfer commands;
 - `tar`, `mkdir`, and `rm` for Workspace hydration and reconciliation;
@@ -111,12 +111,13 @@ await runtime.evaluate(
 )
 ```
 
-The image name above is illustrative: select an image or snapshot that exists in your Daytona account. Never commit `DAYTONA_API_KEY`; configure it through the deployment environment or an injected Daytona client.
+The image name above is illustrative: select an image that Daytona can resolve or a snapshot from your Daytona account.
+Never commit `DAYTONA_API_KEY`; configure it through the deployment environment or an injected Daytona client.
 
 ## Lifecycle
 
 1. AML resolves the active/fallback Workspace source and validates root/cwd boundaries.
-2. Daytona creates a Sandbox using `image`, `snapshot`, or its default creation behavior. `createOptions.timeout` applies to creation; `onSnapshotCreateLogs` receives provider-native snapshot creation logs.
+2. Daytona creates a Sandbox using the selected `image` or `snapshot`; omitting both uses AML's default image. `createOptions.timeout` applies to creation; `onSnapshotCreateLogs` receives provider-native snapshot creation logs.
 3. AML creates a local tar archive of the selected Workspace tree and uploads it to a temporary remote path.
 4. Daytona runs a remote command that clears `workspace`, creates it, extracts the archive, and removes the temporary archive.
 5. The optional setup hook runs through `sh -lc`. Failure rejects acquisition and destroys the Sandbox.
@@ -136,7 +137,7 @@ Use `read-write` for a Daytona ACP Agent unless the complete Agent/Sandbox contr
 
 | Symptom                                                | Cause                                                                                     | What to check                                                                                                             |
 | ------------------------------------------------------ | ----------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
-| `image` and `snapshot` rejected together               | Environment identity is ambiguous.                                                        | Choose exactly one, or omit both for Daytona’s default creation behavior.                                                 |
+| `image` and `snapshot` rejected together               | Environment identity is ambiguous.                                                        | Choose exactly one, or omit both for AML's default image.                                                                 |
 | `image`/`snapshot` inside `create` rejected            | AML keeps root identity separate from native creation fields.                             | Move the field to the factory root.                                                                                       |
 | `requires an active Workspace or configured workspace` | No source tree was provided.                                                              | Add `<Workspace />` or a `workspace` fallback.                                                                            |
 | `tar` transfer fails locally                           | Host `tar` is missing, the source is inaccessible, or archive output exceeded the budget. | Run `tar -C <source> -cf /tmp/check.tar .` as the AML user.                                                               |

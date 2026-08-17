@@ -68,13 +68,16 @@ copilot --version
 copilot help environment
 ```
 
-The AML repository pins `@github/copilot@1.0.79` for deterministic development and smoke setup. That is the verified
+The AML repository pins `@github/copilot@1.0.80` for deterministic development and smoke setup. That is the verified
 baseline for this provider, not a guarantee that every newer release preserves the same ACP behavior. Use the pinned
 version when reproducing repository tests:
 
 ```sh title="Terminal"
-npm install --global @github/copilot@1.0.79
+npm install --global @github/copilot@1.0.80
 ```
+
+[AML Agent Sandbox](/docs/providers/sandboxes/images/#aml-agent-sandbox) includes this pinned baseline and is the default
+image for Docker, Daytona, and Modal. Local Sandbox still requires Copilot CLI on the host.
 
 <Aside type="caution" title="Install it where Copilot runs">
   A host-global installation is visible to [`localSandbox()`](/docs/providers/sandboxes/local/). Docker, Daytona, Modal,

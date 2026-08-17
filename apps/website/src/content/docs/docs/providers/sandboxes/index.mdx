@@ -26,6 +26,8 @@ import ProviderHero from "../../../../../components/docs/ProviderHero.astro"
 
 The compatibility check between an Agent and a Sandbox is structural: it verifies the runtime shape, root, and access mode. It does not prove that an image contains the right executable, that credentials work, that network access is available, or that provider-native utilities are installed. Treat image and credential validation as part of deployment readiness.
 
+Docker, Daytona, and Modal select `wearesingular/aml-agent-sandbox:latest` when their provider factory receives no image or snapshot override. The default contains AML's tested ACP Agent set and common coding tools; it does not contain application credentials or project dependencies. Pin a version or digest for reproducible deployments.
+
 Need a concrete starting point? [Recommended Sandbox images](/docs/providers/sandboxes/images/) tracks public images we have inspected, upstream image recipes, exact Agent requirements, and combinations we deliberately do not claim are ready.
 
 ## The shared lifecycle

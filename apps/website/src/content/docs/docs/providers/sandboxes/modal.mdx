@@ -9,7 +9,7 @@ import ProviderHero from "../../../../../components/docs/ProviderHero.astro"
   name="modal"
   eyebrow="Sandbox provider"
   title="Modal Sandbox"
-  factory="modalSandbox(options)"
+  factory="modalSandbox(options?)"
   summary="The Modal provider creates a disposable Sandbox from a registry image, transfers the selected Workspace to /workspace, and reconciles the full tree before termination on writable release."
   bestFor="Remote execution backed by Modal images, apps, and credentials."
   caution="Workspace state is archived and transferred. A Sandbox or transfer failure before reconciliation can lose unsynchronized remote edits."
@@ -23,18 +23,20 @@ Modal is not a shared mount provider. The local Workspace is archived with host 
 
 ## Options
 
-| Option           | Type                  | Default           | Contract                                                                                   |
-| ---------------- | --------------------- | ----------------- | ------------------------------------------------------------------------------------------ |
-| `image`          | `string`              | Required          | Registry image reference passed to `images.fromRegistry()`.                                |
-| `appName`        | `string`              | `aml-jsx`         | Modal app name used with `createIfMissing: true`.                                          |
-| `client`         | `ModalClient`         | None              | Inject an initialized Modal client. Mutually exclusive with `config`.                      |
-| `config`         | `ModalClientParams`   | None              | Configuration used to construct a Modal client lazily.                                     |
-| `create`         | `SandboxCreateParams` | None              | Provider-native Sandbox creation parameters.                                               |
-| `maxOutputBytes` | `number`              | `4 * 1024 * 1024` | Shared output/transfer budget. Must be positive.                                           |
-| `setup`          | `string`              | None              | Runs through `sh -lc` after hydration and before the lease is returned.                    |
-| `workspace`      | `string`              | None              | Fallback local Workspace path. An active `<Workspace />` materialization takes precedence. |
+| Option           | Type                  | Default                                  | Contract                                                                                   |
+| ---------------- | --------------------- | ---------------------------------------- | ------------------------------------------------------------------------------------------ |
+| `image`          | `string`              | `wearesingular/aml-agent-sandbox:latest` | Registry image reference passed to `images.fromRegistry()`.                                |
+| `appName`        | `string`              | `aml-jsx`                                | Modal app name used with `createIfMissing: true`.                                          |
+| `client`         | `ModalClient`         | None                                     | Inject an initialized Modal client. Mutually exclusive with `config`.                      |
+| `config`         | `ModalClientParams`   | None                                     | Configuration used to construct a Modal client lazily.                                     |
+| `create`         | `SandboxCreateParams` | None                                     | Provider-native Sandbox creation parameters.                                               |
+| `maxOutputBytes` | `number`              | `4 * 1024 * 1024`                        | Shared output/transfer budget. Must be positive.                                           |
+| `setup`          | `string`              | None                                     | Runs through `sh -lc` after hydration and before the lease is returned.                    |
+| `workspace`      | `string`              | None                                     | Fallback local Workspace path. An active `<Workspace />` materialization takes precedence. |
 
 The factory validates `image`, `appName`, `setup`, and `workspace` as non-empty strings. Inject either `client` or `config`, not both. The local host also needs `tar` and enough temporary disk for upload/download archives.
+
+Omitting `image` selects `wearesingular/aml-agent-sandbox:latest`. Pin an immutable version or digest when reproducibility matters, or provide an application image with additional project dependencies.
 
 ## Image requirements
 
@@ -60,7 +62,8 @@ On writable release, AML creates a complete archive from `/workspace`, downloads
 
 ## Complete safe example
 
-This example uses a temporary directory and a minimal shell command. The image reference is illustrative and must exist in your Modal registry:
+This example uses a temporary directory and a minimal shell command. The image reference is illustrative and must be
+readable by Modal from its registry source:
 
 ```tsx
 /** @jsxImportSource @aml-jsx/sdk */

@@ -32,12 +32,12 @@ import { AmlRuntime, codexAgent, dockerSandbox, localWorkspace } from "@aml-jsx/
 
 const runtime = new AmlRuntime({
   agentProvider: codexAgent({}),
-  sandboxProvider: dockerSandbox({ image: "aml-codex:latest" }),
+  sandboxProvider: dockerSandbox(),
   workspaceProvider: localWorkspace({ directory: "/absolute/path/to/project" }),
 })
 ```
 
-[`dockerSandbox()`](/docs/providers/sandboxes/docker/) expects the image to already contain the compatible ACP executable, Node/runtime dependencies, project dependencies, credentials strategy, and any command-line tools the workflow needs. AML does not build the image or install an Agent.
+[`dockerSandbox()`](/docs/providers/sandboxes/docker/) defaults to `wearesingular/aml-agent-sandbox:latest`, AML's portable Agent runtime. The repository smoke matrix uses the `:dev` preview while validating the next release. Applications can override the default with an immutable version, digest, or custom image containing the compatible ACP executable, project dependencies, credentials strategy, and command-line tools their workflow needs. The provider does not build the image or install an Agent during acquisition.
 
   </TabItem>
   <TabItem label="Durable revisions">

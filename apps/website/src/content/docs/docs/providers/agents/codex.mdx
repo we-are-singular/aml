@@ -57,14 +57,16 @@ directory. AML's authored `system` content becomes `developer_instructions` in a
 Install the repository baseline and verify both commands from the environment where AML will launch them:
 
 ```sh title="Terminal"
-npm install --global @agentclientprotocol/codex-acp@1.1.7 @openai/codex@0.145.0
+npm install --global @agentclientprotocol/codex-acp@1.4.0 @openai/codex@0.147.0
 codex-acp --help
 codex --version
 ```
 
 These versions are a repeatable repository baseline, not a guarantee that every newer adapter/CLI pair is compatible. Re-run the live provider path when either changes.
 
-There is no official public Codex Sandbox image that AML currently recommends. [Recommended Sandbox images](/docs/providers/sandboxes/images/#codex-build-and-publish-your-own-image) includes a pinned Dockerfile baseline for publishing an application-owned image.
+For container execution, [AML Agent Sandbox](/docs/providers/sandboxes/images/#aml-agent-sandbox) includes this Codex and
+`codex-acp` baseline and is the default image for Docker, Daytona, and Modal. Local Sandbox still requires both commands
+on the host.
 
 <Aside type="caution" title="Read-only does not mean fully isolated">
   AML maps filesystem access to Codex's `INITIAL_AGENT_MODE`, but the provider implementation explicitly leaves shell
