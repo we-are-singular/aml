@@ -392,8 +392,9 @@ npm run release:docker
 updates the selected package and lockfile, pushes the release, and creates the matching GitHub release. SDK and CLI
 releases publish to npm and use `vX.Y.Z` and `cli-vX.Y.Z` tags. Stable image releases publish to Docker Hub and use
 `docker-vX.Y.Z`. npm prompts for OTP or passkey approval when required. Stable image publication uses a temporary Docker
-Hub browser login and a local Cosign installation. The active GitHub CLI account creates the source release; GHCR's
-separate mutable `dev` channel is published from `main` by GitHub Actions.
+Hub browser login and a local Cosign installation. The active GitHub CLI account creates the source release. GitHub
+Actions publishes GHCR's separate public `dev` nightly/edge channel after relevant changes reach `main`; it does not
+mirror Docker Hub's stable tags.
 
 Release notes follow those package lanes instead of including every repository commit. CLI notes include commits scoped
 to `cli`. SDK notes include commits scoped to `sdk` or an SDK-owned runtime, primitive, Agent, Sandbox, Workspace, or

@@ -8,14 +8,15 @@ Pull stable releases from Docker Hub:
 docker pull wearesingular/aml-agent-sandbox:0.1.0
 ```
 
-Docker Hub is the canonical release registry for semantic versions and `latest`. The mutable development image built
-from the latest relevant `main` revision is available separately from GHCR:
+Docker Hub is the canonical release registry for semantic versions and `latest`. The public, mutable development image
+built from the latest relevant `main` revision is available separately on GHCR:
 
 ```sh
 docker pull ghcr.io/we-are-singular/aml-agent-sandbox:dev
 ```
 
-The development channel is not a mirror of a Docker Hub release. Its contents and digest can change without a release.
+GitHub Actions replaces this nightly/edge channel after relevant image changes land on `main`. It is not a mirror of a
+Docker Hub release, and its contents and digest can change without a release.
 
 ## Included runtime
 

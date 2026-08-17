@@ -53,7 +53,7 @@ That environment is responsible for containing its operating-system dependencies
 
 For example, choosing Codex for a Modal Sandbox requires an image that already contains the compatible Codex ACP adapter and runtime. AML's default image satisfies that executable contract; an override must do the same. AML does not inspect an arbitrary image and install Codex automatically.
 
-AML publishes `aml-agent-sandbox` as a separate, versioned distribution artifact containing the supported Agents and useful coding tools. Provider factories select its `latest` tag by default, but image construction, project dependencies, credentials, and deployment hardening remain outside the Sandbox runtime.
+AML publishes `aml-agent-sandbox` as a separate, versioned distribution artifact containing the supported Agents and useful coding tools. Docker Hub is the canonical stable registry, and provider factories select its `latest` tag by default. GHCR carries the public, mutable `dev` nightly/edge channel used by repository validation; it is not a stable mirror. Image construction, project dependencies, credentials, and deployment hardening remain outside the Sandbox runtime.
 
 ### AML coordinator
 
@@ -287,7 +287,7 @@ AML should learn from those provider boundaries without copying the complete fea
 
 The credentialed smoke matrix exercises the Cartesian product of supported Agent and Sandbox providers. It is separate from default unit tests because it may require credentials, containers, network access, remote infrastructure, and real model calls.
 
-Each Agent has one canonical registration. Docker, Daytona, and Modal matrix cells use the same `aml-agent-sandbox:dev` image; Local uses the matching host-installed executables. Adding either axis therefore requires an explicit compatibility decision for the other axis rather than silently skipping unknown combinations.
+Each Agent has one canonical registration. Docker, Daytona, and Modal matrix cells use the same public `ghcr.io/we-are-singular/aml-agent-sandbox:dev` image; Local uses the matching host-installed executables. Adding either axis therefore requires an explicit compatibility decision for the other axis rather than silently skipping unknown combinations.
 
 Every selected cell runs the same end-to-end behavior:
 
