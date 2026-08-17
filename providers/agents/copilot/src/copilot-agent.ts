@@ -120,6 +120,9 @@ class CopilotAcpProfile implements AcpAgentProfile<"copilot"> {
         // Copilot's config directory can contain credentials, MCP servers,
         // permissions, and session state. Never inherit the operator's home.
         COPILOT_HOME: context.stateDirectory,
+        // The standalone CLI extracts its bundled runtime through HOME before
+        // it reads COPILOT_HOME, so both locations must be invocation-private.
+        HOME: context.stateDirectory,
       },
       ...(initialPromptSections.length === 0 ? {} : { initialPromptPrefix: initialPromptSections.join("\n\n") }),
       // Explicit deny rules above take precedence over approvals. The outer
