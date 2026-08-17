@@ -1,0 +1,23 @@
+{
+  "$schema": "https://unpkg.com/release-it@21/schema/release-it.json",
+  "verbose": true,
+  "hooks": {
+    "after:bump": ["npm install --package-lock-only --ignore-scripts", "git add package-lock.json"],
+    "before:release": ["node scripts/publish.mjs --check", "npm run release:check"],
+    "after:git:release": "node scripts/publish.mjs ${version}"
+  },
+  "git": {
+    "commitMessage": "release(docker): v${version}",
+    "requireBranch": "main",
+    "tagAnnotation": "Release AML Agent Sandbox v${version}",
+    "tagMatch": "docker-v*",
+    "tagName": "docker-v${version}"
+  },
+  "github": {
+    "release": true,
+    "releaseName": "AML Agent Sandbox v${version}"
+  },
+  "npm": {
+    "publish": false
+  }
+}
