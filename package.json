@@ -60,5 +60,5 @@
     "node": ">=26.0.0",
     "npm": ">=11.0.0"
   },
-  "packageManager": "npm@11.18.0"
+  "packageManager": "npm@11.19.0"
 }

@@ -79,6 +79,7 @@ try {
     runNpm(["pack", "--ignore-scripts", "--json", "--pack-destination", temporaryDirectory], packageDirectory),
     "npm pack"
   )
+  // npm pack --json returns an array of one element; npm 12 changes this shape.
   const [packResult] = JSON.parse(packOutput) as PackResult[]
 
   if (packResult === undefined) {
