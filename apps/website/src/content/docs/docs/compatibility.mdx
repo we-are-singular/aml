@@ -26,7 +26,7 @@ Compatibility is a layered decision, not one support badge. AML can ship an adap
 | Sandbox   | Local, Docker, Daytona, Modal              | Host or image contents, identity, isolation policy, resources, transfer, and cleanup.       |
 | Workspace | Local directory, Filesystem, S3-compatible | Writable materialization or storage semantics, locking, publication, retention, and access. |
 
-The repository generates every built-in Agent × Sandbox case through one smoke runner. The docs do not duplicate its pinned tool versions: inspect the current [`smoke-config.ts`](https://github.com/we-are-singular/aml/blob/main/sdk/tests/smoke/smoke-config.ts) when the exact setup matters. Docker, Daytona, and Modal cases use `docker.io/wearesingular/aml-agent-sandbox:dev`; Local cases require the same Agent executables on the host.
+The repository generates every built-in Agent × Sandbox case through one smoke runner. The docs do not duplicate its pinned tool versions: inspect the current [`smoke-config.ts`](https://github.com/we-are-singular/aml/blob/main/sdk/tests/smoke/smoke-config.ts) when the exact setup matters. Docker, Daytona, and Modal cases use `ghcr.io/we-are-singular/aml-agent-sandbox:dev`; Local cases require the same Agent executables on the host.
 
 List cases without contacting a provider:
 
