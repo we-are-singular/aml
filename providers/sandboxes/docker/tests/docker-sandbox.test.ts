@@ -36,7 +36,6 @@ describe("dockerSandbox()", () => {
     const runner = new FakeRunner()
     const provider = createDockerSandboxProvider(
       {
-        image: "node:26-alpine",
         workspace,
       },
       runner
@@ -57,7 +56,7 @@ describe("dockerSandbox()", () => {
         "/workspace/src",
         "--entrypoint",
         "sh",
-        "node:26-alpine",
+        "wearesingular/aml-agent-sandbox:latest",
         "-c",
         expect.any(String),
       ],
@@ -115,6 +114,20 @@ describe("dockerSandbox()", () => {
         timeoutMs: 5000,
       },
     })
+  })
+
+  it("starts the container as an explicitly selected runtime user", async () => {
+    const workspace = await createWorkspace()
+    const runner = new FakeRunner()
+    const lease = await createDockerSandboxProvider(
+      { image: "agent-image", user: "1002:1002", workspace },
+      runner
+    ).acquire(request())
+
+    expect(runner.calls[0]?.args).toEqual(
+      expect.arrayContaining(["--user", "1002:1002", "--volume", `${path.join(workspace, "repository")}:/workspace`])
+    )
+    await lease.release()
   })
 
   it("runs setup before returning and removes a failed setup container", async () => {
@@ -232,6 +245,7 @@ describe("dockerSandbox()", () => {
   })
 
   it("validates the image-first configuration without running Docker", () => {
+    expect(() => dockerSandbox()).not.toThrow()
     expect(() => dockerSandbox({ image: "" })).toThrow("image must be a non-empty normalized string")
     expect(() => dockerSandbox({ image: " alpine " })).toThrow("image must be a non-empty normalized string")
     expect(() => dockerSandbox({ image: "alpine", maxOutputBytes: 0 })).toThrow(
@@ -239,6 +253,9 @@ describe("dockerSandbox()", () => {
     )
     expect(() => dockerSandbox({ image: "alpine", setup: " setup " })).toThrow(
       "setup must be a non-empty normalized string"
+    )
+    expect(() => dockerSandbox({ image: "alpine", user: " 1000:1000" })).toThrow(
+      "user must be a non-empty normalized string"
     )
   })
 

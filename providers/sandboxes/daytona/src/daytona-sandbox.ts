@@ -25,6 +25,7 @@ import {
 } from "@aml-jsx/sdk"
 
 const DEFAULT_MAX_OUTPUT_BYTES = 4 * 1024 * 1024
+const DEFAULT_IMAGE = "wearesingular/aml-agent-sandbox:latest"
 // Daytona commands start in the Sandbox user's writable home. A relative root
 // avoids assuming that the selected snapshot grants access to filesystem `/`.
 const GUEST_ROOT = "workspace"
@@ -64,8 +65,11 @@ export type DaytonaSandboxOptions = DaytonaSandboxSharedOptions &
       }
   )
 
-type ParsedDaytonaSandboxOptions = DaytonaSandboxOptions & {
+interface ParsedDaytonaSandboxOptions extends DaytonaSandboxSharedOptions {
+  readonly create?: Omit<CreateSandboxFromImageParams, "image"> | Omit<CreateSandboxFromSnapshotParams, "snapshot">
+  readonly image?: CreateSandboxFromImageParams["image"]
   readonly maxOutputBytes: number
+  readonly snapshot?: CreateSandboxFromSnapshotParams["snapshot"]
 }
 
 export interface DaytonaSandboxHandle {
@@ -711,7 +715,9 @@ function parseOptions(value: DaytonaSandboxOptions): Readonly<ParsedDaytonaSandb
     throw new TypeError("Daytona Sandbox accepts either image or snapshot, not both")
   }
 
+  const { image: configuredImage, snapshot, ...sharedOptions } = value
   const maxOutputBytes = value.maxOutputBytes ?? DEFAULT_MAX_OUTPUT_BYTES
+  const image = configuredImage ?? (snapshot === undefined ? DEFAULT_IMAGE : undefined)
 
   if (!Number.isSafeInteger(maxOutputBytes) || maxOutputBytes <= 0) {
     throw new RangeError("Daytona Sandbox maxOutputBytes must be a positive safe integer")
@@ -726,7 +732,9 @@ function parseOptions(value: DaytonaSandboxOptions): Readonly<ParsedDaytonaSandb
   }
 
   return Object.freeze({
-    ...value,
+    ...sharedOptions,
+    ...(image === undefined ? {} : { image }),
     maxOutputBytes,
+    ...(snapshot === undefined ? {} : { snapshot }),
   })
 }

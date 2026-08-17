@@ -37,14 +37,13 @@ describe("modalSandbox()", () => {
         cpu: 2,
         timeoutMs: 60_000,
       },
-      image: "node:26",
       setup: "prepare agent",
       workspace,
     })
     const lease = await provider.acquire(request())
 
     expect(fake.appCalls).toEqual([{ createIfMissing: true, name: "aml-tests" }])
-    expect(fake.imageCalls).toEqual(["node:26"])
+    expect(fake.imageCalls).toEqual(["wearesingular/aml-agent-sandbox:latest"])
     expect(fake.createCalls).toEqual([
       {
         app: { appId: "ap-test" },
@@ -114,6 +113,7 @@ describe("modalSandbox()", () => {
   })
 
   it("validates AML options without constructing a credentialed client", () => {
+    expect(() => modalSandbox()).not.toThrow()
     expect(() => modalSandbox({ image: "node:26" })).not.toThrow()
     expect(() =>
       modalSandbox({
