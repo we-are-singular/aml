@@ -4,6 +4,7 @@ import {
   codexAgent,
   copilotAgent,
   daytonaSandbox,
+  glmAgent,
   dockerSandbox,
   localSandbox,
   modalSandbox,
@@ -25,6 +26,7 @@ export function loadSmokeEnvironment(): void {
 const CODEX_ACP_VERSION = "1.1.7"
 const CODEX_VERSION = "0.145.0"
 const COPILOT_VERSION = "1.0.79"
+const GLM_ACP_VERSION = "1.5.0"
 const OPENCODE_VERSION = "1.18.9"
 const PI_ACP_VERSION = "0.0.33"
 const PI_MCP_ADAPTER_VERSION = "2.16.0"
@@ -33,19 +35,21 @@ const SMOKE_AGENT_PATH = `/tmp/aml-agents/bin:${process.env.PATH ?? "/usr/local/
 const ALL_AGENTS_SETUP =
   "test -f input.txt && " +
   `npm install --global --prefix /tmp/aml-agents @agentclientprotocol/codex-acp@${CODEX_ACP_VERSION} ` +
-  `@github/copilot@${COPILOT_VERSION} @openai/codex@${CODEX_VERSION} opencode-ai@${OPENCODE_VERSION} ` +
+  `@github/copilot@${COPILOT_VERSION} @openai/codex@${CODEX_VERSION} glm-acp-agent@${GLM_ACP_VERSION} ` +
+  `opencode-ai@${OPENCODE_VERSION} ` +
   `pi-acp@${PI_ACP_VERSION} ` +
   `pi-mcp-adapter@${PI_MCP_ADAPTER_VERSION} ` +
   `@earendil-works/pi-coding-agent@${PI_VERSION} && ` +
   "PATH=/tmp/aml-agents/bin:$PATH command -v codex-acp && " +
   "PATH=/tmp/aml-agents/bin:$PATH command -v codex && " +
   "PATH=/tmp/aml-agents/bin:$PATH command -v copilot && " +
+  "PATH=/tmp/aml-agents/bin:$PATH command -v glm-acp-agent && " +
   "PATH=/tmp/aml-agents/bin:$PATH command -v opencode && " +
   "PATH=/tmp/aml-agents/bin:$PATH command -v pi-acp && " +
   "PATH=/tmp/aml-agents/bin:$PATH command -v pi && " +
   "PATH=/tmp/aml-agents/bin:$PATH command -v pi-mcp-adapter"
 const ALL_AGENTS_PRESENT =
-  "test -f input.txt && command -v codex-acp && command -v codex && command -v copilot && command -v opencode && command -v pi-acp && command -v pi && command -v pi-mcp-adapter"
+  "test -f input.txt && command -v codex-acp && command -v codex && command -v copilot && command -v glm-acp-agent && command -v opencode && command -v pi-acp && command -v pi && command -v pi-mcp-adapter"
 
 export interface SmokeAgentInstance {
   readonly provider: AgentProvider
@@ -86,6 +90,15 @@ export const SMOKE_AGENTS = {
     },
     get model() {
       return process.env.AML_COPILOT_MODEL ?? "gpt-5-mini"
+    },
+  },
+  glm: {
+    create() {
+      const apiKey = requiredZaiApiKey()
+      return { provider: glmAgent({ apiKey, env: { PATH: SMOKE_AGENT_PATH } }) }
+    },
+    get model() {
+      return process.env.AML_GLM_MODEL ?? "glm-5.3"
     },
   },
   opencode: {
@@ -339,6 +352,12 @@ export function parseKitchenSinkCommand(args: readonly string[]): KitchenSinkCom
 function requiredOpenAiApiKey(agent: string): string {
   const apiKey = process.env.AML_CODEX_API_KEY ?? process.env.OPENAI_API_KEY
   if (apiKey === undefined) throw new Error(`${agent} smoke requires AML_CODEX_API_KEY or OPENAI_API_KEY`)
+  return apiKey
+}
+
+function requiredZaiApiKey(): string {
+  const apiKey = process.env.AML_ZAI_API_KEY ?? process.env.Z_AI_API_KEY
+  if (apiKey === undefined) throw new Error("GLM smoke requires AML_ZAI_API_KEY or Z_AI_API_KEY")
   return apiKey
 }
 
