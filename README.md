@@ -390,9 +390,10 @@ npm run release:docker
 
 `npm run release` remains an alias for `release:sdk`. Release It runs the release checks, prompts for the next version,
 updates the selected package and lockfile, pushes the release, and creates the matching GitHub release. SDK and CLI
-releases publish to npm and use `vX.Y.Z` and `cli-vX.Y.Z` tags. Image releases publish the same signed manifest to Docker
-Hub and GHCR and use `docker-vX.Y.Z`. npm prompts for OTP or passkey approval when required. Image publication uses a
-temporary Docker Hub browser login, the active GitHub CLI account for GHCR, and a local Cosign installation.
+releases publish to npm and use `vX.Y.Z` and `cli-vX.Y.Z` tags. Stable image releases publish to Docker Hub and use
+`docker-vX.Y.Z`. npm prompts for OTP or passkey approval when required. Stable image publication uses a temporary Docker
+Hub browser login and a local Cosign installation. The active GitHub CLI account creates the source release; GHCR's
+separate mutable `dev` channel is published from `main` by GitHub Actions.
 
 Release notes follow those package lanes instead of including every repository commit. CLI notes include commits scoped
 to `cli`. SDK notes include commits scoped to `sdk` or an SDK-owned runtime, primitive, Agent, Sandbox, Workspace, or

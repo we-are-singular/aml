@@ -8,7 +8,6 @@ import { fileURLToPath } from "node:url"
 const imageDirectory = resolve(dirname(fileURLToPath(import.meta.url)), "..")
 const repositoryRoot = resolve(imageDirectory, "../..")
 const dockerHubImage = "docker.io/wearesingular/aml-agent-sandbox"
-const ghcrImage = "ghcr.io/we-are-singular/aml-agent-sandbox"
 const version = process.argv[2]
 
 if (version === "--check") {
@@ -66,31 +65,9 @@ try {
     throw new Error("Docker Buildx did not report a valid image digest")
   }
 
-  // A second Docker push can recompress layers. Copy the canonical manifest
-  // by digest so Docker Hub and GHCR expose the exact same image hash.
-  run(
-    "docker",
-    [
-      "buildx",
-      "imagetools",
-      "create",
-      "--prefer-index=false",
-      "--tag",
-      `${ghcrImage}:${version}`,
-      "--tag",
-      `${ghcrImage}:sha-${shortRevision}`,
-      "--tag",
-      `${ghcrImage}:latest`,
-      `${dockerHubImage}@${digest}`,
-    ],
-    repositoryRoot
-  )
-
   verifyDigest(`${dockerHubImage}:${version}`, digest)
-  verifyDigest(`${ghcrImage}:${version}`, digest)
 
   run("cosign", ["sign", "--yes", `${dockerHubImage}@${digest}`], repositoryRoot)
-  run("cosign", ["sign", "--yes", `${ghcrImage}@${digest}`], repositoryRoot)
 
   process.stdout.write(`Published AML Agent Sandbox ${version}\nDigest: ${digest}\n`)
 } finally {
