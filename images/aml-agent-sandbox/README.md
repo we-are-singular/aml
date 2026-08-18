@@ -98,11 +98,18 @@ Stable image releases run locally, not in GitHub Actions. Start from a clean `ma
 npm run release:docker
 ```
 
-The command opens Docker Hub's browser login in a temporary Docker configuration. The temporary credentials are
-deleted when the command exits. Release It then prompts for the version, runs the image audit/build/conformance checks,
+The command first checks that the caller's selected Buildx builder can publish SBOM and provenance attestations. Use an
+existing `docker-container` builder, or enable Docker's containerd image store; the release does not create or switch
+builders. Docker Hub's browser login then uses a temporary Docker configuration while the caller's Buildx configuration,
+selected builder, and state remain available. The temporary credentials are deleted when the command exits. Release It
+then prompts for the version, runs the image audit/build/conformance checks,
 creates a `docker-vX.Y.Z` release commit and tag, publishes the image to Docker Hub, verifies its digest, and signs that
 digest. The active `gh` account authorizes the source tag's GitHub Release; it is not used to publish a stable GHCR
 image.
+
+Browser authentication follows each maintainer's local setup. Under WSL, set `BROWSER` to an installed host-browser
+opener such as `wslview`, or open the displayed device URL in Windows and enter the one-time code. Native Linux and
+macOS maintainers can keep their normal browser configuration. No browser path is required by the release scripts.
 
 If image publication fails after Release It creates the release commit and tag, recover that same version from a clean `main` checkout:
 
@@ -117,6 +124,18 @@ Preview the versioning and Git release flow without publishing:
 ```sh
 npm run release:docker -- --dry-run
 ```
+
+After publication completes, independently verify the immutable digest, exact Cosign signer policy, BuildKit SBOM and
+provenance, all stable tags, and the GitHub Release:
+
+```sh
+npm run verify:release --prefix images/aml-agent-sandbox -- 0.1.0 sha256:<digest> \
+  --certificate-identity '<exact Fulcio certificate identity>' \
+  --certificate-oidc-issuer 'https://github.com/login/oauth'
+```
+
+Use the signer identity approved for the maintainer who performed the local keyless signing. The verifier requires an
+exact identity and issuer; it does not accept wildcard trust policy.
 
 ## Channels, tags, and platforms
 

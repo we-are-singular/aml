@@ -1,46 +1,53 @@
 import { mkdtempSync, readFileSync, rmSync } from "node:fs"
-import { tmpdir } from "node:os"
-import { join } from "node:path"
+import { homedir, tmpdir } from "node:os"
+import { join, resolve } from "node:path"
 import { spawnSync } from "node:child_process"
 import process from "node:process"
-import { URL } from "node:url"
+import { pathToFileURL, URL } from "node:url"
 
 const releaseArguments = process.argv.slice(2)
 const skipsPublishing = releaseArguments.some(argument => ["--dry-run", "--help", "--version"].includes(argument))
 const recoversRelease = releaseArguments.includes("--recover")
 
-try {
-  if (recoversRelease && releaseArguments.length !== 1) {
-    throw new Error(`--recover cannot be combined with other release arguments`)
-  }
-
-  if (skipsPublishing) {
-    const previewEnvironment = { ...process.env }
-    if (releaseArguments.includes("--dry-run")) {
-      previewEnvironment.GITHUB_TOKEN = output("gh", ["auth", "token"], process.env)
+export function main() {
+  try {
+    if (recoversRelease && releaseArguments.length !== 1) {
+      throw new Error(`--recover cannot be combined with other release arguments`)
     }
-    process.exitCode = run("release-it", releaseArguments, previewEnvironment)
-  } else {
-    process.exitCode = release()
+
+    if (skipsPublishing) {
+      const previewEnvironment = { ...process.env }
+      if (releaseArguments.includes("--dry-run")) {
+        previewEnvironment.GITHUB_TOKEN = output("gh", ["auth", "token"], process.env)
+      }
+      process.exitCode = run("release-it", releaseArguments, previewEnvironment)
+    } else {
+      process.exitCode = release()
+    }
+  } catch (error) {
+    process.stderr.write(`Release failed: ${error instanceof Error ? error.message : String(error)}\n`)
+    process.exitCode = 1
   }
-} catch (error) {
-  process.stderr.write(`Release failed: ${error instanceof Error ? error.message : String(error)}\n`)
-  process.exitCode = 1
+}
+
+if (process.argv[1] !== undefined && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
+  main()
 }
 
 function release() {
   const recoveryVersion = recoversRelease ? readRecoveryVersion() : undefined
 
-  // Release It uses the active CLI token for the source tag's GitHub Release.
-  // Stable image publication itself authenticates only with Docker Hub.
-  const githubToken = output("gh", ["auth", "token"], process.env)
-
-  // Each release gets isolated registry credentials. This avoids mutating the
-  // Docker Desktop vault and guarantees that cleanup removes the release tokens.
-  const dockerConfig = mkdtempSync(join(tmpdir(), "aml-agent-sandbox-auth-"))
-  const releaseEnvironment = { ...process.env, DOCKER_CONFIG: dockerConfig, GITHUB_TOKEN: githubToken }
+  // Fail before Docker authentication or Release It can create a commit/tag.
+  // The check uses the caller's Buildx state assembled below.
+  const releaseEnvironment = createReleaseEnvironment(process.env)
+  const dockerConfig = releaseEnvironment.DOCKER_CONFIG
 
   try {
+    runOrThrow("node", ["scripts/publish.mjs", "--check"], releaseEnvironment)
+
+    // Release It uses the active CLI token for the source tag's GitHub Release.
+    // Stable image publication itself authenticates only with Docker Hub.
+    releaseEnvironment.GITHUB_TOKEN = output("gh", ["auth", "token"], process.env)
     runOrThrow("docker", ["login"], releaseEnvironment)
 
     if (recoveryVersion) {
@@ -53,6 +60,21 @@ function release() {
     return run("release-it", releaseArguments, releaseEnvironment)
   } finally {
     rmSync(dockerConfig, { recursive: true, force: true })
+  }
+}
+
+/**
+ * Isolates registry credentials while retaining the caller's named builders,
+ * current-builder selection, BuildKit configuration, and build history.
+ */
+export function createReleaseEnvironment(environment, createTemporaryDirectory = mkdtempSync) {
+  const callerDockerConfig = environment.DOCKER_CONFIG ?? join(homedir(), ".docker")
+  const dockerConfig = createTemporaryDirectory(join(tmpdir(), "aml-agent-sandbox-auth-"))
+
+  return {
+    ...environment,
+    BUILDX_CONFIG: environment.BUILDX_CONFIG ?? join(callerDockerConfig, "buildx"),
+    DOCKER_CONFIG: dockerConfig,
   }
 }
 
