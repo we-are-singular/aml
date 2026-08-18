@@ -11,12 +11,12 @@ This page distinguishes images we have actually inspected from useful upstream r
 
 ## AML Agent Sandbox
 
-The repository builds `aml-agent-sandbox` from [`images/aml-agent-sandbox/Dockerfile`](https://github.com/we-are-singular/aml/blob/main/images/aml-agent-sandbox/Dockerfile). It uses Debian/glibc and includes Node.js 26, Python 3, Git, common shell/network/archive tools, and the exact Agent/ACP package versions verified by AML's smoke matrix.
+The repository builds `aml-agent-sandbox` from [`images/aml-agent-sandbox/Dockerfile`](https://github.com/we-are-singular/aml/blob/main/images/aml-agent-sandbox/Dockerfile). It uses Debian/glibc and includes Node.js 26, Python 3, Git, common shell/network/archive tools, the AML CLI and SDK, and the Agent/ACP packages verified by AML's smoke matrix.
 
-Docker Hub is the canonical stable registry:
+Docker Hub is the canonical stable registry ([see all versions](/docs/reference/changelog/docker/)):
 
 ```text
-docker.io/wearesingular/aml-agent-sandbox:<tag>
+docker.io/wearesingular/aml-agent-sandbox:latest
 ```
 
 Stable releases include provenance and an SBOM. The manual release process publishes semantic-version, source-revision,
@@ -61,7 +61,13 @@ npm run check
 npm run smoke --prefix ../.. -- --sandbox docker
 ```
 
-The image deliberately omits credentials, Agent home state, project dependencies, cloud CLIs, Docker-in-Docker, browsers, compilers, and additional language runtimes. It runs as the unprivileged `aml` user by default. AML's local Docker smoke passes the host UID/GID through [`dockerSandbox({ user })`](/docs/providers/sandboxes/docker/#options) so the process can access its bind-mounted Workspace. The image also ships its license, third-party notices, and GitHub Copilot CLI redistribution license.
+The image's `aml` command can run a clean mounted TypeScript, TSX, or JavaScript workflow that imports `@aml-jsx/sdk`
+without a local install. The packages live outside `/workspace`, and standard ancestor `node_modules` resolution keeps them
+visible when Docker replaces `/workspace` with a bind mount. The image deliberately omits credentials, Agent home state,
+other project dependencies, cloud CLIs, Docker-in-Docker, browsers, compilers, and additional language runtimes. It runs
+as the unprivileged `aml` user by default. AML's local Docker smoke passes the host UID/GID through
+[`dockerSandbox({ user })`](/docs/providers/sandboxes/docker/#options) so the process can access its bind-mounted
+Workspace. The image also ships its license, third-party notices, and GitHub Copilot CLI redistribution license.
 
 <Aside type="caution" title="Preview tag">
   GHCR `dev` is mutable and is not synchronized with a Docker Hub tag or digest. Do not use it as a production pin. Use
@@ -174,11 +180,9 @@ Modal documents support for [loading existing public registry images](https://mo
 
 For repository development, run the conformance probe against the current GHCR `dev` build:
 
-```bash
-docker run --rm \
-  --volume "$PWD/images/aml-agent-sandbox/verify.sh:/verify.sh:ro" \
-  ghcr.io/we-are-singular/aml-agent-sandbox:dev \
-  /verify.sh
+```sh
+cd images/aml-agent-sandbox
+AML_AGENT_SANDBOX_IMAGE=ghcr.io/we-are-singular/aml-agent-sandbox:dev npm run check
 ```
 
 For release or deployment evaluation, replace `dev` with the exact Docker Hub semantic version or digest being

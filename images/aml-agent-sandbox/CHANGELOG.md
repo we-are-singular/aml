@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- Embed the published AML CLI and SDK packages with bare-import resolution that remains visible behind mounted
+  Workspaces.
+- Verify deterministic AML execution from clean writable and read-only Workspace mounts without local dependencies.
+
 ## 0.1.0
 
 - Establish a Debian Bookworm/glibc runtime with Node.js 26, npm, Python 3, Git, and common Agent shell/network utilities.

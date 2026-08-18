@@ -45,7 +45,10 @@ jobs:
           cache-to: type=gha,mode=max
 
       - name: Verify image contract
-        run: docker run --rm --platform linux/amd64 --volume "$PWD/images/aml-agent-sandbox/verify.sh:/verify.sh:ro" "$LOCAL_IMAGE" /verify.sh
+        working-directory: images/aml-agent-sandbox
+        env:
+          AML_AGENT_SANDBOX_IMAGE: ${{ env.LOCAL_IMAGE }}
+        run: npm run check
 
       - name: Audit image dependencies
         working-directory: images/aml-agent-sandbox

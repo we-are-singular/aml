@@ -1,15 +1,17 @@
 # AML Agent Sandbox
 
-AML Agent Sandbox is a ready-to-use Debian image for running AI agents with AML. Codex, GitHub Copilot, GLM, OpenCode, Pi, Node.js, Python, Git, and common command-line tools are already installed.
+AML Agent Sandbox is a ready-to-use Debian image for running AI agents and AML workflows. The `aml` CLI, AML SDK,
+Codex, GitHub Copilot, GLM, OpenCode, Pi, Node.js, Python, Git, and common command-line tools are already installed.
 
 Pull stable releases from Docker Hub:
 
 ```sh
-docker pull wearesingular/aml-agent-sandbox:0.1.0
+docker pull wearesingular/aml-agent-sandbox:latest
 ```
 
-Docker Hub is the canonical release registry for semantic versions and `latest`. The public, mutable development image
-built from the latest relevant `main` revision is available separately on GHCR:
+Docker Hub is the canonical release registry for semantic versions and `latest`
+([see all versions](https://agent-markup-language.com/docs/reference/changelog/docker/)). The public, mutable development
+image built from the latest relevant `main` revision is available separately on GHCR:
 
 ```sh
 docker pull ghcr.io/we-are-singular/aml-agent-sandbox:dev
@@ -26,19 +28,45 @@ Docker Hub release, and its contents and digest can change without a release.
 - Git and CA certificates
 - Bash, curl, jq, ripgrep, fd, file, patch, and process inspection tools
 - SSH, DNS/IP diagnostics, netcat, SQLite, and common archive tools
+- `aml` on `PATH` with an image-provided SDK available to bare imports from mounted Workspaces
 - non-root `aml` user with writable home, `/tmp`, and `/workspace`
-- no embedded credentials, Agent state, project dependencies, cloud CLIs, Docker daemon, browsers, compilers, or additional language runtimes
+- no embedded credentials, Agent state, application-specific dependencies, cloud CLIs, Docker daemon, browsers, compilers, or additional language runtimes
 
-| Command          | Package                           |   Version |
-| ---------------- | --------------------------------- | --------: |
-| `codex-acp`      | `@agentclientprotocol/codex-acp`  |   `1.4.0` |
-| `codex`          | `@openai/codex`                   | `0.147.0` |
-| `copilot`        | `@github/copilot`                 |  `1.0.80` |
-| `glm-acp-agent`  | `glm-acp-agent`                   |   `1.5.0` |
-| `opencode`       | `opencode-ai`                     | `1.18.18` |
-| `pi-acp`         | `pi-acp`                          |  `0.0.33` |
-| `pi`             | `@earendil-works/pi-coding-agent` |  `0.84.2` |
-| `pi-mcp-adapter` | `pi-mcp-adapter`                  |  `2.26.0` |
+| Command          | Package                           |
+| ---------------- | --------------------------------- |
+| `aml`            | `@aml-jsx/cli`                    |
+| workflow imports | `@aml-jsx/sdk`                    |
+| `codex-acp`      | `@agentclientprotocol/codex-acp`  |
+| `codex`          | `@openai/codex`                   |
+| `copilot`        | `@github/copilot`                 |
+| `glm-acp-agent`  | `glm-acp-agent`                   |
+| `opencode`       | `opencode-ai`                     |
+| `pi-acp`         | `pi-acp`                          |
+| `pi`             | `@earendil-works/pi-coding-agent` |
+| `pi-mcp-adapter` | `pi-mcp-adapter`                  |
+
+## Run an AML workflow
+
+A clean mounted Workspace does not need a local `package.json`, `node_modules`, or dependency installation. For
+example, save this single file as `workflow.tsx`:
+
+```tsx
+/** @jsxImportSource @aml-jsx/sdk */
+import { Fragment } from "@aml-jsx/sdk"
+
+export default <Fragment>hello from the image</Fragment>
+```
+
+Then run it from any working directory inside the container:
+
+```sh
+aml run /workspace/workflow.tsx
+```
+
+The packages are installed reproducibly under `/opt/aml-agent-sandbox/node_modules`. `/node_modules` points to that
+tree so standard Node and Vite ancestor resolution can find bare imports from arbitrary paths, including `/workspace`
+when a provider replaces it with a bind mount. `NODE_PATH` is not used. Add a local dependency manifest or extend the
+image when a workflow needs packages beyond the embedded SDK.
 
 ## Use with AML
 
@@ -46,7 +74,7 @@ Docker Hub release, and its contents and digest can change without a release.
 import { dockerSandbox } from "@aml-jsx/sdk"
 
 const sandbox = dockerSandbox({
-  image: "wearesingular/aml-agent-sandbox:0.1.0",
+  image: "wearesingular/aml-agent-sandbox:latest",
 })
 ```
 
@@ -54,7 +82,7 @@ The image defaults to UID/GID `1000:1000`. For a same-host Docker bind mount own
 
 ```ts
 const sandbox = dockerSandbox({
-  image: "wearesingular/aml-agent-sandbox:0.1.0",
+  image: "wearesingular/aml-agent-sandbox:latest",
   user: `${process.getuid?.()}:${process.getgid?.()}`,
 })
 ```
@@ -66,7 +94,7 @@ Inject model credentials when the Sandbox starts. Do not bake API keys, Agent ho
 Application images should add only their project toolchain and runtime dependencies:
 
 ```dockerfile
-FROM wearesingular/aml-agent-sandbox:0.1.0
+FROM wearesingular/aml-agent-sandbox:latest
 
 USER root
 RUN apt-get update \
@@ -88,7 +116,10 @@ npm run check
 npm run smoke --prefix ../.. -- --sandbox docker
 ```
 
-The conformance check verifies the runtime user, writable paths, required utilities, exact package versions, Agent startup probes, and redistributed notices. The credentialed smoke matrix proves real ACP sessions, AML JavaScript Tool invocation, structured output, Workspace persistence, and cleanup.
+The conformance check verifies writable and read-only mounted Workspaces, the runtime user, writable invocation state,
+required utilities, exact package versions, direct SDK import resolution, deterministic CLI execution, Agent startup
+probes, and redistributed notices. The credentialed smoke matrix proves real ACP sessions, AML JavaScript Tool
+invocation, structured output, Workspace persistence, and cleanup.
 
 ## Releasing
 
@@ -153,4 +184,5 @@ The image runs as non-root, but container isolation, network policy, Linux capab
 
 AML image source is MIT licensed. Bundled software retains its own license. GitHub Copilot CLI is redistributed unmodified as one component of AML's multi-Agent runtime under the GitHub Copilot CLI License. See [`THIRD_PARTY_NOTICES.md`](./THIRD_PARTY_NOTICES.md) and the license files shipped under `/usr/share/doc/aml-agent-sandbox`.
 
-[Source](https://github.com/we-are-singular/aml/tree/main/images/aml-agent-sandbox), [changelog](https://github.com/we-are-singular/aml/blob/main/images/aml-agent-sandbox/CHANGELOG.md), and issues live in the AML repository.
+[Source](https://github.com/we-are-singular/aml/tree/main/images/aml-agent-sandbox),
+[changelog](https://agent-markup-language.com/docs/reference/changelog/docker/), and issues live in the AML repository.
