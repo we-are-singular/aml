@@ -21,7 +21,7 @@
   },
   "github": {
     "release": true,
-    "releaseName": "@aml-jsx/cli v${version}"
+    "releaseName": "cli v${version}"
   },
   "npm": {
     "publish": true

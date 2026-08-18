@@ -21,7 +21,7 @@
   },
   "github": {
     "release": true,
-    "releaseName": "v${version}"
+    "releaseName": "sdk v${version}"
   },
   "npm": {
     "publish": true

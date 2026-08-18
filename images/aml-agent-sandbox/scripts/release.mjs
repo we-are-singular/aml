@@ -97,7 +97,7 @@ function ensureGithubRelease(version, environment) {
 
   runOrThrow(
     "gh",
-    ["release", "create", tag, "--verify-tag", "--generate-notes", "--title", `AML Agent Sandbox v${version}`],
+    ["release", "create", tag, "--verify-tag", "--generate-notes", "--title", `docker v${version}`],
     environment
   )
 }

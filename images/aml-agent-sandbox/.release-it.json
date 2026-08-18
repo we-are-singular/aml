@@ -15,7 +15,7 @@
   },
   "github": {
     "release": true,
-    "releaseName": "AML Agent Sandbox v${version}"
+    "releaseName": "docker v${version}"
   },
   "npm": {
     "publish": false
