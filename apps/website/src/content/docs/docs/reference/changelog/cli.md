@@ -10,6 +10,20 @@ This page tracks `@aml-jsx/cli`. Entries are newest first. See [GitHub Releases]
 
 <!-- changelog:entries -->
 
+## CLI v0.3.0 — Test infrastructure hardening
+
+Released 2026-08-16.
+
+This release makes no user-facing behavior changes. It only adjusts the CLI's test configuration so automated integration checks remain reliable on cold CI runners, where per-spawn Node startup can otherwise exceed Vitest's default timeout before the page cache warms up.
+
+### Highlights
+
+- **More resilient integration tests.** A new vitest.config.ts raises Vitest's per-test timeout from the 5s default to 30s for CLI integration tests. These tests spawn the compiled binary via spawnSync, and each child process on a cold runner pays several seconds of Node startup that previously could flake against the shorter default. No runtime or CLI behavior is affected.
+
+### Commits
+
+- test(cli): raise integration test timeout for cold ci runners (ebabf7a)
+
 ## CLI v0.2.1 — Independent SDK releases with an aligned compatibility range
 
 Released 2026-08-13.
