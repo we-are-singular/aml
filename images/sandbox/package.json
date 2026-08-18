@@ -19,8 +19,8 @@
   },
   "dependencies": {
     "@agentclientprotocol/codex-acp": "1.4.0",
-    "@aml-jsx/cli": "0.2.1",
-    "@aml-jsx/sdk": "0.5.2",
+    "@aml-jsx/cli": "0.3.1",
+    "@aml-jsx/sdk": "0.6.0",
     "@earendil-works/pi-coding-agent": "0.84.2",
     "@github/copilot": "1.0.80",
     "@openai/codex": "0.147.0",

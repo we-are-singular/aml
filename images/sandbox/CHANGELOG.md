@@ -1,10 +1,11 @@
 # Changelog
 
-## Unreleased
+## 0.2.0
 
-- Embed the published AML CLI and SDK packages with bare-import resolution that remains visible behind mounted
-  Workspaces.
+- Embed AML CLI 0.3.1 and SDK 0.6.0 with bare-import resolution that remains visible behind mounted Workspaces.
 - Smoke deterministic AML execution from a clean Workspace without local dependencies.
+- Publish stable Docker Hub images as the version and `latest`, while GHCR `dev` tracks pushes to `main`.
+- Rename the source and GitHub release lane to Sandbox while retaining the `aml-agent-sandbox` image name.
 
 ## 0.1.0
 
