@@ -50,12 +50,12 @@
     "vite-node": "^6.0.0"
   },
   "devDependencies": {
-    "@aml-jsx/sdk": "^0.5.0",
+    "@aml-jsx/sdk": "^0.6.0",
     "typescript": "^7.0.2",
     "vitest": "^4.1.10"
   },
   "peerDependencies": {
-    "@aml-jsx/sdk": "^0.5.0"
+    "@aml-jsx/sdk": "^0.6.0"
   },
   "engines": {
     "node": ">=26.0.0",
