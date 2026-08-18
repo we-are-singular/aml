@@ -10,40 +10,20 @@ docker pull wearesingular/aml-agent-sandbox:latest
 ```
 
 Docker Hub is the canonical release registry for semantic versions and `latest`
-([see all versions](https://agent-markup-language.com/docs/reference/changelog/docker/)). The public, mutable development
-image built from the latest relevant `main` revision is available separately on GHCR:
+([see all versions](https://agent-markup-language.com/docs/reference/changelog/docker/)).
 
-```sh
-docker pull ghcr.io/we-are-singular/aml-agent-sandbox:dev
-```
-
-GitHub Actions replaces this nightly/edge channel after relevant image changes land on `main`. It is not a mirror of a
-Docker Hub release, and its contents and digest can change without a release.
+The latest relevant `main` revision is published separately as `ghcr.io/we-are-singular/aml-agent-sandbox:dev` for
+repository development and smoke testing. It is not a Docker Hub release.
 
 ## Included runtime
 
-- Debian Bookworm with glibc
-- Node.js 26 and npm
-- Python 3 with pip, venv, and `python`/`python3` commands
-- Git and CA certificates
-- Bash, curl, jq, ripgrep, fd, file, patch, and process inspection tools
-- SSH, DNS/IP diagnostics, netcat, SQLite, and common archive tools
+- A Debian/glibc environment with Node.js, Python, Git, and common coding tools
 - `aml` on `PATH` with an image-provided SDK available to bare imports from mounted Workspaces
+- the Agent and ACP commands used by AML's built-in providers
 - non-root `aml` user with writable home, `/tmp`, and `/workspace`
 - no embedded credentials, Agent state, application-specific dependencies, cloud CLIs, Docker daemon, browsers, compilers, or additional language runtimes
 
-| Command          | Package                           |
-| ---------------- | --------------------------------- |
-| `aml`            | `@aml-jsx/cli`                    |
-| workflow imports | `@aml-jsx/sdk`                    |
-| `codex-acp`      | `@agentclientprotocol/codex-acp`  |
-| `codex`          | `@openai/codex`                   |
-| `copilot`        | `@github/copilot`                 |
-| `glm-acp-agent`  | `glm-acp-agent`                   |
-| `opencode`       | `opencode-ai`                     |
-| `pi-acp`         | `pi-acp`                          |
-| `pi`             | `@earendil-works/pi-coding-agent` |
-| `pi-mcp-adapter` | `pi-mcp-adapter`                  |
+The Dockerfile and package manifests are the source of truth for the exact tools and versions in each image release.
 
 ## Run an AML workflow
 
@@ -116,9 +96,9 @@ npm run check
 npm run smoke --prefix ../.. -- --sandbox docker
 ```
 
-The image smoke checks its default user, writable runtime directories, writable and read-only Workspace mounts, and one
-clean AML workflow. The credentialed smoke matrix separately exercises Agent executables, real ACP sessions, AML
-JavaScript Tools, structured output, Workspace persistence, and cleanup.
+The image smoke checks its non-root user, writable runtime directories, promised commands, and one clean AML workflow.
+The credentialed smoke matrix separately exercises real ACP sessions, AML JavaScript Tools, structured output,
+Workspace persistence, and cleanup.
 
 ## Releasing
 
@@ -132,8 +112,7 @@ The command checks that Docker Buildx and Cosign are installed. Docker Hub's bro
 configuration while the caller's Buildx configuration and selected builder remain available. The temporary credentials
 are deleted when the command exits. Release It then prompts for the version, runs the image audit/build/smoke checks,
 creates a `docker-vX.Y.Z` release commit and tag, publishes the image to Docker Hub, verifies its digest, and signs that
-digest. The active `gh` account authorizes the source tag's GitHub Release; it is not used to publish a stable GHCR
-image.
+digest. The active `gh` account authorizes the source tag's GitHub Release.
 
 Publication requests SBOM and provenance attestations directly from Buildx. If the selected builder cannot publish them,
 the real build fails without a separate builder-analysis layer.
@@ -157,10 +136,10 @@ npm run release:docker -- --dry-run
 ```
 
 After publication completes, independently verify the immutable digest, exact Cosign signer policy, BuildKit SBOM and
-provenance, all stable tags, and the GitHub Release:
+provenance, both stable tags, and the GitHub Release:
 
 ```sh
-npm run verify:release --prefix images/aml-agent-sandbox -- 0.1.0 sha256:<digest> \
+npm run verify:release --prefix images/aml-agent-sandbox -- X.Y.Z sha256:<digest> \
   --certificate-identity '<exact Fulcio certificate identity>' \
   --certificate-oidc-issuer 'https://github.com/login/oauth'
 ```
@@ -170,13 +149,12 @@ exact identity and issuer; it does not accept wildcard trust policy.
 
 ## Channels, tags, and platforms
 
-- Docker Hub `0.1.0`: immutable image release
-- Docker Hub `sha-<commit>`: source revision build
-- Docker Hub `latest`: newest fully validated stable release
-- GHCR `dev`: mutable image built after relevant changes reach `main`
+- Docker Hub `X.Y.Z`: immutable image release
+- Docker Hub `latest`: newest stable release
+- GHCR `dev`: mutable development build from `main`
 - initial platform: `linux/amd64`
 
-Pin an immutable Docker Hub version or digest in production. GHCR `dev` is for repository and integration development.
+Pin an immutable Docker Hub version or digest in production. Do not use GHCR `dev` as a production pin.
 
 ## Security and licensing
 

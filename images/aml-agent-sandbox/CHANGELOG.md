@@ -4,7 +4,7 @@
 
 - Embed the published AML CLI and SDK packages with bare-import resolution that remains visible behind mounted
   Workspaces.
-- Smoke deterministic AML execution from clean writable and read-only Workspace mounts without local dependencies.
+- Smoke deterministic AML execution from a clean Workspace without local dependencies.
 
 ## 0.1.0
 

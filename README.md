@@ -188,7 +188,7 @@ The credentialed smoke runner exercises the complete built-in Agent × Sandbox m
 
 Every cell launches its Agent through the same shared ACP engine and `SandboxRuntime.spawn()`. These proofs use read-write Workspaces where a provider cannot enforce read-only access. The selected host, image, or snapshot must contain the required executable. Sandbox providers do not install Agents implicitly.
 
-Docker, Daytona, and Modal smoke cells use `ghcr.io/we-are-singular/aml-agent-sandbox:dev`, which contains the matrix's pinned Agent executables. Set `AML_SMOKE_SANDBOX_IMAGE` to run every image-backed cell against one explicit reference, such as an immutable stable digest. Provider factories default to `wearesingular/aml-agent-sandbox:latest`; applications can override that mutable convenience tag with their own image, snapshot, immutable version, or digest.
+Docker, Daytona, and Modal smoke cells use `ghcr.io/we-are-singular/aml-agent-sandbox:dev`. Set `AML_SMOKE_SANDBOX_IMAGE` to run every image-backed cell against one explicit reference, such as an immutable version or digest. Provider factories default to `wearesingular/aml-agent-sandbox:latest`; applications can override it with their own image or snapshot.
 
 `<System>`, `<Skill>`, `<FollowUp>`, Context, and tree evaluation are runtime-owned. JavaScript Tools use one AML-owned invocation MCP bridge, and structured output uses one AML-owned final-turn submission Tool. Agent permissions default to read-write filesystem, shell, and network access; the active Sandbox remains the security boundary for model-controlled operations.
 
@@ -393,8 +393,7 @@ updates the selected package and lockfile, pushes the release, and creates the m
 releases publish to npm and use `vX.Y.Z` and `cli-vX.Y.Z` tags. Stable image releases publish to Docker Hub and use
 `docker-vX.Y.Z`. npm prompts for OTP or passkey approval when required. Stable image publication uses a temporary Docker
 Hub browser login and a local Cosign installation. The active GitHub CLI account creates the source release. GitHub
-Actions publishes GHCR's separate public `dev` nightly/edge channel after relevant changes reach `main`; it does not
-mirror Docker Hub's stable tags.
+Actions separately publishes GHCR `dev` after relevant changes reach `main`.
 
 Release notes follow those package lanes instead of including every repository commit. CLI notes include commits scoped
 to `cli`. SDK notes include commits scoped to `sdk` or an SDK-owned runtime, primitive, Agent, Sandbox, Workspace, or

@@ -13,14 +13,8 @@ if (!/^sha256:[0-9a-f]{64}$/.test(digest ?? "")) {
 
 const policy = parsePolicy(policyArguments)
 const tag = `docker-v${version}`
-const revision = output("git", ["rev-list", "-n", "1", tag])
-if (!/^[0-9a-f]{40}$/.test(revision)) throw new Error(`Could not resolve source revision for ${tag}`)
 
-const references = [
-  `${dockerHubImage}:${version}`,
-  `${dockerHubImage}:sha-${revision.slice(0, 12)}`,
-  `${dockerHubImage}:latest`,
-]
+const references = [`${dockerHubImage}:${version}`, `${dockerHubImage}:latest`]
 
 for (const reference of references) verifyDigest(reference, digest)
 const immutableReference = `${dockerHubImage}@${digest}`

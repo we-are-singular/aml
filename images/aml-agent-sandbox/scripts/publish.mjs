@@ -28,7 +28,6 @@ function main() {
   }
 
   const revision = output("git", ["rev-parse", "HEAD"], repositoryRoot)
-  const shortRevision = revision.slice(0, 12)
   const temporaryDirectory = mkdtempSync(join(tmpdir(), "aml-agent-sandbox-release-"))
   const metadataPath = join(temporaryDirectory, "build-metadata.json")
 
@@ -49,8 +48,6 @@ function main() {
         `VCS_REF=${revision}`,
         "--tag",
         `${dockerHubImage}:${version}`,
-        "--tag",
-        `${dockerHubImage}:sha-${shortRevision}`,
         "--tag",
         `${dockerHubImage}:latest`,
         "--metadata-file",

@@ -35,25 +35,23 @@ const sandbox = dockerSandbox()
 The default is a convenient tested starting point, not hidden installation. The provider passes the image reference to
 the selected runtime; it does not build an image or download Agent packages during Sandbox acquisition.
 
-## Stable and development channels
+## Release channels
 
 [Docker Hub](https://hub.docker.com/r/wearesingular/aml-agent-sandbox) is the canonical release registry. It receives
-semantic versions, source-revision tags, and `latest`; provider factories use that stable `latest` channel by default.
+semantic versions and `latest`; provider factories use `latest` by default.
 
-[GHCR](https://github.com/we-are-singular/aml/pkgs/container/aml-agent-sandbox) hosts the public `dev` channel used by
-AML's Agent × Sandbox smoke matrix. This is the nightly/edge build: GitHub Actions replaces it after relevant image
-changes land on `main`, so it may update more than once in a day or remain unchanged on quiet days. It is not a mirror
-of Docker Hub's stable tags, and its digest can change without a release.
+GHCR separately publishes `ghcr.io/we-are-singular/aml-agent-sandbox:dev` from relevant changes on `main`. The smoke
+matrix uses this mutable development image; it is not a Docker Hub release or production pin.
 
 <Aside type="caution" title="Pin deployments that must be reproducible">
   `latest` moves when AML publishes a validated image release. Production applications should override it with an
   immutable semantic version or digest after validating that release with their credentials, network policy, provider,
-  and project workload. Do not pin production to GHCR `dev`.
+  and project workload. Do not use GHCR `dev` as a production pin.
 </Aside>
 
 ```ts title="Pin or replace the image"
 const sandbox = dockerSandbox({
-  image: "wearesingular/aml-agent-sandbox:0.1.0",
+  image: "wearesingular/aml-agent-sandbox:X.Y.Z",
 })
 ```
 

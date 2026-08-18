@@ -54,8 +54,7 @@ jobs:
         working-directory: images/aml-agent-sandbox
         run: npm audit --omit=dev
 
-      # Registry credentials are introduced only after the build and conformance
-      # checks. They are never available to the Dockerfile or its build arguments.
+      # Registry credentials are introduced only after the build and smoke check.
       - name: Log in to GHCR
         uses: docker/login-action@v4
         with:

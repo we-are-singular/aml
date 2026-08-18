@@ -28,8 +28,8 @@ The compatibility check between an Agent and a Sandbox is structural: it verifie
 
 Docker, Daytona, and Modal select `wearesingular/aml-agent-sandbox:latest` when their provider factory receives no image or snapshot override. The default contains AML's tested ACP Agent set and common coding tools; it does not contain application credentials or project dependencies. Pin a version or digest for reproducible deployments.
 
-Docker Hub is the canonical stable registry behind that default. GHCR's public `dev` tag is the mutable nightly/edge
-channel used by AML's smoke matrix, not a mirror or production pin.
+Docker Hub is the canonical registry behind that default. GHCR `dev` is the separate mutable build used by the
+repository smoke matrix.
 
 Need a concrete starting point? [Recommended Sandbox images](/docs/providers/sandboxes/images/) tracks public images we have inspected, upstream image recipes, exact Agent requirements, and combinations we deliberately do not claim are ready.
 

@@ -11,7 +11,7 @@ This page distinguishes images we have actually inspected from useful upstream r
 
 ## AML Agent Sandbox
 
-The repository builds `aml-agent-sandbox` from [`images/aml-agent-sandbox/Dockerfile`](https://github.com/we-are-singular/aml/blob/main/images/aml-agent-sandbox/Dockerfile). It uses Debian/glibc and includes Node.js 26, Python 3, Git, common shell/network/archive tools, the AML CLI and SDK, and the Agent/ACP packages verified by AML's smoke matrix.
+The repository builds `aml-agent-sandbox` from [`images/aml-agent-sandbox/Dockerfile`](https://github.com/we-are-singular/aml/blob/main/images/aml-agent-sandbox/Dockerfile). It includes the AML CLI and SDK, the Agent/ACP packages used by AML's providers, and a practical coding environment. The Dockerfile and package manifests are the source of truth for the exact tools and versions in each release.
 
 Docker Hub is the canonical stable registry ([see all versions](/docs/reference/changelog/docker/)):
 
@@ -19,24 +19,17 @@ Docker Hub is the canonical stable registry ([see all versions](/docs/reference/
 docker.io/wearesingular/aml-agent-sandbox:latest
 ```
 
-Stable releases include provenance and an SBOM. The manual release process publishes semantic-version, source-revision,
-and `latest` tags to Docker Hub, verifies the published digest, and signs that digest.
+Stable releases include provenance and an SBOM. The manual release process publishes semantic-version and `latest`
+tags to Docker Hub, verifies the published digest, and signs that digest.
 
-GHCR hosts the public development (`dev`) channel, also referred to as the nightly or edge build:
+Relevant changes on `main` are published separately as `ghcr.io/we-are-singular/aml-agent-sandbox:dev` for repository
+development and smoke testing.
 
-```text
-ghcr.io/we-are-singular/aml-agent-sandbox:dev
-```
-
-| Reference                 | Purpose                                                                       |
-| ------------------------- | ----------------------------------------------------------------------------- |
-| Docker Hub `latest`       | Newest validated stable release and provider-factory default.                 |
-| Docker Hub `X.Y.Z`        | Immutable semantic version for reproducible deployments.                      |
-| Docker Hub `sha-<commit>` | Source-revision reference produced by a manual release.                       |
-| GHCR `dev`                | Public mutable build from the latest relevant `main` revision; not a release. |
-
-GitHub Actions replaces `dev` after relevant image changes land on `main`. It may therefore update more than once in a
-day or remain unchanged on days without image changes. GHCR does not mirror Docker Hub's stable tags or digests.
+| Reference           | Purpose                                                  |
+| ------------------- | -------------------------------------------------------- |
+| Docker Hub `latest` | Newest stable release and provider-factory default.      |
+| Docker Hub `X.Y.Z`  | Immutable semantic version for reproducible deployments. |
+| GHCR `dev`          | Mutable development build from `main`.                   |
 
 ```tsx title="Provider default"
 import { AmlRuntime, dockerSandbox } from "@aml-jsx/sdk"
@@ -68,12 +61,6 @@ other project dependencies, cloud CLIs, Docker-in-Docker, browsers, compilers, a
 as the unprivileged `aml` user by default. AML's local Docker smoke passes the host UID/GID through
 [`dockerSandbox({ user })`](/docs/providers/sandboxes/docker/#options) so the process can access its bind-mounted
 Workspace. The image also ships its license, third-party notices, and GitHub Copilot CLI redistribution license.
-
-<Aside type="caution" title="Preview tag">
-  GHCR `dev` is mutable and is not synchronized with a Docker Hub tag or digest. Do not use it as a production pin. Use
-  a Docker Hub semantic version or digest after validating the image with your provider, credentials, network policy,
-  and project workload.
-</Aside>
 
 ## Extend the image
 
@@ -178,15 +165,16 @@ Modal documents support for [loading existing public registry images](https://mo
 
 ## Verify an image before recommending it
 
-For repository development, run the small image smoke check against the current GHCR `dev` build:
+For repository development, build the current checkout and run its small image smoke check:
 
 ```sh
 cd images/aml-agent-sandbox
-AML_AGENT_SANDBOX_IMAGE=ghcr.io/we-are-singular/aml-agent-sandbox:dev npm run check
+npm run build
+npm run check
 ```
 
-For release or deployment evaluation, replace `dev` with the exact Docker Hub semantic version or digest being
-validated. Do not treat either `latest` or `dev` as an immutable input.
+For release or deployment evaluation, set `AML_AGENT_SANDBOX_IMAGE` to the exact Docker Hub semantic version or digest
+being validated. Do not treat `latest` or GHCR `dev` as immutable inputs.
 
 For another image, probe its required commands directly:
 
