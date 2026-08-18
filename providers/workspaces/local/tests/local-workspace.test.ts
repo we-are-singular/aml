@@ -155,7 +155,7 @@ describe("localWorkspace()", () => {
         await once(child, "exit")
       }
     }
-  }, 15_000)
+  }, 40_000)
 
   it("preserves cancellation before filesystem or lock acquisition", async () => {
     const directory = await createTemporaryDirectory()
@@ -209,10 +209,11 @@ function waitForChildText(child: ChildProcessWithoutNullStreams, expected: strin
   return new Promise((resolve, reject) => {
     let stdout = ""
     let stderr = ""
+    // vite-node can start slowly while every workspace test runs in parallel on CI.
     const timeout = setTimeout(() => {
       cleanup()
       reject(new Error(`Timed out waiting for Local Workspace child "${expected}": ${stderr}`))
-    }, 10_000)
+    }, 30_000)
     const onStdout = (chunk: Buffer) => {
       stdout += chunk.toString("utf8")
 
