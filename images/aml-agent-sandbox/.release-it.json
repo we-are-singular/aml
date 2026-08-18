@@ -3,7 +3,7 @@
   "verbose": true,
   "hooks": {
     "after:bump": ["npm install --package-lock-only --ignore-scripts", "git add package-lock.json"],
-    "before:release": ["node scripts/publish.mjs --check", "npm run release:check"],
+    "before:release": "npm run release:check",
     "after:git:release": "node scripts/publish.mjs ${version}"
   },
   "git": {
