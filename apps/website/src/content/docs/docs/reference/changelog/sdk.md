@@ -10,6 +10,33 @@ This page tracks `@aml-jsx/sdk`. Entries are newest first. See [GitHub Releases]
 
 <!-- changelog:entries -->
 
+## SDK v0.6.0 — A portable Agent runtime image
+
+Released 2026-08-18.
+
+This release debuts AML's portable Agent runtime image, which packs the AML runtime and every built-in Agent provider into a published Docker image and becomes the basis for the SDK's sandbox smoke matrix. It also tightens standalone Copilot CLI launches so they never touch the operator's home directory.
+
+### Highlights
+
+- **New `aml-agent-sandbox` runtime image** AML now ships a ready-to-run Docker image, `wearesingular/aml-agent-sandbox`, with Docker Hub as the canonical stable registry for semantic versions and `latest` (each stable release includes provenance and an SBOM) and a mutable `dev` tag on GHCR. It is a Debian Bookworm/glibc runtime with Node.js 26, Python 3, Git, common shell/network/archive tools, and the codex, copilot, glm, opencode, and pi ACP executables pinned to the versions validated by the SDK's smoke matrix. It runs as the unprivileged `aml` user and ships its license and third-party notices. [Sandbox images](/docs/providers/sandboxes/images/) · [Image changelog](/docs/reference/changelog/docker/)
+- **Run clean mounted workflows with the embedded AML runtime** The image embeds the `aml` CLI and `@aml-jsx/sdk`, and points `/node_modules` at the embedded dependency tree so standard ancestor resolution keeps bare imports visible even when a provider bind-mounts over `/workspace`. A clean mounted TypeScript, TSX, or JavaScript workflow can therefore run (for example `aml run /workspace/workflow.tsx`) with no local `package.json`, `node_modules`, or installation. [Sandbox images](/docs/providers/sandboxes/images/)
+- **Sandbox smoke matrix runs from the AML image** The SDK smoke matrix now exercises the Docker, Daytona, and Modal Sandboxes from the published AML Agent image (a `dev` tag on GHCR during development) instead of installing Agent executables per run, and supports pinning a specific image/tag. This keeps cross-provider compatibility checks aligned with the exact Agent versions the image ships. [Compatibility](/docs/compatibility/)
+- **Invocation-private Copilot CLI home** The Copilot profile now also sets `HOME` to AML's invocation-private state directory, alongside `COPILOT_HOME`. Because the standalone `copilot` CLI extracts its bundled runtime through `HOME` before it reads `COPILOT_HOME`, isolating both keeps its credentials, permissions, and session state away from the operator's home directory. [Copilot Agent](/docs/providers/agents/copilot/)
+
+### Commits
+
+- refactor(agent-sandbox): simplify image release contract (77d0c87)
+- test(workspace-local): allow slow ci child startup (0696711)
+- refactor(agent-sandbox): simplify image checks (2435653)
+- feat(agent-sandbox): embed aml runtime (c73a881)
+- test(sdk): allow smoke matrix image pinning (71e81b4)
+- fix(agent-sandbox): preserve buildx state during releases (571510b)
+- test(sdk): use ghcr dev image for sandbox smoke (7516e36)
+- release(agent-sandbox): make docker hub canonical (a682373)
+- test(sdk): run sandbox matrix from aml image (5cfdc08)
+- feat(agent-sandbox): add portable agent runtime image (01032c9)
+- fix(agent-copilot): isolate standalone cli home (535f8d8)
+
 ## SDK v0.5.2 — Add GLM as a community agent provider
 
 Released 2026-08-17.
