@@ -10,6 +10,20 @@ This page tracks `@aml-jsx/cli`. Entries are newest first. See [GitHub Releases]
 
 <!-- changelog:entries -->
 
+## CLI v0.3.1 — SDK 0.6 compatibility
+
+Released 2026-08-18.
+
+The CLI's declared SDK compatibility range moves from ^0.5.0 to ^0.6.0, aligning the package with the freshly released `@aml-jsx/sdk` 0.6 line.
+
+### Highlights
+
+- **Aligned SDK compatibility range.** The CLI's dev and peer dependency range for `@aml-jsx/sdk` moved from ^0.5.0 to ^0.6.0, matching the SDK line the CLI is developed and reviewed against, so consumers pairing the CLI with SDK ^0.6.0 now satisfy the peer requirement. Covers: support sdk 0.6 (49348c3). [CLI reference](/docs/cli/#run-the-package)
+
+### Commits
+
+- fix(cli): support sdk 0.6 (49348c3)
+
 ## CLI v0.3.0 — Test infrastructure hardening
 
 Released 2026-08-16.
