@@ -24,7 +24,7 @@ export function loadSmokeEnvironment(): void {
 }
 
 const SMOKE_AGENT_PATH = `/tmp/aml-agents/bin:/opt/aml-agent-sandbox/node_modules/.bin:${process.env.PATH ?? "/usr/local/bin:/usr/bin:/bin"}`
-const SMOKE_SANDBOX_IMAGE = "ghcr.io/we-are-singular/aml-agent-sandbox:dev"
+const DEFAULT_SMOKE_SANDBOX_IMAGE = "ghcr.io/we-are-singular/aml-agent-sandbox:dev"
 const ALL_AGENTS_PRESENT =
   "test -f input.txt && command -v codex-acp && command -v codex && command -v copilot && command -v glm-acp-agent && command -v opencode && command -v pi-acp && command -v pi && command -v pi-mcp-adapter"
 
@@ -126,15 +126,17 @@ export const SMOKE_SANDBOXES = {
       if (apiKey === undefined) throw new Error("Daytona smoke requires DAYTONA_API_KEY")
       return daytonaSandbox({
         config: { apiKey },
-        image: SMOKE_SANDBOX_IMAGE,
+        image: resolveSmokeSandboxImage(),
       })
     },
-    environment: SMOKE_SANDBOX_IMAGE,
+    get environment() {
+      return resolveSmokeSandboxImage()
+    },
   },
   docker: {
     create() {
       return dockerSandbox({
-        image: SMOKE_SANDBOX_IMAGE,
+        image: resolveSmokeSandboxImage(),
         // Match the owner of the bind-mounted local Workspace while keeping
         // the container and its coding Agents unprivileged.
         ...(typeof process.getuid === "function" && typeof process.getgid === "function"
@@ -142,7 +144,9 @@ export const SMOKE_SANDBOXES = {
           : {}),
       })
     },
-    environment: SMOKE_SANDBOX_IMAGE,
+    get environment() {
+      return resolveSmokeSandboxImage()
+    },
   },
   local: {
     create() {
@@ -161,14 +165,21 @@ export const SMOKE_SANDBOXES = {
         appName: "aml-jsx-smoke",
         config: { tokenId, tokenSecret },
         create: { memoryMiB: 2_048, timeoutMs: 300_000 },
-        image: SMOKE_SANDBOX_IMAGE,
+        image: resolveSmokeSandboxImage(),
       })
     },
-    environment: SMOKE_SANDBOX_IMAGE,
+    get environment() {
+      return resolveSmokeSandboxImage()
+    },
   },
 } satisfies Record<string, SmokeSandboxRegistration>
 
 export type SmokeSandboxName = keyof typeof SMOKE_SANDBOXES
+
+/** Uses one explicit image reference for every image-backed smoke Sandbox. */
+export function resolveSmokeSandboxImage(environment: Readonly<NodeJS.ProcessEnv> = process.env): string {
+  return environment.AML_SMOKE_SANDBOX_IMAGE ?? DEFAULT_SMOKE_SANDBOX_IMAGE
+}
 
 export const KITCHEN_SINK_WORKSPACE_NAMES = ["local", "r2"] as const
 export const KITCHEN_SINK_MCP_NAMES = ["context7", "none"] as const

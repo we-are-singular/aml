@@ -7,6 +7,7 @@ import {
   parseKitchenSinkCommand,
   parseSmokeCommand,
   requiredCopilotGithubToken,
+  resolveSmokeSandboxImage,
   selectSmokeCases,
   SMOKE_AGENT_NAMES,
   SMOKE_SANDBOX_NAMES,
@@ -28,6 +29,12 @@ describe("smoke configuration", () => {
     expect(selectSmokeCases({ sandbox: "docker" })).toEqual(
       SMOKE_AGENT_NAMES.map(agent => ({ agent, sandbox: "docker" }))
     )
+  })
+
+  it("pins one requested image across image-backed smoke Sandboxes", () => {
+    const image = "docker.io/wearesingular/aml-agent-sandbox@sha256:example"
+    expect(resolveSmokeSandboxImage({ AML_SMOKE_SANDBOX_IMAGE: image })).toBe(image)
+    expect(resolveSmokeSandboxImage({})).toBe("ghcr.io/we-are-singular/aml-agent-sandbox:dev")
   })
 
   it("parses CLI filters", () => {
