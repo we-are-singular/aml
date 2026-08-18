@@ -105,7 +105,7 @@ USER aml
 
 Add project-specific dependencies in your own image instead of installing them every time a Sandbox starts.
 
-## Build and verify
+## Build and smoke
 
 From an AML repository checkout:
 
@@ -116,10 +116,9 @@ npm run check
 npm run smoke --prefix ../.. -- --sandbox docker
 ```
 
-The conformance check verifies writable and read-only mounted Workspaces, the runtime user, writable invocation state,
-required utilities, exact package versions, direct SDK import resolution, deterministic CLI execution, Agent startup
-probes, and redistributed notices. The credentialed smoke matrix proves real ACP sessions, AML JavaScript Tool
-invocation, structured output, Workspace persistence, and cleanup.
+The image smoke checks its default user, writable runtime directories, writable and read-only Workspace mounts, and one
+clean AML workflow. The credentialed smoke matrix separately exercises Agent executables, real ACP sessions, AML
+JavaScript Tools, structured output, Workspace persistence, and cleanup.
 
 ## Releasing
 
@@ -129,14 +128,15 @@ Stable image releases run locally, not in GitHub Actions. Start from a clean `ma
 npm run release:docker
 ```
 
-The command first checks that the caller's selected Buildx builder can publish SBOM and provenance attestations. Use an
-existing `docker-container` builder, or enable Docker's containerd image store; the release does not create or switch
-builders. Docker Hub's browser login then uses a temporary Docker configuration while the caller's Buildx configuration,
-selected builder, and state remain available. The temporary credentials are deleted when the command exits. Release It
-then prompts for the version, runs the image audit/build/conformance checks,
+The command checks that Docker Buildx and Cosign are installed. Docker Hub's browser login then uses a temporary Docker
+configuration while the caller's Buildx configuration and selected builder remain available. The temporary credentials
+are deleted when the command exits. Release It then prompts for the version, runs the image audit/build/smoke checks,
 creates a `docker-vX.Y.Z` release commit and tag, publishes the image to Docker Hub, verifies its digest, and signs that
 digest. The active `gh` account authorizes the source tag's GitHub Release; it is not used to publish a stable GHCR
 image.
+
+Publication requests SBOM and provenance attestations directly from Buildx. If the selected builder cannot publish them,
+the real build fails without a separate builder-analysis layer.
 
 Browser authentication follows each maintainer's local setup. Under WSL, set `BROWSER` to an installed host-browser
 opener such as `wslview`, or open the displayed device URL in Windows and enter the one-time code. Native Linux and

@@ -67,9 +67,9 @@ function release() {
  * Isolates registry credentials while retaining the caller's named builders,
  * current-builder selection, BuildKit configuration, and build history.
  */
-export function createReleaseEnvironment(environment, createTemporaryDirectory = mkdtempSync) {
+function createReleaseEnvironment(environment) {
   const callerDockerConfig = environment.DOCKER_CONFIG ?? join(homedir(), ".docker")
-  const dockerConfig = createTemporaryDirectory(join(tmpdir(), "aml-agent-sandbox-auth-"))
+  const dockerConfig = mkdtempSync(join(tmpdir(), "aml-agent-sandbox-auth-"))
 
   return {
     ...environment,

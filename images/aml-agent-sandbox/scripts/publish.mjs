@@ -14,8 +14,7 @@ function main() {
   if (version === "--check") {
     requireCommand("docker", ["buildx", "version"])
     requireCommand("cosign", ["version"])
-    verifyAttestationBuilder()
-    process.stdout.write("Docker image publishing tools and attestation builder are available\n")
+    process.stdout.write("Docker Buildx and Cosign are available\n")
     return
   }
 
@@ -98,56 +97,6 @@ function requireCommand(command, args) {
   if (result.status !== 0) {
     throw new Error(`${command} is installed but unavailable`)
   }
-}
-
-function verifyAttestationBuilder() {
-  const inspection = output("docker", ["buildx", "inspect", "--bootstrap"], repositoryRoot)
-  const builder = parseBuilderInspection(inspection)
-  const dockerInfo =
-    builder.driver === "docker"
-      ? JSON.parse(output("docker", ["info", "--format", "{{json .}}"], repositoryRoot))
-      : undefined
-  assertBuilderSupportsAttestations(builder, dockerInfo)
-}
-
-export function parseBuilderInspection(inspection) {
-  const name = /^Name:\s+(.+)$/m.exec(inspection)?.[1]?.trim()
-  const driver = /^Driver:\s+(.+)$/m.exec(inspection)?.[1]?.trim()
-  const buildkitVersions = [...inspection.matchAll(/^BuildKit version:\s+v?([^\s]+)$/gm)].map(match => match[1])
-
-  if (name === undefined || driver === undefined) {
-    throw new Error("Could not determine the current Buildx builder name and driver from docker buildx inspect")
-  }
-  if (buildkitVersions.length === 0) {
-    throw new Error(`Could not determine BuildKit version for Buildx builder ${name}`)
-  }
-
-  return { buildkitVersions, driver, name }
-}
-
-export function usesContainerdImageStore(dockerInfo) {
-  return dockerInfo.DriverStatus?.some(
-    status => Array.isArray(status) && status[0] === "driver-type" && status[1] === "io.containerd.snapshotter.v1"
-  )
-}
-
-export function assertBuilderSupportsAttestations(builder, dockerInfo) {
-  if (!builder.buildkitVersions.every(supportsBuildAttestations)) {
-    throw new Error(
-      `Buildx builder ${builder.name} uses BuildKit ${builder.buildkitVersions.join(", ") || "of unknown version"}; SBOM and provenance require BuildKit 0.11 or newer`
-    )
-  }
-
-  if (builder.driver !== "docker" || usesContainerdImageStore(dockerInfo ?? {})) return
-
-  throw new Error(
-    `Buildx builder ${builder.name} uses the docker driver with the classic image store, which cannot publish SBOM and provenance attestations. Select an existing docker-container builder with "docker buildx use <name>" (or BUILDX_BUILDER=<name> npm run release:docker), or enable Docker's containerd image store, then retry. The release script does not create or switch builders.`
-  )
-}
-
-function supportsBuildAttestations(version) {
-  const [major, minor] = version.split(".").map(value => Number.parseInt(value, 10))
-  return Number.isInteger(major) && Number.isInteger(minor) && (major > 0 || minor >= 11)
 }
 
 function output(command, args, cwd) {

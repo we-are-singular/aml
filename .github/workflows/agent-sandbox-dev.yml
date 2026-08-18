@@ -44,7 +44,7 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      - name: Verify image contract
+      - name: Smoke image
         working-directory: images/aml-agent-sandbox
         env:
           AML_AGENT_SANDBOX_IMAGE: ${{ env.LOCAL_IMAGE }}
