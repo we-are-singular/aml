@@ -24,7 +24,7 @@
     "release": "npm run release:sdk --",
     "release:cli": "npm run release --workspace=@aml-jsx/cli --",
     "release:check": "npm run format:check && npm run lint && npm run test && npm run build && npm run pack:check",
-    "release:docker": "npm run release --prefix images/aml-agent-sandbox --",
+    "release:sandbox": "npm run release --prefix images/sandbox --",
     "release:sdk": "npm run release --workspace=@aml-jsx/sdk --",
     "smoke": "vite-node sdk/tests/smoke/run-smoke.ts",
     "smoke:kitchen-sink": "vite-node sdk/tests/smoke/kitchen-sink.smoke.tsx",

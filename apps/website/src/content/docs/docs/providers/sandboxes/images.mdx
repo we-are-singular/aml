@@ -11,9 +11,9 @@ This page distinguishes images we have actually inspected from useful upstream r
 
 ## AML Agent Sandbox
 
-The repository builds `aml-agent-sandbox` from [`images/aml-agent-sandbox/Dockerfile`](https://github.com/we-are-singular/aml/blob/main/images/aml-agent-sandbox/Dockerfile). It includes the AML CLI and SDK, the Agent/ACP packages used by AML's providers, and a practical coding environment. The Dockerfile and package manifests are the source of truth for the exact tools and versions in each release.
+The repository builds `aml-agent-sandbox` from [`images/sandbox/Dockerfile`](https://github.com/we-are-singular/aml/blob/main/images/sandbox/Dockerfile). It includes the AML CLI and SDK, the Agent/ACP packages used by AML's providers, and a practical coding environment. The Dockerfile and package manifests are the source of truth for the exact tools and versions in each release.
 
-Docker Hub is the canonical stable registry ([see all versions](/docs/reference/changelog/docker/)):
+Docker Hub is the canonical stable registry ([see all versions](/docs/reference/changelog/sandbox/)):
 
 ```text
 docker.io/wearesingular/aml-agent-sandbox:latest
@@ -48,7 +48,7 @@ const sandboxProvider = dockerSandbox({
 ```
 
 ```sh title="AML repository checkout"
-cd images/aml-agent-sandbox
+cd images/sandbox
 npm run build
 npm run check
 npm run smoke --prefix ../.. -- --sandbox docker
@@ -168,7 +168,7 @@ Modal documents support for [loading existing public registry images](https://mo
 For repository development, build the current checkout and run its small image smoke check:
 
 ```sh
-cd images/aml-agent-sandbox
+cd images/sandbox
 npm run build
 npm run check
 ```

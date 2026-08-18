@@ -5,7 +5,7 @@ import sitemap from "@astrojs/sitemap"
 import tailwindcss from "@tailwindcss/vite"
 import { agentSkillsPlugin } from "./src/plugins/agent-skills.mjs"
 import { docsMarkdownPlugin } from "./src/plugins/docs-markdown/plugin.mjs"
-import remarkAgentSandboxChangelog from "./src/plugins/remark-agent-sandbox-changelog.mjs"
+import remarkSandboxChangelog from "./src/plugins/remark-sandbox-changelog.mjs"
 import remarkBasePath from "./src/plugins/remark-base-path.mjs"
 import { sitemapAliasPlugin } from "./src/plugins/sitemap-alias.mjs"
 
@@ -22,7 +22,7 @@ export default defineConfig({
     // Astro 7 defaults to the Sätteri pipeline; keep the unified remark pipeline so
     // remarkBasePath (base-aware links) keeps applying on subpath deploys like GitHub Pages.
     processor: unified({
-      remarkPlugins: [remarkAgentSandboxChangelog, [remarkBasePath, { base }]],
+      remarkPlugins: [remarkSandboxChangelog, [remarkBasePath, { base }]],
     }),
   },
   vite: {
@@ -235,7 +235,7 @@ export default defineConfig({
                 { label: "Changelog overview", slug: "docs/reference/changelog" },
                 { label: "SDK releases", slug: "docs/reference/changelog/sdk" },
                 { label: "CLI releases", slug: "docs/reference/changelog/cli" },
-                { label: "Docker image releases", slug: "docs/reference/changelog/docker" },
+                { label: "Sandbox releases", slug: "docs/reference/changelog/sandbox" },
               ],
             },
           ],

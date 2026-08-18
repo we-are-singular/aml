@@ -7,15 +7,16 @@
     "after:git:release": "node scripts/publish.mjs ${version}"
   },
   "git": {
-    "commitMessage": "release(docker): v${version}",
+    "changelog": "node ../../scripts/release-notes.ts sandbox ${from} ${to}",
+    "commitMessage": "release(sandbox): v${version}",
     "requireBranch": "main",
     "tagAnnotation": "Release AML Agent Sandbox v${version}",
-    "tagMatch": "docker-v*",
-    "tagName": "docker-v${version}"
+    "tagMatch": "[ds]*-v*",
+    "tagName": "sandbox-v${version}"
   },
   "github": {
     "release": true,
-    "releaseName": "docker v${version}"
+    "releaseName": "sandbox v${version}"
   },
   "npm": {
     "publish": false

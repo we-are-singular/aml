@@ -69,7 +69,7 @@ function release() {
  */
 function createReleaseEnvironment(environment) {
   const callerDockerConfig = environment.DOCKER_CONFIG ?? join(homedir(), ".docker")
-  const dockerConfig = mkdtempSync(join(tmpdir(), "aml-agent-sandbox-auth-"))
+  const dockerConfig = mkdtempSync(join(tmpdir(), "aml-sandbox-auth-"))
 
   return {
     ...environment,
@@ -90,7 +90,7 @@ function readRecoveryVersion() {
   }
 
   const packageVersion = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")).version
-  const expectedTag = `docker-v${packageVersion}`
+  const expectedTag = `sandbox-v${packageVersion}`
   const tagAtHead = output("git", ["tag", "--points-at", "HEAD", "--list", expectedTag], process.env)
   if (tagAtHead !== expectedTag) {
     throw new Error(`HEAD must have tag ${expectedTag} to recover this release`)
@@ -100,7 +100,7 @@ function readRecoveryVersion() {
 }
 
 function ensureGithubRelease(version, environment) {
-  const tag = `docker-v${version}`
+  const tag = `sandbox-v${version}`
   const existingRelease = spawnSync("gh", ["release", "view", tag], {
     encoding: "utf8",
     env: environment,
@@ -117,9 +117,11 @@ function ensureGithubRelease(version, environment) {
     throw new Error(`Could not check GitHub Release ${tag}`)
   }
 
+  const previousTag = output("git", ["describe", "--tags", "--match=[ds]*-v*", "--abbrev=0", "HEAD^"], environment)
+  const notes = output("node", ["../../scripts/release-notes.ts", "sandbox", previousTag, "HEAD^"], environment)
   runOrThrow(
     "gh",
-    ["release", "create", tag, "--verify-tag", "--generate-notes", "--title", `docker v${version}`],
+    ["release", "create", tag, "--verify-tag", "--notes", notes, "--title", `sandbox v${version}`],
     environment
   )
 }

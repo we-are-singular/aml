@@ -385,13 +385,13 @@ release for the intended package:
 npm login
 GITHUB_TOKEN="$(gh auth token)" npm run release:sdk
 GITHUB_TOKEN="$(gh auth token)" npm run release:cli
-npm run release:docker
+npm run release:sandbox
 ```
 
 `npm run release` remains an alias for `release:sdk`. Release It runs the release checks, prompts for the next version,
 updates the selected package and lockfile, pushes the release, and creates the matching GitHub release. SDK and CLI
-releases publish to npm and use `vX.Y.Z` and `cli-vX.Y.Z` tags. Stable image releases publish to Docker Hub and use
-`docker-vX.Y.Z`. npm prompts for OTP or passkey approval when required. Stable image publication uses a temporary Docker
+releases publish to npm and use `vX.Y.Z` and `cli-vX.Y.Z` tags. Stable Sandbox releases publish to Docker Hub and use
+`sandbox-vX.Y.Z`. npm prompts for OTP or passkey approval when required. Stable image publication uses a temporary Docker
 Hub browser login and a local Cosign installation. The active GitHub CLI account creates the source release. GitHub
 Actions separately publishes GHCR `dev` after relevant changes reach `main`.
 
@@ -408,10 +408,10 @@ Preview the flow without changing Git, npm, or GitHub:
 ```sh
 GITHUB_TOKEN="$(gh auth token)" npm run release:sdk -- --dry-run
 GITHUB_TOKEN="$(gh auth token)" npm run release:cli -- --dry-run
-npm run release:docker -- --dry-run
+npm run release:sandbox -- --dry-run
 ```
 
-If registry publication fails after the release commit and `docker-vX.Y.Z` tag are created, rerun that exact release from a clean `main` checkout with `npm run release:docker -- --recover`.
+If registry publication fails after the release commit and `sandbox-vX.Y.Z` tag are created, rerun that exact release from a clean `main` checkout with `npm run release:sandbox -- --recover`.
 
 The Astro website and Starlight documentation run locally at `http://localhost:5321/` from the repository root:
 

@@ -12,7 +12,7 @@ if (!/^sha256:[0-9a-f]{64}$/.test(digest ?? "")) {
 }
 
 const policy = parsePolicy(policyArguments)
-const tag = `docker-v${version}`
+const tag = `sandbox-v${version}`
 
 const references = [`${dockerHubImage}:${version}`, `${dockerHubImage}:latest`]
 

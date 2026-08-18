@@ -4,7 +4,7 @@ on:
   push:
     branches: [main]
     paths:
-      - "images/aml-agent-sandbox/**"
+      - "images/sandbox/**"
       - ".github/workflows/agent-sandbox-dev.yml"
 
 permissions:
@@ -34,7 +34,7 @@ jobs:
       - name: Build image
         uses: docker/build-push-action@v7
         with:
-          context: images/aml-agent-sandbox
+          context: images/sandbox
           load: true
           platforms: linux/amd64
           tags: ${{ env.LOCAL_IMAGE }}
@@ -45,13 +45,13 @@ jobs:
           cache-to: type=gha,mode=max
 
       - name: Smoke image
-        working-directory: images/aml-agent-sandbox
+        working-directory: images/sandbox
         env:
           AML_AGENT_SANDBOX_IMAGE: ${{ env.LOCAL_IMAGE }}
         run: npm run check
 
       - name: Audit image dependencies
-        working-directory: images/aml-agent-sandbox
+        working-directory: images/sandbox
         run: npm audit --omit=dev
 
       # Registry credentials are introduced only after the build and smoke check.

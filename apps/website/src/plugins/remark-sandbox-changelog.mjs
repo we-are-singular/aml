@@ -2,8 +2,8 @@ import { readFile } from "node:fs/promises"
 import { URL } from "node:url"
 import { createProcessor } from "@mdx-js/mdx"
 
-const marker = "aml-agent-sandbox-changelog"
-const changelogUrl = new URL("../../../../images/aml-agent-sandbox/CHANGELOG.md", import.meta.url)
+const marker = "sandbox-changelog"
+const changelogUrl = new URL("../../../../images/sandbox/CHANGELOG.md", import.meta.url)
 
 /** Replaces the Docker changelog marker with the image package's release history. */
 export default function remarkAgentSandboxChangelog() {

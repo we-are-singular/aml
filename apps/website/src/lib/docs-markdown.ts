@@ -1,6 +1,6 @@
 import { createProcessor } from "@mdx-js/mdx"
 import type { CollectionEntry } from "astro:content"
-import agentSandboxChangelog from "../../../../images/aml-agent-sandbox/CHANGELOG.md?raw"
+import sandboxChangelog from "../../../../images/sandbox/CHANGELOG.md?raw"
 import { withBase } from "../config/site"
 
 interface SourceNode {
@@ -308,9 +308,9 @@ export function renderDocMarkdown(entry: CollectionEntry<"docs">, site: URL): st
 
   // Remark expands this marker for the HTML page. Expand the same source here
   // so the adjacent .md representation keeps the release entries as well.
-  if (entry.id === "docs/reference/changelog/docker") {
-    const releases = agentSandboxChangelog.replace(/^# Changelog\s*/, "")
-    source = source.replace("{/* aml-agent-sandbox-changelog */}", releases)
+  if (entry.id === "docs/reference/changelog/sandbox") {
+    const releases = sandboxChangelog.replace(/^# Changelog\s*/, "")
+    source = source.replace("{/* sandbox-changelog */}", releases)
   }
 
   const body = absoluteMarkdownLinks(normalizeMdxForMarkdown(source, format), canonicalUrl, site)

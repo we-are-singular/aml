@@ -10,7 +10,7 @@ docker pull wearesingular/aml-agent-sandbox:latest
 ```
 
 Docker Hub is the canonical release registry for semantic versions and `latest`
-([see all versions](https://agent-markup-language.com/docs/reference/changelog/docker/)).
+([see all versions](https://agent-markup-language.com/docs/reference/changelog/sandbox/)).
 
 The latest relevant `main` revision is published separately as `ghcr.io/we-are-singular/aml-agent-sandbox:dev` for
 repository development and smoke testing. It is not a Docker Hub release.
@@ -90,7 +90,7 @@ Add project-specific dependencies in your own image instead of installing them e
 From an AML repository checkout:
 
 ```sh
-cd images/aml-agent-sandbox
+cd images/sandbox
 npm run build
 npm run check
 npm run smoke --prefix ../.. -- --sandbox docker
@@ -105,13 +105,13 @@ Workspace persistence, and cleanup.
 Stable image releases run locally, not in GitHub Actions. Start from a clean `main` checkout that matches `origin/main`, authenticate the GitHub CLI, install [Cosign](https://docs.sigstore.dev/cosign/system_config/installation/), and run this from the repository root:
 
 ```sh
-npm run release:docker
+npm run release:sandbox
 ```
 
 The command checks that Docker Buildx and Cosign are installed. Docker Hub's browser login then uses a temporary Docker
 configuration while the caller's Buildx configuration and selected builder remain available. The temporary credentials
 are deleted when the command exits. Release It then prompts for the version, runs the image audit/build/smoke checks,
-creates a `docker-vX.Y.Z` release commit and tag, publishes the image to Docker Hub, verifies its digest, and signs that
+creates a `sandbox-vX.Y.Z` release commit and tag, publishes the image to Docker Hub, verifies its digest, and signs that
 digest. The active `gh` account authorizes the source tag's GitHub Release.
 
 Publication requests SBOM and provenance attestations directly from Buildx. If the selected builder cannot publish them,
@@ -124,22 +124,22 @@ macOS maintainers can keep their normal browser configuration. No browser path i
 If image publication fails after Release It creates the release commit and tag, recover that same version from a clean `main` checkout:
 
 ```sh
-npm run release:docker -- --recover
+npm run release:sandbox -- --recover
 ```
 
-Recovery requires `HEAD` to have the `docker-vX.Y.Z` tag matching this package's version. It safely reruns image publication and creates the GitHub Release if the first attempt did not reach that step.
+Recovery requires `HEAD` to have the `sandbox-vX.Y.Z` tag matching this package's version. It safely reruns image publication and creates the GitHub Release if the first attempt did not reach that step.
 
 Preview the versioning and Git release flow without publishing:
 
 ```sh
-npm run release:docker -- --dry-run
+npm run release:sandbox -- --dry-run
 ```
 
 After publication completes, independently verify the immutable digest, exact Cosign signer policy, BuildKit SBOM and
 provenance, both stable tags, and the GitHub Release:
 
 ```sh
-npm run verify:release --prefix images/aml-agent-sandbox -- X.Y.Z sha256:<digest> \
+npm run verify:release --prefix images/sandbox -- X.Y.Z sha256:<digest> \
   --certificate-identity '<exact Fulcio certificate identity>' \
   --certificate-oidc-issuer 'https://github.com/login/oauth'
 ```
@@ -162,5 +162,5 @@ The image runs as non-root, but container isolation, network policy, Linux capab
 
 AML image source is MIT licensed. Bundled software retains its own license. GitHub Copilot CLI is redistributed unmodified as one component of AML's multi-Agent runtime under the GitHub Copilot CLI License. See [`THIRD_PARTY_NOTICES.md`](./THIRD_PARTY_NOTICES.md) and the license files shipped under `/usr/share/doc/aml-agent-sandbox`.
 
-[Source](https://github.com/we-are-singular/aml/tree/main/images/aml-agent-sandbox),
-[changelog](https://agent-markup-language.com/docs/reference/changelog/docker/), and issues live in the AML repository.
+[Source](https://github.com/we-are-singular/aml/tree/main/images/sandbox),
+[changelog](https://agent-markup-language.com/docs/reference/changelog/sandbox/), and issues live in the AML repository.

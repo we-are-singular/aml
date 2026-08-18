@@ -1,7 +1,7 @@
 import { execFileSync } from "node:child_process"
 import process from "node:process"
 
-type ReleaseLane = "cli" | "sdk"
+type ReleaseLane = "cli" | "sandbox" | "sdk"
 
 interface Commit {
   readonly hash: string
@@ -25,13 +25,19 @@ const sdkScopeRoots = [
   "workspace",
 ] as const
 
+const sandboxScopes = ["agent-sandbox", "docker", "sandbox"] as const
+
 function isReleaseLane(value: string | undefined): value is ReleaseLane {
-  return value === "cli" || value === "sdk"
+  return value === "cli" || value === "sandbox" || value === "sdk"
 }
 
 function belongsToLane(scope: string, lane: ReleaseLane): boolean {
   if (lane === "cli") {
     return scope === "cli"
+  }
+
+  if (lane === "sandbox") {
+    return sandboxScopes.includes(scope as (typeof sandboxScopes)[number])
   }
 
   return sdkScopeRoots.some(root => scope === root || scope.startsWith(`${root}-`))
@@ -71,7 +77,7 @@ function releaseNotes(lane: ReleaseLane, from: string, to: string): string {
 const [lane, from, to = "HEAD"] = process.argv.slice(2)
 
 if (!isReleaseLane(lane) || from === undefined) {
-  process.stderr.write("Usage: node scripts/release-notes.ts <cli|sdk> <from> [to]\n")
+  process.stderr.write("Usage: node scripts/release-notes.ts <cli|sandbox|sdk> <from> [to]\n")
   process.exitCode = 1
 } else {
   process.stdout.write(releaseNotes(lane, from, to))

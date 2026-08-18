@@ -25,7 +25,7 @@ LABEL org.opencontainers.image.title="AML Agent Sandbox" \
     org.opencontainers.image.description="Portable runtime for AML-compatible ACP coding Agents" \
     org.opencontainers.image.version="$IMAGE_VERSION" \
     org.opencontainers.image.revision="$VCS_REF" \
-    org.opencontainers.image.source="https://github.com/we-are-singular/aml/tree/main/images/aml-agent-sandbox" \
+    org.opencontainers.image.source="https://github.com/we-are-singular/aml/tree/main/images/sandbox" \
     org.opencontainers.image.url="https://hub.docker.com/r/wearesingular/aml-agent-sandbox" \
     org.opencontainers.image.licenses="MIT AND LicenseRef-GitHub-Copilot-CLI"
 
