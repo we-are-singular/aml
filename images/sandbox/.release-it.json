@@ -2,7 +2,7 @@
   "$schema": "https://unpkg.com/release-it@21/schema/release-it.json",
   "verbose": true,
   "hooks": {
-    "after:bump": ["npm install --package-lock-only --ignore-scripts", "git add package-lock.json"],
+    "after:bump": ["npm run update:aml", "git add package.json package-lock.json"],
     "before:release": "npm run release:check",
     "after:git:release": "node scripts/publish.mjs ${version}"
   },

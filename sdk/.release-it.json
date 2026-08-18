@@ -3,8 +3,6 @@
   "verbose": true,
   "hooks": {
     "after:bump": [
-      "npm pkg set \"devDependencies.@aml-jsx/sdk=^${version}\" \"peerDependencies.@aml-jsx/sdk=^${version}\" --workspace=@aml-jsx/cli --prefix ..",
-      "git add ../apps/cli/package.json",
       "timeout --signal=INT --kill-after=15s 10m npm run changelog:sdk --prefix ..",
       "npm run format --prefix .. -- apps/website/src/content/docs/docs/reference/changelog/sdk.md",
       "git add ../apps/website/src/content/docs/docs/reference/changelog/sdk.md",
