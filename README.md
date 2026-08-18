@@ -188,7 +188,7 @@ The credentialed smoke runner exercises the complete built-in Agent × Sandbox m
 
 Every cell launches its Agent through the same shared ACP engine and `SandboxRuntime.spawn()`. These proofs use read-write Workspaces where a provider cannot enforce read-only access. The selected host, image, or snapshot must contain the required executable. Sandbox providers do not install Agents implicitly.
 
-Docker, Daytona, and Modal smoke cells use `ghcr.io/we-are-singular/aml-agent-sandbox:dev`, which contains the matrix's pinned Agent executables. Provider factories default to `wearesingular/aml-agent-sandbox:latest`; applications can override that mutable convenience tag with their own image, snapshot, immutable version, or digest.
+Docker, Daytona, and Modal smoke cells use `ghcr.io/we-are-singular/aml-agent-sandbox:dev`, which contains the matrix's pinned Agent executables. Set `AML_SMOKE_SANDBOX_IMAGE` to run every image-backed cell against one explicit reference, such as an immutable stable digest. Provider factories default to `wearesingular/aml-agent-sandbox:latest`; applications can override that mutable convenience tag with their own image, snapshot, immutable version, or digest.
 
 `<System>`, `<Skill>`, `<FollowUp>`, Context, and tree evaluation are runtime-owned. JavaScript Tools use one AML-owned invocation MCP bridge, and structured output uses one AML-owned final-turn submission Tool. Agent permissions default to read-write filesystem, shell, and network access; the active Sandbox remains the security boundary for model-controlled operations.
 
