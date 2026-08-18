@@ -11,7 +11,9 @@
   },
   "scripts": {
     "build": "docker build --platform linux/amd64 --tag aml-agent-sandbox:dev .",
-    "check": "docker run --rm --platform linux/amd64 --volume $PWD/verify.sh:/verify.sh:ro aml-agent-sandbox:dev /verify.sh",
+    "check": "npm run check:writable && npm run check:read-only",
+    "check:read-only": "docker run --rm --platform linux/amd64 --env AML_VERIFY_WORKSPACE_ACCESS=read-only --volume $PWD/fixtures/clean-workspace:/workspace:ro --volume $PWD/verify.sh:/verify.sh:ro ${AML_AGENT_SANDBOX_IMAGE:-aml-agent-sandbox:dev} /verify.sh",
+    "check:writable": "docker run --rm --platform linux/amd64 --env AML_VERIFY_WORKSPACE_ACCESS=read-write --tmpfs /workspace:rw,uid=1000,gid=1000 --volume $PWD/fixtures/clean-workspace:/fixture:ro --volume $PWD/verify.sh:/verify.sh:ro ${AML_AGENT_SANDBOX_IMAGE:-aml-agent-sandbox:dev} /verify.sh",
     "release": "node scripts/release.mjs",
     "release:check": "npm audit --omit=dev && npm run build && npm run check",
     "test": "node --test scripts/*.test.mjs",
@@ -19,6 +21,8 @@
   },
   "dependencies": {
     "@agentclientprotocol/codex-acp": "1.4.0",
+    "@aml-jsx/cli": "0.2.1",
+    "@aml-jsx/sdk": "0.5.2",
     "@earendil-works/pi-coding-agent": "0.84.2",
     "@github/copilot": "1.0.80",
     "@openai/codex": "0.147.0",

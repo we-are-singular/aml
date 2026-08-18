@@ -76,8 +76,11 @@ COPY --from=build /opt/aml-agent-sandbox /opt/aml-agent-sandbox
 COPY README.md CHANGELOG.md LICENSE THIRD_PARTY_NOTICES.md /usr/share/doc/aml-agent-sandbox/
 COPY --from=build /opt/aml-agent-sandbox/node_modules/@github/copilot/LICENSE.md /usr/share/doc/aml-agent-sandbox/licenses/GitHub-Copilot-CLI-LICENSE.md
 
+# Bare ESM imports search ancestor node_modules directories, not npm's global
+# prefix. Root remains an ancestor when /workspace is bind-mounted.
 RUN ln -s ../lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm \
     && ln -s ../lib/node_modules/npm/bin/npx-cli.js /usr/local/bin/npx \
+    && ln -s /opt/aml-agent-sandbox/node_modules /node_modules \
     && ln -s /usr/bin/fdfind /usr/local/bin/fd \
     && ln -s /usr/bin/pip3 /usr/local/bin/pip
 
