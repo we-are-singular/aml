@@ -339,6 +339,7 @@ Props:
 ```ts
 interface AgentProps {
   children?: AmlRenderable
+  cwd?: string
   model?: string
   name?: string
   permissions?: {
@@ -353,6 +354,8 @@ interface AgentProps {
 ```
 
 `provider` selects the harness for this Agent. When omitted, AML uses `AmlRuntimeOptions.agentProvider`. An Agent without either provider is invalid. Different Agents in one evaluation may select different providers while remaining in the same evaluation domain.
+
+`cwd` optionally narrows the logical working directory inside an enclosing Sandbox. It does not create a Sandbox; using it without one is invalid. See [13. `<Sandbox>`](#13-sandbox) for path and confinement rules.
 
 `model` is a provider-neutral override whose string remains provider-owned. Resolution order is the Agent `model` prop, then the configured provider's default, then the provider-native default. AML passes the explicit prop through `AgentRequest.model`; the selected provider rejects identifiers it cannot use.
 
