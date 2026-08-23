@@ -7,6 +7,7 @@ import type { AgentTool } from "../tool/agent-tool.js"
 import { instrumentAgentTools } from "../tool/instrument-agent-tools.js"
 import type { AgentProps } from "./agent.js"
 import type { AgentExecutionContext } from "./agent-execution-context.js"
+import { agentDiagnosticIdentity } from "./agent-diagnostic-identity.js"
 import { attachAgentObservabilityServices, agentObservabilityServices } from "./agent-observability-services.js"
 import { attachAgentStructuredOutputServices } from "./agent-structured-output-services.js"
 import type { ModelSchema } from "./model-schema.js"
@@ -82,7 +83,8 @@ export class AgentRequestPlan {
     const turnCount = 1 + followUps.length
 
     if (input.maxTurns !== 0 && turnCount > input.maxTurns) {
-      throw new EvaluationError(`Agent ${input.trace.spanId} exceeded maxTurnsPerAgent ${input.maxTurns}`)
+      const identity = agentDiagnosticIdentity({ name: input.props.name, spanId: input.trace.spanId })
+      throw new EvaluationError(`${identity} exceeded maxTurnsPerAgent ${input.maxTurns}`)
     }
 
     const tools = instrumentAgentTools(input.tools, input.context, input.trace)
@@ -95,6 +97,7 @@ export class AgentRequestPlan {
     const request: AgentRequest = Object.freeze({
       ...(followUps.length === 0 ? {} : { followUps: Object.freeze(followUps) }),
       ...(input.props.model === undefined ? {} : { model: input.props.model }),
+      ...(input.props.name === undefined ? {} : { name: input.props.name }),
       mcpServers: input.mcpServers,
       ...(input.output === undefined
         ? {}

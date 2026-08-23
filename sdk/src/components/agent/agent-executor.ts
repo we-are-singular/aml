@@ -5,6 +5,7 @@ import type { AmlTraceIdentity } from "../../core/trace-identity.js"
 import type { SandboxSession } from "../sandbox/sandbox-provider.js"
 import type { AgentMcpServer } from "../mcp/aml-mcp-server.js"
 import type { AgentTool } from "../tool/agent-tool.js"
+import { agentDiagnosticIdentity } from "./agent-diagnostic-identity.js"
 import { AgentExecutionResult } from "./agent-execution-result.js"
 import type { ModelSchema } from "./model-schema.js"
 import type { AgentProps } from "./agent.js"
@@ -44,6 +45,13 @@ export class AgentExecutor {
   validateProps(props: Readonly<AgentProps>): Readonly<ValidatedAgentProvider> | undefined {
     if (props.model !== undefined && typeof props.model !== "string") {
       throw new EvaluationError("<Agent> model must be a string")
+    }
+
+    if (
+      props.name !== undefined &&
+      (typeof props.name !== "string" || props.name.length === 0 || props.name !== props.name.trim())
+    ) {
+      throw new EvaluationError("<Agent> name must be a non-empty normalized string")
     }
 
     if (props.system !== undefined && typeof props.system !== "string") {
@@ -93,8 +101,14 @@ export class AgentExecutor {
     readonly tools: readonly AgentTool[]
     readonly trace: AmlTraceIdentity
   }): Promise<Readonly<AgentExecutionResult>> {
+    const identity = agentDiagnosticIdentity({
+      name: input.props.name,
+      ...(input.provider === undefined ? {} : { provider: input.provider.name }),
+      spanId: input.trace.spanId,
+    })
+
     if (!input.provider) {
-      throw new EvaluationError(`Agent ${input.trace.spanId} has no provider`)
+      throw new EvaluationError(`${identity} has no provider`)
     }
 
     const provider = input.provider
@@ -112,15 +126,21 @@ export class AgentExecutor {
             Reflect.apply(supportsSandbox, provider.provider, [input.sandbox])
           ) === true
       } catch (cause) {
-        throw new EvaluationError(`Agent provider "${input.provider.name}" failed its Sandbox compatibility check`, {
+        const message =
+          input.props.name === undefined
+            ? `Agent provider "${input.provider.name}" failed its Sandbox compatibility check`
+            : `${identity} failed its Sandbox compatibility check`
+        throw new EvaluationError(message, {
           cause,
         })
       }
 
       if (!supported) {
-        throw new EvaluationError(
-          `Agent provider "${input.provider.name}" cannot run inside Sandbox provider "${input.sandbox.provider.name}"`
-        )
+        const message =
+          input.props.name === undefined
+            ? `Agent provider "${input.provider.name}" cannot run inside Sandbox provider "${input.sandbox.provider.name}"`
+            : `${identity} cannot run inside Sandbox provider "${input.sandbox.provider.name}"`
+        throw new EvaluationError(message)
       }
     }
 
@@ -141,7 +161,7 @@ export class AgentExecutor {
 
     // Reserve only after the complete plan exists. Limit errors belong to AML,
     // not the provider failure boundary below.
-    input.context.reserveAgentCall(input.trace)
+    input.context.reserveAgentCall(input.trace, input.props.name)
 
     let providerStarted = false
     let response: AgentResponse
@@ -161,18 +181,16 @@ export class AgentExecutor {
       })
     } catch (cause) {
       if (!providerStarted && input.context.signal.aborted) {
-        throw new EvaluationError(
-          `Agent "${provider.name}" (${input.trace.spanId}) was cancelled before provider execution`,
-          { cause }
-        )
+        throw new EvaluationError(`${identity} was cancelled before provider execution`, { cause })
       }
 
-      throw new EvaluationError(`Agent "${provider.name}" (${input.trace.spanId}) failed`, { cause })
+      throw new EvaluationError(`${identity} failed`, { cause })
     }
 
     return await AgentExecutionResult.from({
       mcpServers: input.mcpServers.length,
       model: plan.request.model,
+      name: plan.request.name,
       output: input.output,
       prompt: plan.prompt,
       provider,

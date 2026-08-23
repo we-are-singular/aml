@@ -31,6 +31,24 @@ import { createAgentExecutionContext } from "../src/testing/create-agent-executi
 import { DeterministicSandboxProvider } from "../src/testing/deterministic-sandbox-provider.js"
 
 describe("ACP Agent observability", () => {
+  it("preserves unnamed Agent session and terminal attribute shapes", async () => {
+    const events: AmlTraceEvent[] = []
+    const provider = new ScriptedAcpProvider([script([], { stopReason: "end_turn" })])
+
+    await new AmlRuntime({ trace: event => events.push(event) }).evaluate(<Agent provider={provider}>prompt</Agent>)
+
+    const agentEnd = events.find(event => event.type === "span.end" && event.name === "Agent")
+    const sessionStart = events.find(event => event.type === "span.start" && event.name === "agent.session")
+
+    expect(sessionStart?.attributes).toEqual({ provider: "scripted-acp" })
+    expect(agentEnd?.attributes).toEqual({
+      mcpServers: 0,
+      provider: "scripted-acp",
+      tools: 0,
+      turns: 1,
+    })
+  })
+
   it("traces actual two-turn lifecycle order around streamed ACP updates", async () => {
     const events: AmlTraceEvent[] = []
     const provider = new ScriptedAcpProvider([
@@ -71,7 +89,7 @@ describe("ACP Agent observability", () => {
 
     await expect(
       new AmlRuntime({ trace: event => events.push(event) }).evaluate(
-        <Agent provider={provider}>
+        <Agent name="researcher" provider={provider}>
           first prompt
           <FollowUp>second prompt</FollowUp>
         </Agent>
@@ -123,9 +141,11 @@ describe("ACP Agent observability", () => {
       },
     })
 
+    const agentEnd = events.find(event => event.type === "span.end" && event.name === "Agent")
     const sessionStart = events.find(event => event.type === "span.start" && event.name === "agent.session")
     const cleanupStart = events.find(event => event.type === "span.start" && event.name === "agent.cleanup")
-    expect(sessionStart).toMatchObject({ attributes: { provider: "scripted-acp" } })
+    expect(agentEnd).toMatchObject({ attributes: { name: "researcher", provider: "scripted-acp" } })
+    expect(sessionStart).toMatchObject({ attributes: { name: "researcher", provider: "scripted-acp" } })
     expect(turns[0]).toMatchObject({ parentSpanId: sessionStart?.spanId })
     expect(cleanupStart).toMatchObject({ parentSpanId: sessionStart?.spanId })
   })

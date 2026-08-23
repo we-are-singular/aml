@@ -41,6 +41,7 @@ describe("Agent", () => {
 
     expect(runtimeProvider.calls).toHaveLength(1)
     expect(runtimeProvider.calls[0]?.request.model).toBeUndefined()
+    expect(runtimeProvider.calls[0]?.request).not.toHaveProperty("name")
     expect(runtimeProvider.calls[0]?.request.permissions).toEqual({
       filesystem: "read-write",
       network: true,
@@ -77,6 +78,42 @@ describe("Agent", () => {
         <Agent permissions={{ shell: "yes" as never }}>invalid</Agent>
       )
     ).rejects.toThrow("<Agent> permissions.shell must be a boolean")
+  })
+
+  it("threads duplicate diagnostic names without changing provider content", async () => {
+    const events: AmlTraceEvent[] = []
+    const provider = new DeterministicAgentProvider({
+      respond: request => ({ text: request.prompt }),
+    })
+
+    await expect(
+      new AmlRuntime({ trace: event => events.push(event) }).evaluate([
+        <Agent name="reviewer" provider={provider} system="first system">
+          first prompt
+        </Agent>,
+        <Agent name="reviewer" provider={provider} system="second system">
+          second prompt
+        </Agent>,
+      ])
+    ).resolves.toBe("first promptsecond prompt")
+
+    expect(provider.calls.map(call => call.request.name)).toEqual(["reviewer", "reviewer"])
+    expect(provider.calls.map(call => call.request.prompt)).toEqual(["first prompt", "second prompt"])
+    expect(provider.calls.map(call => call.request.system)).toEqual(["first system", "second system"])
+
+    const agentEnds = events.filter(event => event.type === "span.end" && event.kind === "agent")
+    expect(agentEnds).toHaveLength(2)
+    expect(agentEnds.map(event => event.attributes.name)).toEqual(["reviewer", "reviewer"])
+    expect(new Set(agentEnds.map(event => event.spanId)).size).toBe(2)
+  })
+
+  it.each(["", " reviewer ", 42] as const)("rejects invalid diagnostic name %j", async name => {
+    const provider = new DeterministicAgentProvider()
+
+    await expect(
+      new AmlRuntime({ agentProvider: provider }).evaluate(<Agent name={name as never}>prompt</Agent>)
+    ).rejects.toThrow("<Agent> name must be a non-empty normalized string")
+    expect(provider.calls).toHaveLength(0)
   })
 
   it("resolves child Agents and System subtrees before their parent", async () => {
@@ -243,6 +280,24 @@ describe("Agent", () => {
 
     expect(error).toBeInstanceOf(EvaluationError)
     expect(error).toHaveProperty("message", 'Agent "broken" (span-1) failed')
+    expect(error).toHaveProperty("cause", failure)
+  })
+
+  it("adds the diagnostic name without replacing provider or span identity in failures", async () => {
+    const failure = new Error("provider exploded")
+    const provider: AgentProvider = {
+      name: "broken",
+      async run() {
+        throw failure
+      },
+    }
+
+    const error = await new AmlRuntime({ agentProvider: provider })
+      .evaluate(<Agent name="reviewer">prompt</Agent>)
+      .catch((cause: unknown) => cause)
+
+    expect(error).toBeInstanceOf(EvaluationError)
+    expect(error).toHaveProperty("message", 'Agent "broken" [name: "reviewer"] (span-1) failed')
     expect(error).toHaveProperty("cause", failure)
   })
 
