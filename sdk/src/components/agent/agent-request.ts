@@ -20,6 +20,7 @@ export interface AgentRequest {
   readonly permissions: AgentPermissions
   readonly prompt: string
   readonly system: string
+  readonly timeoutMs?: number
   readonly tools: readonly AgentTool[]
   readonly trace?: AmlTraceIdentity
 }

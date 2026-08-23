@@ -2,6 +2,7 @@ import type { AgentExecutionContext } from "./agent-execution-context.js"
 import type { AgentProviderSession, AgentProviderTurn } from "./agent-provider-session.js"
 import type { AgentResponse } from "./agent-response.js"
 import { agentObservabilityServices } from "./agent-observability-services.js"
+import { AgentTimeoutError } from "./agent-timeout.js"
 
 /**
  * Executes a captured provider session and preserves lifecycle failures in
@@ -73,7 +74,11 @@ export async function executeAgentProviderSession(
   // Cancellation notification is observable immediately, but the caller's
   // AbortSignal reason remains authoritative over any provider abort failure.
   const requestAbort = () => {
-    observability.event(sessionTrace, "agent.session", { state: "cancellation_requested" })
+    const reason = context.signal.reason
+    observability.event(sessionTrace, "agent.session", {
+      ...(AgentTimeoutError.is(reason) ? { reason: "timeout", timeoutMs: reason.timeoutMs } : {}),
+      state: "cancellation_requested",
+    })
 
     if (abort === undefined) {
       return
