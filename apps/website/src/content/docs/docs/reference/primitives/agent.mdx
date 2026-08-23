@@ -17,7 +17,7 @@ const provider = new DeterministicAgentProvider({
 
 const runtime = new AmlRuntime({ agentProvider: provider })
 const result = await runtime.evaluate(
-  <Agent model="reviewer">
+  <Agent name="authorization-review" model="reviewer" timeoutMs={30_000}>
     <System>Use only evidence supplied in the prompt.</System>
     Review the authorization change.
   </Agent>
@@ -28,14 +28,20 @@ For a live session, replace the deterministic provider with [Codex](/docs/provid
 
 ## Props
 
-| Prop          | Type                | Default                                          | Meaning                                                                                              |
-| ------------- | ------------------- | ------------------------------------------------ | ---------------------------------------------------------------------------------------------------- |
-| `children`    | `AmlRenderable`     | empty                                            | Initial prompt text plus Agent-scoped descriptors.                                                   |
-| `provider`    | `AgentProvider`     | runtime `agentProvider`                          | Provider for this session.                                                                           |
-| `model`       | `string`            | provider default                                 | Provider-owned model identifier passed through by AML.                                               |
-| `system`      | `string`            | empty                                            | Fixed system text, placed after runtime system text and before child `<System />` blocks.            |
-| `permissions` | partial permissions | read-write filesystem, network and shell enabled | Requested native harness controls; an active Sandbox may narrow them.                                |
-| `cwd`         | `string`            | active Sandbox cwd                               | Agent-local logical cwd. Requires an enclosing [`<Sandbox />`](/docs/reference/primitives/sandbox/). |
+| Prop          | Type                | Default                                          | Meaning                                                                                                                      |
+| ------------- | ------------------- | ------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------- |
+| `children`    | `AmlRenderable`     | empty                                            | Initial prompt text plus Agent-scoped descriptors.                                                                           |
+| `cwd`         | `string`            | active Sandbox cwd                               | Agent-local logical cwd. Requires an enclosing [`<Sandbox />`](/docs/reference/primitives/sandbox/); it does not create one. |
+| `model`       | `string`            | provider default                                 | Provider-owned model identifier passed through by AML.                                                                       |
+| `name`        | `string`            | —                                                | Optional diagnostic metadata; non-unique and never included in prompts.                                                      |
+| `permissions` | partial permissions | read-write filesystem, network and shell enabled | Requested native harness controls; an active Sandbox may narrow them.                                                        |
+| `provider`    | `AgentProvider`     | runtime `agentProvider`                          | Provider for this session.                                                                                                   |
+| `system`      | `string`            | empty                                            | Fixed system text, placed after runtime system text and before child `<System />` blocks.                                    |
+| `timeoutMs`   | `number`            | —                                                | Positive safe integer that bounds this provider session; caller cancellation and cleanup semantics are described below.      |
+
+`name` is optional diagnostic metadata for relating traces and failures to the authored workflow. It must be a non-empty normalized string when supplied. Names are not unique: structural identities such as trace span IDs continue to distinguish Agents with the same name. AML includes the name in observability and diagnostics only; it never adds it to the prompt or system instructions sent to the provider.
+
+`timeoutMs`, when present, is a positive safe integer that bounds the provider session after it acquires an Agent scheduler slot. AML derives a session signal that aborts when either this timeout expires or the enclosing evaluation is cancelled; the earliest cause wins, and nested Agents retain independent scopes. Expiry follows the same provider cancellation path as caller cancellation. AML awaits provider-owned abort and cleanup before settling the Agent, and preserves both the cancellation cause and any later cleanup failure.
 
 ## Resolution and result
 
