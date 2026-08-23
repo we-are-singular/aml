@@ -110,10 +110,11 @@ describe("Agent timeout", () => {
   it("preserves caller cancellation as a distinct signal reason", async () => {
     const controller = new AbortController()
     const cancellation = new Error("caller stopped evaluation")
+    const events: AmlTraceEvent[] = []
     const clearTimeoutSpy = vi.spyOn(globalThis, "clearTimeout")
     const removeListenerSpy = vi.spyOn(controller.signal, "removeEventListener")
     const provider = new SessionProvider("caller-cancel", (_request, context) => sessionWaitingOn(context.signal))
-    const pending = new AmlRuntime().evaluate(
+    const pending = new AmlRuntime({ trace: event => events.push(event) }).evaluate(
       <Agent provider={provider} timeoutMs={60_000}>
         prompt
       </Agent>,
@@ -128,8 +129,34 @@ describe("Agent timeout", () => {
     await expect(pending).rejects.toMatchObject({ cause: cancellation })
     expect(clearTimeoutSpy).toHaveBeenCalledOnce()
     expect(removeListenerSpy).toHaveBeenCalledTimes(2)
+    const cancellationEvent = events.find(
+      event =>
+        event.type === "event" && event.name === "agent.session" && event.attributes.state === "cancellation_requested"
+    )
+    expect(cancellationEvent).toBeDefined()
+    expect(cancellationEvent?.attributes).not.toHaveProperty("reason")
+    expect(cancellationEvent?.attributes).not.toHaveProperty("timeoutMs")
     clearTimeoutSpy.mockRestore()
     removeListenerSpy.mockRestore()
+  })
+
+  it("rejects when timeout expires while provider cleanup is settling", async () => {
+    const provider = new SessionProvider("cleanup-timeout", (_request, context) => ({
+      async close() {
+        await waitForAbort(context.signal)
+      },
+      async runTurn() {
+        return { text: "turn completed" }
+      },
+    }))
+
+    await expect(
+      new AmlRuntime().evaluate(
+        <Agent provider={provider} timeoutMs={10}>
+          prompt
+        </Agent>
+      )
+    ).rejects.toMatchObject({ cause: expect.any(AgentTimeoutError) })
   })
 
   it("retains timeout and cleanup failures in lifecycle order", async () => {
@@ -215,6 +242,42 @@ describe("Agent timeout", () => {
     expect(calls).toEqual(["child"])
   })
 
+  it("lets an outer Agent continue after a handled inner timeout", async () => {
+    const calls: string[] = []
+    const provider: AgentProvider = {
+      name: "nested-inner-timeout",
+      async run(request, context) {
+        calls.push(request.prompt)
+
+        if (request.prompt === "inner") {
+          return await rejectOnAbort(context.signal)
+        }
+
+        return { text: "outer completed" }
+      },
+    }
+
+    async function HandledInnerTimeout() {
+      try {
+        await evaluate(<Agent timeoutMs={10}>inner</Agent>)
+      } catch (error) {
+        expect(error).toMatchObject({ cause: expect.any(AgentTimeoutError) })
+      }
+
+      return "inner timed out; "
+    }
+
+    await expect(
+      new AmlRuntime({ agentProvider: provider }).evaluate(
+        <Agent timeoutMs={60_000}>
+          <HandledInnerTimeout />
+          outer
+        </Agent>
+      )
+    ).resolves.toBe("outer completed")
+    expect(calls).toEqual(["inner", "inner timed out; outer"])
+  })
+
   it.each([false, true])("releases the scheduler slot after timeout cleanup (fails: %s)", async cleanupFails => {
     const calls: string[] = []
     const cleanupFailure = new Error("expected cleanup failure")
@@ -291,4 +354,12 @@ async function rejectOnAbort(signal: AbortSignal): Promise<never> {
 
     signal.addEventListener("abort", () => reject(signal.reason), { once: true })
   })
+}
+
+async function waitForAbort(signal: AbortSignal): Promise<void> {
+  try {
+    await rejectOnAbort(signal)
+  } catch (error) {
+    if (error !== signal.reason) throw error
+  }
 }
