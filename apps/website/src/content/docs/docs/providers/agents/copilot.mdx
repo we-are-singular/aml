@@ -129,14 +129,16 @@ or repository file.
 
 ## Options and precedence
 
-| Option             | Type                                                                     | Default     | Semantics                                                                                  |
-| ------------------ | ------------------------------------------------------------------------ | ----------- | ------------------------------------------------------------------------------------------ |
-| `command`          | `string`                                                                 | `"copilot"` | Copilot ACP executable or application-owned launcher.                                      |
-| `args`             | `readonly string[]`                                                      | `[]`        | Extra Copilot arguments inserted before AML-owned ACP, isolation, model, and policy flags. |
-| `env`              | `Record<string, string>`                                                 | `{}`        | Optional runtime environment overlay; AML does not filter or rewrite credential variables. |
-| `model`            | `string`                                                                 | `"auto"`    | Provider-level model fallback.                                                             |
-| `reasoningEffort`  | `"none" \| "minimal" \| "low" \| "medium" \| "high" \| "xhigh" \| "max"` | —           | Copilot reasoning-effort flag; the chosen model and plan must support it.                  |
-| `workingDirectory` | `string`                                                                 | —           | Fallback cwd when no active Sandbox supplies one.                                          |
+| Option             | Type                     | Default     | Semantics                                                                                  |
+| ------------------ | ------------------------ | ----------- | ------------------------------------------------------------------------------------------ |
+| `command`          | `string`                 | `"copilot"` | Copilot ACP executable or application-owned launcher.                                      |
+| `args`             | `readonly string[]`      | `[]`        | Extra Copilot arguments inserted before AML-owned ACP, isolation, model, and policy flags. |
+| `env`              | `Record<string, string>` | `{}`        | Optional runtime environment overlay; AML does not filter or rewrite credential variables. |
+| `model`            | `string`                 | `"auto"`    | Provider-level model fallback.                                                             |
+| `reasoningEffort`  | `string`                 | —           | Provider-native value passed through as Copilot's reasoning-effort flag.                   |
+| `workingDirectory` | `string`                 | —           | Fallback cwd when no active Sandbox supplies one.                                          |
+
+Values such as `"low"` in the examples are provider-native examples, not an AML allowlist. AML only checks that the value is a normalized non-empty string without null bytes, then forwards it to Copilot unchanged.
 
 Precedence is deliberate:
 
