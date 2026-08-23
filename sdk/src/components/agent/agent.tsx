@@ -27,6 +27,7 @@ export interface AgentProps {
   readonly permissions?: AgentPermissionOverrides
   readonly provider?: AgentProvider
   readonly system?: string
+  readonly timeoutMs?: number
 }
 
 /**

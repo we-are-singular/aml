@@ -11,6 +11,7 @@ import type { ModelSchema } from "./model-schema.js"
 import type { AgentProps } from "./agent.js"
 import type { AgentProvider } from "./agent-provider.js"
 import { AgentRequestPlan } from "./agent-request-plan.js"
+import { AgentCancellationScope } from "./agent-timeout.js"
 import type { AgentResponse } from "./agent-response.js"
 import { type ValidatedAgentProvider, validateAgentProvider } from "./validate-agent-provider.js"
 
@@ -56,6 +57,10 @@ export class AgentExecutor {
 
     if (props.system !== undefined && typeof props.system !== "string") {
       throw new EvaluationError("<Agent> system must be a string")
+    }
+
+    if (props.timeoutMs !== undefined && (!Number.isSafeInteger(props.timeoutMs) || props.timeoutMs <= 0)) {
+      throw new EvaluationError("<Agent> timeoutMs must be a positive safe integer")
     }
 
     if (props.permissions !== undefined) {
@@ -144,27 +149,40 @@ export class AgentExecutor {
       }
     }
 
-    const plan = AgentRequestPlan.create({
-      context: input.context,
-      followUps: input.followUps,
-      maxTurns: this.#maxTurnsPerAgent,
-      mcpServers: input.mcpServers,
-      output: input.output,
-      prompt: input.prompt,
-      props: input.props,
-      runtimeSystem: this.#system,
-      sandbox: input.sandbox,
-      systemFragments: input.systemFragments,
-      tools: input.tools,
-      trace: input.trace,
-    })
+    const cancellationScope = new AgentCancellationScope(input.context.signal, input.props.timeoutMs)
+    let providerStarted = false
+    let plan: AgentRequestPlan
+    let response: AgentResponse
+
+    try {
+      plan = AgentRequestPlan.create({
+        context: input.context,
+        followUps: input.followUps,
+        maxTurns: this.#maxTurnsPerAgent,
+        mcpServers: input.mcpServers,
+        output: input.output,
+        prompt: input.prompt,
+        props: input.props,
+        runtimeSystem: this.#system,
+        sandbox: input.sandbox,
+        signal: cancellationScope.signal,
+        systemFragments: input.systemFragments,
+        tools: input.tools,
+        trace: input.trace,
+      })
+    } catch (cause) {
+      cancellationScope.dispose()
+      throw cause
+    }
 
     // Reserve only after the complete plan exists. Limit errors belong to AML,
     // not the provider failure boundary below.
-    input.context.reserveAgentCall(input.trace, input.props.name)
-
-    let providerStarted = false
-    let response: AgentResponse
+    try {
+      input.context.reserveAgentCall(input.trace, input.props.name)
+    } catch (cause) {
+      cancellationScope.dispose()
+      throw cause
+    }
 
     try {
       // Scheduling begins only after the complete Agent plan exists. The slot
@@ -172,6 +190,7 @@ export class AgentExecutor {
       // cannot settle until the adapter has finished that lifecycle.
       response = await input.context.scheduleAgent(() => {
         providerStarted = true
+        cancellationScope.start()
 
         // The async wrapper is created inside exit(), so Promise/thenable
         // assimilation and every provider-created continuation remain masked.
@@ -185,6 +204,8 @@ export class AgentExecutor {
       }
 
       throw new EvaluationError(`${identity} failed`, { cause })
+    } finally {
+      cancellationScope.dispose()
     }
 
     return await AgentExecutionResult.from({

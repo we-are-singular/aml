@@ -53,6 +53,7 @@ export class AgentRequestPlan {
     readonly props: Readonly<AgentProps>
     readonly runtimeSystem: string
     readonly sandbox: Readonly<SandboxSession> | undefined
+    readonly signal?: AbortSignal
     readonly systemFragments: readonly string[]
     readonly tools: readonly AgentTool[]
     readonly trace: AmlTraceIdentity
@@ -110,13 +111,14 @@ export class AgentRequestPlan {
       permissions,
       prompt,
       system: systemFragments.join("\n"),
+      ...(input.props.timeoutMs === undefined ? {} : { timeoutMs: input.props.timeoutMs }),
       tools,
       trace: input.trace,
     })
     const context: AgentExecutionContext = Object.freeze({
       events: input.context.events,
       ...(input.sandbox === undefined ? {} : { sandbox: input.sandbox }),
-      signal: input.context.signal,
+      signal: input.signal ?? input.context.signal,
       trace: input.trace,
     })
     attachAgentObservabilityServices(context, input.context)
