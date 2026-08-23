@@ -141,9 +141,13 @@ const codex = codexAgent({ model: "gpt-5.3-codex" })
 const opencode = opencodeAgent({ model: "opencode-go/minimax-m3" })
 
 const answer = await new AmlRuntime().evaluate(
-  <Agent provider={codex} system="Synthesize the two specialist reviews.">
-    <Agent provider={codex}>Inspect authorization changes.</Agent>
-    <Agent provider={opencode}>Inspect operational changes.</Agent>
+  <Agent name="review-coordinator" provider={codex} system="Synthesize the two specialist reviews.">
+    <Agent name="authorization-specialist" provider={codex}>
+      Inspect authorization changes.
+    </Agent>
+    <Agent name="operations-specialist" provider={opencode}>
+      Inspect operational changes.
+    </Agent>
   </Agent>
 )
 ```
