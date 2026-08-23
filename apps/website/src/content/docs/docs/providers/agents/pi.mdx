@@ -160,16 +160,18 @@ The wrapper adds `mcp` to Pi's allowed tool list and writes an `agent/mcp.json` 
 
 ## Options and precedence
 
-| Option             | Type                                                                    | Default                       | Semantics                                                         |
-| ------------------ | ----------------------------------------------------------------------- | ----------------------------- | ----------------------------------------------------------------- |
-| `command`          | `string`                                                                | `"pi-acp"`                    | Outer ACP executable.                                             |
-| `args`             | `readonly string[]`                                                     | `[]`                          | Extra ACP arguments, passed exactly as supplied.                  |
-| `env`              | `Record<string, string>`                                                | `{}`                          | Provider credentials and native environment configuration.        |
-| `mcpAdapterPath`   | `string`                                                                | auto-discovered when possible | Path to the installed `pi-mcp-adapter` entrypoint.                |
-| `model`            | `string`                                                                | —                             | Provider-level model fallback. `<Agent model="..." />` wins.      |
-| `piCommand`        | `string`                                                                | `"pi"`                        | Native Pi command used by the direct or generated wrapper launch. |
-| `thinkingLevel`    | `"off" \| "minimal" \| "low" \| "medium" \| "high" \| "xhigh" \| "max"` | —                             | Adds Pi's `thought_level` configuration value.                    |
-| `workingDirectory` | `string`                                                                | —                             | Fallback directory when no Sandbox supplies the effective cwd.    |
+| Option             | Type                     | Default                       | Semantics                                                             |
+| ------------------ | ------------------------ | ----------------------------- | --------------------------------------------------------------------- |
+| `command`          | `string`                 | `"pi-acp"`                    | Outer ACP executable.                                                 |
+| `args`             | `readonly string[]`      | `[]`                          | Extra ACP arguments, passed exactly as supplied.                      |
+| `env`              | `Record<string, string>` | `{}`                          | Provider credentials and native environment configuration.            |
+| `mcpAdapterPath`   | `string`                 | auto-discovered when possible | Path to the installed `pi-mcp-adapter` entrypoint.                    |
+| `model`            | `string`                 | —                             | Provider-level model fallback. `<Agent model="..." />` wins.          |
+| `piCommand`        | `string`                 | `"pi"`                        | Native Pi command used by the direct or generated wrapper launch.     |
+| `thinkingLevel`    | `string`                 | —                             | Adds the provider-native value as Pi's `thought_level` configuration. |
+| `workingDirectory` | `string`                 | —                             | Fallback directory when no Sandbox supplies the effective cwd.        |
+
+Values such as `"medium"` in the examples are provider-native examples, not an AML allowlist. AML only checks that the value is a normalized non-empty string without null bytes, then forwards it to Pi ACP unchanged; the adapter must advertise the selected value through ACP.
 
 Precedence and launch behavior:
 
@@ -269,7 +271,7 @@ AML materializes wrapper files, Pi settings, and lazy MCP configuration into tha
 
 6. **Configuration fails before launch**
 
-   Commands, paths, model names, and args must be normalized strings. `thinkingLevel` must be one of the documented values, and args cannot contain null bytes.
+   Commands, paths, model names, and `thinkingLevel` must be normalized strings, and args cannot contain null bytes. Pi ACP must advertise the selected `thought_level` value.
 
 </Steps>
 

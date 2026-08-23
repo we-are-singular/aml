@@ -116,17 +116,19 @@ If you use the repository's live ACP test pattern, the adapter can be launched t
 
 ## Options and precedence
 
-| Option              | Type                                                  | Default       | Semantics                                                                                  |
-| ------------------- | ----------------------------------------------------- | ------------- | ------------------------------------------------------------------------------------------ |
-| `apiKey`            | `string`                                              | —             | Adds `CODEX_API_KEY` and selects the ACP `api-key` authentication method.                  |
-| `command`           | `string`                                              | `"codex-acp"` | ACP executable or launcher. It must be a non-empty, trimmed string without null bytes.     |
-| `args`              | `readonly string[]`                                   | `[]`          | Appended to the launch command exactly as supplied. Arguments cannot contain null bytes.   |
-| `config`            | JSON-compatible object                                | `{}`          | Base Codex configuration. It must serialize successfully before any external work begins.  |
-| `codexPathOverride` | `string`                                              | `"codex"`     | Sets `CODEX_PATH` for the ACP adapter; it does not replace `command`.                      |
-| `env`               | `Record<string, string>`                              | `{}`          | Additional launch environment. Use it for provider-specific credentials and configuration. |
-| `model`             | `string`                                              | —             | Provider-level model fallback.                                                             |
-| `reasoningEffort`   | `"minimal" \| "low" \| "medium" \| "high" \| "xhigh"` | —             | Writes `model_reasoning_effort` into Codex configuration.                                  |
-| `workingDirectory`  | `string`                                              | —             | Fallback working directory when no Sandbox supplies the effective directory.               |
+| Option              | Type                     | Default       | Semantics                                                                                  |
+| ------------------- | ------------------------ | ------------- | ------------------------------------------------------------------------------------------ |
+| `apiKey`            | `string`                 | —             | Adds `CODEX_API_KEY` and selects the ACP `api-key` authentication method.                  |
+| `command`           | `string`                 | `"codex-acp"` | ACP executable or launcher. It must be a non-empty, trimmed string without null bytes.     |
+| `args`              | `readonly string[]`      | `[]`          | Appended to the launch command exactly as supplied. Arguments cannot contain null bytes.   |
+| `config`            | JSON-compatible object   | `{}`          | Base Codex configuration. It must serialize successfully before any external work begins.  |
+| `codexPathOverride` | `string`                 | `"codex"`     | Sets `CODEX_PATH` for the ACP adapter; it does not replace `command`.                      |
+| `env`               | `Record<string, string>` | `{}`          | Additional launch environment. Use it for provider-specific credentials and configuration. |
+| `model`             | `string`                 | —             | Provider-level model fallback.                                                             |
+| `reasoningEffort`   | `string`                 | —             | Writes the provider-native value into `model_reasoning_effort` in Codex configuration.     |
+| `workingDirectory`  | `string`                 | —             | Fallback working directory when no Sandbox supplies the effective directory.               |
+
+Values such as `"high"` in the examples are provider-native examples, not an AML allowlist. AML only checks that the value is a normalized non-empty string without null bytes, then forwards it to Codex unchanged.
 
 The effective values are resolved as follows:
 
