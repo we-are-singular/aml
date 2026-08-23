@@ -105,6 +105,27 @@ describe("codexAgent()", () => {
     expect(config).toMatchObject({ model: "provider-model" })
   })
 
+  it.each(["max", "ultra"])("passes arbitrary reasoning effort %s through CODEX_CONFIG", async reasoningEffort => {
+    let config: Record<string, unknown> | undefined
+    const sandboxProvider = new DeterministicSandboxProvider({
+      exec: command => ({ exitCode: 0, stderr: "", stdout: command === "pwd" ? "/sandbox/repository\n" : "" }),
+      spawn(_command, _args, _request, options) {
+        config = JSON.parse(options.env?.CODEX_CONFIG ?? "")
+        return completedProcess()
+      },
+    })
+
+    await expect(
+      new AmlRuntime({ agentProvider: codexAgent({ reasoningEffort }) }).evaluate(
+        <Sandbox provider={sandboxProvider}>
+          <Agent>Prompt</Agent>
+        </Sandbox>
+      )
+    ).rejects.toThrow()
+
+    expect(config).toMatchObject({ model_reasoning_effort: reasoningEffort })
+  })
+
   it("validates process configuration without external work", () => {
     expect(() => codexAgent({ command: " codex-acp " })).toThrow("command must be a non-empty normalized string")
   })

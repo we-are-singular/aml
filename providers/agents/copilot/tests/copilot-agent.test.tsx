@@ -112,7 +112,7 @@ describe("copilotAgent()", () => {
     vi.stubEnv("GH_TOKEN", "ambient-gh-token")
     vi.stubEnv("GITHUB_TOKEN", "ambient-github-token")
 
-    const launchArgs = await captureLocalLaunchArgs({ GITHUB_TOKEN: "explicit-github-token" })
+    const launchArgs = await captureLocalLaunchArgs({ env: { GITHUB_TOKEN: "explicit-github-token" } })
 
     expect(launchArgs).toContain("--auth-token-env=GITHUB_TOKEN")
   })
@@ -178,17 +178,23 @@ describe("copilotAgent()", () => {
     expect(prompt).toContain(`Call the Copilot MCP tool "${mcpServerName}-aml_submit_result" once`)
   })
 
-  it("validates options before launch", () => {
+  it("validates options before launch and forwards arbitrary reasoning effort", async () => {
     expect(() => copilotAgent({ command: " copilot " })).toThrow(
       "Copilot command must be a non-empty normalized string"
     )
-    expect(() => copilotAgent({ reasoningEffort: "impossible" as "low" })).toThrow(
-      "Copilot reasoningEffort is unsupported"
-    )
+
+    const launchArgs = await captureLocalLaunchArgs({ reasoningEffort: "impossible" })
+
+    expect(launchArgs).toContain("--reasoning-effort=impossible")
   })
 })
 
-async function captureLocalLaunchArgs(env?: Readonly<Record<string, string>>): Promise<readonly string[]> {
+async function captureLocalLaunchArgs(
+  options: {
+    readonly env?: Readonly<Record<string, string>>
+    readonly reasoningEffort?: string
+  } = {}
+): Promise<readonly string[]> {
   const directory = await mkdtemp(path.join(os.tmpdir(), "aml-copilot-launch-test-"))
   const outputFile = path.join(directory, "args.json")
   const captureScript =
@@ -200,7 +206,8 @@ async function captureLocalLaunchArgs(env?: Readonly<Record<string, string>>): P
         agentProvider: copilotAgent({
           args: ["--input-type=module", "-e", captureScript, outputFile],
           command: process.execPath,
-          ...(env === undefined ? {} : { env }),
+          ...(options.env === undefined ? {} : { env: options.env }),
+          ...(options.reasoningEffort === undefined ? {} : { reasoningEffort: options.reasoningEffort }),
         }),
       }).evaluate(<Agent>Prompt</Agent>)
     ).rejects.toThrow()

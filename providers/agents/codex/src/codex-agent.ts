@@ -15,10 +15,6 @@ export type CodexConfigValue =
   | readonly CodexConfigValue[]
   | Readonly<{ readonly [key: string]: CodexConfigValue }>
 
-export type CodexReasoningEffort = "minimal" | "low" | "medium" | "high" | "xhigh"
-
-const REASONING_EFFORTS = new Set<CodexReasoningEffort>(["minimal", "low", "medium", "high", "xhigh"])
-
 export interface CodexAgentOptions {
   readonly apiKey?: string
   readonly args?: readonly string[]
@@ -27,7 +23,7 @@ export interface CodexAgentOptions {
   readonly config?: Readonly<Record<string, CodexConfigValue>>
   readonly env?: Readonly<Record<string, string>>
   readonly model?: string
-  readonly reasoningEffort?: CodexReasoningEffort
+  readonly reasoningEffort?: string
   readonly workingDirectory?: string
 }
 
@@ -43,7 +39,7 @@ interface CapturedCodexAgentOptions {
   readonly config: Readonly<Record<string, CodexConfigValue>>
   readonly env: Readonly<Record<string, string>>
   readonly model?: string
-  readonly reasoningEffort?: CodexReasoningEffort
+  readonly reasoningEffort?: string
   readonly workingDirectory?: string
 }
 
@@ -117,7 +113,7 @@ function captureOptions(value: CodexAgentOptions): Readonly<CapturedCodexAgentOp
   const config = value.config ?? {}
   const codexPathOverride = optionalNormalizedString(value.codexPathOverride, "Codex codexPathOverride")
   const model = optionalNormalizedString(value.model, "Codex model")
-  const reasoningEffort = value.reasoningEffort
+  const reasoningEffort = optionalNormalizedString(value.reasoningEffort, "Codex reasoningEffort")
 
   if (!Array.isArray(args) || args.some(argument => typeof argument !== "string" || argument.includes("\0"))) {
     throw new TypeError("Codex args must be strings without null bytes")
@@ -133,10 +129,6 @@ function captureOptions(value: CodexAgentOptions): Readonly<CapturedCodexAgentOp
 
   // Validate serialization before Sandbox acquisition performs external work.
   stringifyConfig(config)
-
-  if (reasoningEffort !== undefined && !REASONING_EFFORTS.has(reasoningEffort)) {
-    throw new TypeError("Codex reasoningEffort is unsupported")
-  }
 
   return Object.freeze({
     ...(value.apiKey === undefined ? {} : { apiKey: normalizedString(value.apiKey, "Codex apiKey") }),

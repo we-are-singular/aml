@@ -6,10 +6,6 @@ import {
   type AgentProvider,
 } from "@aml-jsx/sdk"
 
-/** Reasoning levels exposed by the maintained Pi ACP adapter. */
-export type PiThinkingLevel = "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max"
-const PI_THINKING_LEVELS = new Set<PiThinkingLevel>(["off", "minimal", "low", "medium", "high", "xhigh", "max"])
-
 /**
  * Configures the maintained pi-acp adapter and underlying Pi command.
  */
@@ -26,7 +22,7 @@ export interface PiAgentOptions {
   readonly mcpAdapterPath?: string
   readonly model?: string
   readonly piCommand?: string
-  readonly thinkingLevel?: PiThinkingLevel
+  readonly thinkingLevel?: string
   readonly workingDirectory?: string
 }
 
@@ -41,7 +37,7 @@ interface CapturedPiAgentOptions {
   readonly mcpAdapterPath?: string
   readonly model?: string
   readonly piCommand: string
-  readonly thinkingLevel?: PiThinkingLevel
+  readonly thinkingLevel?: string
   readonly workingDirectory?: string
 }
 
@@ -170,7 +166,7 @@ function captureOptions(options: PiAgentOptions): Readonly<CapturedPiAgentOption
   const mcpAdapterPath = optionalNormalizedString(options.mcpAdapterPath, "Pi MCP adapter path")
   const model = optionalNormalizedString(options.model, "Pi model")
   const piCommand = normalizedString(options.piCommand ?? "pi", "Pi command")
-  const thinkingLevel = options.thinkingLevel
+  const thinkingLevel = optionalNormalizedString(options.thinkingLevel, "Pi thinkingLevel")
   const workingDirectory = optionalNormalizedString(options.workingDirectory, "Pi workingDirectory")
 
   if (!Array.isArray(args) || args.some(argument => typeof argument !== "string" || argument.includes("\0"))) {
@@ -179,10 +175,6 @@ function captureOptions(options: PiAgentOptions): Readonly<CapturedPiAgentOption
 
   if (typeof env !== "object" || env === null || Array.isArray(env)) {
     throw new TypeError("Pi env must be an object")
-  }
-
-  if (thinkingLevel !== undefined && !PI_THINKING_LEVELS.has(thinkingLevel)) {
-    throw new TypeError("Pi thinkingLevel is unsupported")
   }
 
   return Object.freeze({

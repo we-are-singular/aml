@@ -6,10 +6,6 @@ import {
   type AgentProvider,
 } from "@aml-jsx/sdk"
 
-/** Reasoning levels accepted by GitHub Copilot CLI. */
-export type CopilotReasoningEffort = "none" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max"
-
-const REASONING_EFFORTS = new Set<CopilotReasoningEffort>(["none", "minimal", "low", "medium", "high", "xhigh", "max"])
 const AUTH_TOKEN_ENVIRONMENT_VARIABLES = ["COPILOT_GITHUB_TOKEN", "GH_TOKEN", "GITHUB_TOKEN"] as const
 
 /** Configures GitHub Copilot CLI's native ACP server. */
@@ -18,7 +14,7 @@ export interface CopilotAgentOptions {
   readonly command?: string
   readonly env?: Readonly<Record<string, string>>
   readonly model?: string
-  readonly reasoningEffort?: CopilotReasoningEffort
+  readonly reasoningEffort?: string
   readonly workingDirectory?: string
 }
 
@@ -31,7 +27,7 @@ interface CapturedCopilotAgentOptions {
   readonly command: string
   readonly env: Readonly<Record<string, string>>
   readonly model: string
-  readonly reasoningEffort?: CopilotReasoningEffort
+  readonly reasoningEffort?: string
   readonly workingDirectory?: string
 }
 
@@ -161,7 +157,7 @@ function captureOptions(options: CopilotAgentOptions): Readonly<CapturedCopilotA
   const command = normalizedString(options.command ?? "copilot", "Copilot command")
   const env = options.env ?? {}
   const model = normalizedString(options.model ?? "auto", "Copilot model")
-  const reasoningEffort = options.reasoningEffort
+  const reasoningEffort = optionalNormalizedString(options.reasoningEffort, "Copilot reasoningEffort")
   const workingDirectory = optionalNormalizedString(options.workingDirectory, "Copilot workingDirectory")
 
   if (!Array.isArray(args) || args.some(argument => typeof argument !== "string" || argument.includes("\0"))) {
@@ -170,10 +166,6 @@ function captureOptions(options: CopilotAgentOptions): Readonly<CapturedCopilotA
 
   if (typeof env !== "object" || env === null || Array.isArray(env)) {
     throw new TypeError("Copilot env must be an object")
-  }
-
-  if (reasoningEffort !== undefined && !REASONING_EFFORTS.has(reasoningEffort)) {
-    throw new TypeError("Copilot reasoningEffort is unsupported")
   }
 
   return Object.freeze({
