@@ -348,6 +348,7 @@ interface AgentProps {
   }
   provider?: AgentProvider
   system?: string
+  timeoutMs?: number
 }
 ```
 
@@ -358,6 +359,8 @@ interface AgentProps {
 `name` is optional diagnostic metadata for relating traces and failures to the authored workflow. It must be a non-empty normalized string when supplied. Names are not unique: structural identities such as trace span IDs continue to distinguish Agents with the same name. AML includes the name in observability and diagnostics only; it never adds it to the prompt or system instructions sent to the provider.
 
 `system` is the concise fixed-text system prompt. `<System>` is the composable form for resolved asynchronous content. Provider-specific settings that have no portable AML semantics belong to configured provider instances, not arbitrary Agent props or an untyped `providerOptions` bag.
+
+`timeoutMs`, when present, is a positive safe integer that bounds the provider session after it acquires an Agent scheduler slot. AML derives a session signal that aborts when either this timeout expires or the enclosing evaluation is cancelled; the earliest cause wins, and nested Agents retain independent scopes. Expiry follows the same provider cancellation path as caller cancellation. AML awaits provider-owned abort and cleanup before settling the Agent, and preserves both the cancellation cause and any later cleanup failure.
 
 `permissions` describes the native coding environment requested from the Agent harness. Omitted fields default optimistically to `{ filesystem: "read-write", network: true, shell: true }`: a coding Agent can inspect and edit its Workspace, execute commands, and use the network without repetitive `<Tool>` declarations. A profile maps these portable requests to its native controls and reports any control it cannot express exactly.
 
@@ -1754,6 +1757,7 @@ interface AgentRequest {
   }
   prompt: string
   system: string
+  timeoutMs?: number
   tools: readonly AgentTool[]
   trace?: AmlTraceIdentity
 }
