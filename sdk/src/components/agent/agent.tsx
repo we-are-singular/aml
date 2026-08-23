@@ -23,6 +23,7 @@ export interface AgentProps {
   readonly children?: AmlRenderable
   readonly cwd?: string
   readonly model?: string
+  readonly name?: string
   readonly permissions?: AgentPermissionOverrides
   readonly provider?: AgentProvider
   readonly system?: string

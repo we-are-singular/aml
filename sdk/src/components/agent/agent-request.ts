@@ -14,6 +14,8 @@ export interface AgentRequest {
   readonly followUps?: readonly string[]
   readonly mcpServers: readonly AgentMcpServer[]
   readonly model?: string
+  /** Optional authored metadata used only for diagnostics and tracing. */
+  readonly name?: string
   readonly output?: AgentOutputRequest
   readonly permissions: AgentPermissions
   readonly prompt: string

@@ -43,6 +43,7 @@ export abstract class AbstractAgentProvider<Name extends string> implements Agen
     const sessionTrace = observability.createTrace(context.trace.spanId)
     const sessionSpan = observability.startSpan(sessionTrace, "agent.session", {
       ...(request.model === undefined ? {} : { model: request.model }),
+      ...(request.name === undefined ? {} : { name: request.name }),
       provider: this.name,
     })
     // Session setup can emit process and ACP creation events before turn one.

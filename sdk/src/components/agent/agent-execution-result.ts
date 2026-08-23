@@ -1,6 +1,7 @@
 import { ComponentEvaluationContext } from "../../core/component-evaluation-context.js"
 import { EvaluationError } from "../../core/evaluation-error.js"
 import type { AmlTraceAttribute } from "../../observability/trace-event.js"
+import { agentDiagnosticIdentity } from "./agent-diagnostic-identity.js"
 import type { ModelSchema } from "./model-schema.js"
 import type { AgentResponse } from "./agent-response.js"
 import type { ValidatedAgentProvider } from "./validate-agent-provider.js"
@@ -32,6 +33,7 @@ export class AgentExecutionResult {
   static async from(input: {
     readonly mcpServers: number
     readonly model: string | undefined
+    readonly name: string | undefined
     readonly output: ModelSchema<unknown> | undefined
     readonly prompt: string
     readonly provider: Readonly<ValidatedAgentProvider>
@@ -41,7 +43,12 @@ export class AgentExecutionResult {
     readonly tools: number
     readonly turns: number
   }): Promise<AgentExecutionResult> {
-    const invalidResponse = `Agent "${input.provider.name}" (${input.spanId}) returned an invalid response`
+    const identity = agentDiagnosticIdentity({
+      name: input.name,
+      provider: input.provider.name,
+      spanId: input.spanId,
+    })
+    const invalidResponse = `${identity} returned an invalid response`
 
     if (typeof input.response !== "object" || input.response === null) {
       throw new EvaluationError(invalidResponse)
@@ -76,6 +83,7 @@ export class AgentExecutionResult {
         structured: await AgentExecutionResult.#structured(
           input.response,
           input.output,
+          input.name,
           input.provider.name,
           input.spanId
         ),
@@ -88,6 +96,7 @@ export class AgentExecutionResult {
       Object.freeze({
         mcpServers: input.mcpServers,
         ...(input.model === undefined ? {} : { model: input.model }),
+        ...(input.name === undefined ? {} : { name: input.name }),
         provider: input.provider.name,
         tools: input.tools,
         turns: input.turns,
@@ -106,6 +115,7 @@ export class AgentExecutionResult {
   static async #structured(
     response: AgentResponse,
     output: ModelSchema<unknown>,
+    name: string | undefined,
     provider: string,
     spanId: string
   ): Promise<unknown> {
@@ -124,18 +134,26 @@ export class AgentExecutionResult {
       present = captured.present
       structured = captured.structured
     } catch (cause) {
-      throw new EvaluationError(`Agent "${provider}" (${spanId}) returned an invalid structured response`, { cause })
+      throw new EvaluationError(
+        `${agentDiagnosticIdentity({ name, provider, spanId })} returned an invalid structured response`,
+        { cause }
+      )
     }
 
     if (!present) {
-      throw new EvaluationError(`Agent "${provider}" (${spanId}) omitted structured output`)
+      throw new EvaluationError(`${agentDiagnosticIdentity({ name, provider, spanId })} omitted structured output`)
     }
 
     try {
       // Schema thenables and nested accessors stay outside component authority.
       return await ComponentEvaluationContext.withoutAccess(async () => await output.validate(structured))
     } catch (cause) {
-      throw new EvaluationError(`Agent "${provider}" (${spanId}) returned invalid structured output`, { cause })
+      throw new EvaluationError(
+        `${agentDiagnosticIdentity({ name, provider, spanId })} returned invalid structured output`,
+        {
+          cause,
+        }
+      )
     }
   }
 }

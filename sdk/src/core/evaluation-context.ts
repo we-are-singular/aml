@@ -162,11 +162,12 @@ export class EvaluationContext {
   /**
    * Reserves one provider call before it enters the scheduler.
    */
-  reserveAgentCall(trace: AmlTraceIdentity): void {
+  reserveAgentCall(trace: AmlTraceIdentity, name?: string): void {
     this.#signal.throwIfAborted()
 
     if (this.#maxAgentCalls !== 0 && this.#agentCalls >= this.#maxAgentCalls) {
-      throw new EvaluationError(`AML evaluation exceeded maxAgentCalls ${this.#maxAgentCalls} at Agent ${trace.spanId}`)
+      const identity = name === undefined ? `Agent ${trace.spanId}` : `Agent [name: "${name}"] (${trace.spanId})`
+      throw new EvaluationError(`AML evaluation exceeded maxAgentCalls ${this.#maxAgentCalls} at ${identity}`)
     }
 
     this.#agentCalls += 1
