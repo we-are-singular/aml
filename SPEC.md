@@ -340,6 +340,7 @@ Props:
 interface AgentProps {
   children?: AmlRenderable
   model?: string
+  name?: string
   permissions?: {
     filesystem?: "read-only" | "read-write"
     network?: boolean
@@ -353,6 +354,8 @@ interface AgentProps {
 `provider` selects the harness for this Agent. When omitted, AML uses `AmlRuntimeOptions.agentProvider`. An Agent without either provider is invalid. Different Agents in one evaluation may select different providers while remaining in the same evaluation domain.
 
 `model` is a provider-neutral override whose string remains provider-owned. Resolution order is the Agent `model` prop, then the configured provider's default, then the provider-native default. AML passes the explicit prop through `AgentRequest.model`; the selected provider rejects identifiers it cannot use.
+
+`name` is optional diagnostic metadata for relating traces and failures to the authored workflow. It must be a non-empty normalized string when supplied. Names are not unique: structural identities such as trace span IDs continue to distinguish Agents with the same name. AML includes the name in observability and diagnostics only; it never adds it to the prompt or system instructions sent to the provider.
 
 `system` is the concise fixed-text system prompt. `<System>` is the composable form for resolved asynchronous content. Provider-specific settings that have no portable AML semantics belong to configured provider instances, not arbitrary Agent props or an untyped `providerOptions` bag.
 
@@ -382,6 +385,7 @@ interface AgentPlan {
   followUps: readonly string[]
   mcpServers: readonly AgentMcpServer[]
   model?: string
+  name?: string
   permissions: AgentPermissions
   system: string
   systemFragments: readonly string[]
@@ -1742,6 +1746,7 @@ interface AgentRequest {
   followUps?: readonly string[]
   mcpServers: readonly AgentMcpServer[]
   model?: string
+  name?: string
   permissions: AgentPermissions
   output?: {
     jsonSchema: Readonly<Record<string, AmlJsonValue>>
