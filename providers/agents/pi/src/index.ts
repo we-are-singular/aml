@@ -1,1 +1,1 @@
-export { piAgent, type PiAgentOptions, type PiAgentProvider, type PiThinkingLevel } from "./pi-agent.js"
+export { piAgent, type PiAgentOptions, type PiAgentProvider } from "./pi-agent.js"

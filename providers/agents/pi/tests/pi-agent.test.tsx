@@ -8,6 +8,7 @@ import { piAgent } from "../src/index.js"
 describe("piAgent()", () => {
   it("launches pi-acp and configures the underlying Agent through ACP", async () => {
     const prompts: string[] = []
+    const configuredThinkingLevels: string[] = []
     const executed: Array<{
       readonly args: readonly string[]
       readonly command: string
@@ -29,7 +30,12 @@ describe("piAgent()", () => {
       },
       spawn(command, args, _request, options) {
         spawned.push({ args, command, options })
-        return acpFixtureProcess(prompt => prompts.push(prompt))
+        return acpFixtureProcess(prompt => prompts.push(prompt), {
+          onThinkingLevel(value) {
+            configuredThinkingLevels.push(value)
+          },
+          thinkingLevel: "ultra",
+        })
       },
     })
     const provider = piAgent({
@@ -38,7 +44,7 @@ describe("piAgent()", () => {
       env: { OPENCODE_API_KEY: "configured" },
       model: "opencode-go/minimax-m3",
       piCommand: "custom-pi",
-      thinkingLevel: "high",
+      thinkingLevel: "ultra",
     })
 
     await expect(
@@ -80,15 +86,18 @@ describe("piAgent()", () => {
       },
     })
     expect(prompts).toEqual(["<SYSTEM>\nFollow the system.\n</SYSTEM>\n\nInitial"])
+    expect(configuredThinkingLevels).toEqual(["ultra"])
   })
 
   it("validates adapter configuration without external work", () => {
     expect(() => piAgent({ command: " pi-acp " })).toThrow("Pi ACP command must be a non-empty normalized string")
-    expect(() => piAgent({ thinkingLevel: "impossible" as "high" })).toThrow("Pi thinkingLevel is unsupported")
   })
 })
 
-function acpFixtureProcess(onPrompt: (prompt: string) => void): Readonly<SandboxProcess> {
+function acpFixtureProcess(
+  onPrompt: (prompt: string) => void,
+  options: { readonly onThinkingLevel?: (value: string) => void; readonly thinkingLevel?: string } = {}
+): Readonly<SandboxProcess> {
   const clientToAgent = new TransformStream<Uint8Array, Uint8Array>()
   const agentToClient = new TransformStream<Uint8Array, Uint8Array>()
   const configOptions: SessionConfigOption[] = [
@@ -102,10 +111,10 @@ function acpFixtureProcess(onPrompt: (prompt: string) => void): Readonly<Sandbox
     },
     {
       category: "thought_level",
-      currentValue: "high",
+      currentValue: options.thinkingLevel ?? "high",
       id: "thinking-level",
       name: "Thinking level",
-      options: [{ name: "High", value: "high" }],
+      options: [{ name: options.thinkingLevel ?? "high", value: options.thinkingLevel ?? "high" }],
       type: "select",
     },
   ]
@@ -115,7 +124,12 @@ function acpFixtureProcess(onPrompt: (prompt: string) => void): Readonly<Sandbox
       protocolVersion: params.protocolVersion,
     }))
     .onRequest(methods.agent.session.new, () => ({ configOptions, sessionId: "pi-test-session" }))
-    .onRequest(methods.agent.session.setConfigOption, () => ({ configOptions }))
+    .onRequest(methods.agent.session.setConfigOption, ({ params }) => {
+      if (params.configId === "thinking-level" && typeof params.value === "string") {
+        options.onThinkingLevel?.(params.value)
+      }
+      return { configOptions }
+    })
     .onRequest(methods.agent.session.prompt, ({ params }) => {
       onPrompt(params.prompt.flatMap(block => (block.type === "text" ? [block.text] : [])).join(""))
       return { stopReason: "end_turn" }
