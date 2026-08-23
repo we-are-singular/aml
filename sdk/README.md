@@ -41,6 +41,8 @@ const result = await new AmlRuntime().evaluate(<Agent provider={Pi}>Say hello.</
 
 Codex, GitHub Copilot, GLM, OpenCode, and Pi use the same ACP lifecycle on the trusted local host and inside supported Sandboxes. GLM launches the community-maintained `glm-acp-agent` adapter rather than Z.ai's ZCode harness. Agents optimistically receive their native filesystem, shell, and network capabilities unless `<Agent permissions>` narrows them; the enclosing Sandbox remains authoritative. `<Tool>` is reserved for JavaScript functions created with `defineTool()`. The selected environment must contain the compatible ACP Agent executable; AML does not install it implicitly. Provider-specific options remain on each factory.
 
+`<Agent timeoutMs={...}>` optionally bounds one provider session after it acquires an execution slot. The value must be a positive safe integer. Its signal composes with caller cancellation, so the earliest cause wins and nested Agents retain independent scopes. AML requests provider cancellation and awaits provider-owned cleanup before the Agent settles; if cleanup also fails, both causes are preserved.
+
 An unsandboxed `<Script />` runs as a trusted host process from `AmlRuntimeOptions.cwd`, defaulting to `process.cwd()`. Inside an active `<Sandbox />`, it runs only through that Sandbox runtime and never falls back to the host. Its optional portable `cwd` resolves from the runtime cwd on the host or from the active Sandbox root.
 
 The public factory names are `codexAgent()`, `copilotAgent()`, `glmAgent()`, `opencodeAgent()`, and `piAgent()`.
