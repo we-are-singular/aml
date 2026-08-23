@@ -22,9 +22,17 @@ const ExampleProvider = new DeterministicAgentProvider({
  */
 export default function AgentExample() {
   return (
-    <Agent provider={ExampleProvider} model="coordinator/deep" system="Coordinate a review.">
+    <Agent
+      name="review-coordinator"
+      provider={ExampleProvider}
+      model="coordinator/deep"
+      system="Coordinate a review."
+      timeoutMs={30_000}
+    >
       <System>
-        <Agent provider={SpecialistProvider}>Generate one review rule.</Agent>
+        <Agent name="review-rule-specialist" provider={SpecialistProvider}>
+          Generate one review rule.
+        </Agent>
       </System>
       Review this change.
     </Agent>
