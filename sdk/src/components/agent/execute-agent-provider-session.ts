@@ -70,15 +70,23 @@ export async function executeAgentProviderSession(
   let abortError: unknown
   let abortFailed = false
   let abortPromise: Promise<void> | undefined
+  let cancellationObserved = false
 
-  // Cancellation notification is observable immediately, but the caller's
-  // AbortSignal reason remains authoritative over any provider abort failure.
-  const requestAbort = () => {
+  const traceCancellation = () => {
+    if (cancellationObserved) return
+
+    cancellationObserved = true
     const reason = context.signal.reason
     observability.event(sessionTrace, "agent.session", {
       ...(AgentTimeoutError.is(reason) ? { reason: "timeout", timeoutMs: reason.timeoutMs } : {}),
       state: "cancellation_requested",
     })
+  }
+
+  // Cancellation notification is observable immediately, but the caller's
+  // AbortSignal reason remains authoritative over any provider abort failure.
+  const requestAbort = () => {
+    traceCancellation()
 
     if (abort === undefined) {
       return
@@ -168,6 +176,15 @@ export async function executeAgentProviderSession(
     cleanupError = error
   } finally {
     observability.setCurrentTrace(sessionTrace)
+  }
+
+  // Cancellation can arrive after turn execution while close() is settling.
+  // Cleanup already owns the session then, so preserve the reason without
+  // racing abort() against the provider's close() implementation.
+  if (context.signal.aborted && !executionFailed) {
+    traceCancellation()
+    executionFailed = true
+    executionError = context.signal.reason
   }
 
   const errors: unknown[] = []
