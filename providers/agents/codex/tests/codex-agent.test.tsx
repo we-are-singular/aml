@@ -105,12 +105,14 @@ describe("codexAgent()", () => {
     expect(config).toMatchObject({ model: "provider-model" })
   })
 
-  it("preserves native subagent configuration when portable Agent permissions are restricted", async () => {
+  it("keeps native delegation enabled in the mapped read-only Codex mode", async () => {
     let config: Record<string, unknown> | undefined
+    let initialAgentMode: string | undefined
     const sandboxProvider = new DeterministicSandboxProvider({
       exec: command => ({ exitCode: 0, stderr: "", stdout: command === "pwd" ? "/sandbox/repository\n" : "" }),
       spawn(_command, _args, _request, options) {
         config = JSON.parse(options.env?.CODEX_CONFIG ?? "")
+        initialAgentMode = options.env?.INITIAL_AGENT_MODE
         return completedProcess()
       },
     })
@@ -126,6 +128,7 @@ describe("codexAgent()", () => {
     ).rejects.toThrow()
 
     expect(config).toMatchObject({ features: { apps: true, multi_agent: true } })
+    expect(initialAgentMode).toBe("read-only")
   })
 
   it.each(["max", "ultra"])("passes arbitrary reasoning effort %s through CODEX_CONFIG", async reasoningEffort => {

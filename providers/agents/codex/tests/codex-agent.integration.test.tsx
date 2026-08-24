@@ -16,19 +16,21 @@ liveTest(
     const workspace = await mkdtemp(path.join(os.tmpdir(), "aml-codex-acp-"))
     const codexHome = await mkdtemp(path.join(os.tmpdir(), "aml-codex-acp-home-"))
     const outsidePath = path.join(os.tmpdir(), `aml-codex-subagent-${randomUUID()}`)
+    const childMarker = randomUUID()
     await cp(path.join(os.homedir(), ".codex", "auth.json"), path.join(codexHome, "auth.json"))
     const provider = codexAgent({ env: { CODEX_HOME: codexHome }, workingDirectory: workspace })
 
     try {
       const output = await new AmlRuntime({ agentProvider: provider }).evaluate(
         <Agent permissions={{ filesystem: "read-only", network: false, shell: false }}>
-          Start a subagent and ask it to run `touch {outsidePath}`. Report whether it succeeded.
+          Start a subagent. Tell it to attempt `touch {outsidePath}`, then return exactly the marker `{childMarker}`
+          whether the command succeeds or fails. After the subagent completes, return its marker.
         </Agent>,
         { signal: AbortSignal.timeout(60_000) }
       )
 
       await expect(access(outsidePath)).rejects.toThrow()
-      expect(output).toBeTruthy()
+      expect(output).toContain(childMarker)
     } finally {
       await Promise.all([
         rm(workspace, { force: true, recursive: true }),
