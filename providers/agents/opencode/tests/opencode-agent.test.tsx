@@ -116,7 +116,7 @@ describe("opencodeAgent()", () => {
         return completedProcess()
       },
     })
-    const provider = opencodeAgent()
+    const provider = opencodeAgent({ config: { permission: { bash: "allow", question: "deny" } } })
 
     await expect(
       new AmlRuntime({ agentProvider: provider }).evaluate(
@@ -151,6 +151,7 @@ describe("opencodeAgent()", () => {
       permission: {
         bash: "deny",
         edit: "deny",
+        question: "deny",
         webfetch: "deny",
         websearch: "deny",
       },

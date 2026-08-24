@@ -76,8 +76,8 @@ class OpenCodeAcpProfile implements AcpAgentProfile<"opencode"> {
         },
       },
       default_agent: "aml",
-      // OpenCode derives native child-session permissions from top-level deny
-      // rules, so task subagents inherit the portable AML restrictions.
+      // OpenCode merges top-level permissions into every native agent profile,
+      // so task subagents receive the same portable AML restrictions.
       permission: { ...configuredPermission, ...inheritedPermission },
       ...(model === undefined ? {} : { model }),
     }
