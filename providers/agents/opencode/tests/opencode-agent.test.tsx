@@ -1,7 +1,8 @@
-import { agent, methods, ndJsonStream } from "@agentclientprotocol/sdk"
-import { Agent, AmlRuntime, FollowUp, Sandbox, type SandboxProcess } from "@aml-jsx/sdk"
+import { agent, methods, ndJsonStream, type SessionConfigOption } from "@agentclientprotocol/sdk"
+import { Agent, AmlRuntime, defineTool, evaluate, FollowUp, Sandbox, Tool, type SandboxProcess } from "@aml-jsx/sdk"
 import { DeterministicSandboxProvider } from "@aml-jsx/sdk/testing"
 import { describe, expect, it } from "vitest"
+import { z } from "zod"
 
 import { opencodeAgent } from "../src/index.js"
 
@@ -23,7 +24,7 @@ describe("opencodeAgent()", () => {
       args: ["--print-logs"],
       command: "custom-opencode",
       config: { share: "disabled" },
-      env: { PROVIDER_TOKEN: "configured" },
+      env: { PROVIDER_TOKEN: "configured", XDG_DATA_HOME: "/staged/opencode-data" },
       model: "opencode-go/minimax-m3",
     })
 
@@ -45,7 +46,7 @@ describe("opencodeAgent()", () => {
         env: expect.objectContaining({
           OPENCODE_DB: expect.stringMatching(/^\/tmp\/aml-acp-[^/]+\/opencode\.db$/),
           PROVIDER_TOKEN: "configured",
-          XDG_DATA_HOME: expect.stringMatching(/^\/tmp\/aml-acp-/),
+          XDG_DATA_HOME: "/staged/opencode-data",
         }),
       },
     })
@@ -105,6 +106,71 @@ describe("opencodeAgent()", () => {
     )
 
     expect(prompts).toEqual(["Initial"])
+  })
+
+  it("selects the configured model through the ACP session", async () => {
+    const configuredModels: string[] = []
+    const model = "opencode/deepseek-v4-flash"
+    const sandboxProvider = new DeterministicSandboxProvider({
+      exec: command => ({ exitCode: 0, stderr: "", stdout: command === "pwd" ? "/sandbox/repository\n" : "" }),
+      spawn() {
+        return acpFixtureProcess(() => {}, {
+          model,
+          onModel: configuredModel => configuredModels.push(configuredModel),
+        })
+      },
+    })
+
+    await new AmlRuntime({ agentProvider: opencodeAgent({ model }) }).evaluate(
+      <Sandbox provider={sandboxProvider}>
+        <Agent>Initial</Agent>
+      </Sandbox>
+    )
+
+    expect(configuredModels).toEqual([model])
+  })
+
+  it("names generated OpenCode MCP tools in structured turns", async () => {
+    const prompts: string[] = []
+    const sandboxProvider = new DeterministicSandboxProvider({
+      exec: command => ({ exitCode: 0, stderr: "", stdout: command === "pwd" ? "/sandbox/repository\n" : "" }),
+      spawn(command) {
+        if (command === "node") return relayFixtureProcess()
+        return acpFixtureProcess(prompt => prompts.push(prompt))
+      },
+    })
+    const Result = z.object({ proof: z.string() })
+    const readEvidence = defineTool({
+      description: "Read evidence",
+      execute: async () => "evidence",
+      input: z.object({}),
+      name: "read_evidence",
+    })
+
+    async function StructuredResult() {
+      return JSON.stringify(
+        await evaluate(
+          <Agent system="Follow the system.">
+            <Tool use={readEvidence} />
+            Submit proof.
+          </Agent>,
+          Result
+        )
+      )
+    }
+
+    await expect(
+      new AmlRuntime({ agentProvider: opencodeAgent() }).evaluate(
+        <Sandbox provider={sandboxProvider}>
+          <StructuredResult />
+        </Sandbox>
+      )
+    ).rejects.toThrow('Agent "opencode"')
+
+    expect(prompts).toHaveLength(1)
+    expect(prompts[0]).toMatch(
+      /^<SYSTEM>\nFollow the system\.\n<\/SYSTEM>\n\nAML JavaScript Tools use these OpenCode MCP tool names:\n- read_evidence: aml_[a-f0-9]+_read_evidence\n\nSubmit proof\.\n\nCall the OpenCode MCP tool "aml_[a-f0-9]+_aml_submit_result"/u
+    )
   })
 
   it("maps restrictive Agent permissions into OpenCode's native controls", async () => {
@@ -182,15 +248,37 @@ function completedProcess(): Readonly<SandboxProcess> {
   })
 }
 
-function acpFixtureProcess(onPrompt: (prompt: string) => void): Readonly<SandboxProcess> {
+function acpFixtureProcess(
+  onPrompt: (prompt: string) => void,
+  options: { readonly model?: string; readonly onModel?: (value: string) => void } = {}
+): Readonly<SandboxProcess> {
   const clientToAgent = new TransformStream<Uint8Array, Uint8Array>()
   const agentToClient = new TransformStream<Uint8Array, Uint8Array>()
+  const configOptions: SessionConfigOption[] =
+    options.model === undefined
+      ? []
+      : [
+          {
+            category: "model",
+            currentValue: "opencode/big-pickle",
+            id: "model",
+            name: "Model",
+            options: [{ name: options.model, value: options.model }],
+            type: "select",
+          },
+        ]
   const app = agent({ name: "opencode-test" })
     .onRequest(methods.agent.initialize, ({ params }) => ({
-      agentCapabilities: {},
+      agentCapabilities: { mcpCapabilities: { http: true } },
       protocolVersion: params.protocolVersion,
     }))
-    .onRequest(methods.agent.session.new, () => ({ sessionId: "opencode-test-session" }))
+    .onRequest(methods.agent.session.new, () => ({ configOptions, sessionId: "opencode-test-session" }))
+    .onRequest(methods.agent.session.setConfigOption, ({ params }) => {
+      if (params.configId === "model" && typeof params.value === "string") {
+        options.onModel?.(params.value)
+      }
+      return { configOptions }
+    })
     .onRequest(methods.agent.session.prompt, ({ params }) => {
       onPrompt(params.prompt.flatMap(block => (block.type === "text" ? [block.text] : [])).join(""))
       return { stopReason: "end_turn" }
@@ -207,6 +295,38 @@ function acpFixtureProcess(onPrompt: (prompt: string) => void): Readonly<Sandbox
     stdout: agentToClient.readable,
     async wait() {
       await connection.closed
+      return { exitCode: 0 }
+    },
+  })
+}
+
+function relayFixtureProcess(): Readonly<SandboxProcess> {
+  let resolveExited: () => void = () => {}
+  const exited = new Promise<void>(resolve => {
+    resolveExited = resolve
+  })
+  let closed = false
+  let stdoutController: ReadableStreamDefaultController<Uint8Array> | undefined
+  const stdout = new ReadableStream<Uint8Array>({
+    start(controller) {
+      stdoutController = controller
+      controller.enqueue(new TextEncoder().encode('{"kind":"ready","port":4567}\n'))
+    },
+  })
+
+  return Object.freeze({
+    id: "opencode-mcp-relay-fixture",
+    async kill() {
+      if (closed) return
+      closed = true
+      stdoutController?.close()
+      resolveExited()
+    },
+    stdin: new WritableStream(),
+    stderr: emptyStream(),
+    stdout,
+    async wait() {
+      await exited
       return { exitCode: 0 }
     },
   })

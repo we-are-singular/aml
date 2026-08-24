@@ -30,6 +30,8 @@ class OpenCodeAcpProfile implements AcpAgentProfile<"opencode"> {
   }
 
   createLaunch(context: Readonly<AcpAgentLaunchContext>): Readonly<AcpAgentLaunch> {
+    const configuration: NonNullable<AcpAgentLaunch["configuration"]>[number][] = []
+    const initialPromptSections: string[] = []
     const tools: Record<string, boolean> = { "*": true }
     const permission: Record<string, "allow" | "deny"> = { "*": "allow" }
     const inheritedPermission: Record<string, "deny"> = {}
@@ -59,12 +61,30 @@ class OpenCodeAcpProfile implements AcpAgentProfile<"opencode"> {
       inheritedPermission.websearch = "deny"
     }
 
+    if (context.request.system.length > 0) {
+      initialPromptSections.push(`<SYSTEM>\n${context.request.system}\n</SYSTEM>`)
+    }
+
+    if (context.amlMcpServerName !== undefined && context.request.tools.length > 0) {
+      // OpenCode exposes MCP tools as <server>_<tool>. Name every generated
+      // bridge Tool so the model can reliably address the authored capability.
+      const toolMappings = context.request.tools
+        .map(tool => `- ${tool.name}: ${context.amlMcpServerName}_${tool.name}`)
+        .join("\n")
+      initialPromptSections.push(`AML JavaScript Tools use these OpenCode MCP tool names:\n${toolMappings}`)
+    }
+
     const configuredAgents = configTable(this.#options.config.agent)
     const configuredPermission =
       typeof this.#options.config.permission === "string"
         ? { "*": this.#options.config.permission }
         : (this.#options.config.permission ?? {})
     const model = context.request.model ?? this.#options.model ?? this.#options.config.model
+    if (model !== undefined) {
+      // OpenCode ACP owns the session model after launch. File and environment
+      // config alone leave the session on OpenCode's fallback model.
+      configuration.push({ category: "model", value: model })
+    }
     const config: Config = {
       ...this.#options.config,
       agent: {
@@ -85,19 +105,28 @@ class OpenCodeAcpProfile implements AcpAgentProfile<"opencode"> {
     return Object.freeze({
       args: ["acp", "--pure", "--cwd", context.cwd, ...this.#options.args],
       command: this.#options.command,
+      configuration: Object.freeze(configuration),
       env: {
         ...this.#options.env,
         OPENCODE_CONFIG_CONTENT: JSON.stringify(config),
         OPENCODE_DB: `${context.stateDirectory}/opencode.db`,
         XDG_CACHE_HOME: `${context.stateDirectory}/cache`,
         XDG_CONFIG_HOME: `${context.stateDirectory}/config`,
-        XDG_DATA_HOME: `${context.stateDirectory}/data`,
+        // Callers may stage a request-local login while AML still owns every
+        // other invocation-private OpenCode state directory.
+        XDG_DATA_HOME: this.#options.env.XDG_DATA_HOME ?? `${context.stateDirectory}/data`,
         XDG_STATE_HOME: `${context.stateDirectory}/state`,
       },
-      ...(context.request.system.length === 0
-        ? {}
-        : { initialPromptPrefix: `<SYSTEM>\n${context.request.system}\n</SYSTEM>` }),
+      ...(initialPromptSections.length === 0 ? {} : { initialPromptPrefix: initialPromptSections.join("\n\n") }),
       permissionPolicy: "allow_always",
+      ...(context.amlMcpServerName === undefined || context.request.output === undefined
+        ? {}
+        : {
+            structuredOutputInstruction:
+              `Call the OpenCode MCP tool "${context.amlMcpServerName}_aml_submit_result" once with the final value ` +
+              "in its result field. If the tool returns an error, correct the result and retry the call. " +
+              "After the tool accepts a result, do not call it again. Do not return substitute JSON only as message text.",
+          }),
     })
   }
 }
