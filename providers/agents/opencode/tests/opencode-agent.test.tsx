@@ -134,7 +134,6 @@ describe("opencodeAgent()", () => {
             "*": "allow",
             bash: "deny",
             edit: "deny",
-            task: "deny",
             webfetch: "deny",
             websearch: "deny",
             write: "deny",
@@ -143,14 +142,21 @@ describe("opencodeAgent()", () => {
             "*": true,
             bash: false,
             edit: false,
-            task: false,
             webfetch: false,
             websearch: false,
             write: false,
           },
         },
       },
+      permission: {
+        bash: "deny",
+        edit: "deny",
+        webfetch: "deny",
+        websearch: "deny",
+      },
     })
+    expect(config).not.toHaveProperty("agent.aml.permission.task")
+    expect(config).not.toHaveProperty("agent.aml.tools.task")
     expect(config).not.toHaveProperty("instructions")
     expect((config.agent as { aml: unknown }).aml).not.toHaveProperty("prompt")
   })

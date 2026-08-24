@@ -32,6 +32,7 @@ class OpenCodeAcpProfile implements AcpAgentProfile<"opencode"> {
   createLaunch(context: Readonly<AcpAgentLaunchContext>): Readonly<AcpAgentLaunch> {
     const tools: Record<string, boolean> = { "*": true }
     const permission: Record<string, "allow" | "deny"> = { "*": "allow" }
+    const inheritedPermission: Record<string, "deny"> = {}
 
     // OpenCode exposes more granular controls than ACP. Translate the portable
     // request here while the outer Sandbox remains the hard boundary.
@@ -40,11 +41,13 @@ class OpenCodeAcpProfile implements AcpAgentProfile<"opencode"> {
       tools.write = false
       permission.edit = "deny"
       permission.write = "deny"
+      inheritedPermission.edit = "deny"
     }
 
     if (!context.request.permissions.shell) {
       tools.bash = false
       permission.bash = "deny"
+      inheritedPermission.bash = "deny"
     }
 
     if (!context.request.permissions.network) {
@@ -52,21 +55,15 @@ class OpenCodeAcpProfile implements AcpAgentProfile<"opencode"> {
       tools.websearch = false
       permission.webfetch = "deny"
       permission.websearch = "deny"
-    }
-
-    if (
-      context.request.permissions.filesystem === "read-only" ||
-      !context.request.permissions.shell ||
-      !context.request.permissions.network
-    ) {
-      // Native task subagents have their own OpenCode profile and can widen the
-      // portable Agent permissions. Restricted sessions therefore cannot
-      // delegate outside the AML-owned Agent boundary.
-      tools.task = false
-      permission.task = "deny"
+      inheritedPermission.webfetch = "deny"
+      inheritedPermission.websearch = "deny"
     }
 
     const configuredAgents = configTable(this.#options.config.agent)
+    const configuredPermission =
+      typeof this.#options.config.permission === "string"
+        ? { "*": this.#options.config.permission }
+        : (this.#options.config.permission ?? {})
     const model = context.request.model ?? this.#options.model ?? this.#options.config.model
     const config: Config = {
       ...this.#options.config,
@@ -79,6 +76,9 @@ class OpenCodeAcpProfile implements AcpAgentProfile<"opencode"> {
         },
       },
       default_agent: "aml",
+      // OpenCode derives native child-session permissions from top-level deny
+      // rules, so task subagents inherit the portable AML restrictions.
+      permission: { ...configuredPermission, ...inheritedPermission },
       ...(model === undefined ? {} : { model }),
     }
 
