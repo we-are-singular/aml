@@ -174,7 +174,7 @@ Model precedence is:
 2. `opencodeAgent({ model: "..." })`
 3. `opencodeAgent({ config: { model: "..." } })`
 
-AML sets `default_agent` to `aml` and merges the existing `config.agent` table, replacing the `aml` profile with the session-specific profile. This profile is `mode: "primary"` and exposes only the tools allowed by AML's normalized permission request.
+AML sets `default_agent` to `aml` and merges the existing `config.agent` table, replacing the `aml` profile with the session-specific profile. This profile is `mode: "primary"` and exposes only the tools allowed by AML's normalized permission request. AML also merges its deny rules into the top-level OpenCode permission policy, which OpenCode applies to every native agent profile. Native `task` subagents therefore inherit the parent AML restrictions without disabling delegation.
 
 OpenCode replaces its model-specific base coding prompt when a custom Agent has a non-empty `prompt`, so AML does not set that field. ACP has no system-message field; when the effective AML System text is non-empty, AML prepends it to the first user turn inside literal `<SYSTEM>` tags. Empty System content adds no prelude. This preserves OpenCode's native model-specific prompt, but the ACP protocol still carries the prelude as user-role content.
 
@@ -188,6 +188,8 @@ OpenCode replaces its model-specific base coding prompt when a custom Agent has 
 | Default permission        | Keeps tools enabled                 | Uses the AML profile's allow policy |
 
 These mappings are provider-native controls. They do not grant access beyond the enclosing Sandbox, and an OpenCode policy cannot make a read-only Sandbox writable. Conversely, a writable host Sandbox is not made safe merely because an Agent prompt asks it to be careful.
+
+Configured top-level permissions are preserved, but AML deny rules take precedence for a restricted evaluation. Child agents may narrow that policy further; they cannot regain filesystem, shell, or network tools denied by the parent AML request.
 
 ## State isolation and lifecycle
 
