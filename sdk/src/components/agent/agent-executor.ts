@@ -7,7 +7,7 @@ import type { AgentMcpServer } from "../mcp/aml-mcp-server.js"
 import type { AgentTool } from "../tool/agent-tool.js"
 import { agentDiagnosticIdentity } from "./agent-diagnostic-identity.js"
 import { AgentExecutionResult } from "./agent-execution-result.js"
-import type { ModelSchema } from "./model-schema.js"
+import { ModelSchema } from "./model-schema.js"
 import type { AgentProps } from "./agent.js"
 import type { AgentProvider } from "./agent-provider.js"
 import { AgentRequestPlan } from "./agent-request-plan.js"
@@ -88,6 +88,20 @@ export class AgentExecutor {
     return explicitProvider === undefined
       ? this.#agentProvider
       : ComponentEvaluationContext.withoutAccess(() => validateAgentProvider(explicitProvider))
+  }
+
+  /**
+   * Selects one schema owner for an Agent before its descendants execute.
+   */
+  outputSchema(
+    props: Readonly<AgentProps>,
+    evaluationSchema: ModelSchema<unknown> | undefined
+  ): ModelSchema<unknown> | undefined {
+    if (props.schema !== undefined && evaluationSchema !== undefined) {
+      throw new EvaluationError("<Agent> schema cannot be combined with evaluate(value, schema)")
+    }
+
+    return props.schema === undefined ? evaluationSchema : new ModelSchema(props.schema)
   }
 
   /**

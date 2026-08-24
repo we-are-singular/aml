@@ -63,4 +63,19 @@ export class ModelSchema<Output> {
 
     return result.value as Output
   }
+
+  /**
+   * Renders a transformed schema result as canonical JSON for AML text channels.
+   */
+  stringify(value: unknown): string {
+    let captured: AmlJsonValue
+
+    try {
+      captured = JsonSnapshot.capture(value, "Transformed Agent structured output")
+    } catch (cause) {
+      throw new TypeError("Transformed Agent structured output cannot be rendered as JSON text", { cause })
+    }
+
+    return JSON.stringify(captured)
+  }
 }
