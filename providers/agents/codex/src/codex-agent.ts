@@ -57,8 +57,28 @@ class CodexProfile implements AcpAgentProfile<"codex"> {
 
   createLaunch(context: Readonly<AcpAgentLaunchContext>): Readonly<AcpAgentLaunch> {
     const model = context.request.model ?? this.#options.model
+    const hasRestrictedPermissions =
+      context.request.permissions.filesystem === "read-only" ||
+      !context.request.permissions.shell ||
+      !context.request.permissions.network
+    const configuredFeatures = this.#options.config.features
     const config = {
       ...this.#options.config,
+      ...(hasRestrictedPermissions
+        ? {
+            features: {
+              ...(typeof configuredFeatures === "object" &&
+              configuredFeatures !== null &&
+              !Array.isArray(configuredFeatures)
+                ? configuredFeatures
+                : {}),
+              // Codex subagents share the session sandbox but can leave a
+              // denied operation pending. Keep restricted execution within
+              // the single AML-owned Agent session.
+              multi_agent: false,
+            },
+          }
+        : {}),
       ...(this.#options.reasoningEffort === undefined ? {} : { model_reasoning_effort: this.#options.reasoningEffort }),
       ...(model === undefined ? {} : { model }),
       ...(context.request.system.length === 0 ? {} : { developer_instructions: context.request.system }),

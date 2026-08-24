@@ -105,6 +105,29 @@ describe("codexAgent()", () => {
     expect(config).toMatchObject({ model: "provider-model" })
   })
 
+  it("disables native subagents when portable Agent permissions are restricted", async () => {
+    let config: Record<string, unknown> | undefined
+    const sandboxProvider = new DeterministicSandboxProvider({
+      exec: command => ({ exitCode: 0, stderr: "", stdout: command === "pwd" ? "/sandbox/repository\n" : "" }),
+      spawn(_command, _args, _request, options) {
+        config = JSON.parse(options.env?.CODEX_CONFIG ?? "")
+        return completedProcess()
+      },
+    })
+
+    await expect(
+      new AmlRuntime({
+        agentProvider: codexAgent({ config: { features: { apps: true, multi_agent: true } } }),
+      }).evaluate(
+        <Sandbox provider={sandboxProvider}>
+          <Agent permissions={{ filesystem: "read-only", network: false, shell: false }}>Prompt</Agent>
+        </Sandbox>
+      )
+    ).rejects.toThrow()
+
+    expect(config).toMatchObject({ features: { apps: true, multi_agent: false } })
+  })
+
   it.each(["max", "ultra"])("passes arbitrary reasoning effort %s through CODEX_CONFIG", async reasoningEffort => {
     let config: Record<string, unknown> | undefined
     const sandboxProvider = new DeterministicSandboxProvider({
