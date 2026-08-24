@@ -378,6 +378,13 @@ async function configureSession(
       { cancellationSignal: signal }
     )
     available = response.configOptions
+
+    // A successful update must report the selected value. Do not continue on
+    // a provider fallback after the caller requested an explicit option.
+    const applied = available.find(candidate => candidate.id === option.id)
+    if (applied?.currentValue !== configuration.value) {
+      throw new Error(`ACP session configuration "${option.id}" did not apply value "${configuration.value}"`)
+    }
   }
 }
 

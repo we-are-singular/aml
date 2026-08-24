@@ -110,12 +110,14 @@ describe("opencodeAgent()", () => {
 
   it("selects the configured model through the ACP session", async () => {
     const configuredModels: string[] = []
+    const fallbackModel = "opencode/big-pickle"
     const model = "opencode/deepseek-v4-flash"
     const sandboxProvider = new DeterministicSandboxProvider({
       exec: command => ({ exitCode: 0, stderr: "", stdout: command === "pwd" ? "/sandbox/repository\n" : "" }),
       spawn() {
         return acpFixtureProcess(() => {}, {
-          model,
+          advertisedModels: [fallbackModel, model],
+          currentModel: fallbackModel,
           onModel: configuredModel => configuredModels.push(configuredModel),
         })
       },
@@ -128,6 +130,58 @@ describe("opencodeAgent()", () => {
     )
 
     expect(configuredModels).toEqual([model])
+  })
+
+  it("rejects a configured model that the ACP Agent does not advertise", async () => {
+    const prompts: string[] = []
+    const model = "opencode/deepseek-v4-flash"
+    const sandboxProvider = new DeterministicSandboxProvider({
+      exec: command => ({ exitCode: 0, stderr: "", stdout: command === "pwd" ? "/sandbox/repository\n" : "" }),
+      spawn() {
+        return acpFixtureProcess(prompt => prompts.push(prompt), {
+          advertisedModels: ["opencode/big-pickle"],
+          currentModel: "opencode/big-pickle",
+        })
+      },
+    })
+
+    await expect(
+      new AmlRuntime({ agentProvider: opencodeAgent({ model }) }).evaluate(
+        <Sandbox provider={sandboxProvider}>
+          <Agent>Initial</Agent>
+        </Sandbox>
+      )
+    ).rejects.toMatchObject({
+      cause: { message: `ACP session configuration "model" does not advertise value "${model}"` },
+    })
+    expect(prompts).toEqual([])
+  })
+
+  it("rejects an ACP Agent that does not apply the configured model", async () => {
+    const prompts: string[] = []
+    const fallbackModel = "opencode/big-pickle"
+    const model = "opencode/deepseek-v4-flash"
+    const sandboxProvider = new DeterministicSandboxProvider({
+      exec: command => ({ exitCode: 0, stderr: "", stdout: command === "pwd" ? "/sandbox/repository\n" : "" }),
+      spawn() {
+        return acpFixtureProcess(prompt => prompts.push(prompt), {
+          advertisedModels: [fallbackModel, model],
+          applyModel: false,
+          currentModel: fallbackModel,
+        })
+      },
+    })
+
+    await expect(
+      new AmlRuntime({ agentProvider: opencodeAgent({ model }) }).evaluate(
+        <Sandbox provider={sandboxProvider}>
+          <Agent>Initial</Agent>
+        </Sandbox>
+      )
+    ).rejects.toMatchObject({
+      cause: { message: `ACP session configuration "model" did not apply value "${model}"` },
+    })
+    expect(prompts).toEqual([])
   })
 
   it("names generated OpenCode MCP tools in structured turns", async () => {
@@ -254,20 +308,25 @@ function completedProcess(): Readonly<SandboxProcess> {
 
 function acpFixtureProcess(
   onPrompt: (prompt: string) => void,
-  options: { readonly model?: string; readonly onModel?: (value: string) => void } = {}
+  options: {
+    readonly advertisedModels?: readonly string[]
+    readonly applyModel?: boolean
+    readonly currentModel?: string
+    readonly onModel?: (value: string) => void
+  } = {}
 ): Readonly<SandboxProcess> {
   const clientToAgent = new TransformStream<Uint8Array, Uint8Array>()
   const agentToClient = new TransformStream<Uint8Array, Uint8Array>()
-  const configOptions: SessionConfigOption[] =
-    options.model === undefined
+  let currentModel = options.currentModel
+  const configOptions = (): SessionConfigOption[] =>
+    options.advertisedModels === undefined
       ? []
       : [
           {
-            category: "model",
-            currentValue: "opencode/big-pickle",
+            currentValue: currentModel ?? options.advertisedModels[0] ?? "opencode/big-pickle",
             id: "model",
             name: "Model",
-            options: [{ name: options.model, value: options.model }],
+            options: options.advertisedModels.map(model => ({ name: model, value: model })),
             type: "select",
           },
         ]
@@ -276,12 +335,16 @@ function acpFixtureProcess(
       agentCapabilities: { mcpCapabilities: { http: true } },
       protocolVersion: params.protocolVersion,
     }))
-    .onRequest(methods.agent.session.new, () => ({ configOptions, sessionId: "opencode-test-session" }))
+    .onRequest(methods.agent.session.new, () => ({
+      configOptions: configOptions(),
+      sessionId: "opencode-test-session",
+    }))
     .onRequest(methods.agent.session.setConfigOption, ({ params }) => {
       if (params.configId === "model" && typeof params.value === "string") {
+        if (options.applyModel !== false) currentModel = params.value
         options.onModel?.(params.value)
       }
-      return { configOptions }
+      return { configOptions: configOptions() }
     })
     .onRequest(methods.agent.session.prompt, ({ params }) => {
       onPrompt(params.prompt.flatMap(block => (block.type === "text" ? [block.text] : [])).join(""))
