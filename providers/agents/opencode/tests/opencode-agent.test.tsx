@@ -167,10 +167,14 @@ describe("opencodeAgent()", () => {
       )
     ).rejects.toThrow('Agent "opencode"')
 
-    expect(prompts).toHaveLength(1)
+    expect(prompts).toHaveLength(2)
     expect(prompts[0]).toMatch(
       /^<SYSTEM>\nFollow the system\.\n<\/SYSTEM>\n\nAML JavaScript Tools use these OpenCode MCP tool names:\n- read_evidence: aml_[a-f0-9]+_read_evidence\n\nSubmit proof\.\n\nCall the OpenCode MCP tool "aml_[a-f0-9]+_aml_submit_result"/u
     )
+    expect(prompts[1]).toMatch(
+      /^The previous turn ended without submitting a valid structured result\.\n\nCall the OpenCode MCP tool "aml_[a-f0-9]+_aml_submit_result"/u
+    )
+    expect(prompts[1]).toContain('"proof"')
   })
 
   it("maps restrictive Agent permissions into OpenCode's native controls", async () => {

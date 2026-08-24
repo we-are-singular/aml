@@ -89,6 +89,10 @@ export class AcpMcpBridge implements AcpStructuredOutputController {
     this.#acceptStructuredOutput = true
   }
 
+  hasStructuredResult(): boolean {
+    return this.#structuredAccepted
+  }
+
   close(): Promise<void> {
     this.#closePromise ??= this.#close()
     return this.#closePromise

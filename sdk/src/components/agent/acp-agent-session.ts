@@ -61,6 +61,7 @@ export type AcpSessionConfiguration =
 export interface AcpStructuredOutputController {
   readonly instruction: string
   beginStructuredTurn(): void
+  hasStructuredResult(): boolean
   structuredResult(): unknown
 }
 
@@ -189,16 +190,42 @@ class AcpProviderSession implements AgentProviderSession {
     const prefix = this.#initialPromptPrefix
     this.#initialPromptPrefix = undefined
     let prompt = prefix === undefined ? turn.prompt : `${prefix}\n\n${turn.prompt}`
+    let structuredOutput: AcpStructuredOutputController | undefined
+    let structuredOutputInstruction: string | undefined
 
     if (turn.output !== undefined) {
-      if (this.#structuredOutput === undefined) {
+      structuredOutput = this.#structuredOutput
+
+      if (structuredOutput === undefined) {
         throw new Error("ACP structured turn has no AML submission bridge")
       }
 
-      this.#structuredOutput.beginStructuredTurn()
-      prompt = `${prompt}\n\n${this.#structuredOutputInstruction ?? this.#structuredOutput.instruction}`
+      structuredOutputInstruction = this.#structuredOutputInstruction ?? structuredOutput.instruction
+      structuredOutput.beginStructuredTurn()
+      prompt = `${prompt}\n\n${structuredOutputInstruction}`
     }
 
+    let receivedText = await this.#runPrompt(prompt, context)
+
+    if (turn.output !== undefined && structuredOutput !== undefined && !structuredOutput.hasStructuredResult()) {
+      // Some Agents finish their reasoning turn as text even though the result
+      // Tool is available. Give the retained session one explicit repair turn
+      // with both its provider-specific Tool identity and the output contract.
+      receivedText = await this.#runPrompt(
+        structuredOutputReminder(structuredOutputInstruction ?? structuredOutput.instruction, turn.output.jsonSchema),
+        context
+      )
+    }
+
+    context.signal.throwIfAborted()
+    const text = this.#transformText?.(receivedText, this.#session) ?? receivedText
+    return Object.freeze({
+      ...(structuredOutput === undefined ? {} : { structured: structuredOutput.structuredResult() }),
+      text,
+    })
+  }
+
+  async #runPrompt(prompt: string, context: AgentExecutionContext): Promise<string> {
     const turnAttempt = runAcpPrompt(this.#session, prompt, context)
 
     // A silent Agent process exit would otherwise leave nextUpdate() waiting
@@ -208,13 +235,7 @@ class AcpProviderSession implements AgentProviderSession {
       const detail = stderr.trim().length === 0 ? "" : `: ${stderr.trim()}`
       throw new Error(`ACP Agent process exited with code ${result.exitCode} during a turn${detail}`)
     })
-    const receivedText = await Promise.race([turnAttempt, exited])
-    context.signal.throwIfAborted()
-    const text = this.#transformText?.(receivedText, this.#session) ?? receivedText
-    return Object.freeze({
-      ...(turn.output === undefined ? {} : { structured: this.#structuredOutput?.structuredResult() }),
-      text,
-    })
+    return await Promise.race([turnAttempt, exited])
   }
 
   async abort(): Promise<void> {
@@ -253,6 +274,15 @@ class AcpProviderSession implements AgentProviderSession {
     if (errors.length === 1) throw errors[0]
     if (errors.length > 1) throw new AggregateError(errors, "ACP session cleanup failed")
   }
+}
+
+function structuredOutputReminder(instruction: string, jsonSchema: Readonly<Record<string, unknown>>): string {
+  return [
+    "The previous turn ended without submitting a valid structured result.",
+    instruction,
+    "Call the structured-result Tool now. Do not continue the analysis or answer only with message text.",
+    `The required result must match this JSON Schema:\n${JSON.stringify(jsonSchema, null, 2)}`,
+  ].join("\n\n")
 }
 
 /**
