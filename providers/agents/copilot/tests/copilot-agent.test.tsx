@@ -129,7 +129,7 @@ describe("copilotAgent()", () => {
 
   it("uses Copilot-qualified names for AML JavaScript Tools and structured output", async () => {
     let mcpServerName: string | undefined
-    let prompt = ""
+    const prompts: string[] = []
     const Result = z.object({ status: z.literal("done") })
     const proof = defineTool({
       description: "Return a deterministic proof",
@@ -147,7 +147,7 @@ describe("copilotAgent()", () => {
             mcpServerName = servers[0]?.name
           },
           onPrompt(value) {
-            prompt = value
+            prompts.push(value)
           },
         })
       },
@@ -173,9 +173,13 @@ describe("copilotAgent()", () => {
     ).rejects.toThrow('Agent "copilot"')
 
     expect(mcpServerName).toMatch(/^aml_[a-f0-9]{32}$/)
-    expect(prompt).toContain("<SYSTEM>\nFollow the authored system.\n</SYSTEM>")
-    expect(prompt).toContain(`- copilot_proof: ${mcpServerName}-copilot_proof`)
-    expect(prompt).toContain(`Call the Copilot MCP tool "${mcpServerName}-aml_submit_result" once`)
+    expect(prompts).toHaveLength(2)
+    expect(prompts[0]).toContain("<SYSTEM>\nFollow the authored system.\n</SYSTEM>")
+    expect(prompts[0]).toContain(`- copilot_proof: ${mcpServerName}-copilot_proof`)
+    expect(prompts[0]).toContain(`Call the Copilot MCP tool "${mcpServerName}-aml_submit_result" once`)
+    expect(prompts[1]).toContain("The previous turn ended without submitting a valid structured result.")
+    expect(prompts[1]).toContain(`Call the Copilot MCP tool "${mcpServerName}-aml_submit_result" once`)
+    expect(prompts[1]).toContain('"status"')
   })
 
   it("validates options before launch and forwards arbitrary reasoning effort", async () => {
