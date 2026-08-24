@@ -153,6 +153,8 @@ The effective values are resolved as follows:
 | `shell: false`             | No additional Codex-native mapping is claimed by this profile.            | Use a Sandbox that rejects shell execution.                                 |
 | `network: false`           | No additional Codex-native mapping is claimed by this profile.            | Use a Sandbox or deployment network policy that enforces it.                |
 
+Codex native subagents inherit the parent turn's effective Codex permission profile and approval policy. AML leaves multi-agent execution enabled, so a subagent spawned after AML sets the Codex ACP adapter's `INITIAL_AGENT_MODE=read-only` remains read-only. This inheritance does not add Codex-native mappings for `shell: false` or `network: false`; those restrictions still depend on the enclosing Sandbox.
+
 ## Failure modes and troubleshooting
 
 <Steps>
