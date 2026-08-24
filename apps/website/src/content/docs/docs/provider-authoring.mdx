@@ -79,7 +79,7 @@ The image name and output budget belong to [`dockerSandbox()`](/docs/providers/s
 Implement an **Agent provider** when the external system owns a model or coding-harness session.
 
 - Use the direct `AgentProvider.run()` boundary for an internal service, deterministic harness, or protocol that already exposes one complete session operation.
-- Use AML's ACP profile boundary when the integration launches an ACP-compatible executable. The shared adapter owns process launch, ordered turns, MCP bridging, structured output, Sandbox execution, and cleanup; the profile owns command, arguments, environment, configuration, and capability translation.
+- Use AML's ACP profile boundary when the integration launches an ACP-compatible executable. The shared adapter owns process launch, ordered turns, MCP bridging, structured-output validation and bounded repair, Sandbox execution, and cleanup; the profile owns command, arguments, environment, configuration, and capability translation.
 - Use a retained provider session only when the integration genuinely has ordered turn state and invocation-scoped cleanup that cannot be represented as one direct call.
 
 Do not label a plain chat-completions call as a coding-agent integration unless it really provides the session, tools, permissions, and execution behavior the provider claims.

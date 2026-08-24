@@ -45,6 +45,8 @@ Codex, GitHub Copilot, GLM, OpenCode, and Pi use the same ACP lifecycle on the t
 
 `<Agent timeoutMs={...}>` optionally bounds one provider session after it acquires an execution slot. The value must be a positive safe integer. AML derives a session signal that aborts when either this timeout expires or the enclosing evaluation is cancelled; the earliest cause wins, and nested Agents retain independent scopes. Expiry follows the same provider cancellation path as caller cancellation. AML awaits provider-owned abort and cleanup before settling the Agent, and preserves both the cancellation cause and any later cleanup failure.
 
+`<Agent schema={Result}>` validates that Agent's structured result and contributes canonical JSON text to ordinary AML composition. An authored `<FollowUp>` sequence remains valid: AML asks for structured output only on the final authored turn. Use `evaluate(<Agent>...</Agent>, Result)` instead when component code needs the schema-inferred value.
+
 An unsandboxed `<Script />` runs as a trusted host process from `AmlRuntimeOptions.cwd`, defaulting to `process.cwd()`. Inside an active `<Sandbox />`, it runs only through that Sandbox runtime and never falls back to the host. Its optional portable `cwd` resolves from the runtime cwd on the host or from the active Sandbox root.
 
 The public factory names are `codexAgent()`, `copilotAgent()`, `glmAgent()`, `opencodeAgent()`, and `piAgent()`.

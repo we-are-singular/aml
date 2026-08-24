@@ -36,6 +36,7 @@ For a live session, replace the deterministic provider with [Codex](/docs/provid
 | `name`        | `string`            | —                                                | Optional diagnostic metadata; non-unique and never included in prompts.                                                      |
 | `permissions` | partial permissions | read-write filesystem, network and shell enabled | Requested native harness controls; an active Sandbox may narrow them.                                                        |
 | `provider`    | `AgentProvider`     | runtime `agentProvider`                          | Provider for this session.                                                                                                   |
+| `schema`      | `AmlModelSchema`    | —                                                | Validates this Agent's result and renders it as canonical JSON text in ordinary composition.                                 |
 | `system`      | `string`            | empty                                            | Fixed system text, placed after runtime system text and before child `<System />` blocks.                                    |
 | `timeoutMs`   | `number`            | —                                                | Positive safe integer that bounds this provider session; caller cancellation and cleanup semantics are described below.      |
 
@@ -47,7 +48,9 @@ For a live session, replace the deterministic provider with [Codex](/docs/provid
 
 AML resolves child `<Agent />` components, text, [`<System />`](/docs/reference/primitives/system/), [`<Skill />`](/docs/reference/primitives/skill/), [`<Tool />`](/docs/reference/primitives/tool/), [`<Mcp />`](/docs/reference/primitives/mcp/), and [`<FollowUp />`](/docs/reference/primitives/follow-up/) descriptors before the provider session begins. Prompt and system fragments are trimmed at the session boundary; ordinary child text is otherwise concatenated without inserted separators.
 
-The provider returns an `AgentResponse`. Normal evaluation contributes its `text` to the surrounding AML value. Component-local [`evaluate()`](/docs/reference/runtime/#component-local-evaluation) can additionally validate a single `<Agent />` result against a Standard Schema. Built-in ACP providers validate submitted candidates during the turn, accept the first valid candidate, and ignore later submissions.
+The provider returns an `AgentResponse`. Normal evaluation contributes its `text` to the surrounding AML value. With `schema`, AML instead validates the structured response and renders the transformed value as canonical JSON text with deterministically ordered object keys. Transformations that produce non-JSON values, including `undefined`, reject because ordinary AML composition is a text channel.
+
+Component-local [`evaluate()`](/docs/reference/runtime/#component-local-evaluation) remains the typed collector: pass its schema as the second argument when TypeScript needs the inferred value. Do not also set the Agent `schema` prop; one Agent has one schema owner.
 
 ## Placement and scope
 
@@ -60,7 +63,7 @@ The provider returns an `AgentResponse`. Normal evaluation contributes its `text
 
 An Agent trace contains one `agent.session` span, one ordered `agent.turn` span for the initial prompt and each [`<FollowUp />`](/docs/reference/primitives/follow-up/), and one `agent.cleanup` span. Built-in ACP providers stream `acp.session.update` events inside the active turn and attach the final ACP stop reason and optional usage to the successful turn end.
 
-One Agent turn is one provider `runTurn()` call and, on the shared ACP path, one ACP `session/prompt` request. It must not be interpreted as one underlying model API call. See [Observability](/docs/observability/#what-an-agent-trace-represents) for the lifecycle tree, content policy, and ACP limitations.
+One Agent turn is one provider `runTurn()` call. It normally maps to one ACP `session/prompt` request, but a schema-bearing final turn may contain one additional repair prompt when the Agent omits the result Tool. It must not be interpreted as one underlying model API call. See [Observability](/docs/observability/#what-an-agent-trace-represents) for the lifecycle tree, content policy, and ACP limitations.
 
 <Aside type="caution" title="Agent permissions are not confinement">
   Native provider permissions are best-effort harness controls. Use a Sandbox provider with an appropriate isolation

@@ -89,7 +89,7 @@ If `supportsSandbox()` returns `true`, `run()` must actually launch model-contro
 
 ### ACP profile extension
 
-Use `defineAcpAgentProvider()` when the vendor already exposes an Agent Client Protocol executable. AML's shared ACP adapter owns process launch, one-session turn order, JavaScript Tool and structured-output bridging, immediate candidate validation, first-valid-result selection, submission tracing, MCP descriptors, temporary state, local versus Sandbox execution, abort, cleanup, and portable ACP-boundary telemetry.
+Use `defineAcpAgentProvider()` when the vendor already exposes an Agent Client Protocol executable. AML's shared ACP adapter owns process launch, one-session turn order, JavaScript Tool and structured-output bridging, immediate candidate validation, first-valid-result selection, the one-prompt missing-output repair, submission tracing, MCP descriptors, temporary state, local versus Sandbox execution, abort, cleanup, and portable ACP-boundary telemetry. Profiles may customize the Tool instruction, but they must not fork that lifecycle or recovery policy.
 
 ```ts
 import { defineAcpAgentProvider, type AcpAgentProfile } from "@aml-jsx/sdk"

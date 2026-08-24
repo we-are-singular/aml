@@ -348,6 +348,7 @@ interface AgentProps {
     shell?: boolean
   }
   provider?: AgentProvider
+  schema?: AmlModelSchema<unknown, unknown>
   system?: string
   timeoutMs?: number
 }
@@ -364,6 +365,8 @@ interface AgentProps {
 `system` is the concise fixed-text system prompt. `<System>` is the composable form for resolved asynchronous content. Provider-specific settings that have no portable AML semantics belong to configured provider instances, not arbitrary Agent props or an untyped `providerOptions` bag.
 
 `timeoutMs`, when present, is a positive safe integer that bounds the provider session after it acquires an Agent scheduler slot. AML derives a session signal that aborts when either this timeout expires or the enclosing evaluation is cancelled; the earliest cause wins, and nested Agents retain independent scopes. Expiry follows the same provider cancellation path as caller cancellation. AML awaits provider-owned abort and cleanup before settling the Agent, and preserves both the cancellation cause and any later cleanup failure.
+
+`schema` declares structured output at this Agent boundary. The Agent receives the generated JSON Schema, AML validates the returned value, and ordinary tree composition receives the transformed result as canonical JSON text. Use component-local `evaluate(value, schema)` instead when TypeScript needs the inferred value. One Agent cannot declare both schema owners.
 
 `permissions` describes the native coding environment requested from the Agent harness. Omitted fields default optimistically to `{ filesystem: "read-write", network: true, shell: true }`: a coding Agent can inspect and edit its Workspace, execute commands, and use the network without repetitive `<Tool>` declarations. A profile maps these portable requests to its native controls and reports any control it cannot express exactly.
 
@@ -393,6 +396,7 @@ interface AgentPlan {
   model?: string
   name?: string
   permissions: AgentPermissions
+  schema?: AmlModelSchema<unknown, unknown>
   system: string
   systemFragments: readonly string[]
   tools: readonly AgentTool[]
@@ -468,7 +472,9 @@ AML evaluates these siblings left to right. Explicit `Promise.all(evaluate(...))
 
 ### 5.4 Agent result
 
-Without structured output, the Agent element resolves to the final assistant text from its session. With FollowUps, intermediate assistant responses remain in provider session history and traces but do not become AML output.
+Without a `schema`, the Agent element resolves to the final assistant text from its session. With `schema`, AML validates the structured response and inserts the transformed value into the surrounding tree as canonical JSON text with deterministically ordered object keys. A transformation that produces non-JSON data, including `undefined`, rejects at that Agent boundary.
+
+With FollowUps, intermediate assistant responses remain in provider session history and traces but do not become AML output. Structured output is requested only on the final authored turn.
 
 An Agent with one input returns that input's response. An Agent with FollowUps returns the response to the last successful FollowUp.
 
@@ -875,6 +881,14 @@ A `stdio` MCP server may run in the provider environment or inside the active Sa
 
 `AmlModelSchema<T>` is AML's structural contract for a schema that supports both Standard Schema validation and Standard JSON Schema generation. AML does not require one concrete schema library.
 
+An Agent may own this contract declaratively:
+
+```tsx
+<Agent schema={Research}>Return structured research.</Agent>
+```
+
+That form remains ordinary AML composition: the validated, transformed value renders as canonical JSON text in a parent prompt, File, System block, or root string result.
+
 `evaluate()` executes AML as component-local data:
 
 ```tsx
@@ -896,13 +910,13 @@ const Research = z.object({
 const research = await evaluate(<Agent>Return structured research.</Agent>, Research)
 ```
 
-With a schema, the supplied AML must resolve to exactly one Agent, optionally through Fragments, Context Providers, or ordinary function components. Non-empty text outside that Agent is invalid because it would create a second result channel. AML generates and snapshots draft 2020-12 JSON Schema before the provider boundary, sends that portable JSON document through `AgentRequest.output.jsonSchema`, and validates the provider's returned unknown value again through the original Standard Schema. Providers never receive or invoke the application-owned schema object. The component receives Standard Schema's inferred output, including an authored transformation; only the provider-facing value and JSON Schema must remain JSON.
+With a schema argument, the supplied AML must resolve to exactly one Agent, optionally through Fragments, Context Providers, or ordinary function components. Non-empty text outside that Agent is invalid because it would create a second result channel. AML generates and snapshots draft 2020-12 JSON Schema before the provider boundary, sends that portable JSON document through `AgentRequest.output.jsonSchema`, and validates the provider's returned unknown value again through the original Standard Schema. Providers never receive or invoke the application-owned schema object. The component receives Standard Schema's inferred output, including an authored transformation; only the provider-facing value and JSON Schema must remain JSON. An Agent `schema` prop cannot be combined with this evaluation-owned schema.
 
 `<Loop>` is invalid anywhere inside a schema-bearing `evaluate()` subtree, including the selected Agent's prompt, System, Skill, and FollowUp channels. A Loop may open multiple fresh Agent sessions and therefore cannot satisfy the structured call's exactly-one-Agent execution contract.
 
-With FollowUps, the schema applies only to the final turn.
+With FollowUps, either schema form applies only to the final authored turn.
 
-Built-in coding-agent providers implement this contract through one AML-owned, invocation-scoped MCP submission Tool supplied during ACP session creation. AML exposes that Tool only for a structured invocation, instructs the Agent profile to submit exactly one final value on the last authored turn, captures the submitted JSON value, and validates it through the original Standard Schema after the provider returns. ACP does not currently define a portable JSON Schema output field, so profiles must not implement separate vendor-native structured-output lifecycles. Missing, duplicate, premature, or invalid submissions reject the Agent.
+Built-in coding-agent providers implement this contract through one AML-owned, invocation-scoped MCP submission Tool supplied during ACP session creation. AML exposes that Tool only for a structured invocation, instructs the Agent profile to submit exactly one final value on the last authored turn, and validates every candidate immediately. Invalid or premature submissions return recoverable Tool errors; the first valid candidate wins and later candidates are ignored. If the final authored turn ends without an accepted candidate, the shared ACP session sends one repair prompt containing the provider-specific Tool instruction and complete JSON Schema. A second omission rejects the Agent. ACP does not currently define a portable JSON Schema output field, so profiles must not implement separate vendor-native structured-output lifecycles.
 
 ### 10.1 Invocation scope
 
@@ -1791,8 +1805,9 @@ An omitted or empty `followUps` array represents a single-input Agent. When Foll
 3. sends `prompt`
 4. sends each `followUps` entry after the preceding response
 5. applies structured output only to the final input
-6. returns only the final response
-7. disposes invocation-scoped Tool registrations and MCP connections after the session settles; if the provider cannot remove dynamic registrations, its adapter must use a disposable provider host or reject that capability rather than accumulate registrations in shared provider state
+6. for built-in ACP profiles, sends one schema-bearing repair prompt if that final input ends without an accepted result
+7. returns only the final response
+8. disposes invocation-scoped Tool registrations and MCP connections after the session settles; if the provider cannot remove dynamic registrations, its adapter must use a disposable provider host or reject that capability rather than accumulate registrations in shared provider state
 
 For built-in coding-agent providers, this lifecycle is implemented once by the shared ACP session engine. A profile supplies:
 
@@ -2055,7 +2070,7 @@ The event stream covers evaluation and component execution, Agent sessions and a
 
 Every event includes `runId`, `spanId`, a monotonically increasing evaluation-local `sequence`, and a Unix-millisecond `timestamp`. Nested events include `parentSpanId`. `span.end` reuses its `span.start` identity and reports non-negative elapsed milliseconds. An evaluation span is the root ancestor of every other span, including component-local `evaluate()` calls and concurrently scheduled Agents. Each lexical execution boundary is the direct parent of the subtree it evaluates: a component returning an Agent owns that Agent span, and Workspace, Sandbox, Loop, System, and Skill descendants remain beneath their corresponding spans.
 
-Agent spans begin when the runtime enters the authored Agent, before Agent-specific prop and Sandbox preflight, and include post-order request assembly plus the provider session. The runtime closes a successful Agent span only after its result enters the parent AML output channel. FollowUps remain inside that Agent span. `agent.turn` events are emitted in authored order at the provider handoff: the initial prompt is turn `1`, and the first FollowUp is turn `2`. Provider-internal reasoning, retries, tool loops, token accounting, and usage records are not part of the stable Slice 15 contract because the portable provider interface cannot observe them consistently.
+Agent spans begin when the runtime enters the authored Agent, before Agent-specific prop and Sandbox preflight, and include post-order request assembly plus the provider session. The runtime closes a successful Agent span only after its result enters the parent AML output channel. FollowUps remain inside that Agent span. `agent.turn` events are emitted in authored order at the provider handoff: the initial prompt is turn `1`, and the first FollowUp is turn `2`. A shared ACP structured-output repair prompt remains inside the final authored turn and emits its own ACP prompt events; it does not consume another authored-turn budget. Provider-internal reasoning, retries, tool loops, token accounting, and usage records are not part of the stable Slice 15 contract because the portable provider interface cannot observe them consistently.
 
 Trace sinks supplied through the compatibility `trace` runtime option are registered as `trace` event listeners. Each evaluation still owns its ordering counter, root span, and failure-warning state. A listener receives deeply immutable snapshots rather than request, response, Tool, provider, lease, or component objects. It runs outside component-local `evaluate()` access and cannot mutate workflow inputs or results through the event API.
 
