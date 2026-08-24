@@ -105,7 +105,7 @@ describe("codexAgent()", () => {
     expect(config).toMatchObject({ model: "provider-model" })
   })
 
-  it("disables native subagents when portable Agent permissions are restricted", async () => {
+  it("preserves native subagent configuration when portable Agent permissions are restricted", async () => {
     let config: Record<string, unknown> | undefined
     const sandboxProvider = new DeterministicSandboxProvider({
       exec: command => ({ exitCode: 0, stderr: "", stdout: command === "pwd" ? "/sandbox/repository\n" : "" }),
@@ -125,7 +125,7 @@ describe("codexAgent()", () => {
       )
     ).rejects.toThrow()
 
-    expect(config).toMatchObject({ features: { apps: true, multi_agent: false } })
+    expect(config).toMatchObject({ features: { apps: true, multi_agent: true } })
   })
 
   it.each(["max", "ultra"])("passes arbitrary reasoning effort %s through CODEX_CONFIG", async reasoningEffort => {
