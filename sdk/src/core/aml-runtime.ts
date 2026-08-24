@@ -129,6 +129,7 @@ interface ReleaseFrame {
 }
 
 interface CompleteAgentFrame {
+  readonly collectStructured: boolean
   readonly kind: "complete-agent"
   readonly plan: AgentTarget
   readonly props: Readonly<AgentProps>
@@ -713,7 +714,7 @@ export class AmlRuntime {
           })
           const response = execution.response
 
-          if (frame.schema !== undefined) {
+          if (frame.schema !== undefined && frame.collectStructured) {
             const collector = frame.target.structured
 
             if (collector === undefined) {
@@ -724,6 +725,8 @@ export class AmlRuntime {
             // receives a ModelSchema, including transformed undefined output.
             collector.hasResult = true
             collector.result = response.structured
+          } else if (frame.schema !== undefined) {
+            appendText(frame.target, frame.schema.stringify(response.structured))
           } else {
             appendText(frame.target, response.text)
           }
@@ -805,10 +808,16 @@ export class AmlRuntime {
             const trace = context.createTrace(frame.target.parentSpanId)
             const span = context.startTraceSpan(trace, "agent", "Agent")
             let provider: Readonly<ValidatedAgentProvider> | undefined
+            let schema: ModelSchema<unknown> | undefined
             let sandbox: Readonly<SandboxSession> | undefined
 
             try {
               provider = this.#agentExecutor.validateProps(props)
+              const evaluationSchema =
+                collector !== undefined && frame.target.kind === "text" && frame.target.source === "evaluation"
+                  ? collector.schema
+                  : undefined
+              schema = this.#agentExecutor.outputSchema(props, evaluationSchema)
               sandbox = this.#sandboxEvaluator.forAgent(frame.target.sandbox, props.cwd)
             } catch (error) {
               context.failTraceSpan(span, error)
@@ -840,14 +849,13 @@ export class AmlRuntime {
             activeTraceSpans.push(span)
             frames.push({ kind: "release", value: current })
             frames.push({
+              collectStructured:
+                collector !== undefined && frame.target.kind === "text" && frame.target.source === "evaluation",
               kind: "complete-agent",
               plan,
               props,
               provider,
-              schema:
-                collector !== undefined && frame.target.kind === "text" && frame.target.source === "evaluation"
-                  ? collector.schema
-                  : undefined,
+              schema,
               sandbox,
               span,
               target: frame.target,

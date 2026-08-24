@@ -1,4 +1,5 @@
 import { AmlNode, type AmlRenderable } from "../../core/aml-node.js"
+import type { AmlModelSchema } from "./aml-model-schema.js"
 import type { AgentProvider } from "./agent-provider.js"
 
 /**
@@ -26,6 +27,7 @@ export interface AgentProps {
   readonly name?: string
   readonly permissions?: AgentPermissionOverrides
   readonly provider?: AgentProvider
+  readonly schema?: AmlModelSchema<unknown, unknown>
   readonly system?: string
   readonly timeoutMs?: number
 }

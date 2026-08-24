@@ -452,4 +452,18 @@ describe("component-local evaluate()", () => {
 
     await expect(new AmlRuntime().evaluate(<Workflow />)).resolves.toBe("length:4")
   })
+
+  it("rejects competing Agent-owned and evaluation-owned output schemas", async () => {
+    const provider = new DeterministicAgentProvider()
+
+    async function Workflow() {
+      await evaluate(<Agent schema={ResearchResult}>extract</Agent>, ResearchResult)
+      return "unreachable"
+    }
+
+    await expect(new AmlRuntime({ agentProvider: provider }).evaluate(<Workflow />)).rejects.toThrow(
+      "<Agent> schema cannot be combined with evaluate(value, schema)"
+    )
+    expect(provider.calls).toHaveLength(0)
+  })
 })

@@ -1,9 +1,11 @@
+import { z } from "zod"
 import { describe, expect, expectTypeOf, it } from "vitest"
 
 import { Agent } from "../src/components/agent/agent.js"
 import type { AgentProvider } from "../src/components/agent/agent-provider.js"
 import type { AgentRequest } from "../src/components/agent/agent-request.js"
 import { defineAgentProvider } from "../src/components/agent/define-agent-provider.js"
+import { FollowUp } from "../src/components/follow-up/follow-up.js"
 import { System } from "../src/components/system/system.js"
 import { Sandbox } from "../src/components/sandbox/sandbox.js"
 import type { AmlRenderable } from "../src/core/aml-node.js"
@@ -17,6 +19,69 @@ import { DeterministicAgentProvider } from "../src/testing/deterministic-agent-p
 import { DeterministicSandboxProvider } from "../src/testing/deterministic-sandbox-provider.js"
 
 describe("Agent", () => {
+  it("renders Agent-owned structured output as canonical JSON text", async () => {
+    const Finding = z
+      .object({ evidence: z.array(z.string()), summary: z.string() })
+      .transform(value => ({ summary: value.summary, evidenceCount: value.evidence.length }))
+    const specialist = new DeterministicAgentProvider({
+      name: "specialist",
+      respond(request) {
+        expect(request.prompt).toBe("Inspect.")
+        expect(request.followUps).toEqual(["Submit the final finding."])
+        expect(request.output?.jsonSchema).toMatchObject({
+          properties: { evidence: { type: "array" }, summary: { type: "string" } },
+          type: "object",
+        })
+        return {
+          structured: { evidence: ["line 1", "line 2"], summary: "authorization gap" },
+          text: "ignored specialist prose",
+        }
+      },
+    })
+    const coordinator = new DeterministicAgentProvider({
+      name: "coordinator",
+      respond: request => ({ text: request.prompt }),
+    })
+
+    await expect(
+      new AmlRuntime().evaluate(
+        <Agent provider={coordinator}>
+          Finding:{" "}
+          <Agent provider={specialist} schema={Finding}>
+            Inspect.
+            <FollowUp>Submit the final finding.</FollowUp>
+          </Agent>
+        </Agent>
+      )
+    ).resolves.toBe('Finding: {"evidenceCount":2,"summary":"authorization gap"}')
+  })
+
+  it("attributes invalid Agent-owned output to that Agent boundary", async () => {
+    const Result = z.object({ proof: z.string() })
+    const provider = new DeterministicAgentProvider({
+      respond: () => ({ structured: { proof: 42 }, text: "" }),
+    })
+
+    await expect(
+      new AmlRuntime().evaluate(
+        <Agent name="structured-specialist" provider={provider} schema={Result}>
+          Inspect.
+        </Agent>
+      )
+    ).rejects.toThrow('Agent "deterministic" [name: "structured-specialist"]')
+  })
+
+  it("rejects transformed Agent output that cannot enter a JSON text channel", async () => {
+    const UndefinedResult = z.object({ proof: z.string() }).transform(() => undefined)
+    const provider = new DeterministicAgentProvider({
+      respond: () => ({ structured: { proof: "accepted" }, text: "" }),
+    })
+
+    await expect(
+      new AmlRuntime({ agentProvider: provider }).evaluate(<Agent schema={UndefinedResult}>Inspect.</Agent>)
+    ).rejects.toThrow("Transformed Agent structured output cannot be rendered as JSON text")
+  })
+
   it("uses the runtime provider unless an Agent overrides it", async () => {
     const runtimeProvider = new DeterministicAgentProvider({
       name: "runtime",
