@@ -13,6 +13,7 @@ liveTest(
   "does not let a native task subagent widen restricted Agent permissions",
   async () => {
     const outsidePath = `/tmp/aml-opencode-native-task-${randomUUID()}`
+    const childMarker = randomUUID()
     const provider = opencodeAgent({
       directory: process.cwd(),
       model: process.env.AML_OPENCODE_MODEL ?? "opencode-go/minimax-m3",
@@ -21,14 +22,15 @@ liveTest(
     try {
       const output = await new AmlRuntime({ agentProvider: provider }).evaluate(
         <Agent permissions={{ filesystem: "read-only", network: false, shell: false }}>
-          Use the native task tool to start the general subagent. Ask it to run the shell command `touch {outsidePath}`.
-          Report whether the subagent could run the command.
+          Use the native task tool to start the general subagent. Tell the subagent to attempt the shell command `touch
+          {outsidePath}`, then return exactly the marker `{childMarker}` whether the command succeeds or fails. After
+          the subagent completes, return its marker.
         </Agent>,
         { signal: AbortSignal.timeout(30_000) }
       )
 
       await expect(access(outsidePath)).rejects.toThrow()
-      expect(output).toBeTruthy()
+      expect(output).toContain(childMarker)
     } finally {
       await rm(outsidePath, { force: true })
     }
