@@ -83,7 +83,7 @@ class OpenCodeAcpProfile implements AcpAgentProfile<"opencode"> {
     if (model !== undefined) {
       // OpenCode ACP owns the session model after launch. File and environment
       // config alone leave the session on OpenCode's fallback model.
-      configuration.push({ category: "model", value: model })
+      configuration.push({ id: "model", value: model })
     }
     const config: Config = {
       ...this.#options.config,
