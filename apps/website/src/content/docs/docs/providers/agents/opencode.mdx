@@ -26,7 +26,10 @@ The profile starts OpenCode with an ACP server command equivalent to:
 opencode acp --pure --cwd <effective-sandbox-cwd> <your args>
 ```
 
-`command` changes the executable; AML always supplies the ACP arguments before your additional `args`. The profile injects `OPENCODE_CONFIG_CONTENT` with an AML-owned `aml` primary agent, then gives every acquired session private database, cache, config, data, and state directories.
+`command` changes the executable; AML always supplies the ACP arguments before your additional `args`. The profile
+injects `OPENCODE_CONFIG_CONTENT` with an AML-owned `aml` primary agent, then gives every acquired session private
+database, cache, config, and state directories. Its data directory is private by default and may be replaced only
+through an explicit `env.XDG_DATA_HOME` setting.
 
 <Aside type="note" title="Native OpenCode configuration">
   The `config` option is OpenCode's typed `Config` object from `@opencode-ai/sdk/v2`, not an AML-specific arbitrary bag.
@@ -34,7 +37,12 @@ opencode acp --pure --cwd <effective-sandbox-cwd> <your args>
   needed for the session.
 </Aside>
 
-The private XDG directories isolate OpenCode-native user state. OpenCode still loads project rules from `AGENTS.md`, or
+The XDG directories isolate OpenCode-native user state. `XDG_DATA_HOME`, which contains OpenCode's `auth.json`, is
+invocation-private by default. A caller may explicitly point it at a staged data directory through `env`, while AML
+still owns the invocation's session database and every other XDG directory. Prefer a dedicated request-local data
+directory or an environment credential over sharing the operator's complete interactive OpenCode data directory.
+
+OpenCode still loads project rules from `AGENTS.md`, or
 `CLAUDE.md` when no project `AGENTS.md` exists. It can also fall back to `~/.claude/CLAUDE.md` because this profile does
 not replace `HOME`; set `OPENCODE_DISABLE_CLAUDE_CODE_PROMPT=1` in `env` when that compatibility behavior is unwanted.
 Loaded rules remain OpenCode system instructions. AML-authored System content is delivered separately as a first-turn prelude.
@@ -68,6 +76,10 @@ opencode auth list
 ```
 
 `opencode auth login` stores provider credentials in OpenCode's own data directory. `opencode auth list` also reports provider credentials discovered through environment variables. AML does not copy those credentials into a Workspace or infer which model provider you intended.
+
+For an isolated invocation, pass the provider credential through `env` or stage the required OpenCode data into a
+dedicated directory and set `env.XDG_DATA_HOME` to it. `OPENCODE_DB` remains invocation-private even when the data
+directory is explicitly staged, so the Agent does not import or persist interactive session history.
 
 The AML repository currently pins `opencode-ai@1.18.18` for its integration toolchain and `@opencode-ai/sdk@1.18.5` for the typed provider configuration. These versions are the repository's verification baseline, not a claim that every newer OpenCode release is compatible. Re-run the provider integration path when changing either side.
 
@@ -199,11 +211,14 @@ For each acquired session AML sets:
 OPENCODE_DB       <state>/opencode.db
 XDG_CACHE_HOME    <state>/cache
 XDG_CONFIG_HOME   <state>/config
-XDG_DATA_HOME     <state>/data
+XDG_DATA_HOME     <state>/data (default) or an explicit env.XDG_DATA_HOME
 XDG_STATE_HOME    <state>/state
 ```
 
-The profile creates the launch configuration after AML has resolved the effective Sandbox cwd and capabilities. AML then starts the ACP session, streams turns, validates the response, and releases provider-owned state through the shared lifecycle. Do not persist these temporary directories as a Workspace artifact unless you intentionally want OpenCode session state in your application.
+The profile creates the launch configuration after AML has resolved the effective Sandbox cwd and capabilities.
+`OPENCODE_DB`, cache, config, and state always remain invocation-owned. AML then starts the ACP session, streams turns,
+validates the response, and releases provider-owned state through the shared lifecycle. Do not persist these temporary
+directories as a Workspace artifact unless you intentionally want OpenCode session state in your application.
 
 ## Failure modes and troubleshooting
 
