@@ -54,6 +54,18 @@ class OpenCodeAcpProfile implements AcpAgentProfile<"opencode"> {
       permission.websearch = "deny"
     }
 
+    if (
+      context.request.permissions.filesystem === "read-only" ||
+      !context.request.permissions.shell ||
+      !context.request.permissions.network
+    ) {
+      // Native task subagents have their own OpenCode profile and can widen the
+      // portable Agent permissions. Restricted sessions therefore cannot
+      // delegate outside the AML-owned Agent boundary.
+      tools.task = false
+      permission.task = "deny"
+    }
+
     const configuredAgents = configTable(this.#options.config.agent)
     const model = context.request.model ?? this.#options.model ?? this.#options.config.model
     const config: Config = {

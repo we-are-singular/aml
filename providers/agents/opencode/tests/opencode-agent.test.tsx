@@ -130,8 +130,24 @@ describe("opencodeAgent()", () => {
     expect(config).toMatchObject({
       agent: {
         aml: {
-          permission: { "*": "allow", bash: "deny", edit: "deny", webfetch: "deny", websearch: "deny", write: "deny" },
-          tools: { "*": true, bash: false, edit: false, webfetch: false, websearch: false, write: false },
+          permission: {
+            "*": "allow",
+            bash: "deny",
+            edit: "deny",
+            task: "deny",
+            webfetch: "deny",
+            websearch: "deny",
+            write: "deny",
+          },
+          tools: {
+            "*": true,
+            bash: false,
+            edit: false,
+            task: false,
+            webfetch: false,
+            websearch: false,
+            write: false,
+          },
         },
       },
     })
