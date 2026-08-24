@@ -35,7 +35,7 @@ const result = await runtime.evaluate(
 - Authored order is preserved.
 - Every turn counts toward `maxTurnsPerAgent`; the default budget is 16 turns including the initial prompt.
 - The same Agent-scoped Tools, MCP servers, model, permissions, Sandbox view, and provider session apply to every turn.
-- When structured output is requested, the schema applies to the final turn.
+- When structured output is requested through the Agent `schema` prop or `evaluate(value, schema)`, the schema applies only to the final authored turn. If that turn omits the result Tool, built-in ACP providers send one schema-bearing repair prompt afterward.
 
 With tracing enabled, AML starts and ends each `agent.turn` around actual execution. A later follow-up cannot appear as started before the preceding turn ends. The initial turn has `kind="initial"`; later turns have `kind="follow-up"`, and all carry a one-based `index`. ACP messages, Tool updates, plans, and usage emitted during that prompt stay ordered inside its turn. See [Observability](/docs/observability/#agent-lifecycle-events).
 

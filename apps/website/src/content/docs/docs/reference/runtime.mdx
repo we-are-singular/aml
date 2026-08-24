@@ -81,6 +81,8 @@ const report = await evaluate(<Agent>Return the report.</Agent>, ReportSchema)
 
 The schema remains application-owned. AML derives the provider-facing JSON Schema from it and retains the authoritative validator. On the shared ACP path, AML validates every `aml_submit_result` candidate immediately so the Agent can correct invalid output in the same turn. The first valid candidate wins; later candidates are ignored. AML still enforces the schema at the final application boundary before returning the value.
 
+Use `<Agent schema={ReportSchema}>` instead when a nested Agent should validate its own boundary and contribute canonical JSON text to the surrounding AML tree. An Agent `schema` prop and the second `evaluate()` argument are alternative schema owners and cannot be combined on the same Agent.
+
 ## Errors and lifecycle events
 
 `EvaluationError` identifies invalid authored AML values and evaluator invariants. Provider failures, schema failures, capability validation, cancellation, and cleanup failures retain their original causes where possible. Catch `EvaluationError` when you specifically need to distinguish an AML authoring/runtime failure from an upstream failure.

@@ -111,7 +111,9 @@ The [Tools guide](/docs/cookbook/tools/) starts with a local function. The [Tool
 
 ### Can I get predictable JSON instead of a prose answer?
 
-Yes. AML can ask an agent for structured output and validate the returned value with a Standard Schema-compatible library such as Zod before your TypeScript code receives it.
+Yes. Use `<Agent schema={Result}>` when a nested Agent's validated result should continue through the AML tree as canonical JSON text. Use component-local `evaluate(<Agent>...</Agent>, Result)` when TypeScript needs the schema-inferred value for an application decision.
+
+Both forms apply the structured contract only to the final authored turn, so ordered `<FollowUp>` prompts can run first. Built-in ACP providers send one explicit schema-bearing repair prompt if that final turn omits the result Tool.
 
 Validation proves that the value has the expected shape; it does not prove that the model's claims are true or authorized. See [structured output](/docs/cookbook/structured-output/) for a complete example.
 

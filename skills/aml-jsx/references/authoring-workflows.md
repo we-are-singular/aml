@@ -67,7 +67,21 @@ async function Review() {
 
 ## Structured output
 
-Pass a Standard Schema-compatible schema as the second argument to `evaluate()`:
+Declare `schema` on a nested Agent when its validated result should continue through ordinary AML text composition:
+
+```tsx
+<Agent provider={Coordinator}>
+  Finding:
+  <Agent provider={OpenCode} schema={Finding}>
+    Inspect the authorization path.
+    <FollowUp>Challenge the evidence, then submit the final finding.</FollowUp>
+  </Agent>
+</Agent>
+```
+
+The validated value renders as canonical JSON text. FollowUps run in authored order, and structured output is requested only on the final authored turn.
+
+Pass the schema as the second argument to `evaluate()` when TypeScript needs its inferred value:
 
 ```tsx
 import { Agent, evaluate } from "@aml-jsx/sdk"
@@ -89,7 +103,7 @@ async function Triage() {
 }
 ```
 
-Use structured output for routing, validation, or application data. Use plain text for prompts and final prose.
+Use one schema owner per Agent: either its `schema` prop for JSON-text composition or `evaluate(value, schema)` for typed collection. Use plain text for prompts and final prose.
 
 ## System content and follow-ups
 

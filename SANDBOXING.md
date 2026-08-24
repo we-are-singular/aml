@@ -260,8 +260,10 @@ Agent-specific configuration, reject an unsupported MCP transport, or report tha
 enforceable. Those are profile capability differences, not reasons to fork the session lifecycle.
 
 JavaScript Tools use one AML-owned MCP bridge. Structured output uses one AML-owned MCP submission Tool on the final
-turn. Native Agent operations remain inside the Agent process; the outer Sandbox is their security boundary. ACP
-permission requests are workflow interactions and must not be represented as filesystem or process confinement.
+authored turn. If that turn omits the Tool call, the shared ACP engine sends one repair prompt with the Tool instruction
+and complete JSON Schema; Agent profiles do not own separate recovery algorithms. Native Agent operations remain
+inside the Agent process; the outer Sandbox is their security boundary. ACP permission requests are workflow
+interactions and must not be represented as filesystem or process confinement.
 
 ## Third-party Sandbox abstractions
 

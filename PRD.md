@@ -80,6 +80,10 @@ Without an active Sandbox, `<Agent>` runs according to its provider and `<Script
 
 Unknown provider and Tool data is validated at the boundary where it enters AML. Model-facing structured data must also provide JSON Schema.
 
+Structured output has two explicit owners. An Agent `schema` prop keeps the result in ordinary AML composition as canonical JSON text, which lets nested Agents feed validated data into later prompts. Component-local `evaluate(value, schema)` is the typed collection boundary for application decisions. One Agent cannot use both forms.
+
+FollowUps remain ordered turns in one provider-owned session. A structured contract applies only to the final authored turn, after every authored FollowUp has run. For built-in ACP profiles, omission of the submission Tool triggers exactly one shared-engine repair prompt containing the profile-specific Tool instruction and complete JSON Schema; a second omission fails the Agent. This bounded protocol recovery is owned by AML's shared ACP engine rather than individual profiles and does not establish a general workflow retry policy.
+
 ### Explicit resource ownership
 
 Sandbox and Workspace scopes acquire, expose, save, and release resources through explicit provider contracts. Working directories are not treated as security boundaries.
@@ -168,7 +172,7 @@ Stable public API contains behavior accepted in `SPEC.md` and proven through pro
 
 AML separates three provider responsibilities:
 
-- The shared ACP engine owns built-in coding-agent sessions, authored turns, MCP bridges, streaming, cancellation, and cleanup.
+- The shared ACP engine owns built-in coding-agent sessions, authored turns, MCP bridges, structured-output submission and bounded repair, streaming, cancellation, and cleanup.
 - Agent profiles own ACP executable selection, model and system mapping, native permission mapping, credentials, and provider-specific configuration.
 - Sandbox providers own disposable execution environments and expose bounded command execution plus safe long-lived process spawning.
 - Workspace providers own durable materialization, optional cross-process locking, persistence, and release.
@@ -287,7 +291,7 @@ Research references:
 - Effect and Flue runtimes
 - React-style mutable state
 - durable resume and distributed scheduling
-- retry and repair policies
+- general workflow retry policies beyond structured-output protocol recovery
 - human approval gates
 - CLI and TUI
 - generic plugin infrastructure
@@ -310,7 +314,6 @@ These remain product questions until resolved into `SPEC.md`:
 - When, if ever, should JSX siblings become implicitly concurrent?
 - Which trace events are stable public API?
 - What is the first useful artifact contract for large data?
-- Where should retries and schema repair live?
 - What should an Agent provider expose about inherited host configuration?
 - Should a strict capability mode reject provider-inherited MCP servers that cannot be disabled?
 - Should local MCP server execution location be explicit, or remain entirely adapter-owned?

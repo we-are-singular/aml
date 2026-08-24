@@ -119,7 +119,7 @@ workflows with `@aml-jsx/sdk`.
 
 | Primitive     | Purpose                                                                                                              |
 | ------------- | -------------------------------------------------------------------------------------------------------------------- |
-| `<Agent>`     | Runs one Agent session after its prompt, System content, capabilities, and child Agent results have resolved.        |
+| `<Agent>`     | Runs one Agent session and optionally validates its result with an Agent-owned `schema`.                             |
 | `<System>`    | Adds resolved content to the owning Agent's system prompt. Multiple System blocks are joined in authored order.      |
 | `<Tool>`      | Grants the owning Agent a JavaScript Tool created with `defineTool()`.                                               |
 | `<Skill>`     | Adds reusable inline or local-file instructions to the owning Agent.                                                 |
@@ -190,7 +190,7 @@ Every cell launches its Agent through the same shared ACP engine and `SandboxRun
 
 Docker, Daytona, and Modal smoke cells use `ghcr.io/we-are-singular/aml-agent-sandbox:dev`. Set `AML_SMOKE_SANDBOX_IMAGE` to run every image-backed cell against one explicit reference, such as an immutable version or digest. Provider factories default to `wearesingular/aml-agent-sandbox:latest`; applications can override it with their own image or snapshot.
 
-`<System>`, `<Skill>`, `<FollowUp>`, Context, and tree evaluation are runtime-owned. JavaScript Tools use one AML-owned invocation MCP bridge, and structured output uses one AML-owned final-turn submission Tool. Agent permissions default to read-write filesystem, shell, and network access; the active Sandbox remains the security boundary for model-controlled operations.
+`<System>`, `<Skill>`, `<FollowUp>`, Context, and tree evaluation are runtime-owned. JavaScript Tools use one AML-owned invocation MCP bridge. Structured output uses one AML-owned submission Tool on the final authored turn and one shared, schema-bearing repair prompt if that turn omits the Tool call. Agent permissions default to read-write filesystem, shell, and network access; the active Sandbox remains the security boundary for model-controlled operations.
 
 Provider factories retain typed vendor configuration and process environment inputs. Credentials normally remain in the selected host or Sandbox environment; an application may also pass explicit invocation environment variables without changing the AML tree.
 

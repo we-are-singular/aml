@@ -189,7 +189,7 @@ MCP server identity, allowlists, transport configuration, and lifecycle belong t
 
 ### Structured output
 
-`evaluate(value, schema)` asks for one structured `<Agent />` result. Built-in ACP profiles submit candidates through the invocation-owned `aml_submit_result` MCP tool. AML validates each candidate immediately with the supplied Standard Schema: an invalid candidate is returned to the Agent as a tool error, the first valid candidate is accepted, and later submissions are ignored. A turn that ends without a valid candidate rejects the evaluation.
+`evaluate(value, schema)` asks for one typed structured `<Agent />` result; `<Agent schema={schema}>` validates a nested Agent and contributes canonical JSON text to ordinary composition. Built-in ACP profiles submit candidates through the invocation-owned `aml_submit_result` MCP tool. AML validates each candidate immediately with the supplied Standard Schema: an invalid candidate is returned to the Agent as a tool error, the first valid candidate is accepted, and later submissions are ignored. If the final authored turn ends without an accepted candidate, AML sends one repair prompt that repeats the provider-specific Tool instruction and complete JSON Schema. A second omission rejects the evaluation.
 
 With tracing enabled, AML emits `agent.output` for every submission with its call number and `invalid`, `accepted`, or `ignored` status. Payloads are excluded from metadata-only traces and included only for a sink that explicitly enables content capture. See the [structured-output cookbook](/docs/cookbook/structured-output/) for the complete pattern.
 

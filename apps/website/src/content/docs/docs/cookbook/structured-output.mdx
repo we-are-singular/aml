@@ -81,6 +81,27 @@ synthesized:Explain this high finding: authorization is checked after mutation
 
 The deterministic provider returns a JSON-shaped value only when AML asks for JSON. The schema then validates that value before the typed `finding` is interpolated into the second `<Agent />`.
 
+## Structured nested Agents
+
+Use the Agent `schema` prop when a nested Agent should own validation without opening an imperative collection boundary:
+
+```tsx
+import { Agent, FollowUp } from "@aml-jsx/sdk"
+
+const workflow = (
+  <Agent provider={provider}>
+    Specialist finding:
+    <Agent provider={provider} schema={Finding}>
+      Inspect the change.
+      <FollowUp>Challenge the evidence, then submit the final finding.</FollowUp>
+    </Agent>
+    Synthesize the validated finding.
+  </Agent>
+)
+```
+
+The specialist's transformed result enters the parent prompt as canonical JSON text. FollowUps remain one ordered session; AML requests structured output only on the final authored turn. Use `evaluate(value, Finding)` instead when component code needs the schema-inferred value. The two forms are alternative schema owners and cannot be combined on one Agent.
+
 ## How it works
 
 <Steps>
@@ -88,7 +109,7 @@ The deterministic provider returns a JSON-shaped value only when AML asks for JS
 1. `evaluate(value, Finding)` requests structured output from the nearest Agent provider.
 2. AML converts the application-owned schema to JSON Schema for the provider request. Zod is one implementation of the Standard Schema contract.
 3. On the shared ACP path, the Agent submits candidates through AML's `aml_submit_result` MCP tool. AML immediately validates each candidate and returns validation errors to the Agent so it can correct the result in the same turn.
-4. The first valid candidate is accepted. Later submissions are ignored, while missing or never-valid output rejects the evaluation.
+4. The first valid candidate is accepted. Later submissions are ignored. If the final authored turn omits a valid candidate, AML sends one repair prompt with the Tool instruction and complete JSON Schema; a second omission rejects the evaluation.
 5. AML validates the accepted value at the application boundary before returning the schema's output type.
 6. The second `<Agent />` remains text-producing. In this example, structured output applies to the specialist, not to the final response.
 
@@ -101,7 +122,7 @@ The deterministic provider returns a JSON-shaped value only when AML asks for JS
 
 ## Failure and security notes
 
-- On the shared ACP path, invalid candidates are recoverable tool errors until the turn ends. Missing output, or a turn that ends without any valid candidate, rejects the evaluation.
+- On the shared ACP path, invalid candidates are recoverable Tool errors. A final authored turn without an accepted candidate receives one schema-bearing repair prompt; missing output after that repair rejects the evaluation.
 - After AML accepts the first valid candidate, repeated submissions cannot replace it. With tracing enabled, submissions appear as `agent.output` events with `invalid`, `accepted`, or `ignored` status.
 - The repository example uses a deterministic provider; it does not prove that every Agent provider supports the same native structured-output mechanism.
 - Do not treat a valid shape as authorization to perform an external side effect. Validate business rules before writing files, merging code, or sending messages.
