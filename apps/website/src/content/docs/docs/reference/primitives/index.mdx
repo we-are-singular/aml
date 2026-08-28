@@ -1,12 +1,12 @@
 ---
 title: AML primitives
-description: Reference the eleven stable AML authoring primitives, their placement rules, results, and composition boundaries.
+description: Reference the twelve stable AML authoring primitives, their placement rules, results, and composition boundaries.
 ---
 
 import { Aside } from "@astrojs/starlight/components"
 import PrimitiveCatalog from "../../../../../components/docs/PrimitiveCatalog.astro"
 
-AML has eleven stable authoring primitives. Each exists because the runtime must own a distinct piece of evaluation, capability scope, or resource lifecycle. Branching, finite iteration, retries, concurrency, and data transformation remain ordinary TypeScript.
+AML has twelve stable authoring primitives. Each exists because the runtime must own a distinct piece of evaluation, capability scope, or resource lifecycle. Branching, finite iteration, retries, and data transformation remain ordinary TypeScript; [`<Parallel>`](/docs/reference/primitives/parallel/) is the explicit boundary for independent AML branches.
 
 <PrimitiveCatalog />
 
@@ -15,6 +15,7 @@ AML has eleven stable authoring primitives. Each exists because the runtime must
 | Responsibility                | Start with                                                | Add when needed                                                                                                                                                                                                                                             |
 | ----------------------------- | --------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Run a provider session        | [`<Agent />`](/docs/reference/primitives/agent/)          | [`<System />`](/docs/reference/primitives/system/), [`<Tool />`](/docs/reference/primitives/tool/), [`<Mcp />`](/docs/reference/primitives/mcp/), [`<Skill />`](/docs/reference/primitives/skill/), [`<FollowUp />`](/docs/reference/primitives/follow-up/) |
+| Run independent AML branches  | [`<Parallel />`](/docs/reference/primitives/parallel/)    | Function components or Fragments when one branch contains ordered steps                                                                                                                                                                                     |
 | Execute a command             | [`<Script />`](/docs/reference/primitives/script/)        | [`<Sandbox />`](/docs/reference/primitives/sandbox/) when it must run in a selected environment                                                                                                                                                             |
 | Materialize or preserve files | [`<Workspace />`](/docs/reference/primitives/workspace/)  | [`<File />`](/docs/reference/primitives/file/) and, when commands are needed, [`<Sandbox />`](/docs/reference/primitives/sandbox/)                                                                                                                          |
 | Group authored values         | [Fragment `<>…</>`](/docs/reference/primitives/fragment/) | Function components and ordinary TypeScript                                                                                                                                                                                                                 |

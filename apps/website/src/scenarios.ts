@@ -41,28 +41,33 @@ export interface Scenario {
   duration: number
 }
 
-const REVIEW_CODE = `import { Agent, AmlRuntime, evaluate } from "@aml-jsx/sdk"
+const REVIEW_CODE = `import { Agent, AmlRuntime, Parallel, Tool } from "@aml-jsx/sdk"
 
-async function Review() {
-  const [correctness, maintainability] = await Promise.all([
-    evaluate(
-      <Agent provider={OpenCode} system="Find concrete correctness defects.">
-        <Tool use={ReadSource} />
-        Review src/index.ts.
-      </Agent>,
-    ),
-    evaluate(
-      <Agent provider={OpenCode} system="Find proportionate improvements.">
-        <Tool use={ReadSource} />
-        Review src/index.ts.
-      </Agent>,
-    ),
-  ])
+function CorrectnessLane() {
+  return (
+    <Agent provider={OpenCode} system="Find concrete correctness defects.">
+      <Tool use={ReadSource} />
+      Review src/index.ts.
+    </Agent>
+  )
+}
 
+function MaintainabilityLane() {
+  return (
+    <Agent provider={OpenCode} system="Find proportionate improvements.">
+      <Tool use={ReadSource} />
+      Review src/index.ts.
+    </Agent>
+  )
+}
+
+function Review() {
   return (
     <Agent provider={OpenCode} system="Synthesize evidence, invent nothing.">
-      Correctness: {correctness}
-      Maintainability: {maintainability}
+      <Parallel>
+        <CorrectnessLane />
+        <MaintainabilityLane />
+      </Parallel>
     </Agent>
   )
 }
@@ -77,28 +82,32 @@ Maintainability: extract provider dispatch into a named helper.
 const review: Scenario = {
   id: "review",
   tab: "parallel specialists",
-  title: "Promise.all() concurrency + ordered synthesis",
+  title: "<Parallel> concurrency + ordered synthesis",
   file: "examples/src/core/concurrency.tsx",
   code: REVIEW_CODE,
   nodes: [
     { id: "tool", label: "<Tool /> read_source", x: 150, y: 30 },
     { id: "spec-a", label: "<Agent /> correctness", x: 150, y: 100 },
     { id: "spec-b", label: "<Agent /> maintainability", x: 420, y: 100 },
-    { id: "synth", label: "<Agent /> synthesize", x: 280, y: 185 },
-    { id: "root", label: "<Review />", x: 280, y: 258 },
+    { id: "parallel", label: "<Parallel />", x: 280, y: 160 },
+    { id: "synth", label: "<Agent /> synthesize", x: 280, y: 220 },
+    { id: "root", label: "<Review />", x: 280, y: 280 },
   ],
   edges: [
     { id: "e-root", from: "root", to: "synth" },
-    { id: "e-a", from: "synth", to: "spec-a" },
-    { id: "e-b", from: "synth", to: "spec-b" },
+    { id: "e-parallel", from: "synth", to: "parallel" },
+    { id: "e-a", from: "parallel", to: "spec-a" },
+    { id: "e-b", from: "parallel", to: "spec-b" },
     { id: "e-tool", from: "spec-a", to: "tool" },
   ],
   events: [
-    { at: 0, kind: "code", lines: [27] },
+    { at: 0, kind: "code", lines: [32] },
     { at: 0, kind: "trace", text: "evaluation:start tree=<Review />", tone: "info" },
     { at: 350, kind: "node", id: "root", state: "resolving" },
-    { at: 350, kind: "code", lines: [3] },
-    { at: 750, kind: "code", lines: [4] },
+    { at: 350, kind: "code", lines: [21] },
+    { at: 750, kind: "node", id: "parallel", state: "resolving" },
+    { at: 750, kind: "edge", id: "e-parallel", state: "hot" },
+    { at: 750, kind: "code", lines: [24] },
     { at: 900, kind: "node", id: "spec-a", state: "resolving" },
     { at: 900, kind: "edge", id: "e-a", state: "hot" },
     { at: 900, kind: "edge", id: "e-b", state: "hot" },
@@ -108,33 +117,35 @@ const review: Scenario = {
     { at: 1500, kind: "node", id: "tool", state: "done" },
     { at: 1500, kind: "trace", text: "tool:grant read_source → correctness", tone: "ok" },
     { at: 1650, kind: "node", id: "spec-b", state: "resolving" },
-    { at: 1650, kind: "code", lines: [12, 13] },
+    { at: 1650, kind: "code", lines: [14, 15] },
     { at: 1950, kind: "trace", text: "tool:grant read_source → maintainability", tone: "ok" },
     { at: 2150, kind: "node", id: "spec-a", state: "running" },
     { at: 2150, kind: "trace", text: "agent:start correctness provider=opencode", tone: "info" },
     { at: 2400, kind: "node", id: "spec-b", state: "running" },
     { at: 2400, kind: "trace", text: "agent:start maintainability provider=opencode", tone: "info" },
-    { at: 2400, kind: "code", lines: [6, 12] },
+    { at: 2400, kind: "code", lines: [5, 14] },
     { at: 3300, kind: "trace", text: 'tool:call read_source path="src/index.ts"', tone: "info" },
     { at: 3550, kind: "trace", text: "tool:result 4_812 chars", tone: "ok" },
     { at: 4600, kind: "node", id: "spec-b", state: "done" },
     { at: 4600, kind: "edge", id: "e-b", state: "done" },
     { at: 4600, kind: "trace", text: "agent:done maintainability ms=2_200 (finishes first)", tone: "ok" },
-    { at: 4600, kind: "code", lines: [6] },
+    { at: 4600, kind: "code", lines: [14] },
     { at: 5400, kind: "node", id: "spec-a", state: "done" },
     { at: 5400, kind: "edge", id: "e-a", state: "done" },
     { at: 5400, kind: "trace", text: "agent:done correctness ms=3_250", tone: "ok" },
+    { at: 5600, kind: "node", id: "parallel", state: "done" },
+    { at: 5600, kind: "edge", id: "e-parallel", state: "done" },
     { at: 5700, kind: "node", id: "synth", state: "resolving" },
-    { at: 5700, kind: "code", lines: [19, 20] },
+    { at: 5700, kind: "code", lines: [23, 24] },
     { at: 5700, kind: "trace", text: "agent:prepare synthesize prompt += 2 results (authored order)", tone: "info" },
     { at: 6100, kind: "node", id: "synth", state: "running" },
     { at: 6100, kind: "trace", text: "agent:start synthesize provider=opencode", tone: "info" },
-    { at: 6100, kind: "code", lines: [21, 22] },
+    { at: 6100, kind: "code", lines: [23, 28] },
     { at: 7900, kind: "node", id: "synth", state: "done" },
     { at: 7900, kind: "edge", id: "e-root", state: "done" },
     { at: 7900, kind: "trace", text: "agent:done synthesize ms=1_800", tone: "ok" },
     { at: 8100, kind: "node", id: "root", state: "done" },
-    { at: 8100, kind: "code", lines: [27] },
+    { at: 8100, kind: "code", lines: [32] },
     { at: 8100, kind: "trace", text: "evaluation:end ms=8_100 output=text", tone: "ok" },
     { at: 8300, kind: "output", text: REVIEW_OUTPUT },
   ],

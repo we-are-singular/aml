@@ -47,6 +47,22 @@ Codex, GitHub Copilot, GLM, OpenCode, and Pi use the same ACP lifecycle on the t
 
 `<Agent schema={Result}>` validates that Agent's structured result and contributes canonical JSON text to ordinary AML composition. An authored `<FollowUp>` sequence remains valid: AML asks for structured output only on the final authored turn. Use `evaluate(<Agent>...</Agent>, Result)` instead when component code needs the schema-inferred value.
 
+`<Parallel>` evaluates independent AML branches concurrently, waits for every branch and its cleanup to settle, then
+contributes successful text in authored order. Agent-owned `schema` values remain canonical JSON text inside a branch.
+`AmlRuntime.maxConcurrentAgents` still bounds active Agent sessions; `<Parallel>` adds no second concurrency limit.
+When any branch fails, it throws `ParallelError` with ordered, zero-based `{ branchIndex, cause }` entries after all
+branches settle. It does not retry, cancel siblings after a failure, or roll back completed side effects.
+
+```tsx
+<Agent provider={Pi}>
+  <Parallel>
+    <Agent>Review correctness.</Agent>
+    <Agent>Review maintainability.</Agent>
+  </Parallel>
+  Synthesize the reviews.
+</Agent>
+```
+
 An unsandboxed `<Script />` runs as a trusted host process from `AmlRuntimeOptions.cwd`, defaulting to `process.cwd()`. Inside an active `<Sandbox />`, it runs only through that Sandbox runtime and never falls back to the host. Its optional portable `cwd` resolves from the runtime cwd on the host or from the active Sandbox root.
 
 The public factory names are `codexAgent()`, `copilotAgent()`, `glmAgent()`, `opencodeAgent()`, and `piAgent()`.

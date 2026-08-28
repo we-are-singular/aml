@@ -159,11 +159,17 @@ AML:
 5. runs the parent Agent last
 6. returns the parent Agent's final text
 
-AML evaluates JSX siblings from left to right. Independent work can run concurrently through ordinary JavaScript:
+AML evaluates JSX siblings from left to right. Independent text-producing branches use an explicit `<Parallel>`
+boundary:
 
 ```tsx
-const [review, audit] = await Promise.all([evaluate(<Reviewer />, ReviewResult), evaluate(<Auditor />, AuditResult)])
+<Parallel>
+  <Reviewer />
+  <Auditor />
+</Parallel>
 ```
+
+Component code may instead use `Promise.all(evaluate(...))` when it needs named or typed branch values.
 
 Implicit sibling concurrency is outside the normative evaluation model. Parent/child dependencies remain post-order.
 
@@ -214,6 +220,7 @@ AML cannot automatically roll back arbitrary effects already performed by an Age
 | `<Fragment>` / `<>`                | Group authored siblings                                              | Ordered child results      |
 | `AmlRuntime`                       | Own one complete evaluation                                          | Final string               |
 | `<Agent>`                          | Execute one Agent boundary                                           | Final text                 |
+| `<Parallel>`                       | Evaluate independent AML branches concurrently                       | Ordered branch text        |
 | `<System>`                         | Contribute resolved text to an Agent's system prompt                 | System descriptor          |
 | `defineAgentProvider()`            | Define an Agent harness adapter                                      | `AgentProvider`            |
 | `<Tool>`                           | Grant a JavaScript capability                                        | Tool descriptor            |
@@ -239,18 +246,18 @@ AML cannot automatically roll back arbitrary effects already performed by an Age
 
 The normative surface is delivered in phases so the public API grows only after each earlier boundary has deterministic proof.
 
-| Phase                  | Surface                                                        | Purpose                                                                               |
-| ---------------------- | -------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
-| Foundation             | JSX values, Fragments, async components, `AmlRuntime`          | Prove single-invocation asynchronous evaluation                                       |
-| MVP 1                  | `<Agent>`, `<System>`, `defineAgentProvider()`                 | Establish the provider-neutral execution and message-channel boundary                 |
-| MVP 2                  | `<Tool>`, `defineTool()`                                       | Add scoped JavaScript capabilities                                                    |
-| MVP 3                  | `<Skill>`                                                      | Add reusable instruction resolution                                                   |
-| MVP 4                  | `<Sandbox>`, `defineSandboxProvider()`                         | Add ephemeral execution scope                                                         |
-| MVP 5                  | `<Workspace>`, `defineWorkspaceProvider()`                     | Add durable filesystem scope and complete the MVP                                     |
-| Post-MVP capabilities  | `<Mcp>`, `defineMcpServer()`                                   | Attach MCP servers without making the SDK own an Agent harness                        |
-| Filesystem composition | `<File>`, `<Script>`                                           | Materialize resolved text and run explicit commands on the host or in resource scopes |
-| Post-MVP orchestration | `evaluate()`, structured output, `<FollowUp>`; draft: `<Loop>` | Add richer dataflow and same-session or iterative execution                           |
-| Draft late surface     | `createContext()`, `useContext()`, `<Context.Provider>`        | Add immutable dependency scope only after the execution and resource model is stable  |
+| Phase                  | Surface                                                                      | Purpose                                                                               |
+| ---------------------- | ---------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| Foundation             | JSX values, Fragments, async components, `AmlRuntime`                        | Prove single-invocation asynchronous evaluation                                       |
+| MVP 1                  | `<Agent>`, `<System>`, `defineAgentProvider()`                               | Establish the provider-neutral execution and message-channel boundary                 |
+| MVP 2                  | `<Tool>`, `defineTool()`                                                     | Add scoped JavaScript capabilities                                                    |
+| MVP 3                  | `<Skill>`                                                                    | Add reusable instruction resolution                                                   |
+| MVP 4                  | `<Sandbox>`, `defineSandboxProvider()`                                       | Add ephemeral execution scope                                                         |
+| MVP 5                  | `<Workspace>`, `defineWorkspaceProvider()`                                   | Add durable filesystem scope and complete the MVP                                     |
+| Post-MVP capabilities  | `<Mcp>`, `defineMcpServer()`                                                 | Attach MCP servers without making the SDK own an Agent harness                        |
+| Filesystem composition | `<File>`, `<Script>`                                                         | Materialize resolved text and run explicit commands on the host or in resource scopes |
+| Post-MVP orchestration | `evaluate()`, structured output, `<Parallel>`, `<FollowUp>`; draft: `<Loop>` | Add richer dataflow, explicit concurrency, and same-session or iterative execution    |
+| Draft late surface     | `createContext()`, `useContext()`, `<Context.Provider>`                      | Add immutable dependency scope only after the execution and resource model is stable  |
 
 This is a delivery order, not a hierarchy of importance. Later primitives remain normative desired state, but they must not shape earlier implementations beyond the explicit extension points in their contracts.
 
@@ -468,7 +475,8 @@ A child Agent is deterministic authored composition:
 
 The child Agents finish before the parent Agent session begins. Their final texts are inserted into the parent input at their authored positions. They do not become distinct provider message roles.
 
-AML evaluates these siblings left to right. Explicit `Promise.all(evaluate(...))` is the normative parallel form.
+AML evaluates these siblings left to right. Wrap independent text-producing branches in `<Parallel>`; use
+`Promise.all(evaluate(...))` when component code needs to inspect or transform the individual results.
 
 ### 5.4 Agent result
 
@@ -935,19 +943,46 @@ Nested calls share the root evaluation's:
 
 ### 10.2 Parallel dataflow
 
-Independent calls may be started together:
+`<Parallel>` is a normal AML component built on component-local `evaluate()`. Each recursively flattened child array
+entry becomes an independent branch; empty values are ignored. A Fragment remains one branch, so its children keep
+their ordinary sequential semantics.
 
 ```tsx
-const [review, audit] = await Promise.all([evaluate(<Reviewer />, ReviewResult), evaluate(<Auditor />, AuditResult)])
+<Agent>
+  <Parallel>
+    <Reviewer />
+    {auditors.map(auditor => (
+      <Auditor kind={auditor} />
+    ))}
+  </Parallel>
+  Synthesize the completed reviews.
+</Agent>
 ```
 
-`maxConcurrentAgents` limits active Agent sessions. `Promise.all()` preserves result array order even when Agents finish out of order.
+Branches start together and collect into isolated text targets while active. `<Parallel>` waits for every branch to
+settle, including owned cleanup, and contributes successful text in authored branch order rather than completion order.
+An Agent with a `schema` prop contributes its validated canonical JSON text through the same composition channel.
+`<Parallel>` itself remains a text boundary; a schema-bearing `evaluate(<Parallel>...</Parallel>, schema)` does not turn
+several branch Agents into one structured root result.
+
+If any branch rejects, `<Parallel>` throws `ParallelError` only after every branch has settled. Its `failures` array is
+ordered by authored branch position and contains `{ branchIndex, cause }`, where `branchIndex` is zero-based and `cause`
+is that branch's rejection. One and multiple failures use the same error type. `<Parallel>` does not expose partial
+results, retry branches, cancel healthy siblings after a failure, or roll back Tool, filesystem, network, or other side
+effects that completed before rejection.
+
+Direct `<System>`, `<Tool>`, and other Agent-owned descriptors inside `<Parallel>` do not mutate an Agent surrounding the
+component. Put those descriptors inside the branch's own `<Agent>`.
+
+`maxConcurrentAgents` limits active Agent sessions inside `<Parallel>`. The component adds no independent concurrency
+prop or scheduler; non-Agent branch work starts with ordinary JavaScript promise concurrency.
 
 The scheduler belongs to one evaluation domain. An Agent resolves its authored children, capabilities, Sandbox view, and structured-output contract before requesting a slot. AML reserves its Agent-call budget and then queues the complete provider call in ready order. A slot is held until `AgentProvider.run()` settles, including any provider-owned session and capability cleanup performed before that Promise resolves.
 
 `maxConcurrentAgents: 0` disables the concurrency limit. A positive value is the maximum number of provider calls active in that evaluation; separate root evaluations have separate schedulers. Aborting the evaluation propagates the caller's signal to active providers, rejects queued Agents with the caller's cancellation reason, and prevents those queued providers from starting. One Agent failure does not implicitly abort independent sibling work that the application already started.
 
-Use `Promise.allSettled()` only when partial failure is an explicit application decision. AML itself does not silently convert Agent failures into partial results.
+Component code may still start `Promise.all(evaluate(...))` when it needs named or schema-inferred values rather than
+ordered text composition. Use `Promise.allSettled()` only when partial failure is an explicit application decision.
 
 ## 11. Scoped context (Draft)
 

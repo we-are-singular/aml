@@ -40,30 +40,32 @@ Use nested Agents for dataflow dependencies. Do not use them merely for visual g
 
 ## Explicit parallel work
 
-JSX children resolve in authored order. Use `Promise.all()` inside an async component when branches are genuinely independent:
+JSX children resolve in authored order. Use `<Parallel>` when independent branch text should flow directly into the
+surrounding AML tree:
 
 ```tsx
-import { Agent, evaluate } from "@aml-jsx/sdk"
+import { Agent, Parallel } from "@aml-jsx/sdk"
 
-async function Review() {
-  const [correctness, maintainability] = await Promise.all([
-    evaluate(<Agent provider={OpenCode}>Find concrete correctness defects.</Agent>),
-    evaluate(<Agent provider={Codex}>Find proportionate maintainability improvements.</Agent>),
-  ])
-
+function Review() {
   return (
     <Agent provider={OpenCode}>
-      Correctness:
-      {correctness}
-      Maintainability:
-      {maintainability}
+      <Parallel>
+        <Agent provider={OpenCode}>Find concrete correctness defects.</Agent>
+        <Agent provider={Codex}>Find proportionate maintainability improvements.</Agent>
+      </Parallel>
       Produce one final review.
     </Agent>
   )
 }
 ```
 
-`evaluate()` requires an active AML component evaluation. Never call it as a detached top-level substitute for `runtime.evaluate()`.
+`<Parallel>` waits for every branch and its cleanup, preserves authored output order, and reports failures through
+`ParallelError.failures`. It does not retry, cancel healthy siblings after a failure, or roll back successful side
+effects. `maxConcurrentAgents` remains the Agent-session limit.
+
+Use `Promise.all([evaluate(...), evaluate(...)])` inside an async component when JavaScript needs named or
+schema-inferred branch values. `evaluate()` requires an active AML component evaluation; never call it as a detached
+top-level substitute for `runtime.evaluate()`.
 
 ## Structured output
 

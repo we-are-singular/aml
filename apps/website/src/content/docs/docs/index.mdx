@@ -39,7 +39,7 @@ import { CardGrid, LinkCard } from "@astrojs/starlight/components"
   </CardGrid>
 </div>
 
-AML is an asynchronous TypeScript and JSX runtime for building executable agent workflows. JSX describes the dependency tree; [`AmlRuntime`](/docs/reference/runtime/) evaluates it, opens scoped resources, runs provider sessions, and cleans up in reverse order. It is not a UI framework or a second workflow language—ordinary TypeScript still owns control flow and concurrency.
+AML is an asynchronous TypeScript and JSX runtime for building executable agent workflows. JSX describes the dependency tree; [`AmlRuntime`](/docs/reference/runtime/) evaluates it, opens scoped resources, runs provider sessions, and cleans up in reverse order. It is not a UI framework or a second workflow language—ordinary TypeScript owns control flow, while [`<Parallel>`](/docs/reference/primitives/parallel/) explicitly marks independent AML branches.
 
 ## Install AML
 

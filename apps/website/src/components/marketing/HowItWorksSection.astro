@@ -2,28 +2,29 @@
 import { withBase } from "../../config/site"
 import { highlightTsx } from "../../highlight"
 
-const source = `import { Agent, evaluate, System, Tool } from "@aml-jsx/sdk"
+const source = `import { Agent, Parallel, System, Tool } from "@aml-jsx/sdk"
 
-async function Review() {
-  const [correctness, maintainability] = await Promise.all([
-    evaluate(
-      <Agent provider={OpenCode}>
-        <Tool use={ReadSource} />
-        Review src/index.ts for correctness defects.
-      </Agent>,
-    ),
-    evaluate(
-      <Agent provider={OpenCode}>
-        Review src/index.ts for maintainability issues.
-      </Agent>,
-    ),
-  ])
+function CorrectnessLane() {
+  return <Agent provider={OpenCode}>
+    <Tool use={ReadSource} />
+    Review src/index.ts for correctness defects.
+  </Agent>
+}
 
+function MaintainabilityLane() {
+  return <Agent provider={OpenCode}>
+    Review src/index.ts for maintainability issues.
+  </Agent>
+}
+
+function Review() {
   return (
     <Agent provider={OpenCode}>
       <System>Synthesize evidence without inventing findings.</System>
-      Correctness: {correctness}
-      Maintainability: {maintainability}
+      <Parallel>
+        <CorrectnessLane />
+        <MaintainabilityLane />
+      </Parallel>
       Produce the final review.
     </Agent>
   )
@@ -44,7 +45,7 @@ const highlightedSource = await highlightTsx(source)
         </h2>
         <p class="reveal mt-5 text-[15px] leading-relaxed text-ink-soft [--reveal-delay:120ms]">
           AML resolves every value before the boundary that consumes it. JSX describes the dependency structure;
-          ordinary TypeScript still owns branching, concurrency, and data flow.
+          ordinary TypeScript owns branching and data flow, while <code>&lt;Parallel&gt;</code> marks independent work.
         </p>
         <div class="reveal mt-7 flex flex-wrap gap-x-6 gap-y-3 [--reveal-delay:160ms]">
           <a

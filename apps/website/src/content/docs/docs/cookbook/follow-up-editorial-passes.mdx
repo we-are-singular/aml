@@ -127,7 +127,7 @@ The important observable behavior is session shape: the provider receives one in
 - Use separate evaluations for schema-validated editorial stages: outline → host validation → critique → host policy → final writer. This exposes intermediate values at the cost of multiple Agent sessions.
 - Keep a fixed FollowUp chain for predictable editorial passes where provider-owned history is desirable and no host decision belongs between turns.
 - Add a final structured-output boundary only if the provider supports it for the final turn; earlier FollowUp responses remain session history rather than typed host values.
-- For independent reviewers, use separate `evaluate()` calls and explicit JavaScript concurrency instead of placing parallel work in one `<FollowUp />` chain.
+- For independent reviewers whose text flows directly onward, use `<Parallel>` instead of placing concurrent work in one `<FollowUp />` chain. Use separate `evaluate()` calls when host code needs each result.
 
 ## API and source links
 

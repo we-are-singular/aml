@@ -83,9 +83,19 @@ The schema remains application-owned. AML derives the provider-facing JSON Schem
 
 Use `<Agent schema={ReportSchema}>` instead when a nested Agent should validate its own boundary and contribute canonical JSON text to the surrounding AML tree. An Agent `schema` prop and the second `evaluate()` argument are alternative schema owners and cannot be combined on the same Agent.
 
+## Parallel branches
+
+[`<Parallel>`](/docs/reference/primitives/parallel/) uses component-local `evaluate()` to start independent AML branches
+inside the current evaluation domain. Branches inherit the active Context, Sandbox, Workspace, trace ancestry, limits,
+and cancellation. Their output stays isolated until every branch settles, then renders in authored order.
+
+`maxConcurrentAgents` remains the only Agent-session concurrency limit. `<Parallel>` adds no second scheduler. Use
+manual `Promise.all(evaluate(...))` when component code needs individual or schema-inferred results instead of direct
+text composition.
+
 ## Errors and lifecycle events
 
-`EvaluationError` identifies invalid authored AML values and evaluator invariants. Provider failures, schema failures, capability validation, cancellation, and cleanup failures retain their original causes where possible. Catch `EvaluationError` when you specifically need to distinguish an AML authoring/runtime failure from an upstream failure.
+`EvaluationError` identifies invalid authored AML values and evaluator invariants. Provider failures, schema failures, capability validation, cancellation, and cleanup failures retain their original causes where possible. Catch `EvaluationError` when you specifically need to distinguish an AML authoring/runtime failure from an upstream failure. `ParallelError` reports one or more failed [`<Parallel>`](/docs/reference/primitives/parallel/#failure-semantics) branches through ordered `{ branchIndex, cause }` entries.
 
 `start` and `finish` listeners are awaited. Trace sinks are dispatched according to their own policy and do not delay workflow completion:
 

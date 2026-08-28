@@ -63,7 +63,7 @@ Unknown objects, DOM-like intrinsic elements, cyclic arrays, and cyclic nodes ar
 
 <Aside type="note" title="Fragments are grouping, not scheduling">
   A fragment adds no prompt text and no provider lifecycle. It also does not create implicit concurrency. Use
-  `Promise.all()` when work may safely overlap.
+  [`<Parallel>`](/docs/reference/primitives/parallel/) when independent text-producing branches may safely overlap.
 </Aside>
 
 ## Runtime-owned primitive nodes
@@ -81,6 +81,10 @@ Built-in primitive components are marked for special evaluation. They are not or
 | [`<>…</>`](/docs/reference/primitives/fragment/)                                                                                                                                                                                                            | Stable | JSX runtime         | Groups authored values without adding another boundary.                        |
 
 Placement is part of the contract. For example, `<Tool />` and `<Mcp />` are valid only inside `<Agent />`, while `<File />` requires `<Workspace />` and cannot be nested inside `<Sandbox />`. `<Script />` may execute on the host without a Sandbox; an enclosing Sandbox changes its execution location.
+
+`<Parallel>` is intentionally different from the runtime-owned nodes above: it is a normal exported function component
+built on component-local `evaluate()`. That existing boundary supplies inherited scopes, limits, cancellation, tracing,
+and cleanup joining without adding a second evaluator primitive.
 
 ## Post-order consumers versus lexical scopes
 
