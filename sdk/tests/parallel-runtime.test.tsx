@@ -9,6 +9,7 @@ import { Parallel, ParallelError } from "../src/components/parallel/parallel.js"
 import { Sandbox } from "../src/components/sandbox/sandbox.js"
 import { System } from "../src/components/system/system.js"
 import { AmlRuntime } from "../src/core/aml-runtime.js"
+import { EvaluationError } from "../src/core/evaluation-error.js"
 import { DeterministicAgentProvider } from "../src/testing/deterministic-agent-provider.js"
 import { DeterministicSandboxProvider } from "../src/testing/deterministic-sandbox-provider.js"
 
@@ -285,6 +286,71 @@ describe("Parallel", () => {
     finishSecond?.()
 
     await expect(evaluation).rejects.toMatchObject({ failures: [{ branchIndex: 0 }] })
+    expect(sandboxProvider.releases).toHaveLength(1)
+  })
+
+  it("reports branch cleanup failures only after every sibling settles", async () => {
+    const cleanupFailure = new Error("branch cleanup failed")
+    let finishSecond: (() => void) | undefined
+    const secondGate = new Promise<void>(resolve => {
+      finishSecond = resolve
+    })
+    const events: string[] = []
+    const sandboxProvider = new DeterministicSandboxProvider({
+      release() {
+        events.push("first:cleanup")
+        throw cleanupFailure
+      },
+    })
+
+    async function SlowLane() {
+      events.push("second:start")
+      await secondGate
+      events.push("second:end")
+      return "second"
+    }
+
+    const evaluation = new AmlRuntime().evaluate(
+      <Parallel>
+        <Sandbox provider={sandboxProvider}>first</Sandbox>
+        <SlowLane />
+      </Parallel>
+    )
+
+    await vi.waitFor(() => {
+      expect(events).toContain("first:cleanup")
+      expect(events).toContain("second:start")
+    })
+    let settled = false
+    void evaluation.then(
+      () => {
+        settled = true
+      },
+      () => {
+        settled = true
+      }
+    )
+    await Promise.resolve()
+    expect(settled).toBe(false)
+    finishSecond?.()
+
+    let error: unknown
+
+    try {
+      await evaluation
+    } catch (cause) {
+      error = cause
+    }
+
+    expect(error).toBeInstanceOf(ParallelError)
+    if (!(error instanceof ParallelError)) {
+      throw new Error("Expected ParallelError")
+    }
+    expect(error.failures).toHaveLength(1)
+    expect(error.failures[0]?.branchIndex).toBe(0)
+    expect(error.failures[0]?.cause).toBeInstanceOf(EvaluationError)
+    expect(error.failures[0]?.cause).toMatchObject({ cause: cleanupFailure })
+    expect(events).toContain("second:end")
     expect(sandboxProvider.releases).toHaveLength(1)
   })
 
