@@ -58,6 +58,57 @@ aml run ./workflow.tsx --trace --capture-content
 
 Trace sinks are captured when the runtime is constructed. AML does not await a sink's returned promise. Synchronous throws and rejected promises go to `onTraceError` when configured; telemetry failure does not change the workflow result.
 
+## Application-owned spans
+
+Automatic component spans cover both a function component call and resolution of its returned subtree. They cannot
+isolate a narrower deterministic phase such as validation, retrieval, or persistence. Measure that work with
+`withTraceSpan()` inside an active function component:
+
+```tsx
+async function Review({ findings }: { findings: readonly Finding[] }) {
+  return await withTraceSpan("review.validate", async () => await validateFindings(findings))
+}
+```
+
+The runtime allocates an `application` span beneath the active component or enclosing application span. It closes the
+span on success, thrown failure, or cancellation without changing the callback result. Calls outside an active
+component, including detached calls after component settlement, fail. Nested calls remain correctly parented across
+`evaluate()`, `<Parallel>`, and concurrent async work.
+
+Applications supply only the span name and callback. They never supply trace identity, parent fields, metadata, or
+content.
+
+## Run summaries
+
+`createTraceSummaryCollector()` derives content-free summaries from the same public trace stream:
+
+```tsx
+const summaries = createTraceSummaryCollector()
+const runtime = new AmlRuntime({
+  onTraceError: (error, event) => reportTraceFailure(error, event),
+  trace: summaries.trace,
+})
+
+function summaryFor(runId: string) {
+  const summary = summaries.forRun(runId)
+  summaries.deleteRun(runId)
+  return summary
+}
+```
+
+`forRun()` requires an explicit evaluation `runId`; there is no latest-run API that becomes ambiguous when a runtime
+handles overlapping evaluations. Capture that identity from the public `start` event using the request-correlation
+pattern in the cookbook below. Completed summaries report evaluation status and wall duration, Agent session and turn
+timing, Tool and resource timing, named application spans, provider-reported usage entries, and Agent cleanup outcomes.
+Timing aggregates contain `count`, summed `totalDurationMs`, and `slowestMs` when at least one span was observed. The
+collector does not rewrite evaluation status. Trace-consumer failures remain separate on the runtime's existing
+`onTraceError` channel.
+
+`providerUsage` is empty when the provider reports no usage. When ACP supplies usage, AML retains the serialized JSON
+string rather than promising token fields that may not exist. A turn is one provider/ACP prompt request, not one model
+call. Summaries do not infer provider retries, cache behavior, costs, or billing data. See [Correlate application spans and run
+summaries](/docs/cookbook/application-observability/) for a concurrent production pattern.
+
 ## What an Agent trace represents
 
 AML traces the lifecycle it owns and the events that cross its ACP connection. One ACP `session/prompt` request is one **Agent turn**. It is not necessarily one model API call.

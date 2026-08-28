@@ -166,6 +166,37 @@ workflows with `@aml-jsx/sdk`.
 | `defineWorkspaceProvider()`           | Defines a durable filesystem materialization provider.                                                           |
 | `createPersistentWorkspaceProvider()` | Builds revision persistence over a user-defined `WorkspaceStorageAdapter`.                                       |
 | `runtime.on()` / `runtime.once()`     | Subscribes to evaluation lifecycle and trace events.                                                             |
+| `withTraceSpan()`                     | Measures application-owned work inside the active function component.                                            |
+| `createTraceSummaryCollector()`       | Derives run-keyed, content-free summaries from the public trace stream.                                          |
+
+## Application observability
+
+AML automatically traces function components and runtime primitives, but a component span covers both the component
+call and resolution of its returned subtree. It cannot identify an application phase inside that component, such as
+validation, retrieval, or persistence. Use `withTraceSpan()` for that real lexical work:
+
+```tsx
+async function Review({ findings }: { findings: readonly Finding[] }) {
+  return await withTraceSpan("review.validate", async () => await validateFindings(findings))
+}
+```
+
+Application spans inherit the active component or application-span parent, close on success, error, or cancellation,
+and preserve the callback's result or thrown value. Calls outside an active function component, including detached work
+after it settles, are rejected. AML retains allocation of `runId`, `spanId`, and ancestry; applications supply only the
+span name and work to measure.
+
+`createTraceSummaryCollector()` consumes the same public immutable events as any other sink. Summaries are retrieved by
+explicit `runId`, so runtime reuse and overlapping evaluations never depend on a global latest result. They include
+evaluation status and wall duration, Agent session and turn timing, Tool and resource timing, named application spans,
+raw provider-reported usage entries, and Agent cleanup outcomes. Trace-consumer failures remain on the runtime's existing
+`onTraceError` channel. An empty `providerUsage` means the provider reported no usage; AML does not infer model-call
+counts, token fields, cache behavior, cost, or billing data.
+Each timing aggregate reports `count`, summed `totalDurationMs`, and `slowestMs` when present.
+Completed summaries remain available until the application calls `deleteRun(runId)`.
+
+See the [production-oriented observability cookbook](./examples/src/operations/trace-summaries.tsx) for custom phase
+timing, request-to-run correlation across concurrent evaluations, optional usage, cleanup, and trace-consumer reporting.
 
 ### Experimental APIs
 
