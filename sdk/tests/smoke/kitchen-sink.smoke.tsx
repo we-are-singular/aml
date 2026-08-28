@@ -18,6 +18,7 @@ import {
   FollowUp,
   localWorkspace,
   Mcp,
+  Parallel,
   Sandbox,
   Script,
   Skill,
@@ -184,8 +185,18 @@ async function runKitchenSink(selection: KitchenSinkSelection): Promise<void> {
  */
 async function KitchenSinkAgent({ mcp, model, proofs, proofTool }: KitchenSinkAgentProps) {
   const expectedMcp = mcp === undefined ? "skipped" : "context7"
-  const nestedAgent = await evaluate(<NestedRemoteProof model={model} proofs={proofs} />)
-  assert.equal(nestedAgent.trim(), proofs.nestedAgent, "Nested Agent composition returned an unexpected proof")
+  const parallelProof = await evaluate(
+    <Parallel>
+      <NestedRemoteProof model={model} proofs={proofs} />
+      <InputFileProof proofs={proofs} />
+    </Parallel>
+  )
+  assert.equal(
+    parallelProof.trim(),
+    `${proofs.nestedAgent}input-ok`,
+    "Parallel composition returned proofs outside authored order"
+  )
+  const nestedAgent = proofs.nestedAgent
   const Result = z.object({
     command: z.literal(proofs.command),
     input: z.literal(proofs.input),
@@ -270,6 +281,16 @@ writeFileSync("shell.txt", ${JSON.stringify(proofs.shell)});
 process.stdout.write(${JSON.stringify(proofs.shell)});`}
     </Script>
   )
+}
+
+function InputFileProof({ proofs }: Readonly<{ proofs: KitchenSinkProofs }>) {
+  const source = [
+    'import { readFileSync } from "node:fs";',
+    `if (readFileSync("input.txt", "utf8") !== ${JSON.stringify(proofs.input)}) throw new Error("unexpected input.txt");`,
+    'process.stdout.write("input-ok");',
+  ].join("")
+
+  return <Script command="node" args={["--input-type=module", "--eval", source]} />
 }
 
 function createMcp(name: KitchenSinkMcpName): AmlMcpServer | undefined {

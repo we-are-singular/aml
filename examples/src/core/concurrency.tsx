@@ -1,4 +1,4 @@
-import { Agent, evaluate } from "@aml-jsx/sdk"
+import { Agent, Parallel } from "@aml-jsx/sdk"
 import { DeterministicAgentProvider } from "@aml-jsx/sdk/testing"
 
 /**
@@ -22,17 +22,26 @@ const ExampleProvider = new DeterministicAgentProvider({
 })
 
 /**
- * Starts independent specialists explicitly, then authors one coordinator.
+ * Runs one independent specialist and contributes its labeled result.
  */
-async function Review() {
-  const [review, audit] = await Promise.all([
-    evaluate(<Agent provider={ExampleProvider}>review</Agent>),
-    evaluate(<Agent provider={ExampleProvider}>audit</Agent>),
-  ])
+function ReviewLane() {
+  return [<Agent provider={ExampleProvider}>review</Agent>, "|"]
+}
 
+/** Runs the second independent specialist. */
+function AuditLane() {
+  return <Agent provider={ExampleProvider}>audit</Agent>
+}
+
+/** Starts both specialists explicitly, then authors one coordinator. */
+function Review() {
   return (
     <Agent provider={ExampleProvider}>
-      combine:{review}|{audit}
+      combine:
+      <Parallel>
+        <ReviewLane />
+        <AuditLane />
+      </Parallel>
     </Agent>
   )
 }
