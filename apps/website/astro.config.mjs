@@ -207,6 +207,7 @@ export default defineConfig({
               items: [
                 { label: "Primitives overview", slug: "docs/reference/primitives" },
                 { label: "<Agent />", slug: "docs/reference/primitives/agent" },
+                { label: "<Parallel />", slug: "docs/reference/primitives/parallel" },
                 { label: "<System />", slug: "docs/reference/primitives/system" },
                 { label: "<Tool />", slug: "docs/reference/primitives/tool" },
                 { label: "<Mcp />", slug: "docs/reference/primitives/mcp" },

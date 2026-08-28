@@ -114,6 +114,7 @@ Test behavior that can regress:
 
 - Exact prompt and system assembly.
 - Authored ordering after parallel work.
+- Wait-for-all failure and cleanup behavior inside `<Parallel>`.
 - Structured output validation.
 - Tool and MCP isolation between sibling Agents.
 - Follow-up ordering within one session.

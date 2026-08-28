@@ -61,22 +61,27 @@ return <Agent>Prepare the standup from: {synthesis}</Agent>`,
     id: "parallel-child-agents",
     group: "Concepts",
     name: "Parallel child Agents",
-    signature: "Promise.all([evaluate(…), evaluate(…)])",
+    signature: "<Parallel>…</Parallel>",
     description:
-      "A parent <Agent /> can depend on several child <Agent /> components. Start the children together with Promise.all(); AML waits for both outputs, resolves the parent's <System /> and prompt content, and only then opens the parent session.",
-    note: "Concurrency is explicit JavaScript. The parent provider receives one complete request containing the resolved <System /> content, prompt, and both child outputs.",
+      "A parent <Agent /> can depend on several independent child branches. <Parallel> starts them together, preserves authored output order, and waits for every branch before the parent session opens.",
+    note: "The runtime's Agent scheduler remains authoritative. One failed branch does not interrupt healthy siblings, and ParallelError reports every failed authored index after cleanup.",
     file: "concepts/parallel-child-agents.tsx",
-    code: `async function Review() {
-  const [security, performance] = await Promise.all([
-    evaluate(<Agent provider={Codex}>Review security.</Agent>),
-    evaluate(<Agent provider={Codex}>Review performance.</Agent>),
-  ])
+    code: `function SecurityLane() {
+  return <>Security: <Agent provider={Codex}>Review security.</Agent></>
+}
 
+function PerformanceLane() {
+  return <>Performance: <Agent provider={Codex}>Review performance.</Agent></>
+}
+
+function Review() {
   return (
     <Agent provider={Codex}>
       <System>Synthesize the evidence. Invent nothing.</System>
-      Security review: {security}
-      Performance review: {performance}
+      <Parallel>
+        <SecurityLane />
+        <PerformanceLane />
+      </Parallel>
       Produce the final review.
     </Agent>
   )
@@ -133,6 +138,24 @@ const [codexReview, openCodeReview] = await Promise.all([
     code: `<Agent provider={OpenCode} system="Find concrete correctness defects.">
   <Tool use={ReadSource} />
   Review src/index.ts.
+</Agent>`,
+  },
+  {
+    id: "parallel",
+    group: "Components",
+    name: "<Parallel />",
+    docsPath: "docs/reference/primitives/parallel/",
+    signature: "<Parallel>…</Parallel>",
+    description:
+      "Evaluates independent AML branches concurrently, waits for all branch cleanup, and contributes successful text in authored order. Failures surface together as ParallelError.",
+    note: "maxConcurrentAgents still bounds provider calls. <Parallel /> adds no retry, fail-fast cancellation, partial-result, or transactional side-effect policy.",
+    file: "parallel.tsx",
+    code: `<Agent provider={Coordinator}>
+  <Parallel>
+    <Agent provider={Reviewer}>Review correctness.</Agent>
+    <Agent provider={Auditor}>Review security.</Agent>
+  </Parallel>
+  Synthesize both reports.
 </Agent>`,
   },
   {

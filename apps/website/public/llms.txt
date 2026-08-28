@@ -39,7 +39,10 @@ Use these primary documentation destinations:
 
 AML gives JSX a job unrelated to user interfaces: an AML tree describes executable dependencies between Agents, prompts, capabilities, Sandboxes, and durable Workspaces. `AmlRuntime` resolves that tree from the leaves upward, passes child results into parent prompts at their authored positions, and releases acquired resources in reverse order.
 
-AML is not React, a visual workflow builder, or a replacement for TypeScript control flow. Conditions, functions, promises, loops, and explicit `Promise.all()` calls remain ordinary TypeScript. JSX children resolve in authored order; sibling JSX does not imply concurrency.
+AML is not React, a visual workflow builder, or a replacement for TypeScript control flow. Conditions, functions,
+promises, loops, and typed data collection remain ordinary TypeScript. JSX children resolve in authored order; sibling
+JSX does not imply concurrency. `<Parallel>` explicitly marks independent text-producing branches, while
+`Promise.all(evaluate(...))` remains available when component code needs individual results.
 
 The library separates three provider responsibilities:
 

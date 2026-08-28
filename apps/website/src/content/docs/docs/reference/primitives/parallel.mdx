@@ -1,0 +1,133 @@
+---
+title: "<Parallel />"
+description: Evaluate independent AML branches concurrently, preserve authored output order, and report every failure after cleanup.
+---
+
+import { Aside } from "@astrojs/starlight/components"
+
+`<Parallel />` is AML's explicit concurrency boundary for text-producing branches. It starts each branch through
+component-local [`evaluate()`](/docs/reference/runtime/#component-local-evaluation), waits for all branches and their
+cleanup, then contributes successful text in authored order.
+
+```tsx
+import { Agent, AmlRuntime, Parallel } from "@aml-jsx/sdk"
+
+function CorrectnessLane() {
+  return <Agent>Review correctness.</Agent>
+}
+
+function SecurityLane() {
+  return <Agent>Review security.</Agent>
+}
+
+const result = await new AmlRuntime({ agentProvider }).evaluate(
+  <Agent system="Synthesize only the supplied reviews.">
+    <Parallel>
+      <CorrectnessLane />
+      <SecurityLane />
+    </Parallel>
+  </Agent>
+)
+```
+
+The two lanes may finish in either order. The parent Agent starts only after both settle and receives their text in the
+authored `CorrectnessLane`, `SecurityLane` order.
+
+## Props
+
+| Prop       | Type            | Default | Meaning                                      |
+| ---------- | --------------- | ------- | -------------------------------------------- |
+| `children` | `AmlRenderable` | empty   | Independent branches evaluated concurrently. |
+
+`<Parallel>` has no `concurrency`, retry, error callback, quorum, partial-result, or fail-fast cancellation prop.
+[`maxConcurrentAgents`](/docs/reference/runtime/#runtime-options) remains the single limit for active Agent provider
+calls in the evaluation domain.
+
+## Branches and ordering
+
+Each immediate child is one branch. Child arrays are recursively flattened so mapped workflows behave naturally:
+
+```tsx
+<Parallel>
+  {reviewKinds.map(kind => (
+    <ReviewLane kind={kind} />
+  ))}
+</Parallel>
+```
+
+`null`, `undefined`, and booleans contribute no branch. A Fragment remains one branch, and the values inside it keep
+ordinary sequential semantics:
+
+```tsx
+<Parallel>
+  <>
+    lane-a:
+    <Agent>Run lane A.</Agent>
+  </>
+  <>
+    lane-b:
+    <Agent>Run lane B.</Agent>
+  </>
+</Parallel>
+```
+
+Branch output is isolated while work is active. Completion order never changes the rendered result order, and AML does
+not insert separators between branch strings.
+
+## Structured branch output
+
+An Agent-owned [`schema`](/docs/reference/primitives/agent/#resolution-and-result) remains valid inside a branch. Its
+validated value contributes canonical JSON text like any other nested Agent result:
+
+```tsx
+<Parallel>
+  <Agent schema={LaneResult}>Review correctness.</Agent>
+  <Agent schema={LaneResult}>Review security.</Agent>
+</Parallel>
+```
+
+`<Parallel>` itself is a text-composition boundary. Do not pass a schema to `evaluate(<Parallel>...</Parallel>, schema)`
+to collect several typed results. Use `Promise.all([evaluate(branch, schema), ...])` in component code when JavaScript
+needs named or schema-inferred branch values.
+
+## Failure semantics
+
+One or more rejected branches produce the same exported `ParallelError`. Its `failures` array preserves authored branch
+order and contains the zero-based branch index plus that branch's original rejection:
+
+```tsx
+import { ParallelError } from "@aml-jsx/sdk"
+
+try {
+  await runtime.evaluate(<Review />)
+} catch (error) {
+  if (error instanceof ParallelError) {
+    for (const failure of error.failures) {
+      console.error(`Branch ${failure.branchIndex + 1} failed`, failure.cause)
+    }
+  }
+}
+```
+
+`<Parallel>` uses wait-for-all semantics. It does not throw as soon as the first branch rejects, because enclosing
+Sandbox and Workspace resources must remain available until every started branch completes cleanup. Caller cancellation
+still propagates through the evaluation signal: active providers receive it, queued Agents do not start, and the boundary
+waits for their resulting evaluations to settle.
+
+<Aside type="caution" title="Parallel side effects are not transactional">
+  A successful branch may already have called Tools, changed files, or reached external services before another branch
+  fails. `<Parallel>` does not retry branches or roll back completed effects. Give shared mutable resources
+  concurrency-safe ownership and place retry policy at the operation that knows whether replay is safe.
+</Aside>
+
+## Placement and descriptor isolation
+
+`<Parallel>` may appear wherever ordinary component text is valid, including inside an Agent, Sandbox, or Workspace. It
+inherits the active Context, Sandbox, Workspace, cancellation, budgets, tracing, and Agent scheduler.
+
+Each branch is its own nested evaluation. Direct `<System>`, `<Tool>`, `<Mcp>`, `<Skill>`, or `<FollowUp>` children do not
+attach to an Agent surrounding `<Parallel>`; put Agent-owned descriptors inside that branch's own `<Agent>`.
+
+See the runnable [`concurrency` example](https://github.com/we-are-singular/aml/blob/main/examples/src/core/concurrency.tsx),
+[the evaluation model](/docs/concepts/#explicit-concurrency), and
+[`evaluate()`](/docs/reference/runtime/#component-local-evaluation).

@@ -168,6 +168,12 @@ The specialist text is intentionally visible in the final prompt. A production w
 
 </Steps>
 
+<Aside type="note" title="Choose the boundary that matches the result shape">
+  This recipe uses `Promise.all(evaluate(...))` because the component binds two named JavaScript strings before
+  authoring the synthesis Agent. Use [`<Parallel>`](/docs/reference/primitives/parallel/) when independent branch text
+  can flow directly into the surrounding AML tree without an intermediate JavaScript transformation.
+</Aside>
+
 ## Failure and security notes
 
 <Aside type="caution" title="Tools execute in the host process">
@@ -180,6 +186,7 @@ The specialist text is intentionally visible in the final prompt. A production w
 </Aside>
 
 - A specialist failure rejects the `Promise.all`; the synthesis does not run with partial evidence.
+- `<Parallel>` also remains all-or-nothing, but waits for every branch and reports ordered failures through `ParallelError`.
 - A [`<Tool />`](/docs/reference/primitives/tool/) input or output that violates its schema fails closed.
 - A real provider can hallucinate or misread evidence. Treat the final review as an input to a human or policy gate, not as proof.
 - For untrusted workflows, set finite runtime budgets such as `maxAgentCalls`, `maxConcurrentAgents`, and `maxTurnsPerAgent`.
@@ -187,6 +194,7 @@ The specialist text is intentionally visible in the final prompt. A production w
 ## API and source links
 
 - [`<Agent />`](/docs/reference/primitives/agent/)
+- [`<Parallel />`](/docs/reference/primitives/parallel/)
 - [`evaluate()`](/docs/reference/runtime/#component-local-evaluation)
 - [`defineTool()`](/docs/reference/primitives/tool/)
 - [`AmlRuntime`](/docs/reference/runtime/)

@@ -135,27 +135,29 @@ JavaScript evaluates ordinary expressions in authored order. If two JSX values a
 
 ### Explicit concurrency
 
-AML does not infer that sibling `<Agent />` components are safe to run concurrently. Start independent evaluations with JavaScript concurrency primitives, then pass their results into a later `<Agent />`:
+AML does not infer that ordinary sibling `<Agent />` components are safe to run concurrently. Wrap independent
+text-producing branches in [`<Parallel>`](/docs/reference/primitives/parallel/):
 
 ```tsx
-async function Review() {
-  const [correctness, maintainability] = await Promise.all([
-    evaluate(<Agent>Review correctness.</Agent>),
-    evaluate(<Agent>Review maintainability.</Agent>),
-  ])
-
+function Review() {
   return (
     <Agent>
-      Correctness:
-      {correctness}
-      Maintainability:
-      {maintainability}
+      <Parallel>
+        <Agent>Review correctness.</Agent>
+        <Agent>Review maintainability.</Agent>
+      </Parallel>
     </Agent>
   )
 }
 ```
 
-The array keeps the authored `[correctness, maintainability]` order even if the second provider call finishes first. `maxConcurrentAgents` limits active provider calls; it does not turn sequential JSX into concurrent work.
+`<Parallel>` keeps authored branch order even if the second provider call finishes first. It waits for every branch and
+its cleanup before the parent continues. `maxConcurrentAgents` limits active provider calls; it does not turn ordinary
+sequential JSX into concurrent work.
+
+Use `Promise.all([evaluate(...), evaluate(...)])` inside an active async component when JavaScript needs named or typed
+branch values before authoring the next AML node. Both forms inherit the same evaluation domain, cancellation, resource
+scopes, budgets, tracing, and Agent scheduler.
 
 ## Lexical scope and cleanup
 

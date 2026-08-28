@@ -152,7 +152,9 @@ const answer = await new AmlRuntime().evaluate(
 )
 ```
 
-For independent specialist evaluations, use explicit `Promise.all([evaluate(...)])`. AML's scheduler and budgets remain in charge; JavaScript concurrency is the authored boundary.
+For independent specialist branches whose text flows directly into the tree, use
+[`<Parallel>`](/docs/reference/primitives/parallel/). Use explicit `Promise.all([evaluate(...)])` when component code
+needs named or typed results. AML's scheduler and budgets remain in charge in both forms.
 
 ## Cross-provider capability matrix
 

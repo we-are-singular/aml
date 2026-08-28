@@ -1,6 +1,6 @@
 ---
 name: aml-jsx
-description: Build, explain, test, or debug TypeScript agent workflows with Agent Markup Language and the @aml-jsx/sdk package. Use when a coding task involves AML, AML JSX/TSX trees, Agent/System/Tool/Skill/Mcp/FollowUp components, provider-agnostic multi-agent orchestration, explicit parallel agents, structured agent output, Sandboxes, Workspaces, OpenCode, Codex, GitHub Copilot, GLM, or Pi providers, or custom AML providers.
+description: Build, explain, test, or debug TypeScript agent workflows with Agent Markup Language and the @aml-jsx/sdk package. Use when a coding task involves AML, AML JSX/TSX trees, Agent/Parallel/System/Tool/Skill/Mcp/FollowUp components, provider-agnostic multi-agent orchestration, explicit parallel agents, structured agent output, Sandboxes, Workspaces, OpenCode, Codex, GitHub Copilot, GLM, or Pi providers, or custom AML providers.
 ---
 
 # Build with AML JSX
@@ -72,7 +72,7 @@ Follow these semantics:
 - `evaluate(tree)` is only for work started inside an actively evaluated AML function component.
 - AML resolves children from the leaves upward and preserves authored order.
 - A nested Agent resolves before its parent Agent; its text becomes part of the parent prompt at the authored position.
-- Sibling JSX does not imply concurrency. Start independent branches with `Promise.all()` and `evaluate()`.
+- Sibling JSX does not imply concurrency. Use `<Parallel>` for independent text-producing branches; use `Promise.all()` and `evaluate()` when component code needs individual or typed results.
 - Keep JavaScript control flow in TypeScript: use functions, arrays, conditions, loops, and promises rather than inventing markup primitives.
 - Inject providers through `<Agent provider={...}>` or runtime defaults so the tree remains provider-agnostic.
 - Scope `<Tool>`, `<Mcp>`, `<Skill>`, and `<FollowUp>` to their nearest Agent.

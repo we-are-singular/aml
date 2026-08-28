@@ -79,7 +79,10 @@ The [runtime guide](/docs/runtime/) covers application-owned evaluation, limits,
 
 ### Can one workflow use more than one coding agent?
 
-Yes. One agent's result can become another agent's input, and independent agents can work concurrently with ordinary `Promise.all()`. Each [`<Agent />`](/docs/reference/primitives/agent/) is still a separate session with its own explicitly granted instructions and capabilities.
+Yes. One agent's result can become another agent's input, and independent text-producing branches can run concurrently
+inside [`<Parallel>`](/docs/reference/primitives/parallel/). Use ordinary `Promise.all(evaluate(...))` when component
+code needs the individual results. Each [`<Agent />`](/docs/reference/primitives/agent/) remains a separate session with
+its own explicitly granted instructions and capabilities.
 
 See the [code-review workflow](/docs/cookbook/code-review-workflow/) for both parallel review and a final synthesis step.
 

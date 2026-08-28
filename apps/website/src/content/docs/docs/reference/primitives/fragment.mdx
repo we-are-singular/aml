@@ -33,7 +33,7 @@ The automatic JSX transform imports `Fragment` from `@aml-jsx/sdk/jsx-runtime`; 
 - Children are resolved and concatenated in authored order.
 - `<>…</>` inserts no separators or prompt text of its own.
 - It creates no Agent, Sandbox, Workspace, capability, trace, or cleanup boundary.
-- It does not start siblings concurrently. Use `Promise.all()` around component-local [`evaluate()`](/docs/reference/runtime/#component-local-evaluation) calls when independent work may overlap.
+- It does not start siblings concurrently. Use [`<Parallel>`](/docs/reference/primitives/parallel/) for independent text-producing branches, or `Promise.all()` around component-local [`evaluate()`](/docs/reference/runtime/#component-local-evaluation) calls when JavaScript needs each result.
 - Descriptor placement still follows the eventual containing boundary. A `<System />` or `<Tool />` inside `<>…</>` still belongs to its nearest [`<Agent />`](/docs/reference/primitives/agent/).
 
 An explicit `<Fragment>…</Fragment>` form is also exported, but shorthand fragments are the conventional authoring form. See [AST and evaluation](/docs/ast/) for renderable values and node construction.
