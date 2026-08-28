@@ -69,6 +69,17 @@ An unsandboxed `<Script />` runs as a trusted host process from `AmlRuntimeOptio
 
 The public factory names are `codexAgent()`, `copilotAgent()`, `glmAgent()`, `opencodeAgent()`, and `piAgent()`.
 
+## Application observability
+
+Use `withTraceSpan(name, operation)` inside a function component to time application work that automatic component and
+primitive spans cannot isolate. AML owns correlation identities and closes spans on success, failure, and cancellation.
+
+`createTraceSummaryCollector()` derives content-free summaries from public trace events. Read them with `forRun(runId)`;
+there is deliberately no concurrency-ambiguous latest-run API. Provider usage remains optional provider-reported JSON,
+Agent cleanup outcomes have their own field, and trace-consumer failures continue through `AmlRuntime.onTraceError`. The
+collector does not rewrite evaluation status. AML does not infer model calls, costs, cache behavior, or missing token
+fields.
+
 ## Coding agents
 
 Install AML's coding-agent skill for current workflow patterns, runtime semantics, providers, and testing guidance:

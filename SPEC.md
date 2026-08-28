@@ -2085,7 +2085,7 @@ AML publishes one immutable, provider-neutral event stream:
 type AmlTraceAttribute = boolean | number | string | readonly string[]
 
 type AmlTraceSpanKind =
-  "evaluation" | "component" | "agent" | "system" | "skill" | "tool" | "loop" | "sandbox" | "workspace"
+  "application" | "evaluation" | "component" | "agent" | "system" | "skill" | "tool" | "loop" | "sandbox" | "workspace"
 
 type AmlTraceEvent =
   | {
@@ -2129,9 +2129,13 @@ interface TraceSink {
 }
 ```
 
-The event stream covers evaluation and component execution, Agent sessions and authored turns, System and Skill resolution, JavaScript Tool calls, committed Loop transitions, and Sandbox and Workspace scope lifecycles. Tool and MCP descriptor events describe capability grants; they do not claim that a provider completed a remote attachment lifecycle AML cannot observe. `capability.tool` identifies the JavaScript Tool `name`. `capability.mcp` identifies the server `name` and whether its `kind` is `named`, `stdio`, or `streamable-http`; it never includes transport configuration.
+The event stream covers evaluation and component execution, application-owned phases, Agent sessions and authored turns, System and Skill resolution, JavaScript Tool calls, committed Loop transitions, and Sandbox and Workspace scope lifecycles. Tool and MCP descriptor events describe capability grants; they do not claim that a provider completed a remote attachment lifecycle AML cannot observe. `capability.tool` identifies the JavaScript Tool `name`. `capability.mcp` identifies the server `name` and whether its `kind` is `named`, `stdio`, or `streamable-http`; it never includes transport configuration.
 
 Every event includes `runId`, `spanId`, a monotonically increasing evaluation-local `sequence`, and a Unix-millisecond `timestamp`. Nested events include `parentSpanId`. `span.end` reuses its `span.start` identity and reports non-negative elapsed milliseconds. An evaluation span is the root ancestor of every other span, including component-local `evaluate()` calls and concurrently scheduled Agents. Each lexical execution boundary is the direct parent of the subtree it evaluates: a component returning an Agent owns that Agent span, and Workspace, Sandbox, Loop, System, and Skill descendants remain beneath their corresponding spans.
+
+`withTraceSpan(name, operation)` measures application-owned work while a function component is active. AML allocates an `application` span beneath the active component or enclosing application span, preserves that ancestry across component-local `evaluate()`, Parallel branches, and concurrent asynchronous work, and closes the span on success, thrown failure, or cancellation. The callback result or thrown value passes through unchanged. Calls outside an active component or from detached work after that component settles are rejected. Applications provide only a non-empty normalized name and callback; AML retains ownership of trace identity and does not accept application metadata or content.
+
+`createTraceSummaryCollector()` is an ordinary consumer of the public trace stream. After an evaluation root span closes, `forRun(runId)` returns that explicit run's content-free summary; there is no global latest-run result. Summaries include evaluation status and wall duration, Agent session and authored-turn timing, Tool and resource timing, named application-span aggregates, raw provider-reported usage entries, and Agent cleanup outcomes. An empty usage list explicitly means no usage was reported; AML does not infer model-call counts, token fields, cache behavior, cost, or billing data. Cleanup and trace-consumer failures remain separate from workflow status, and `deleteRun(runId)` releases a retained completed summary.
 
 Agent spans begin when the runtime enters the authored Agent, before Agent-specific prop and Sandbox preflight, and include post-order request assembly plus the provider session. The runtime closes a successful Agent span only after its result enters the parent AML output channel. FollowUps remain inside that Agent span. `agent.turn` events are emitted in authored order at the provider handoff: the initial prompt is turn `1`, and the first FollowUp is turn `2`. A shared ACP structured-output repair prompt remains inside the final authored turn and emits its own ACP prompt events; it does not consume another authored-turn budget. Provider-internal reasoning, retries, tool loops, token accounting, and usage records are not part of the stable Slice 15 contract because the portable provider interface cannot observe them consistently.
 
