@@ -36,6 +36,7 @@ export type {
 export { FollowUp, type FollowUpProps } from "./components/follow-up/follow-up.js"
 export { File, type FileProps } from "./components/file/file.js"
 export { type DeepReadonly, Loop, type LoopProps, type LoopRenderContext } from "./components/loop/loop.js"
+export { Parallel, ParallelError, type ParallelFailure, type ParallelProps } from "./components/parallel/parallel.js"
 export { System, type SystemProps } from "./components/system/system.js"
 
 // Immutable downward-scoped application dependencies.
