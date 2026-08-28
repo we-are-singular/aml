@@ -158,6 +158,8 @@ export type { AmlTraceIdentity } from "./core/trace-identity.js"
 
 // Provider-neutral observability contracts and the dependency-free console view.
 export { createConsoleTracer, type ConsoleTracerOptions } from "./observability/create-console-tracer.js"
+export { createTraceSummaryCollector, type TraceSummary } from "./observability/create-trace-summary-collector.js"
+export { withTraceSpan } from "./observability/with-trace-span.js"
 export type {
   AmlTraceAttribute,
   AmlTraceEvent,

@@ -5,7 +5,11 @@ import type { ContextScope } from "../context/context-scope.js"
 import { AmlNode, type AmlRenderable } from "../../core/aml-node.js"
 import { EvaluationError } from "../../core/evaluation-error.js"
 
-type NestedEvaluator = (value: AmlRenderable, schema: AmlModelSchema<unknown, unknown> | undefined) => Promise<unknown>
+type NestedEvaluator = (
+  value: AmlRenderable,
+  schema: AmlModelSchema<unknown, unknown> | undefined,
+  parentSpanId: string
+) => Promise<unknown>
 type ComponentInvoker = (
   componentType: Function,
   component: () => unknown,
@@ -76,7 +80,8 @@ export class LoopAgentSelector {
       schema: AmlModelSchema<unknown, unknown> | undefined,
       depth: number,
       activeAncestors: ReadonlySet<object>,
-      contextScope: ContextScope
+      contextScope: ContextScope,
+      parentSpanId: string
     ) => Promise<unknown>
   ): Promise<LoopAgentSelection> {
     const activeValues = new Set(activeAncestors)
@@ -205,8 +210,15 @@ export class LoopAgentSelector {
         const componentOutput = await invokeComponent(
           current.type,
           () => current.type(current.props),
-          async (nestedValue, nestedSchema) =>
-            await evaluateNested(nestedValue, nestedSchema, nodeDepth, new Set(activeValues), frame.contextScope),
+          async (nestedValue, nestedSchema, parentSpanId) =>
+            await evaluateNested(
+              nestedValue,
+              nestedSchema,
+              nodeDepth,
+              new Set(activeValues),
+              frame.contextScope,
+              parentSpanId
+            ),
           frame.contextScope
         )
 

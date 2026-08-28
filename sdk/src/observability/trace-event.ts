@@ -12,6 +12,7 @@ export type AmlTraceAttribute = boolean | number | string | readonly string[]
  * Execution boundaries represented by paired start and end events.
  */
 export type AmlTraceSpanKind =
+  | "application"
   | "evaluation"
   | "component"
   | "agent"
