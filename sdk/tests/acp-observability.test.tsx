@@ -12,7 +12,7 @@ import { describe, expect, it } from "vitest"
 
 import { AbstractAgentProvider } from "../src/components/agent/abstract-agent-provider.js"
 import { defineAcpAgentProvider } from "../src/components/agent/acp-agent-provider.js"
-import { openAcpSession, runAcpPrompt } from "../src/components/agent/acp-agent-session.js"
+import { openAcpSession, runAcpPrompt, runAcpPromptResponse } from "../src/components/agent/acp-agent-session.js"
 import type { AgentExecutionContext } from "../src/components/agent/agent-execution-context.js"
 import { agentObservabilityServices } from "../src/components/agent/agent-observability-services.js"
 import type { AgentProviderSession, AgentProviderTurn } from "../src/components/agent/agent-provider-session.js"
@@ -29,6 +29,59 @@ import type { AmlTraceEvent } from "../src/observability/trace-event.js"
 import type { TraceSink } from "../src/observability/trace-sink.js"
 import { createAgentExecutionContext } from "../src/testing/create-agent-execution-context.js"
 import { DeterministicSandboxProvider } from "../src/testing/deterministic-sandbox-provider.js"
+
+describe("ACP Agent response messages", () => {
+  it("groups chunks into assistant messages with the final message last", async () => {
+    const selected = script(
+      [
+        update({
+          content: { text: "Working", type: "text" },
+          messageId: "progress",
+          sessionUpdate: "agent_message_chunk",
+        }),
+        update({
+          content: { text: " on it.", type: "text" },
+          messageId: "progress",
+          sessionUpdate: "agent_message_chunk",
+        }),
+        update({
+          content: { text: "Final answer.", type: "text" },
+          messageId: "answer",
+          sessionUpdate: "agent_message_chunk",
+        }),
+      ],
+      { stopReason: "end_turn" }
+    )
+
+    await expect(
+      runAcpPromptResponse(activeSession(selected), "prompt", createAgentExecutionContext())
+    ).resolves.toEqual({
+      messages: ["Working on it.", "Final answer."],
+      text: "Working on it.Final answer.",
+    })
+  })
+
+  it("preserves concatenated text without guessing mixed or legacy boundaries", async () => {
+    const selected = script(
+      [
+        update({
+          content: { text: "bounded", type: "text" },
+          messageId: "message-1",
+          sessionUpdate: "agent_message_chunk",
+        }),
+        update({
+          content: { text: " legacy", type: "text" },
+          sessionUpdate: "agent_message_chunk",
+        }),
+      ],
+      { stopReason: "end_turn" }
+    )
+
+    await expect(
+      runAcpPromptResponse(activeSession(selected), "prompt", createAgentExecutionContext())
+    ).resolves.toEqual({ text: "bounded legacy" })
+  })
+})
 
 describe("ACP Agent observability", () => {
   it("preserves unnamed Agent session and terminal attribute shapes", async () => {

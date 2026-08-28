@@ -205,28 +205,30 @@ class AcpProviderSession implements AgentProviderSession {
       prompt = `${prompt}\n\n${structuredOutputInstruction}`
     }
 
-    let receivedText = await this.#runPrompt(prompt, context)
+    let response = await this.#runPrompt(prompt, context)
 
     if (turn.output !== undefined && structuredOutput !== undefined && !structuredOutput.hasStructuredResult()) {
       // Some Agents finish their reasoning turn as text even though the result
       // Tool is available. Give the retained session one explicit repair turn
       // with both its provider-specific Tool identity and the output contract.
-      receivedText = await this.#runPrompt(
+      response = await this.#runPrompt(
         structuredOutputReminder(structuredOutputInstruction ?? structuredOutput.instruction, turn.output.jsonSchema),
         context
       )
     }
 
     context.signal.throwIfAborted()
-    const text = this.#transformText?.(receivedText, this.#session) ?? receivedText
+    const text = this.#transformText?.(response.text, this.#session) ?? response.text
+    const preservesMessageText = text === response.text
     return Object.freeze({
+      ...(preservesMessageText && response.messages !== undefined ? { messages: response.messages } : {}),
       ...(structuredOutput === undefined ? {} : { structured: structuredOutput.structuredResult() }),
       text,
     })
   }
 
-  async #runPrompt(prompt: string, context: AgentExecutionContext): Promise<string> {
-    const turnAttempt = runAcpPrompt(this.#session, prompt, context)
+  async #runPrompt(prompt: string, context: AgentExecutionContext): Promise<AcpPromptResponse> {
+    const turnAttempt = runAcpPromptResponse(this.#session, prompt, context)
 
     // A silent Agent process exit would otherwise leave nextUpdate() waiting
     // forever. Preserve stderr only for the failure surfaced to the caller.
@@ -297,6 +299,21 @@ export async function runAcpPrompt(
   prompt: string,
   context: AgentExecutionContext
 ): Promise<string> {
+  return (await runAcpPromptResponse(session, prompt, context)).text
+}
+
+/**
+ * Consumes one ACP prompt turn and preserves bounded assistant messages.
+ *
+ * `text` always contains every streamed text chunk in protocol order. Message
+ * fields are omitted if any text chunk lacks `messageId`, because that stream
+ * does not provide enough information to separate assistant messages safely.
+ */
+export async function runAcpPromptResponse(
+  session: Pick<ActiveSession, "nextUpdate" | "prompt" | "sessionId">,
+  prompt: string,
+  context: AgentExecutionContext
+): Promise<AcpPromptResponse> {
   const observability = agentObservabilityServices(context)
   const trace = observability.currentTrace()
   observability.event(trace, "acp.session.prompt.submitted", { sessionId: session.sessionId }, { prompt })
@@ -306,6 +323,8 @@ export async function runAcpPrompt(
     error => ({ error })
   )
   let text = ""
+  const boundedMessages = new Map<string, string>()
+  let hasUnboundedText = false
 
   let message = await session.nextUpdate()
 
@@ -325,6 +344,15 @@ export async function runAcpPrompt(
 
     if (message.update.sessionUpdate === "agent_message_chunk" && message.update.content.type === "text") {
       text += message.update.content.text
+
+      if (typeof message.update.messageId === "string") {
+        boundedMessages.set(
+          message.update.messageId,
+          `${boundedMessages.get(message.update.messageId) ?? ""}${message.update.content.text}`
+        )
+      } else {
+        hasUnboundedText = true
+      }
     }
 
     message = await session.nextUpdate()
@@ -344,8 +372,15 @@ export async function runAcpPrompt(
   observability.event(trace, "acp.session.prompt.completed", attributes)
   observability.addSpanEndAttributes(trace, attributes)
 
-  return text
+  if (hasUnboundedText) return Object.freeze({ text })
+
+  const messages = Object.freeze([...boundedMessages.values()])
+  if (messages.length === 0) return Object.freeze({ text })
+
+  return Object.freeze({ messages, text })
 }
+
+export type AcpPromptResponse = Readonly<Pick<AgentResponse, "messages" | "text">>
 
 async function configureSession(
   connection: ClientConnection,

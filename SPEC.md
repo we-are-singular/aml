@@ -1815,6 +1815,7 @@ interface AgentRequest {
 }
 
 interface AgentResponse {
+  messages?: readonly string[]
   structured?: unknown
   text: string
 }
@@ -1826,6 +1827,16 @@ interface AgentExecutionContext {
   trace: AmlTraceIdentity
 }
 ```
+
+`text` preserves the complete provider response in emission order. ACP-backed providers additionally expose
+`messages` in first-seen order when every streamed text chunk carries a `messageId`; the last item is the final
+assistant message for the completed turn. If any text chunk omits its message identity, `messages` is omitted because
+the stream does not provide a reliable boundary. A profile text transform that changes the assembled response also
+omits `messages` because AML cannot safely map the transformed text back onto the original message boundaries. The
+legacy concatenated `text` remains available unchanged. This field belongs to the provider response boundary; ordinary
+`<Agent>` evaluation continues to render `text`. The shared ACP engine
+currently uses the stable v1 session API and its optional chunk `messageId`; adopting experimental v2 sessions must
+also consume full `agent_message` replacement updates through the v2 session path.
 
 `runId` identifies one `AmlRuntime.evaluate()` call. `spanId` identifies the Agent session within that evaluation, and `parentSpanId` is present when the runtime can attribute the session to an enclosing execution boundary. Trace identities are opaque correlation values; providers must preserve them rather than deriving behavior from their format.
 
