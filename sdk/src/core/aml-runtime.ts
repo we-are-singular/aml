@@ -33,7 +33,7 @@ import type {
 } from "../components/workspace/workspace-provider.js"
 import type { WorkspaceProps } from "../components/workspace/workspace.js"
 import { AmlNode, type AmlRenderable } from "./aml-node.js"
-import { ComponentEvaluationContext } from "./component-evaluation-context.js"
+import { ComponentEvaluationContext, type ApplicationSpanRunner } from "./component-evaluation-context.js"
 import { AmlEventBus } from "./aml-event-bus.js"
 import type { AmlEventListener, AmlEventName } from "./aml-event-subscriber.js"
 import { EvaluationContext } from "./evaluation-context.js"
@@ -932,7 +932,9 @@ export class AmlRuntime {
                         component,
                         evaluateNested,
                         contextScope,
-                        (tool, input) => this.#callTool(tool, input, context, componentTrace)
+                        (tool, input) => this.#callTool(tool, input, context, componentTrace),
+                        componentTrace.spanId,
+                        this.#applicationSpanRunner(context, componentTrace.spanId)
                       )
                       context.endTraceSpan(componentSpan, "ok")
                       return output
@@ -941,7 +943,7 @@ export class AmlRuntime {
                       throw error
                     }
                   },
-                  async (nestedValue, nestedSchema, nestedDepth, nestedAncestors, nestedContextScope) => {
+                  async (nestedValue, nestedSchema, nestedDepth, nestedAncestors, nestedContextScope, parentSpanId) => {
                     const modelSchema = nestedSchema === undefined ? undefined : new ModelSchema(nestedSchema)
 
                     return await this.#evaluateInDomain(
@@ -950,7 +952,7 @@ export class AmlRuntime {
                       {
                         contextScope: nestedContextScope,
                         depth: nestedDepth,
-                        parentSpanId: trace.spanId,
+                        parentSpanId,
                         sandbox: frame.target.sandbox,
                         workspace: frame.target.workspace,
                       },
@@ -1358,7 +1360,7 @@ export class AmlRuntime {
           try {
             componentOutput = await ComponentEvaluationContext.invoke(
               () => current.type(current.props),
-              async (nestedValue, nestedSchema) => {
+              async (nestedValue, nestedSchema, parentSpanId) => {
                 context.signal.throwIfAborted()
 
                 // A nested schema is captured before its provider boundary.
@@ -1372,7 +1374,7 @@ export class AmlRuntime {
                   {
                     contextScope: frame.target.contextScope,
                     depth: nodeDepth,
-                    parentSpanId: trace.spanId,
+                    parentSpanId,
                     sandbox: frame.target.sandbox,
                     workspace: frame.target.workspace,
                   },
@@ -1381,7 +1383,9 @@ export class AmlRuntime {
                 )
               },
               frame.target.contextScope,
-              (tool, input) => this.#callTool(tool, input, context, trace)
+              (tool, input) => this.#callTool(tool, input, context, trace),
+              trace.spanId,
+              this.#applicationSpanRunner(context, trace.spanId)
             )
           } catch (error) {
             context.failTraceSpan(span, error)
@@ -1494,7 +1498,6 @@ export class AmlRuntime {
 
     return output.chunks.join("")
   }
-
   /**
    * Executes application-invoked Tools through the registered SDK port and the
    * same validation, snapshotting, cancellation, and trace path as Agents.
@@ -1522,6 +1525,31 @@ export class AmlRuntime {
       signal: context.signal,
       trace: parent,
     })
+  }
+
+  /**
+   * Creates a lexical application-span runner without exposing trace allocation.
+   */
+  #applicationSpanRunner(context: EvaluationContext, parentSpanId: string): ApplicationSpanRunner {
+    return async <Result>(
+      name: string,
+      operation: (childRunner: ApplicationSpanRunner, parentSpanId: string) => PromiseLike<Result> | Result
+    ): Promise<Result> => {
+      context.signal.throwIfAborted()
+      const trace = context.createObservationTrace(parentSpanId)
+      const span = context.startTraceSpan(trace, "application", name)
+
+      try {
+        const result = await operation(this.#applicationSpanRunner(context, trace.spanId), trace.spanId)
+        context.signal.throwIfAborted()
+        context.endTraceSpan(span, "ok")
+        return result
+      } catch (error) {
+        const failure = context.signal.aborted ? context.signal.reason : error
+        context.failTraceSpan(span, failure)
+        throw failure
+      }
+    }
   }
 }
 

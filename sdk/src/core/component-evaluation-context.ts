@@ -8,15 +8,31 @@ import type { AmlJsonValue } from "./aml-json-value.js"
 import type { AmlRenderable } from "./aml-node.js"
 import { EvaluationError } from "./evaluation-error.js"
 
-type NestedEvaluator = (value: AmlRenderable, schema: AmlModelSchema<unknown, unknown> | undefined) => Promise<unknown>
+type NestedEvaluator = (
+  value: AmlRenderable,
+  schema: AmlModelSchema<unknown, unknown> | undefined,
+  parentSpanId: string
+) => Promise<unknown>
 type ToolCaller = (tool: AmlTool<never, unknown>, input: unknown) => Promise<AmlJsonValue>
 
-interface ComponentEvaluationBinding {
+/** Runtime-owned application span capability carried by an active component. */
+export type ApplicationSpanRunner = <Result>(
+  name: string,
+  operation: (childRunner: ApplicationSpanRunner, parentSpanId: string) => PromiseLike<Result> | Result
+) => Promise<Result>
+
+interface ComponentEvaluationAuthority {
   active: boolean
-  contextScope: ContextScope | undefined
   evaluate: NestedEvaluator | undefined
   callTool: ToolCaller | undefined
   readonly pending: Set<Promise<unknown>>
+}
+
+interface ComponentEvaluationBinding {
+  readonly authority: ComponentEvaluationAuthority
+  contextScope: ContextScope | undefined
+  readonly parentSpanId: string
+  readonly runApplicationSpan: ApplicationSpanRunner
 }
 
 const AML_COMPONENT_EVALUATION_STORAGE = Symbol.for("@aml-jsx/sdk/component-evaluation-storage")
@@ -42,13 +58,13 @@ export class ComponentEvaluationContext {
   static evaluate(value: AmlRenderable, schema?: AmlModelSchema<unknown, unknown>): Promise<unknown> {
     const binding = ComponentEvaluationContext.#storage.getStore()
 
-    const evaluateNested = binding?.evaluate
+    const evaluateNested = binding?.authority.evaluate
 
-    if (binding === undefined || !binding.active || evaluateNested === undefined) {
+    if (binding === undefined || !binding.authority.active || evaluateNested === undefined) {
       throw new EvaluationError("evaluate() is only available while an AML component is active")
     }
 
-    return ComponentEvaluationContext.#track(binding, evaluateNested(value, schema))
+    return ComponentEvaluationContext.#track(binding.authority, evaluateNested(value, schema, binding.parentSpanId))
   }
 
   /**
@@ -56,13 +72,13 @@ export class ComponentEvaluationContext {
    */
   static callTool(tool: AmlTool<never, unknown>, input: unknown): Promise<AmlJsonValue> {
     const binding = ComponentEvaluationContext.#storage.getStore()
-    const callTool = binding?.callTool
+    const callTool = binding?.authority.callTool
 
-    if (binding === undefined || !binding.active || callTool === undefined) {
+    if (binding === undefined || !binding.authority.active || callTool === undefined) {
       throw new EvaluationError("Tools can only be called while an AML component is active")
     }
 
-    return ComponentEvaluationContext.#track(binding, callTool(tool, input))
+    return ComponentEvaluationContext.#track(binding.authority, callTool(tool, input))
   }
 
   /**
@@ -72,7 +88,7 @@ export class ComponentEvaluationContext {
     const binding = ComponentEvaluationContext.#storage.getStore()
     const contextScope = binding?.contextScope
 
-    if (binding === undefined || !binding.active || contextScope === undefined) {
+    if (binding === undefined || !binding.authority.active || contextScope === undefined) {
       throw new EvaluationError("useContext() is only available while an AML component is active")
     }
 
@@ -101,20 +117,48 @@ export class ComponentEvaluationContext {
   }
 
   /**
+   * Runs application work inside a runtime-owned child trace span.
+   */
+  static runApplicationSpan<Result>(name: string, operation: () => PromiseLike<Result> | Result): Promise<Result> {
+    const binding = ComponentEvaluationContext.#storage.getStore()
+
+    if (binding === undefined || !binding.authority.active) {
+      throw new EvaluationError("withTraceSpan() is only available while an AML component is active")
+    }
+
+    return ComponentEvaluationContext.#track(
+      binding.authority,
+      binding.runApplicationSpan(name, (childRunner, parentSpanId) =>
+        ComponentEvaluationContext.#storage.run(
+          { ...binding, parentSpanId, runApplicationSpan: childRunner },
+          operation
+        )
+      )
+    )
+  }
+
+  /**
    * Invokes one component exactly once with a scoped nested evaluator.
    */
   static async invoke(
     component: () => unknown,
     evaluateNested: NestedEvaluator,
     contextScope: ContextScope,
-    callTool: ToolCaller
+    callTool: ToolCaller,
+    parentSpanId: string,
+    runApplicationSpan: ApplicationSpanRunner
   ): Promise<unknown> {
-    const binding: ComponentEvaluationBinding = {
+    const authority: ComponentEvaluationAuthority = {
       active: true,
-      contextScope,
       evaluate: evaluateNested,
       callTool,
       pending: new Set(),
+    }
+    const binding: ComponentEvaluationBinding = {
+      authority,
+      contextScope,
+      parentSpanId,
+      runApplicationSpan,
     }
     let componentError: unknown
     let componentFailed = false
@@ -157,17 +201,17 @@ export class ComponentEvaluationContext {
       // revocation must mutate the shared binding rather than merely exit run().
       // Dropping the closure also prevents a detached timer from retaining the
       // complete runtime and evaluation domain after access has been revoked.
-      binding.active = false
+      authority.active = false
       binding.contextScope = undefined
-      binding.evaluate = undefined
-      binding.callTool = undefined
+      authority.evaluate = undefined
+      authority.callTool = undefined
     }
 
     // Promise.all() rejects before its remaining branches settle. Join only the
     // still-active nested evaluations before an enclosing resource scope can
     // release underneath them.
-    const pendingResults = await Promise.allSettled([...binding.pending])
-    binding.pending.clear()
+    const pendingResults = await Promise.allSettled([...authority.pending])
+    authority.pending.clear()
     const pendingErrors = pendingResults
       .filter((result): result is PromiseRejectedResult => result.status === "rejected")
       .map(result => result.reason as unknown)
@@ -199,14 +243,14 @@ export class ComponentEvaluationContext {
   /**
    * Keeps started component work alive through enclosing resource cleanup.
    */
-  static #track<Result>(binding: ComponentEvaluationBinding, pending: Promise<Result>): Promise<Result> {
-    binding.pending.add(pending)
+  static #track<Result>(authority: ComponentEvaluationAuthority, pending: Promise<Result>): Promise<Result> {
+    authority.pending.add(pending)
 
     // Both handlers observe rejection immediately without changing the Promise
     // returned to application code or manufacturing an unhandled Promise.
     void pending.then(
-      () => binding.pending.delete(pending),
-      () => binding.pending.delete(pending)
+      () => authority.pending.delete(pending),
+      () => authority.pending.delete(pending)
     )
 
     return pending
