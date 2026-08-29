@@ -10,6 +10,23 @@ This page tracks `@aml-jsx/sdk`. Entries are newest first. See [GitHub Releases]
 
 <!-- changelog:entries -->
 
+## SDK v0.7.1 — Preserved OpenCode native tools and ACP tool-call summaries
+
+Released 2026-08-29.
+
+This patch keeps caller-disabled native OpenCode tools intact while retaining AML's portable permission denials as the final authority, and extends run summaries with a content-free tally of ACP tool-call starts.
+
+### Highlights
+
+- **OpenCode preserves caller-disabled native tools** The OpenCode profile no longer overwrites the tool map with a blanket `*: true` that discarded disabled native tools. It now merges native tool choices from both the top-level `tools` config and the `agent.aml.tools` layer before applying AML's portable permission denials, which remain the final authority. [OpenCode Agent](/docs/providers/agents/opencode/)
+- **ACP tool-call summaries** `createTraceSummaryCollector()` now also counts ACP tool-call starts (`acp.session.update` with `tool_call`) from the trace stream, exposing each run's `acpToolCalls` as a content-free total and per-name breakdown alongside the existing span aggregates. [Observability](/docs/observability)
+
+### Commits
+
+- fix(agent-opencode): #36 preserve disabled native tools (96eb4b6)
+- feat(sdk): #34 summarize acp tool calls (32560de)
+- release(sandbox): v0.3.0 (ca0b7a2)
+
 ## SDK v0.7.0 — Parallel branches, callable Tools, and per-Agent timeouts
 
 Released 2026-08-29.
