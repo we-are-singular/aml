@@ -189,9 +189,12 @@ span name and work to measure.
 `createTraceSummaryCollector()` consumes the same public immutable events as any other sink. Summaries are retrieved by
 explicit `runId`, so runtime reuse and overlapping evaluations never depend on a global latest result. They include
 evaluation status and wall duration, Agent session and turn timing, Tool and resource timing, named application spans,
-raw provider-reported usage entries, and Agent cleanup outcomes. Trace-consumer failures remain on the runtime's existing
-`onTraceError` channel. An empty `providerUsage` means the provider reported no usage; AML does not infer model-call
-counts, token fields, cache behavior, cost, or billing data.
+ACP tool-call counts, raw provider-reported usage entries, and Agent cleanup outcomes. `acpToolCalls` counts initial ACP
+`tool_call` updates and groups them by exact provider-reported capability name. Those names do not portably identify the
+backend or MCP server that handled a call. The separate `tools` aggregate measures declarative AML `<Tool>` execution
+spans, so one call routed to an AML Tool may correctly appear in both; AML does not deduplicate the distinct boundaries.
+Trace-consumer failures remain on the runtime's existing `onTraceError` channel. An empty `providerUsage` means the
+provider reported no usage; AML does not infer model-call counts, token fields, cache behavior, cost, or billing data.
 Each timing aggregate reports `count`, summed `totalDurationMs`, and `slowestMs` when present.
 Completed summaries remain available until the application calls `deleteRun(runId)`.
 

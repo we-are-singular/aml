@@ -99,10 +99,16 @@ function summaryFor(runId: string) {
 `forRun()` requires an explicit evaluation `runId`; there is no latest-run API that becomes ambiguous when a runtime
 handles overlapping evaluations. Capture that identity from the public `start` event using the request-correlation
 pattern in the cookbook below. Completed summaries report evaluation status and wall duration, Agent session and turn
-timing, Tool and resource timing, named application spans, provider-reported usage entries, and Agent cleanup outcomes.
-Timing aggregates contain `count`, summed `totalDurationMs`, and `slowestMs` when at least one span was observed. The
-collector does not rewrite evaluation status. Trace-consumer failures remain separate on the runtime's existing
-`onTraceError` channel.
+timing, Tool and resource timing, named application spans, ACP tool-call counts, provider-reported usage entries, and
+Agent cleanup outcomes. `acpToolCalls.byName` lets an application check whether a supplied provider capability was
+invoked without persisting raw ACP events. It counts only initial `tool_call` updates and retains only the exact public
+provider-reported name and count—not arguments, results, later updates, prompts, or model text. Provider capability names
+do not portably guarantee which backend or MCP server handled a call.
+
+The separate `tools` timing aggregate measures declarative AML `<Tool>` executions. A provider call routed to an AML Tool
+may correctly appear in both aggregates; AML does not deduplicate these different boundaries. Timing aggregates contain
+`count`, summed `totalDurationMs`, and `slowestMs` when at least one span was observed. The collector does not rewrite
+evaluation status. Trace-consumer failures remain separate on the runtime's existing `onTraceError` channel.
 
 `providerUsage` is empty when the provider reports no usage. When ACP supplies usage, AML retains the serialized JSON
 string rather than promising token fields that may not exist. A turn is one provider/ACP prompt request, not one model
