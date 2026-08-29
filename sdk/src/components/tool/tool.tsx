@@ -3,7 +3,7 @@ import type { AmlTool } from "./agent-tool.js"
 
 /** Grants one JavaScript Tool created by defineTool(). */
 export interface ToolProps {
-  readonly use: AmlTool
+  readonly use: AmlTool<never, unknown>
 }
 
 /**
