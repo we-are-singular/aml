@@ -32,29 +32,29 @@ class OpenCodeAcpProfile implements AcpAgentProfile<"opencode"> {
   createLaunch(context: Readonly<AcpAgentLaunchContext>): Readonly<AcpAgentLaunch> {
     const configuration: NonNullable<AcpAgentLaunch["configuration"]>[number][] = []
     const initialPromptSections: string[] = []
-    const tools: Record<string, boolean> = { "*": true }
+    const deniedTools: Record<string, false> = {}
     const permission: Record<string, "allow" | "deny"> = { "*": "allow" }
     const inheritedPermission: Record<string, "deny"> = {}
 
     // OpenCode exposes more granular controls than ACP. Translate the portable
     // request here while the outer Sandbox remains the hard boundary.
     if (context.request.permissions.filesystem === "read-only") {
-      tools.edit = false
-      tools.write = false
+      deniedTools.edit = false
+      deniedTools.write = false
       permission.edit = "deny"
       permission.write = "deny"
       inheritedPermission.edit = "deny"
     }
 
     if (!context.request.permissions.shell) {
-      tools.bash = false
+      deniedTools.bash = false
       permission.bash = "deny"
       inheritedPermission.bash = "deny"
     }
 
     if (!context.request.permissions.network) {
-      tools.webfetch = false
-      tools.websearch = false
+      deniedTools.webfetch = false
+      deniedTools.websearch = false
       permission.webfetch = "deny"
       permission.websearch = "deny"
       inheritedPermission.webfetch = "deny"
@@ -75,6 +75,16 @@ class OpenCodeAcpProfile implements AcpAgentProfile<"opencode"> {
     }
 
     const configuredAgents = configTable(this.#options.config.agent)
+    const configuredAmlAgent = configTable(configuredAgents.aml)
+    const configuredAmlTools = configTable(configuredAmlAgent.tools) as Readonly<Record<string, boolean>>
+    // Preserve native Tool choices from both OpenCode config layers, then let
+    // AML's portable permission denials remain the final authority.
+    const tools: Record<string, boolean> = {
+      "*": true,
+      ...this.#options.config.tools,
+      ...configuredAmlTools,
+      ...deniedTools,
+    }
     const configuredPermission =
       typeof this.#options.config.permission === "string"
         ? { "*": this.#options.config.permission }
