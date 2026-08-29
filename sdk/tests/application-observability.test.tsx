@@ -188,9 +188,94 @@ describe("application observability", () => {
     })
 
     expect(summaries.forRun("run")).toMatchObject({
+      acpToolCalls: { byName: {}, count: 0 },
       cleanup: [{ status: "error" }],
       providerUsage: ['{"inputTokens":10,"outputTokens":4}'],
       status: "ok",
     })
+  })
+
+  it("summarizes ACP tool-call starts separately from AML Tool spans", () => {
+    const summaries = createTraceSummaryCollector()
+    const base = { attributes: {}, runId: "run", spanId: "session", timestamp: 1 }
+
+    for (const [sequence, sessionUpdate, toolName] of [
+      [1, "tool_call", "read_source"],
+      [2, "tool_call_update", undefined],
+      [3, "agent_message_chunk", undefined],
+      [4, "agent_thought_chunk", undefined],
+      [5, "tool_call", "shell"],
+      [6, "tool_call", "read_source"],
+    ] as const) {
+      summaries.trace({
+        ...base,
+        attributes: { sessionUpdate, ...(toolName === undefined ? {} : { toolName }) },
+        name: "acp.session.update",
+        sequence,
+        type: "event",
+      })
+    }
+
+    summaries.trace({
+      ...base,
+      durationMs: 2,
+      kind: "tool",
+      name: "read_source",
+      sequence: 7,
+      status: "ok",
+      type: "span.end",
+    })
+    summaries.trace({
+      ...base,
+      durationMs: 8,
+      kind: "evaluation",
+      name: "evaluate",
+      sequence: 8,
+      status: "ok",
+      type: "span.end",
+    })
+
+    expect(summaries.forRun("run")).toMatchObject({
+      acpToolCalls: { byName: { read_source: 2, shell: 1 }, count: 3 },
+      tools: { count: 1 },
+    })
+  })
+
+  it("isolates ACP tool calls by run ID", () => {
+    const summaries = createTraceSummaryCollector()
+
+    for (const [runId, toolName, sequence] of [
+      ["first", "read", 1],
+      ["second", "write", 1],
+      ["first", "read", 2],
+    ] as const) {
+      summaries.trace({
+        attributes: { sessionUpdate: "tool_call", toolName },
+        name: "acp.session.update",
+        runId,
+        sequence,
+        spanId: `${runId}-session`,
+        timestamp: sequence,
+        type: "event",
+      })
+    }
+
+    for (const runId of ["second", "first"] as const) {
+      summaries.trace({
+        attributes: {},
+        durationMs: 1,
+        kind: "evaluation",
+        name: "evaluate",
+        runId,
+        sequence: 3,
+        spanId: `${runId}-root`,
+        status: "ok",
+        timestamp: 3,
+        type: "span.end",
+      })
+    }
+
+    expect(summaries.forRun("first")?.acpToolCalls).toEqual({ byName: { read: 2 }, count: 2 })
+    expect(summaries.forRun("second")?.acpToolCalls).toEqual({ byName: { write: 1 }, count: 1 })
   })
 })
