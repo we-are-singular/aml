@@ -114,6 +114,11 @@ are deleted when the command exits. Release It then prompts for the version, run
 creates a `sandbox-vX.Y.Z` release commit and tag, publishes the image to Docker Hub, verifies its digest, and signs that
 digest. The active `gh` account authorizes the source tag's GitHub Release.
 
+Before authentication, the release inspects the selected Buildx driver. An existing attestation-capable builder is used
+as configured. When the selected builder uses the incompatible `docker` driver, the release creates or reuses the
+`aml-agent-sandbox-publisher` `docker-container` builder for its child processes without changing the caller's global
+builder selection.
+
 Publication requests SBOM and provenance attestations directly from Buildx. If the selected builder cannot publish them,
 the real build fails without a separate builder-analysis layer.
 

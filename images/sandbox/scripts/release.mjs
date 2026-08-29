@@ -8,6 +8,7 @@ import { pathToFileURL, URL } from "node:url"
 const releaseArguments = process.argv.slice(2)
 const skipsPublishing = releaseArguments.some(argument => ["--dry-run", "--help", "--version"].includes(argument))
 const recoversRelease = releaseArguments.includes("--recover")
+const publisherBuilder = "aml-agent-sandbox-publisher"
 
 export function main() {
   try {
@@ -44,6 +45,7 @@ function release() {
 
   try {
     runOrThrow("node", ["scripts/publish.mjs", "--check"], releaseEnvironment)
+    prepareBuildx(releaseEnvironment)
 
     // Release It uses the active CLI token for the source tag's GitHub Release.
     // Stable image publication itself authenticates only with Docker Hub.
@@ -61,6 +63,50 @@ function release() {
   } finally {
     rmSync(dockerConfig, { recursive: true, force: true })
   }
+}
+
+/**
+ * Keeps an explicit or attestation-capable builder and supplies a private
+ * docker-container fallback when the selected Docker driver cannot attest.
+ */
+function prepareBuildx(environment) {
+  const driver = parseBuildxDriver(output("docker", ["buildx", "inspect"], environment))
+  if (driver !== "docker") {
+    runOrThrow("docker", ["buildx", "inspect", "--bootstrap"], environment)
+    return
+  }
+
+  const existingBuilder = spawnSync("docker", ["buildx", "inspect", publisherBuilder], {
+    encoding: "utf8",
+    env: environment,
+  })
+  if (existingBuilder.error?.code === "ENOENT") {
+    throw new Error(`docker is required to release the image`)
+  }
+
+  if (existingBuilder.status === 0) {
+    if (parseBuildxDriver(existingBuilder.stdout) === "docker") {
+      throw new Error(`Buildx builder ${publisherBuilder} must use the docker-container driver`)
+    }
+    runOrThrow("docker", ["buildx", "inspect", publisherBuilder, "--bootstrap"], environment)
+  } else {
+    runOrThrow(
+      "docker",
+      ["buildx", "create", "--name", publisherBuilder, "--driver", "docker-container", "--bootstrap"],
+      environment
+    )
+  }
+
+  environment.BUILDX_BUILDER = publisherBuilder
+}
+
+/** Extracts the selected Buildx driver from its stable inspect output. */
+export function parseBuildxDriver(value) {
+  const driver = /^Driver:\s*(\S+)\s*$/m.exec(value)?.[1]
+  if (driver === undefined) {
+    throw new Error(`Docker Buildx did not report its selected driver`)
+  }
+  return driver
 }
 
 /**
