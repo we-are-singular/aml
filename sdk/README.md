@@ -78,7 +78,9 @@ primitive spans cannot isolate. AML owns correlation identities and closes spans
 there is deliberately no concurrency-ambiguous latest-run API. Provider usage remains optional provider-reported JSON,
 Agent cleanup outcomes have their own field, and trace-consumer failures continue through `AmlRuntime.onTraceError`. The
 collector does not rewrite evaluation status. AML does not infer model calls, costs, cache behavior, or missing token
-fields.
+fields. Its `acpToolCalls` aggregate counts initial provider-reported ACP tool calls by exact capability name without
+retaining arguments, results, updates, prompts, or model text. Names do not portably identify a backend or MCP server.
+This is separate from `tools`, which measures declarative AML `<Tool>` execution spans; a routed call may appear in both.
 
 ## Coding agents
 

@@ -46,6 +46,9 @@ async function evaluateRequest(requestId: string, candidates: number) {
 
 const [first, second] = await Promise.all([evaluateRequest("request-1", 3), evaluateRequest("request-2", 7)])
 
+// Applications can check acpToolCalls.byName for a supplied provider capability
+// without storing raw ACP events. Names are provider-reported identifiers, and
+// the separate tools aggregate measures AML <Tool> execution spans.
 // providerUsage is [] when the active provider reports no usage. ACP usage is
 // retained as provider-reported JSON; AML does not reinterpret turns as calls,
 // invent token fields, calculate costs, or infer cache behavior.

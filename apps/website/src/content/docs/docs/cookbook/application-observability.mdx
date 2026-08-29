@@ -69,9 +69,15 @@ async function evaluateRequest(requestId: string, candidates: number) {
 const [first, second] = await Promise.all([evaluateRequest("request-1", 3), evaluateRequest("request-2", 7)])
 ```
 
-The collector retains completed summaries until `deleteRun(runId)`. `providerUsage: []` explicitly means no provider
-usage was reported. If ACP reports usage, the entry keeps that provider-owned JSON shape without inferred tokens, model
-calls, cache data, cost, or billing meaning.
+The collector retains completed summaries until `deleteRun(runId)`. To answer whether a supplied capability was actually
+invoked, inspect `summary.acpToolCalls.byName[providerCapabilityName]` without storing raw ACP events. The aggregate keeps
+only initial call counts and exact provider-reported names; it does not retain arguments, results, updates, prompts, or
+model text. A name is a provider-contract identifier, not a portable backend or MCP-server identity.
+
+`summary.tools` measures the different declarative AML `<Tool>` execution-span boundary. A call routed to an AML Tool may
+appear in both aggregates and is intentionally not deduplicated. `providerUsage: []` explicitly means no provider usage
+was reported. If ACP reports usage, the entry keeps that provider-owned JSON shape without inferred tokens, model calls,
+cache data, cost, or billing meaning.
 
 <Aside type="note" title="Telemetry failures are not workflow failures">
   Handle sink failures with the runtime's existing `onTraceError` option; sink failures do not change the workflow
