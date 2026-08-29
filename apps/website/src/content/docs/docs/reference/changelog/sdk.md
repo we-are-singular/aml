@@ -10,6 +10,44 @@ This page tracks `@aml-jsx/sdk`. Entries are newest first. See [GitHub Releases]
 
 <!-- changelog:entries -->
 
+## SDK v0.7.0 — Parallel branches, callable Tools, and per-Agent timeouts
+
+Released 2026-08-29.
+
+This release introduces an explicit concurrency boundary, makes defined Tools callable from application code, adds per-Agent execution timeouts and diagnostic names, and correlates application work and run summaries in the trace stream. It also keeps structured output reliable for nested Agents and hardens permission inheritance for Codex and OpenCode subagents.
+
+### Highlights
+
+- **Parallel branches with an explicit concurrency boundary** New `<Parallel />` evaluates independent text-producing branches concurrently, so branches may finish in any order but contribute successful text in authored order. It waits for every branch and its Sandbox/Workspace cleanup before resolving, and surfaces any rejection as one exported ParallelError whose failures keep the authored branch index and cause. Caller cancellation still propagates, and maxConcurrentAgents remains the single limit on provider calls. [Parallel reference](/docs/reference/primitives/parallel) · [Explicit concurrency](/docs/concepts/#explicit-concurrency)
+- **Defined Tools are now callable from application code** The `defineTool()` result becomes both a model-grantable Tool and a directly callable function usable inside an active component without an enclosing `<Agent />` or `<Tool />`. Calls share the same execution path, schema-validating input and revalidating and snapshotting output while inheriting cancellation and tracing, and never grant the Tool to a model. Granted Tools must reference the exact callable returned by `defineTool()`. [Tool reference](/docs/reference/primitives/tool) · [Tool or MCP](/docs/cookbook/tool-or-mcp)
+- **Application observability across the trace stream** Components can time custom phases with `withTraceSpan()`, and `createTraceSummaryCollector()` derives content-free per-run summaries keyed by an explicit `runId`, with `deleteRun()` to release them. Preserved ACP message boundaries and a bounded repair turn keep structured results reliable for nested Agents. Telemetry sink failures stay isolated on `onTraceError` and never change the workflow result. [Observability](/docs/observability) · [Application observability cookbook](/docs/cookbook/application-observability)
+- **Per-Agent execution timeouts and diagnostic names** A `timeoutMs` prop bounds a provider session after it acquires a scheduler slot, aborting on the earliest of timeout or enclosing cancellation and surfacing a timeout reason with elapsed `timeoutMs` in the trace. A `name` prop adds optional, non-unique diagnostic metadata for relating traces and failures to workflows, never reaching the prompt or system instructions. [Agent reference](/docs/reference/primitives/agent)
+- **Delegated subagents inherit restricted permissions** Codex and OpenCode now deny restricted delegation so native child sessions cannot widen the portable AML permission set. OpenCode maps read-only filesystem, no shell, or no network into inherited edit, bash, and web deny rules; Codex keeps restricted subagents within the single AML-owned session. [OpenCode Agent](/docs/providers/agents/opencode) · [Codex Agent](/docs/providers/agents/codex)
+
+### Commits
+
+- feat(sdk): #30 add application observability (3f12335)
+- feat(sdk): #29 make defined tools callable (c0a6a83)
+- feat(sdk): #28 preserve acp message boundaries (cc67af7)
+- test(sdk): cover parallel cleanup failures (0452df1)
+- feat(sdk): #9 add explicit parallel boundary (a01a823)
+- fix(sdk): verify acp session configuration (650ad0a)
+- feat(sdk): #11 support nested structured output (0dadac0)
+- fix(sdk): #22 repair missing structured output (c87e4f8)
+- fix(agent-opencode): align acp launch with runtime requests (d1c9a0f)
+- test(agent-codex): prove delegated sandbox inheritance (2d8bbaa)
+- test(agent-opencode): prove delegated permission inheritance (d862248)
+- fix(agent-codex): preserve restricted subagent delegation (d29dc5d)
+- fix(agent-opencode): #20 inherit task permissions (e7494cd)
+- fix(agent-codex): #20 prevent restricted subagent delegation (b188163)
+- fix(agent-opencode): #20 prevent restricted task delegation (24e320b)
+- fix(sdk): preserve cancellation during agent cleanup (bca0107)
+- feat(sdk): #12 add per-agent execution timeouts (de044a9)
+- feat(sdk): add agent diagnostic names (a20447b)
+- release(sandbox): v0.2.0 (4f497bd)
+- build(sandbox): update aml runtime (b0418e3)
+- refactor(sandbox): align source and release lane (ca51b2e)
+
 ## SDK v0.6.0 — A portable Agent runtime image
 
 Released 2026-08-18.
