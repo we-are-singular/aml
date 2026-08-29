@@ -77,12 +77,17 @@ COPY README.md CHANGELOG.md LICENSE THIRD_PARTY_NOTICES.md /usr/share/doc/aml-ag
 COPY --from=build /opt/aml-agent-sandbox/node_modules/@github/copilot/LICENSE.md /usr/share/doc/aml-agent-sandbox/licenses/GitHub-Copilot-CLI-LICENSE.md
 
 # Bare ESM imports search ancestor node_modules directories, not npm's global
-# prefix. Root remains an ancestor when /workspace is bind-mounted.
+# prefix. Root remains an ancestor when /workspace is bind-mounted. Login shells
+# replace the image PATH, so advertised commands also live in /usr/local/bin for
+# downstream Dockerfiles and setup scripts.
 RUN ln -s ../lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm \
     && ln -s ../lib/node_modules/npm/bin/npx-cli.js /usr/local/bin/npx \
     && ln -s /opt/aml-agent-sandbox/node_modules /node_modules \
     && ln -s /usr/bin/fdfind /usr/local/bin/fd \
-    && ln -s /usr/bin/pip3 /usr/local/bin/pip
+    && ln -s /usr/bin/pip3 /usr/local/bin/pip \
+    && for command_name in aml codex-acp codex copilot glm-acp-agent opencode pi-acp pi pi-mcp-adapter; do \
+        ln -s "/opt/aml-agent-sandbox/node_modules/.bin/$command_name" "/usr/local/bin/$command_name"; \
+    done
 
 RUN useradd --uid 1000 --user-group --shell /bin/sh --create-home aml
 
