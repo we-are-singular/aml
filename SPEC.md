@@ -215,30 +215,30 @@ AML cannot automatically roll back arbitrary effects already performed by an Age
 
 ### 3.1 Normative surface
 
-| Surface                            | Purpose                                                              | Result                     |
-| ---------------------------------- | -------------------------------------------------------------------- | -------------------------- |
-| `<Fragment>` / `<>`                | Group authored siblings                                              | Ordered child results      |
-| `AmlRuntime`                       | Own one complete evaluation                                          | Final string               |
-| `<Agent>`                          | Execute one Agent boundary                                           | Final text                 |
-| `<Parallel>`                       | Evaluate independent AML branches concurrently                       | Ordered branch text        |
-| `<System>`                         | Contribute resolved text to an Agent's system prompt                 | System descriptor          |
-| `defineAgentProvider()`            | Define an Agent harness adapter                                      | `AgentProvider`            |
-| `<Tool>`                           | Grant a JavaScript capability                                        | Tool descriptor            |
-| `defineTool()`                     | Expose a JavaScript function to an Agent                             | Tool definition            |
-| `<Skill>`                          | Resolve reusable instruction text                                    | Text                       |
-| `<File>`                           | Materialize resolved text inside an active Workspace                 | No text                    |
-| `<Sandbox>`                        | Scope an ephemeral execution lease and restrictive filesystem policy | Descendant execution scope |
-| `defineSandboxProvider()`          | Define an ephemeral execution adapter                                | `SandboxProvider`          |
-| `<Script>`                         | Execute an authored command on the host or in an active Sandbox      | Standard output            |
-| `<Workspace>`                      | Load and save one durable working directory                          | Descendant filesystem root |
-| `defineWorkspaceProvider()`        | Define a durable workspace adapter                                   | `WorkspaceProvider`        |
-| `<Mcp>`                            | Grant a provider-native or explicitly configured MCP server          | MCP server descriptor      |
-| `defineMcpServer()`                | Define an explicitly configured MCP server grant                     | MCP server definition      |
-| `evaluate()`                       | Evaluate AML as component-local data                                 | `Promise<string \| T>`     |
-| `<FollowUp>`                       | Stage another input in the same Agent session                        | Turn descriptor            |
-| `<Loop>`                           | Repeat fresh Agents over validated state snapshots                   | Final text                 |
-| `<Context.Provider>`               | Scope an immutable dependency downward                               | Descendant context         |
-| `createContext()` / `useContext()` | Define and read scoped dependencies                                  | Typed value                |
+| Surface                            | Purpose                                                               | Result                     |
+| ---------------------------------- | --------------------------------------------------------------------- | -------------------------- |
+| `<Fragment>` / `<>`                | Group authored siblings                                               | Ordered child results      |
+| `AmlRuntime`                       | Own one complete evaluation                                           | Final string               |
+| `<Agent>`                          | Execute one Agent boundary                                            | Final text                 |
+| `<Parallel>`                       | Evaluate independent AML branches concurrently                        | Ordered branch text        |
+| `<System>`                         | Contribute resolved text to an Agent's system prompt                  | System descriptor          |
+| `defineAgentProvider()`            | Define an Agent harness adapter                                       | `AgentProvider`            |
+| `<Tool>`                           | Grant a JavaScript capability                                         | Tool descriptor            |
+| `defineTool()`                     | Create a callable JavaScript Tool for application use or Agent grants | `AmlTool<Input, Output>`   |
+| `<Skill>`                          | Resolve reusable instruction text                                     | Text                       |
+| `<File>`                           | Materialize resolved text inside an active Workspace                  | No text                    |
+| `<Sandbox>`                        | Scope an ephemeral execution lease and restrictive filesystem policy  | Descendant execution scope |
+| `defineSandboxProvider()`          | Define an ephemeral execution adapter                                 | `SandboxProvider`          |
+| `<Script>`                         | Execute an authored command on the host or in an active Sandbox       | Standard output            |
+| `<Workspace>`                      | Load and save one durable working directory                           | Descendant filesystem root |
+| `defineWorkspaceProvider()`        | Define a durable workspace adapter                                    | `WorkspaceProvider`        |
+| `<Mcp>`                            | Grant a provider-native or explicitly configured MCP server           | MCP server descriptor      |
+| `defineMcpServer()`                | Define an explicitly configured MCP server grant                      | MCP server definition      |
+| `evaluate()`                       | Evaluate AML as component-local data                                  | `Promise<string \| T>`     |
+| `<FollowUp>`                       | Stage another input in the same Agent session                         | Turn descriptor            |
+| `<Loop>`                           | Repeat fresh Agents over validated state snapshots                    | Final text                 |
+| `<Context.Provider>`               | Scope an immutable dependency downward                                | Descendant context         |
+| `createContext()` / `useContext()` | Define and read scoped dependencies                                   | Typed value                |
 
 `<Loop>`, `<Context.Provider>`, and `createContext()` / `useContext()` are draft design targets. Their sections remain in this specification so the intended boundaries can be reviewed, but they are not part of the current public reference or release-ready primitive count.
 
@@ -664,7 +664,7 @@ Rules:
 
 ## 8. Tools
 
-Tools are application-defined JavaScript capabilities, not render-time calls and not aliases for an Agent's native Unix tools.
+Tools are application-defined JavaScript capabilities, not aliases for an Agent's native Unix tools. Calling an `AmlTool` from an active function component performs application-selected work; evaluating `<Tool use={tool} />` does not call it and instead grants it to the nearest Agent.
 
 `<Tool>` is a capitalized exported component. AML does not define lowercase HTML-like intrinsic elements.
 
@@ -691,7 +691,9 @@ interface AgentToolExecutionContext {
   trace: AmlTraceIdentity
 }
 
-interface AmlTool extends AgentJavaScriptTool {
+interface AmlTool<Input, Output> extends AgentJavaScriptTool {
+  (input: Input): Promise<Output>
+
   // Nominal SDK brand: authored through defineTool(), not implemented structurally.
 }
 ```
@@ -700,7 +702,7 @@ Tool names and descriptions must be non-empty strings equal to their trimmed for
 
 ### 8.1 JavaScript tools
 
-`defineTool()` exposes an in-process JavaScript function:
+`defineTool()` captures an authored function and returns one immutable, callable `AmlTool` identity:
 
 ```tsx
 const lookupCustomer = defineTool({
@@ -713,13 +715,20 @@ const lookupCustomer = defineTool({
   output: Customer,
 })
 
-<Agent>
-  <Tool use={lookupCustomer} />
-  Look up customer 42.
-</Agent>
+async function Workflow() {
+  const customer = await lookupCustomer({ id: 42 })
+  return customer.name
+}
+
+const CustomerAgent = (
+  <Agent>
+    <Tool use={lookupCustomer} />
+    Look up customer 42.
+  </Agent>
+)
 ```
 
-The input schema must satisfy both Standard Schema and Standard JSON Schema. `defineTool()` generates draft 2020-12 input JSON Schema synchronously, validates the returned JSON value, and freezes a stable snapshot. `AmlTool` has a non-enumerable authoring brand, while runtime authenticity uses a package-global exact-identity registry that maps the original `defineTool()` result to an SDK-owned execution port. `<Tool use>` rejects structurally similar objects, clones, derived objects, and forwarding proxies so replaced public members cannot bypass validation. The registry remains interoperable across physical copies of the same SDK package in one JavaScript realm. AML validates every call before the authored `execute()` runs and gives only that generated JSON Schema to the Agent provider. An optional Standard Schema output contract validates and may transform the function result.
+The input schema must satisfy both Standard Schema and Standard JSON Schema. `defineTool()` generates draft 2020-12 input JSON Schema synchronously, validates the returned JSON value, and freezes a stable snapshot. The returned function carries immutable `name`, `description`, `inputSchema`, `kind`, and low-level `execute(input, context)` properties. `AmlTool` has a non-enumerable authoring brand, while runtime authenticity uses a package-global exact-identity registry that maps the original callable to an SDK-owned execution port. `<Tool use>` rejects structurally similar objects, clones, derived objects, and forwarding proxies so replaced public members cannot bypass validation. The registry remains interoperable across physical copies of the same SDK package in one JavaScript realm. AML validates every call before the authored `execute()` runs and gives only the generated JSON Schema to the Agent provider. An optional Standard Schema output contract validates and may transform the function result.
 
 Every successful result must be a string or stable JSON data even without an output schema. AML rejects:
 
@@ -770,9 +779,17 @@ const runtime = new AmlRuntime({
 
 An undeclared name fails before the Agent executes. When the allowlist is omitted, AML adds no runtime name restriction.
 
-A Tool outside an Agent is invalid. Duplicate names in one Agent are invalid. Trusted JavaScript tools execute in the AML host process; `<Sandbox>` does not automatically confine arbitrary host functions.
+A `<Tool>` grant outside an Agent is invalid. Duplicate names in one Agent are invalid. Trusted JavaScript tools execute in the AML host process; `<Sandbox>` does not automatically confine arbitrary host functions.
 
-### 8.3 Transport input normalization
+### 8.3 Application invocation
+
+Calling the function returned by `defineTool()` invokes that exact Tool from application component code. It does not require an enclosing `<Agent>` or `<Tool>`, does not add a capability to an Agent plan, and never exposes the Tool to a model. The call uses the same registered SDK-owned execution port as Agent-driven calls, including input and optional output validation, stable JSON snapshots, `ToolInputError` and `ToolOutputError`, and the shared `kind="tool"` tracing path. Application invocation spans carry `invocation: "application"`; input and output remain metadata-only unless a trace sink opts into content capture.
+
+Calling an `AmlTool` has the same component-local lexical lifetime as `evaluate()` and `useContext()`. It throws `EvaluationError` at module initialization, outside evaluation, after AML observes the component settle, and from detached work that outlives the component. It inherits the active evaluation `AbortSignal` and checks already-aborted evaluations before application Tool code runs. A started call is component-owned work even when its Promise is not explicitly awaited: AML joins it before leaving the component, so an enclosing Workspace or Sandbox cannot clean up underneath it.
+
+Application Tools execute in the AML host process. An enclosing `<Sandbox>` does not redirect or confine a callable Tool; Tool code must explicitly use a Sandbox-scoped capability when that is intended.
+
+### 8.4 Transport input normalization
 
 The declared input schema remains authoritative. Before schema validation, AML snapshots every non-omitted provider value once into stable JSON and uses that same snapshot whether content tracing is disabled or enabled. This prevents stateful accessors or proxies from presenting different data to tracing and validation. Invalid transport JSON throws `ToolInputError`; omitted input remains `undefined` for the schema algorithm below.
 

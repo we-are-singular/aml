@@ -72,7 +72,7 @@ Use ordinary TypeScript for composition, branching, dependencies, and explicit p
 
 ### Capability visibility
 
-JavaScript Tools and MCP servers are invocation-scoped grants. Native filesystem, shell, and network access is requested through optimistic `<Agent permissions>` defaults rather than repetitive Tool declarations. The active Sandbox, not ACP permission prompts, is the security boundary for model-controlled operations.
+`<Tool>` and `<Mcp>` create invocation-scoped model grants. A JavaScript Tool may also be called directly by active application component code without granting it to a model. Native filesystem, shell, and network access is requested through optimistic `<Agent permissions>` defaults rather than repetitive Tool declarations. The active Sandbox, not ACP permission prompts, is the security boundary for model-controlled operations.
 
 Without an active Sandbox, `<Agent>` runs according to its provider and `<Script>` uses trusted local process execution. An active Sandbox supplies the execution environment for compatible descendant Agents and Scripts and must never silently fall back to the host.
 
@@ -193,13 +193,14 @@ may implement it directly, but a provider that claims built-in coding-agent or S
 Definition helpers are provider-authoring and application-authoring tools, not registries. Each helper:
 
 - validates its input eagerly
-- returns an opaque definition
+- returns one immutable authored value
 - preserves exact identity for capability matching
 - prevents mutation from changing evaluation behavior
 - performs no I/O
-- does not register globally
 - does not create a hidden singleton
 - does not infer a provider from a string name
+
+`defineTool()` returns a typed callable carrying its immutable model-facing declaration and explicit low-level execution method. Calling it from an active AML component runs application work; passing the same identity to `<Tool use>` grants its registered execution port to that Agent. The exact-identity registry is realm-global and weakly held so separately installed SDK copies interoperate, but it is not a discoverable name registry or source of ambient capabilities.
 
 ### Distribution and proof
 

@@ -100,6 +100,8 @@ runtime.on("trace", createConsoleTracer())
 console.log(await runtime.evaluate(<Review />))
 ```
 
+`defineTool()` returns a typed callable. An active function component can call `ReadSource({ path })` as application work, while `<Tool use={ReadSource} />` explicitly grants that same Tool to one model session.
+
 The workflow stays the same when the provider changes. Replace `OpenCode` with a Codex, GitHub Copilot, GLM, or Pi provider without rewriting the AML tree:
 
 ```tsx
@@ -150,7 +152,7 @@ workflows with `@aml-jsx/sdk`.
 | `AmlRuntime`                          | Evaluates a complete AML tree, owns budgets and lifecycle events, and returns the final text output.             |
 | `ProcessSignalCancellation`           | Converts application-owned SIGINT/SIGTERM handling into bounded runtime cancellation.                            |
 | `evaluate()`                          | Evaluates AML from inside an active component and returns text or schema-validated structured data.              |
-| `defineTool()`                        | Turns a JavaScript function into a model-callable capability with validated input and optional validated output. |
+| `defineTool()`                        | Creates a typed callable Tool for application code or an explicit `<Tool use>` model grant.                      |
 | `defineMcpServer()`                   | Creates an immutable provider-neutral MCP descriptor for a local stdio process or remote Streamable HTTP server. |
 | `defineAgentProvider()`               | Defines an Agent harness adapter implementing AML's provider contract.                                           |
 | `AbstractAgentProvider`               | Optional lifecycle template for custom structural providers outside the built-in ACP path.                       |
@@ -288,6 +290,7 @@ Every example is one self-contained AML component. Run one with `npm run example
 | [`concurrency`](./examples/src/core/concurrency.tsx)                     | Runs two specialists concurrently and preserves authored result order for synthesis.                   |
 | [`structured`](./examples/src/core/structured.tsx)                       | Passes schema-validated Agent data into a later text-producing Agent.                                  |
 | [`context`](./examples/src/core/context.tsx)                             | Injects a session repository and captures it inside a JavaScript Tool without adding it to the prompt. |
+| [`programmatic-tool`](./examples/src/core/programmatic-tool.tsx)         | Calls a validated Tool from application component code without granting it to a model.                 |
 | [`follow-up`](./examples/src/core/follow-up.tsx)                         | Authors several turns inside one Agent session.                                                        |
 | [`skill`](./examples/src/capabilities/skill.tsx)                         | Adds reusable inline instructions to an Agent.                                                         |
 | [`mcp`](./examples/src/capabilities/mcp.tsx)                             | Grants one Agent an MCP server while proving sibling capability isolation.                             |

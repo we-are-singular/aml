@@ -155,7 +155,7 @@ Prefer focused assertions on the normalized request and result. Avoid broad snap
 
 ## Spy on application-owned Tool behavior
 
-Vitest spies are useful at dependencies your application owns. The Tool remains the narrow model-facing boundary while the spy verifies the underlying operation.
+Vitest spies are useful at dependencies your application owns. This example deliberately calls `.execute(input, context)` because the deterministic provider receives AML's low-level provider-facing port. Application components should call the `defineTool()` result directly.
 
 ```tsx
 import { expect, it, vi } from "vitest"

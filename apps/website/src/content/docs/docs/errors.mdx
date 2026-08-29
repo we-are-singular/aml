@@ -9,12 +9,12 @@ AML rejects invalid placement, invalid data, policy violations, provider failure
 
 ## Public AML error classes
 
-| Class                    | Stable identity                     | Typical cause                                                                                                       | Retry guidance                                                                      |
-| ------------------------ | ----------------------------------- | ------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
-| `EvaluationError`        | `name === "EvaluationError"`        | Invalid AML value/placement, missing scope, cycle, policy, limit, or structured-output contract                     | Fix the workflow or configuration; do not blindly retry                             |
-| `ToolInputError`         | `name === "ToolInputError"`         | Model-supplied [`<Tool />`](/docs/reference/primitives/tool/) input fails JSON or input-schema validation           | Usually ask the Agent to correct its call; retry only with a bounded policy         |
-| `ToolOutputError`        | `name === "ToolOutputError"`        | [`<Tool />`](/docs/reference/primitives/tool/) output cannot cross the provider boundary or fails output validation | Fix the Tool output/schema; a network retry may be appropriate only inside the Tool |
-| `WorkspaceConflictError` | `code === "AML_WORKSPACE_CONFLICT"` | Another writer owns the same [`<Workspace />`](/docs/reference/primitives/workspace/) identity                      | Serialize, choose another identity, or retry acquisition with backoff               |
+| Class                    | Stable identity                     | Typical cause                                                                                   | Retry guidance                                                               |
+| ------------------------ | ----------------------------------- | ----------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| `EvaluationError`        | `name === "EvaluationError"`        | Invalid AML value/placement, missing scope, cycle, policy, limit, or structured-output contract | Fix the workflow or configuration; do not blindly retry                      |
+| `ToolInputError`         | `name === "ToolInputError"`         | A callable Tool receives input that fails JSON or input-schema validation                       | Correct application input or ask the Agent to correct a model-selected call  |
+| `ToolOutputError`        | `name === "ToolOutputError"`        | A callable Tool returns data that fails output validation or the stable JSON boundary           | Fix the Tool output/schema; retry only when the underlying operation is safe |
+| `WorkspaceConflictError` | `code === "AML_WORKSPACE_CONFLICT"` | Another writer owns the same [`<Workspace />`](/docs/reference/primitives/workspace/) identity  | Serialize, choose another identity, or retry acquisition with backoff        |
 
 Only `WorkspaceConflictError` defines an AML-specific `code`. Do not invent a code for `EvaluationError`, `ToolInputError`, or `ToolOutputError`; preserve the class/name and `cause` instead.
 
@@ -42,6 +42,7 @@ The static `WorkspaceConflictError.is()` check is useful across duplicated physi
 The class is intentionally broad because the error message identifies the invalid contract. Common messages include:
 
 - `evaluate() is only available while an AML component is active` — move the call into an async AML component.
+- `Tools can only be called while an AML component is active` — call the function returned by `defineTool()` during active component evaluation, or use its explicit low-level `execute(input, context)` API only in provider/test infrastructure.
 - `<Tool> is only valid inside <Agent>` or `<Mcp> is only valid inside <Agent>` — move the capability under its owning [`<Agent />`](/docs/reference/primitives/agent/).
 - `<File> requires an enclosing <Workspace>` — write through [`<Workspace />`](/docs/reference/primitives/workspace/).
 - `A nested <Sandbox> cannot widen read-only access to read-write` — narrow the child [`<Sandbox />`](/docs/reference/primitives/sandbox/) policy or change the parent policy.
@@ -53,7 +54,7 @@ Path validation also rejects absolute paths, parent traversal, and paths that es
 
 ## Tool validation boundaries
 
-[`defineTool()`](/docs/reference/primitives/tool/) validates the [`<Tool />`](/docs/reference/primitives/tool/) definition when it is created and validates inputs/outputs at the provider boundary. A Tool input failure means application code did not run for that invalid input. An output failure means the Tool may already have performed its external effect; correcting the schema does not undo it.
+[`defineTool()`](/docs/reference/primitives/tool/) validates the Tool definition when it is created. Both application calls and Agent-driven calls use the same registered input/output validation boundary. A Tool input failure means the authored executor did not run for that invalid input. An output failure means the Tool may already have performed its external effect; correcting the schema does not undo it.
 
 ```tsx
 const ReadOrder = defineTool({

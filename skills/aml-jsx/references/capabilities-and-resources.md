@@ -2,7 +2,7 @@
 
 ## JavaScript tools
 
-Define model-callable JavaScript with a Standard Schema-compatible input. Add an output schema when the tool's result also needs validation:
+`defineTool()` returns one typed callable with a Standard Schema-compatible input. Call it from an active component when application code chooses the operation; pass the same identity to `<Tool use>` only when the model should receive that capability. Add an output schema when the Tool's result also needs validation:
 
 ```tsx
 import { readFile } from "node:fs/promises"
@@ -14,16 +14,23 @@ const ReadSource = defineTool({
   name: "read_source",
   description: "Read one source file from the current project",
   input: z.object({ path: z.string() }),
+  output: z.string(),
   execute: async ({ path }) => await readFile(path, "utf8"),
 })
 
-<Agent provider={OpenCode}>
-  <Tool use={ReadSource} />
-  Read src/index.ts and summarize it.
-</Agent>
+async function LoadSource() {
+  return await ReadSource({ path: "src/index.ts" })
+}
+
+const SourceAgent = (
+  <Agent provider={OpenCode}>
+    <Tool use={ReadSource} />
+    Read src/index.ts and summarize it.
+  </Agent>
+)
 ```
 
-Use the execution context passed to `execute(input, context)` for invocation-scoped signals or resources. Do not capture mutable global execution state.
+The authored `execute(input, context)` callback receives invocation-scoped cancellation and trace state for both application and model-selected calls. The returned Tool's public `.execute(input, context)` method is the explicit low-level provider/test API; application components use the callable form. Do not capture mutable global execution state.
 
 Native repository reads, edits, shell commands, and network access belong to the coding Agent rather than `<Tool>`.
 They default optimistically on and can be narrowed with `<Agent permissions={...}>`. Profiles map those requests to

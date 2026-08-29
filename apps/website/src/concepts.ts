@@ -373,14 +373,19 @@ const findings = await evaluate(
     name: "defineTool()",
     signature: "defineTool({ name, input, execute })",
     description:
-      "Turns a JavaScript function into a model-callable capability with validated input and optional validated output. Execution is bridged by the Agent provider; invalid calls never reach your function.",
+      "Returns a typed callable with validated input and optional validated output. Active components can call it directly; <Tool use={tool} /> separately grants the same identity to one Agent.",
     file: "define-tool.ts",
     code: `const ReadSource = defineTool({
   name: "read_source",
   description: "Read one source file from the current project",
   input: z.object({ path: z.string() }),
+  output: z.string(),
   execute: async ({ path }) => await readFile(path, "utf8"),
-})`,
+})
+
+async function LoadSource() {
+  return await ReadSource({ path: "src/index.ts" })
+}`,
   },
   {
     id: "define-mcp-server",
