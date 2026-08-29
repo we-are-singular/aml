@@ -29,7 +29,7 @@ const REPO_ROOT = new URL("..", import.meta.url).pathname
 const provider = opencodeAgent({
   directory: REPO_ROOT,
   ...(process.env.OPENCODE_API_KEY === undefined ? {} : { env: { OPENCODE_API_KEY: process.env.OPENCODE_API_KEY } }),
-  model: process.env.AML_CHANGELOG_MODEL ?? "opencode/deepseek-v4-flash-free",
+  model: process.env.AML_CHANGELOG_MODEL ?? "opencode-go/deepseek-v4-flash",
 })
 
 interface ChangelogProps {
