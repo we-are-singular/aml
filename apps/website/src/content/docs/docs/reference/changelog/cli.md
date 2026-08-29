@@ -10,6 +10,16 @@ This page tracks `@aml-jsx/cli`. Entries are newest first. See [GitHub Releases]
 
 <!-- changelog:entries -->
 
+## CLI v0.3.2 — Version-only release — no user-facing changes
+
+Released 2026-08-29.
+
+This CLI release contains no new code commits. The working tree bumps `@aml-jsx/cli` to 0.3.2 with no underlying behavioral change, and the release inventory between the prior `cli-v0.3.1` tag and HEAD contains no CLI-scoped commits. There is nothing new for readers to adopt in this entry.
+
+### Highlights
+
+- **No new CLI behavior in this release.** The commit range from `cli-v0.3.1` to HEAD includes only SDK, sandbox, docs, and root-level changes; none touch the CLI. The package version bump to 0.3.2 carries no user-facing addition, fix, or configuration change. The prior entry (CLI v0.3.1) already documents the current CLI capabilities. [CLI reference](/docs/cli)
+
 ## CLI v0.3.1 — SDK 0.6 compatibility
 
 Released 2026-08-18.
