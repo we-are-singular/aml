@@ -2,7 +2,7 @@ import { mkdtemp, mkdir, readFile, rm, symlink, writeFile } from "node:fs/promis
 import os from "node:os"
 import path from "node:path"
 
-import { afterEach, describe, expect, it } from "vitest"
+import { afterEach, describe, expect, it, vi } from "vitest"
 
 import { AmlRuntime, Sandbox, Script, type SandboxAcquireRequest, Workspace } from "@aml-jsx/sdk"
 import { DeterministicWorkspaceProvider, sandboxProviderConformance } from "@aml-jsx/sdk/testing"
@@ -157,7 +157,12 @@ describe("localSandbox()", () => {
     await spawned.kill()
     await spawned.wait().catch(() => undefined)
     await reader.cancel()
-    expect(() => process.kill(childPid, 0)).toThrow(expect.objectContaining({ code: "ESRCH" }))
+    // The killed grandchild can briefly remain as a zombie until the runner's
+    // init process reaps it, during which signal 0 still reports that PID.
+    await vi.waitFor(
+      () => expect(() => process.kill(childPid, 0)).toThrow(expect.objectContaining({ code: "ESRCH" })),
+      { timeout: 1_000 }
+    )
     await lease.release()
   })
 
