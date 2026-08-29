@@ -231,7 +231,7 @@ describe("opencodeAgent()", () => {
     expect(prompts[1]).toContain('"proof"')
   })
 
-  it("maps restrictive Agent permissions into OpenCode's native controls", async () => {
+  it("merges caller-disabled native tools before portable permission denials", async () => {
     let config: Record<string, unknown> | undefined
     const sandboxProvider = new DeterministicSandboxProvider({
       exec: command => ({ exitCode: 0, stderr: "", stdout: command === "pwd" ? "/sandbox/repository\n" : "" }),
@@ -240,7 +240,13 @@ describe("opencodeAgent()", () => {
         return completedProcess()
       },
     })
-    const provider = opencodeAgent({ config: { permission: { bash: "allow", question: "deny" } } })
+    const provider = opencodeAgent({
+      config: {
+        agent: { aml: { tools: { edit: true, question: false, write: true } } },
+        permission: { bash: "allow", question: "deny" },
+        tools: { question: true, task: false },
+      },
+    })
 
     await expect(
       new AmlRuntime({ agentProvider: provider }).evaluate(
@@ -266,6 +272,8 @@ describe("opencodeAgent()", () => {
             "*": true,
             bash: false,
             edit: false,
+            question: false,
+            task: false,
             webfetch: false,
             websearch: false,
             write: false,
@@ -281,7 +289,6 @@ describe("opencodeAgent()", () => {
       },
     })
     expect(config).not.toHaveProperty("agent.aml.permission.task")
-    expect(config).not.toHaveProperty("agent.aml.tools.task")
     expect(config).not.toHaveProperty("instructions")
     expect((config.agent as { aml: unknown }).aml).not.toHaveProperty("prompt")
   })
