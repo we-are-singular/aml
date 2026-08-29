@@ -11,7 +11,8 @@ import { ToolInputError } from "./tool-input-error.js"
 export function instrumentAgentTools(
   tools: readonly AgentTool[],
   context: EvaluationContext,
-  parent: AmlTraceIdentity
+  parent: AmlTraceIdentity,
+  attributes: Readonly<Record<string, string>> = {}
 ): readonly AgentTool[] {
   return Object.freeze(
     tools.map((tool): AgentTool => {
@@ -27,7 +28,7 @@ export function instrumentAgentTools(
               input === undefined ? undefined : JsonSnapshot.capture(input, `Tool "${tool.name}" transport input`)
           } catch (cause) {
             const error = new ToolInputError(`Tool "${tool.name}" input is not valid JSON`, { cause })
-            const span = context.startTraceSpan(trace, "tool", tool.name)
+            const span = context.startTraceSpan(trace, "tool", tool.name, attributes)
 
             context.failTraceSpan(span, error)
             throw error
@@ -38,7 +39,7 @@ export function instrumentAgentTools(
             trace,
             "tool",
             tool.name,
-            {},
+            attributes,
             serializedInput === undefined ? {} : { input: serializedInput }
           )
 

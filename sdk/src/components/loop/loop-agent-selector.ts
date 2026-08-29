@@ -3,8 +3,15 @@ import type { AgentProps } from "../agent/agent.js"
 import { ContextRegistry } from "../context/context-registry.js"
 import type { ContextScope } from "../context/context-scope.js"
 import { AmlNode, type AmlRenderable } from "../../core/aml-node.js"
-import { ComponentEvaluationContext } from "../../core/component-evaluation-context.js"
 import { EvaluationError } from "../../core/evaluation-error.js"
+
+type NestedEvaluator = (value: AmlRenderable, schema: AmlModelSchema<unknown, unknown> | undefined) => Promise<unknown>
+type ComponentInvoker = (
+  componentType: Function,
+  component: () => unknown,
+  evaluateNested: NestedEvaluator,
+  contextScope: ContextScope
+) => Promise<unknown>
 
 interface ResolveFrame {
   readonly contextScope: ContextScope
@@ -63,6 +70,7 @@ export class LoopAgentSelector {
     activeAncestors: ReadonlySet<object>,
     initialContextScope: ContextScope,
     signal: AbortSignal,
+    invokeComponent: ComponentInvoker,
     evaluateNested: (
       value: AmlRenderable,
       schema: AmlModelSchema<unknown, unknown> | undefined,
@@ -194,7 +202,8 @@ export class LoopAgentSelector {
         activeValues.add(current)
         frames.push({ kind: "release", value: current })
 
-        const componentOutput = await ComponentEvaluationContext.invoke(
+        const componentOutput = await invokeComponent(
+          current.type,
           () => current.type(current.props),
           async (nestedValue, nestedSchema) =>
             await evaluateNested(nestedValue, nestedSchema, nodeDepth, new Set(activeValues), frame.contextScope),

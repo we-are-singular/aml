@@ -3,15 +3,19 @@ import { AsyncLocalStorage } from "node:async_hooks"
 import type { AmlModelSchema } from "../components/agent/aml-model-schema.js"
 import type { RegisteredContext } from "../components/context/context-registry.js"
 import type { ContextScope } from "../components/context/context-scope.js"
+import type { AmlTool } from "../components/tool/agent-tool.js"
+import type { AmlJsonValue } from "./aml-json-value.js"
 import type { AmlRenderable } from "./aml-node.js"
 import { EvaluationError } from "./evaluation-error.js"
 
 type NestedEvaluator = (value: AmlRenderable, schema: AmlModelSchema<unknown, unknown> | undefined) => Promise<unknown>
+type ToolCaller = (tool: AmlTool<never, unknown>, input: unknown) => Promise<AmlJsonValue>
 
 interface ComponentEvaluationBinding {
   active: boolean
   contextScope: ContextScope | undefined
   evaluate: NestedEvaluator | undefined
+  callTool: ToolCaller | undefined
   readonly pending: Set<Promise<unknown>>
 }
 
@@ -44,18 +48,21 @@ export class ComponentEvaluationContext {
       throw new EvaluationError("evaluate() is only available while an AML component is active")
     }
 
-    const pending = evaluateNested(value, schema)
-    binding.pending.add(pending)
+    return ComponentEvaluationContext.#track(binding, evaluateNested(value, schema))
+  }
 
-    // Track only work still active when the component settles. Both handlers
-    // observe rejection immediately without changing the Promise returned to
-    // the component or manufacturing another unhandled Promise.
-    void pending.then(
-      () => binding.pending.delete(pending),
-      () => binding.pending.delete(pending)
-    )
+  /**
+   * Invokes one exact defineTool() capability through the active component.
+   */
+  static callTool(tool: AmlTool<never, unknown>, input: unknown): Promise<AmlJsonValue> {
+    const binding = ComponentEvaluationContext.#storage.getStore()
+    const callTool = binding?.callTool
 
-    return pending
+    if (binding === undefined || !binding.active || callTool === undefined) {
+      throw new EvaluationError("Tools can only be called while an AML component is active")
+    }
+
+    return ComponentEvaluationContext.#track(binding, callTool(tool, input))
   }
 
   /**
@@ -99,12 +106,14 @@ export class ComponentEvaluationContext {
   static async invoke(
     component: () => unknown,
     evaluateNested: NestedEvaluator,
-    contextScope: ContextScope
+    contextScope: ContextScope,
+    callTool: ToolCaller
   ): Promise<unknown> {
     const binding: ComponentEvaluationBinding = {
       active: true,
       contextScope,
       evaluate: evaluateNested,
+      callTool,
       pending: new Set(),
     }
     let componentError: unknown
@@ -151,6 +160,7 @@ export class ComponentEvaluationContext {
       binding.active = false
       binding.contextScope = undefined
       binding.evaluate = undefined
+      binding.callTool = undefined
     }
 
     // Promise.all() rejects before its remaining branches settle. Join only the
@@ -184,6 +194,22 @@ export class ComponentEvaluationContext {
     }
 
     return output
+  }
+
+  /**
+   * Keeps started component work alive through enclosing resource cleanup.
+   */
+  static #track<Result>(binding: ComponentEvaluationBinding, pending: Promise<Result>): Promise<Result> {
+    binding.pending.add(pending)
+
+    // Both handlers observe rejection immediately without changing the Promise
+    // returned to application code or manufacturing an unhandled Promise.
+    void pending.then(
+      () => binding.pending.delete(pending),
+      () => binding.pending.delete(pending)
+    )
+
+    return pending
   }
 }
 

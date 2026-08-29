@@ -53,7 +53,12 @@ export type AgentTool = AgentJavaScriptTool
  * while remaining compatible across physical SDK copies. Runtime authenticity
  * comes from an exact-identity registry, never from this readable shape.
  */
-export interface AmlTool extends AgentJavaScriptTool {
+export interface AmlTool<Input = never, Output = AmlJsonValue> extends AgentJavaScriptTool {
+  /**
+   * Invokes this Tool through the active AML function component.
+   */
+  (input: Input): Promise<Output>
+
   readonly __amlTool: true
 }
 
@@ -64,7 +69,7 @@ export interface AmlTool extends AgentJavaScriptTool {
  * JavaScript realm must recognize each other's definitions without accepting
  * clones, derived objects, or forwarding proxies.
  */
-export function registerAmlTool(tool: AmlTool, execution: AgentJavaScriptTool): void {
+export function registerAmlTool(tool: AmlTool<never, unknown>, execution: AgentJavaScriptTool): void {
   toolRegistry().set(tool, execution)
 }
 
@@ -72,7 +77,9 @@ export function registerAmlTool(tool: AmlTool, execution: AgentJavaScriptTool): 
  * Returns the SDK-owned execution port only for an exact registered identity.
  */
 export function registeredAmlTool(value: unknown): AgentJavaScriptTool | undefined {
-  return typeof value === "object" && value !== null ? toolRegistry().get(value) : undefined
+  return (typeof value === "object" && value !== null) || typeof value === "function"
+    ? toolRegistry().get(value)
+    : undefined
 }
 
 /**

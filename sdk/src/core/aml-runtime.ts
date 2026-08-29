@@ -23,7 +23,8 @@ import type { ScriptProps } from "../components/script/script.js"
 import { type SkillEvaluation, SkillEvaluator } from "../components/skill/skill-evaluator.js"
 import type { SystemProps } from "../components/system/system.js"
 import { ToolCollection } from "../components/tool/tool-collection.js"
-import type { AgentJavaScriptTool } from "../components/tool/agent-tool.js"
+import { registeredAmlTool, type AgentJavaScriptTool, type AmlTool } from "../components/tool/agent-tool.js"
+import { instrumentAgentTools } from "../components/tool/instrument-agent-tools.js"
 import type { ToolProps } from "../components/tool/tool.js"
 import { type WorkspaceEvaluationScope, WorkspaceEvaluator } from "../components/workspace/workspace-evaluator.js"
 import type {
@@ -918,6 +919,28 @@ export class AmlRuntime {
                   new Set(activeValues),
                   frame.target.contextScope,
                   context.signal,
+                  async (componentType, component, evaluateNested, contextScope) => {
+                    const componentTrace = context.createObservationTrace(trace.spanId)
+                    const componentSpan = context.startTraceSpan(
+                      componentTrace,
+                      "component",
+                      traceComponentName(componentType)
+                    )
+
+                    try {
+                      const output = await ComponentEvaluationContext.invoke(
+                        component,
+                        evaluateNested,
+                        contextScope,
+                        (tool, input) => this.#callTool(tool, input, context, componentTrace)
+                      )
+                      context.endTraceSpan(componentSpan, "ok")
+                      return output
+                    } catch (error) {
+                      context.failTraceSpan(componentSpan, error)
+                      throw error
+                    }
+                  },
                   async (nestedValue, nestedSchema, nestedDepth, nestedAncestors, nestedContextScope) => {
                     const modelSchema = nestedSchema === undefined ? undefined : new ModelSchema(nestedSchema)
 
@@ -1357,7 +1380,8 @@ export class AmlRuntime {
                   new Set(activeValues)
                 )
               },
-              frame.target.contextScope
+              frame.target.contextScope,
+              (tool, input) => this.#callTool(tool, input, context, trace)
             )
           } catch (error) {
             context.failTraceSpan(span, error)
@@ -1469,6 +1493,35 @@ export class AmlRuntime {
     }
 
     return output.chunks.join("")
+  }
+
+  /**
+   * Executes application-invoked Tools through the registered SDK port and the
+   * same validation, snapshotting, cancellation, and trace path as Agents.
+   */
+  async #callTool(
+    value: AmlTool<never, unknown>,
+    input: unknown,
+    context: EvaluationContext,
+    parent: AmlTraceIdentity
+  ) {
+    context.signal.throwIfAborted()
+    const registered = registeredAmlTool(value)
+
+    if (registered === undefined) {
+      throw new EvaluationError("Only an exact Tool returned by defineTool() can be called")
+    }
+
+    const instrumented = instrumentAgentTools([registered], context, parent, { invocation: "application" })[0]
+
+    if (instrumented === undefined) {
+      throw new EvaluationError("AML could not prepare the Tool call")
+    }
+
+    return await instrumented.execute(input, {
+      signal: context.signal,
+      trace: parent,
+    })
   }
 }
 

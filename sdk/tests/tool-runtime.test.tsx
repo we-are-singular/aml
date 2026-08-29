@@ -141,8 +141,8 @@ describe("Tool", () => {
       name: "legitimate",
       execute: async ({ id }) => id,
     })
-    const derived = Object.assign(Object.create(legitimate), {
-      execute: unsafeExecute,
+    const derived = Object.defineProperty(Object.create(legitimate), "execute", {
+      value: unsafeExecute,
     })
     const lookalikes = [structuralTool, { ...legitimate, execute: unsafeExecute }, derived, new Proxy(legitimate, {})]
 
@@ -175,6 +175,59 @@ function fixtureTool(name: string) {
 }
 
 describe("defineTool", () => {
+  it("returns an immutable callable accepted by <Tool use>", async () => {
+    const provider = new DeterministicAgentProvider({ respond: () => ({ text: "done" }) })
+    const tool = defineTool({
+      description: "Read an ID",
+      execute: async ({ id }) => ({ id }),
+      input: z.object({ id: z.number() }),
+      name: "callable",
+      output: z.object({ id: z.number() }),
+    })
+
+    expectTypeOf(tool).toBeCallableWith({ id: 42 })
+    expect(typeof tool).toBe("function")
+    expect(Object.isFrozen(tool)).toBe(true)
+    expect(tool.description).toBe("Read an ID")
+    expect(tool.kind).toBe("javascript")
+    expect(tool.name).toBe("callable")
+
+    await expect(
+      new AmlRuntime({ agentProvider: provider }).evaluate(
+        <Agent>
+          <Tool use={tool} />
+          prompt
+        </Agent>
+      )
+    ).resolves.toBe("done")
+    expect(provider.calls[0]?.request.tools.map(({ name }) => name)).toEqual(["callable"])
+  })
+
+  it("accepts an inline defineTool() result as a model grant", async () => {
+    const provider = new DeterministicAgentProvider({
+      respond(request) {
+        expect(request.tools.map(({ name }) => name)).toEqual(["inline"])
+        return { text: "done" }
+      },
+    })
+
+    await expect(
+      new AmlRuntime({ agentProvider: provider }).evaluate(
+        <Agent>
+          <Tool
+            use={defineTool({
+              description: "Inline capability",
+              execute: async () => "inline result",
+              input: z.object({}),
+              name: "inline",
+            })}
+          />
+          prompt
+        </Agent>
+      )
+    ).resolves.toBe("done")
+  })
+
   it("implements exact transport input normalization", async () => {
     const objectExecute = vi.fn(async ({ id }: { id: number }) => id)
     const objectTool = defineTool({
