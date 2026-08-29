@@ -47,6 +47,8 @@ Codex, GitHub Copilot, GLM, OpenCode, and Pi use the same ACP lifecycle on the t
 
 `<Agent schema={Result}>` validates that Agent's structured result and contributes canonical JSON text to ordinary AML composition. An authored `<FollowUp>` sequence remains valid: AML asks for structured output only on the final authored turn. Use `evaluate(<Agent>...</Agent>, Result)` instead when component code needs the schema-inferred value.
 
+`defineTool()` returns a typed callable. Calling it from an active AML function component validates through the same registered execution path used by Agents, but does not grant the Tool to an Agent or expose anything to a model and needs no surrounding Agent. The call inherits evaluation cancellation and tracing, runs in the AML host process even beneath `<Sandbox>`, and is joined before the component's enclosing resources clean up even when its Promise is not explicitly awaited. Pass the same Tool to `<Tool use={tool} />` only when a model should receive that capability.
+
 `<Parallel>` evaluates independent AML branches concurrently, waits for every branch and its cleanup to settle, then
 contributes successful text in authored order. Agent-owned `schema` values remain canonical JSON text inside a branch.
 `AmlRuntime.maxConcurrentAgents` still bounds active Agent sessions; `<Parallel>` adds no second concurrency limit.

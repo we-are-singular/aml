@@ -30,6 +30,43 @@ await runtime.evaluate(
 
 This example uses Zod as a Standard Schema implementation; install it separately with `npm install zod`.
 
+## Call a Tool from application code
+
+Call the function returned by `defineTool()` inside an active AML function component when application code, rather than a model, chooses to run the Tool:
+
+```tsx
+import { AmlRuntime, defineTool } from "@aml-jsx/sdk"
+import { z } from "zod"
+
+const loadOrder = defineTool({
+  name: "load_order",
+  description: "Load one order for application workflow code",
+  input: z.object({ id: z.string() }),
+  output: z.object({ id: z.string(), status: z.literal("paid") }),
+  execute: async ({ id }) => ({ id, status: "paid" as const }),
+})
+
+async function Workflow() {
+  const order = await loadOrder({ id: "order-17" })
+  return `${order.id}:${order.status}`
+}
+
+await new AmlRuntime().evaluate(<Workflow />)
+```
+
+Calling `loadOrder()` requires no surrounding `<Agent />` or `<Tool />`. It validates and snapshots through the same registered Tool execution path, inherits evaluation cancellation and tracing, and runs in the AML host process. Calling a Tool never grants it to a model. The callable API is available only while the function component is active, and AML joins started calls before enclosing resources clean up.
+
+The same Tool can be granted separately when a model should decide whether to call it:
+
+```tsx
+<Agent>
+  <Tool use={loadOrder} />
+  Check order-17.
+</Agent>
+```
+
+`<Tool use>` accepts only the exact callable returned by `defineTool()`. An inline definition is valid—`<Tool use={defineTool({...})} />`—but a structurally similar plain object is not.
+
 ## Props
 
 | Prop  | Type      | Required | Meaning                                         |
@@ -51,4 +88,4 @@ This example uses Zod as a Standard Schema implementation; install it separately
   instructions are not an access-control boundary.
 </Aside>
 
-See [Build a JavaScript Tool](/docs/cookbook/tools/), [Tool or MCP?](/docs/cookbook/tool-or-mcp/), and [production security](/docs/production/security/).
+See the runnable [`programmatic-tool` example](https://github.com/we-are-singular/aml/blob/main/examples/src/core/programmatic-tool.tsx), [Build a JavaScript Tool](/docs/cookbook/tools/), [Tool or MCP?](/docs/cookbook/tool-or-mcp/), and [production security](/docs/production/security/).

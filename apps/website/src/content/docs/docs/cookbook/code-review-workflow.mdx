@@ -161,7 +161,7 @@ The specialist text is intentionally visible in the final prompt. A production w
 
 <Steps>
 
-1. `defineTool()` creates an immutable, schema-backed capability. `<Tool use={readFixture} />` grants it only to the containing `<Agent />`.
+1. `defineTool()` creates an immutable, schema-backed callable. `<Tool use={readFixture} />` grants the same identity only to the containing `<Agent />`; calling `readFixture({})` from an active component would run application-selected work without that grant. The deterministic provider uses the preserved low-level `.execute(input, context)` port to simulate a model-selected call.
 2. Each `evaluate(<Agent />)` runs one specialist inside the current AML evaluation domain. `Promise.all` is the explicit concurrency boundary.
 3. The parent `<Agent />` receives both resolved strings as prompt content. It is authored only after the specialists complete.
 4. `AmlRuntime` owns the root evaluation, budgets, cancellation, provider calls, and cleanup.

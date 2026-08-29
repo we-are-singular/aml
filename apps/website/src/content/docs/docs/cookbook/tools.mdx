@@ -1,6 +1,6 @@
 ---
-title: Give an Agent a JavaScript Tool
-description: Define a typed, capability-scoped application Tool with validated input and safe JSON output.
+title: Define and grant a JavaScript Tool
+description: Create one typed callable for application work and explicit, capability-scoped Agent grants.
 ---
 
 import { Aside, Badge, Steps } from "@astrojs/starlight/components"
@@ -9,7 +9,7 @@ import { Aside, Badge, Steps } from "@astrojs/starlight/components"
 
 ## Goal
 
-Attach one application-owned function to an [`<Agent />`](/docs/reference/primitives/agent/) without turning its return value into prompt text. The workflow injects an application-owned repository into a component, then grants a narrow [`<Tool />`](/docs/reference/primitives/tool/) rather than exposing the repository itself.
+Create one application-owned callable with validated input and safe JSON output, then grant it to an [`<Agent />`](/docs/reference/primitives/agent/) only when the model should choose whether to call it. The workflow injects an application-owned repository into a component, then grants a narrow [`<Tool />`](/docs/reference/primitives/tool/) rather than exposing the repository itself.
 
 ## Prerequisites
 
@@ -84,9 +84,9 @@ orders:["order-17","order-29"]
 <Steps>
 
 1. The application passes `SessionRepository` into `OrderAgent`; AML does not expose that object to the provider.
-2. `defineTool()` captures a name, description, input schema, and executor. The executor receives validated input and an `AgentToolExecutionContext` containing cancellation and trace state.
+2. `defineTool()` returns a typed callable carrying the Tool declaration. Calling `listOrders({})` from an active component would run it as application-selected work without exposing it to a model.
 3. `<Tool use={listOrders} />` grants the Tool only to its containing `<Agent />`. A sibling `<Agent />` does not receive it.
-4. The deterministic provider invokes the Tool explicitly and returns its JSON result as text. A real Agent provider may expose the same Tool through its native capability bridge.
+4. The deterministic provider receives AML's low-level execution port and calls `.execute(input, context)` to simulate a model-selected Tool call. Application components use the callable form instead.
 
 </Steps>
 
@@ -102,6 +102,7 @@ orders:["order-17","order-29"]
 - Duplicate Tool names and runtime `allowedTools` policy violations fail closed.
 - Forward `context.signal` into I/O so cancellation can stop work that supports it.
 - Keep capability descriptions narrow and auditable. The model should not receive a Tool merely because the application happens to have the function available.
+- Calling a Tool from application code requires an active AML function component. Defining it at module scope is valid; calling it there is not.
 
 ## API and source links
 

@@ -47,6 +47,10 @@ const highlightedSource = await highlightTsx(source)
           AML resolves every value before the boundary that consumes it. JSX describes the dependency structure;
           ordinary TypeScript owns branching and data flow, while <code>&lt;Parallel&gt;</code> marks independent work.
         </p>
+        <p class="reveal mt-4 text-[15px] leading-relaxed text-ink-soft [--reveal-delay:140ms]">
+          A <code>defineTool()</code> value is a typed callable for active application components. Passing that same
+          value to <code>&lt;Tool use=&#123;tool&#125; /&gt;</code> is the separate, explicit step that grants it to a model.
+        </p>
         <div class="reveal mt-7 flex flex-wrap gap-x-6 gap-y-3 [--reveal-delay:160ms]">
           <a
             href={withBase("docs/concepts/")}

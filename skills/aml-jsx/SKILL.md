@@ -86,7 +86,7 @@ For current public detail, fetch the [execution model](https://agent-markup-lang
 
 Prefer AML's public definitions over provider-specific glue:
 
-- Define JavaScript tools with `defineTool()` and grant them with `<Tool use={tool} />`.
+- Define callable JavaScript Tools with `defineTool()`. Call them from active components for application-selected work; use `<Tool use={tool} />` only for an explicit model grant.
 - Configure native filesystem, shell, and network access with `<Agent permissions={...}>`; omitted permissions default optimistically on.
 - Define stdio or Streamable HTTP MCP servers with `defineMcpServer()` and grant them with `<Mcp use={server} />`.
 - Add reusable instructions with inline `<Skill>` content or `<Skill src="..." />`.

@@ -108,7 +108,7 @@ Review the selected [sandbox provider](/docs/providers/sandboxes/) and the [secu
 
 ### Can an agent call my application's functions or APIs?
 
-Yes. A [`<Tool />`](/docs/reference/primitives/tool/) grants one agent a schema-validated JavaScript function owned by your application. AML can also connect an agent through [`<Mcp />`](/docs/reference/primitives/mcp/) to a separately operated Model Context Protocol (MCP) server when a capability already exists behind that standard boundary.
+Yes. [`defineTool()`](/docs/reference/primitives/tool/) returns a schema-validated callable owned by your application. Call it directly from an active component when application code chooses the operation, or pass it to [`<Tool use={tool} />`](/docs/reference/primitives/tool/) when one Agent should receive it as a model-callable capability. AML can also connect an Agent through [`<Mcp />`](/docs/reference/primitives/mcp/) to a separately operated Model Context Protocol server.
 
 The [Tools guide](/docs/cookbook/tools/) starts with a local function. The [Tool or MCP guide](/docs/cookbook/tool-or-mcp/) explains when an external server is worth the extra moving parts.
 
