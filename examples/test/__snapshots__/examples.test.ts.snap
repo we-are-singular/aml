@@ -14,6 +14,8 @@ exports[`examples > loop 1`] = `"final:state commits after this session"`;
 
 exports[`examples > mcp 1`] = `"MCP attached. Sibling isolated."`;
 
+exports[`examples > programmatic-tool 1`] = `"order:order-17:paid"`;
+
 exports[`examples > sandbox 1`] = `"Inspected repository/packages/api/src through deterministic-sandbox-1."`;
 
 exports[`examples > script 1`] = `"npm test from repository/packages/api"`;
