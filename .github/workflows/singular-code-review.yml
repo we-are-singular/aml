@@ -33,6 +33,7 @@ jobs:
       cancel-in-progress: true
     uses: we-are-singular/singular-code-review-agent/.github/workflows/review.yml@main
     with:
+      runner: singular-code-review
       pr_number: ${{ github.event.issue.number || github.event.pull_request.number || github.event.inputs.pr_number }}
       trigger_comment_id: ${{ github.event.comment.id || '' }}
     secrets:
