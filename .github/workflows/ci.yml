@@ -176,7 +176,9 @@ jobs:
   deploy:
     name: Deploy website
     needs: gate
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    # A skipped optional portability job propagates through the gate unless this
+    # condition is evaluated explicitly after all dependencies settle.
+    if: always() && needs.gate.result == 'success' && github.event_name == 'push' && github.ref == 'refs/heads/main'
     permissions:
       pages: write
       id-token: write
