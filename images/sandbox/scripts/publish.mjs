@@ -1,7 +1,7 @@
-import { Buffer } from "node:buffer"
-import { mkdtempSync, readFileSync, readSync, rmSync } from "node:fs"
+import { mkdtempSync, readFileSync, rmSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { dirname, join, resolve } from "node:path"
+import { createInterface } from "node:readline/promises"
 import { spawnSync } from "node:child_process"
 import process from "node:process"
 import { fileURLToPath, pathToFileURL } from "node:url"
@@ -14,7 +14,7 @@ const dockerHubImage = "docker.io/wearesingular/aml-agent-sandbox"
 const version = process.argv[2]
 const resumesFromSigning = process.argv[3] === "--resume-signing"
 
-function main() {
+async function main() {
   if (version === "--check") {
     requireCommand("docker", ["buildx", "version"])
     requireCommand("cosign", ["version"])
@@ -63,7 +63,7 @@ function main() {
     }
 
     for (const image of images) {
-      waitForSigningConfirmation(image.name)
+      await waitForSigningConfirmation(image.name)
       run("cosign", ["sign", "--yes", `${dockerHubImage}@${image.digest}`], repositoryRoot)
     }
 
@@ -85,7 +85,7 @@ function main() {
   }
 }
 
-if (process.argv[1] !== undefined && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) main()
+if (process.argv[1] !== undefined && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) await main()
 
 function buildVariant(name, references, revision, temporaryDirectory) {
   const variant = getVariant(name)
@@ -137,18 +137,17 @@ function publishedImages(version) {
   })
 }
 
-function waitForSigningConfirmation(name) {
+async function waitForSigningConfirmation(name) {
   if (!process.stdin.isTTY) {
     throw new Error("Cosign signing requires an interactive terminal")
   }
 
-  process.stdout.write(`\nPress Enter when you are ready to begin keyless Cosign signing for ${name}... `)
-  const input = Buffer.alloc(1)
-  while (readSync(process.stdin.fd, input, 0, 1, null) > 0) {
-    if (input[0] === 10 || input[0] === 13) return
+  const prompt = createInterface({ input: process.stdin, output: process.stdout })
+  try {
+    await prompt.question(`\nPress Enter when you are ready to begin keyless Cosign signing for ${name}... `)
+  } finally {
+    prompt.close()
   }
-
-  throw new Error("Cosign signing confirmation was cancelled")
 }
 
 function verifyDigest(reference, expectedDigest) {
