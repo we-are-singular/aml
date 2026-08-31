@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, rmSync } from "node:fs"
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs"
 import { homedir, tmpdir } from "node:os"
 import { join, resolve } from "node:path"
 import { spawnSync } from "node:child_process"
@@ -121,12 +121,22 @@ export function parseBuildxDriver(value) {
 function createReleaseEnvironment(environment) {
   const callerDockerConfig = environment.DOCKER_CONFIG ?? join(homedir(), ".docker")
   const dockerConfig = mkdtempSync(join(tmpdir(), "aml-sandbox-auth-"))
-
-  return {
+  const releaseEnvironment = {
     ...environment,
     BUILDX_CONFIG: environment.BUILDX_CONFIG ?? join(callerDockerConfig, "buildx"),
     DOCKER_CONFIG: dockerConfig,
   }
+
+  // Raw Explorer opens a File Explorer window before forwarding the URL. Use
+  // Windows' registered URL handler so browser and profile selection stay local.
+  const windowsCommand = "/mnt/c/WINDOWS/system32/cmd.exe"
+  if (environment.BROWSER?.toLowerCase().endsWith("/explorer.exe") && existsSync(windowsCommand)) {
+    const browserOpener = join(dockerConfig, "open-windows-browser")
+    writeFileSync(browserOpener, `#!/bin/sh\nexec "${windowsCommand}" /d /c start "" "$1"\n`, { mode: 0o700 })
+    releaseEnvironment.BROWSER = browserOpener
+  }
+
+  return releaseEnvironment
 }
 
 function readRecoveryVersion() {

@@ -160,7 +160,7 @@ Before authentication, the release inspects the selected Buildx driver. An exist
 
 Publication requests SBOM and provenance attestations directly from Buildx. If the selected builder cannot publish them, the real build fails without a separate builder-analysis layer.
 
-Browser authentication follows each maintainer's local setup. Under WSL, set `BROWSER` to an installed host-browser opener such as `wslview`, or open the displayed device URL in Windows and enter the one-time code. Native Linux and macOS maintainers can keep their normal browser configuration. No browser path is required by the release scripts.
+Publication pauses once before the signing batch, then forces Cosign's normal browser flow so each successful login returns through the local callback automatically. Every distinct image digest still receives its own keyless signature. Under WSL, a raw `explorer.exe` browser setting uses Windows' registered URL handler to avoid opening File Explorer windows while preserving the configured browser and profile behavior; otherwise configure `BROWSER` with an installed host-browser opener such as `wslview`. Native Linux and macOS maintainers can keep their normal browser configuration.
 
 If image publication fails after Release It creates the release commit and tag, recover that same version from a clean `main` checkout:
 

@@ -62,9 +62,13 @@ async function main() {
       }
     }
 
+    await waitForSigningConfirmation(images.length)
     for (const image of images) {
-      await waitForSigningConfirmation(image.name)
-      run("cosign", ["sign", "--yes", `${dockerHubImage}@${image.digest}`], repositoryRoot)
+      run(
+        "cosign",
+        ["sign", "--yes", "--fulcio-auth-flow", "normal", `${dockerHubImage}@${image.digest}`],
+        repositoryRoot
+      )
     }
 
     // Moving aliases change only after every immutable variant passes its real
@@ -137,14 +141,16 @@ function publishedImages(version) {
   })
 }
 
-async function waitForSigningConfirmation(name) {
+async function waitForSigningConfirmation(imageCount) {
   if (!process.stdin.isTTY) {
     throw new Error("Cosign signing requires an interactive terminal")
   }
 
   const prompt = createInterface({ input: process.stdin, output: process.stdout })
   try {
-    await prompt.question(`\nPress Enter when you are ready to begin keyless Cosign signing for ${name}... `)
+    await prompt.question(
+      `\nPress Enter when you are ready to begin keyless Cosign signing for ${imageCount} images... `
+    )
   } finally {
     prompt.close()
   }
