@@ -1,0 +1,41 @@
+name: Singular Code Review
+
+on:
+  pull_request:
+    types: [opened, ready_for_review, synchronize]
+  issue_comment:
+    types: [created]
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: Pull request number to review
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+
+jobs:
+  review:
+    if: >-
+      github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' &&
+        !github.event.pull_request.draft &&
+        github.event.pull_request.head.repo.full_name == github.repository) ||
+      (github.event_name == 'issue_comment' &&
+        github.event.issue.pull_request &&
+        contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association) &&
+        github.event.comment.user.type != 'Bot' &&
+        contains(github.event.comment.body, '@singular-code-review'))
+    concurrency:
+      group: singular-code-review-${{ github.event.issue.number || github.event.pull_request.number || github.event.inputs.pr_number }}
+      cancel-in-progress: true
+    uses: we-are-singular/singular-code-review-agent/.github/workflows/review.yml@main
+    with:
+      pr_number: ${{ github.event.issue.number || github.event.pull_request.number || github.event.inputs.pr_number }}
+      trigger_comment_id: ${{ github.event.comment.id || '' }}
+    secrets:
+      SINGULAR_CODE_REVIEW_PRIVATE_KEY: ${{ secrets.SINGULAR_CODE_REVIEW_PRIVATE_KEY }}
+      OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
+      CONTEXT7_API_KEY: ${{ secrets.CONTEXT7_API_KEY }}
