@@ -13,21 +13,94 @@ export type CodexConfigValue =
   | string
   | null
   | readonly CodexConfigValue[]
-  | Readonly<{ readonly [key: string]: CodexConfigValue }>
+  | Readonly<{
+      /** Stores one nested Codex configuration value under its authored key. */
+      readonly [key: string]: CodexConfigValue
+    }>
 
+/**
+ * Configures the maintained Codex ACP adapter and the Codex process it launches.
+ *
+ * Options are validated and snapshotted when {@link codexAgent} is called, so
+ * later mutations to arrays or objects do not alter the provider.
+ */
 export interface CodexAgentOptions {
+  /**
+   * API key written to `CODEX_API_KEY` for the launched session.
+   *
+   * Omit to use credentials from `env` or the adapter's own supported flow. An
+   * explicit value overrides `env.CODEX_API_KEY` and selects ACP's `api-key`
+   * authentication method.
+   */
   readonly apiKey?: string
+
+  /**
+   * Arguments appended to the ACP adapter command exactly as supplied.
+   *
+   * Defaults to `[]`. Entries may be empty but cannot contain null bytes.
+   */
   readonly args?: readonly string[]
+
+  /**
+   * ACP adapter executable or application-owned launcher.
+   *
+   * Defaults to `"codex-acp"`. AML does not install or resolve the adapter.
+   */
   readonly command?: string
+
+  /**
+   * Codex executable path exposed to the adapter as `CODEX_PATH`.
+   *
+   * Defaults to `"codex"`. This does not replace the outer `command` that
+   * starts the ACP adapter.
+   */
   readonly codexPathOverride?: string
+
+  /**
+   * Base Codex configuration serialized into `CODEX_CONFIG`.
+   *
+   * Defaults to `{}` and must be JSON-serializable. The effective model,
+   * reasoning effort, and AML system instructions are applied afterward and
+   * therefore override the corresponding base keys when present.
+   */
   readonly config?: Readonly<Record<string, CodexConfigValue>>
+
+  /**
+   * Additional environment variables for the launched adapter.
+   *
+   * Defaults to `{}`. AML-owned session isolation and launch variables are
+   * written after this object and cannot be overridden through it.
+   */
   readonly env?: Readonly<Record<string, string>>
+
+  /**
+   * Provider-level model fallback.
+   *
+   * Omit to let Codex select its configured default. An `<Agent model>` prop
+   * takes precedence for that Agent session.
+   */
   readonly model?: string
+
+  /**
+   * Provider-native value written to Codex `model_reasoning_effort`.
+   *
+   * Omitted by default. AML validates only that the string is normalized and
+   * forwards it without maintaining an allowlist.
+   */
   readonly reasoningEffort?: string
+
+  /**
+   * Fallback working directory for host execution.
+   *
+   * Omit to inherit the application directory. An active Sandbox supplies the
+   * effective directory instead.
+   */
   readonly workingDirectory?: string
 }
 
+/** Agent provider returned by {@link codexAgent}. */
 export interface CodexAgentProvider extends AgentProvider {
+  /** Stable provider identifier reported in Agent requests and traces. */
   readonly name: "codex"
 }
 
@@ -96,6 +169,9 @@ class CodexProfile implements AcpAgentProfile<"codex"> {
  *
  * The trusted host or selected Sandbox must contain `codex-acp` or the
  * configured command. AML never installs the adapter implicitly.
+ * Configuration is validated and captured before any process or Sandbox work.
+ *
+ * @param options Adapter command, credentials, Codex configuration, and defaults.
  */
 export function codexAgent(options: CodexAgentOptions = {}): Readonly<CodexAgentProvider> {
   const profile = new CodexProfile(captureOptions(options))

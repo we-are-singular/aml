@@ -25,10 +25,45 @@ const KEEPALIVE_COMMAND = "trap 'exit 0' TERM INT; while :; do sleep 3600 & wait
  * Image-first configuration for the local Docker CLI adapter.
  */
 export interface DockerSandboxOptions {
+  /**
+   * Image reference passed to `docker run`.
+   *
+   * Defaults to `"wearesingular/aml-agent-sandbox:latest"`. Pin a version or
+   * digest when reproducibility matters. The image must already contain every
+   * command and Agent dependency used by the workflow.
+   */
   readonly image?: string
+
+  /**
+   * Maximum combined output retained from a Docker CLI or Sandbox command.
+   *
+   * Defaults to `4 * 1024 * 1024` bytes and must be a positive safe integer.
+   */
   readonly maxOutputBytes?: number
+
+  /**
+   * Shell source run once through `sh -lc` after the container starts and the
+   * Workspace is mounted, before the lease is returned.
+   *
+   * Omitted by default. A non-zero exit rejects acquisition and removes the
+   * disposable container.
+   */
   readonly setup?: string
+
+  /**
+   * Docker user or `UID:GID` passed through `docker run --user`.
+   *
+   * Omit to use the image default. The value must be a non-empty,
+   * already-trimmed string without null bytes.
+   */
   readonly user?: string
+
+  /**
+   * Fallback host Workspace directory used when no active `<Workspace>` exists.
+   *
+   * Omitted by default and resolved when the factory is called. An active
+   * Workspace materialization takes precedence and is mounted at `/workspace`.
+   */
   readonly workspace?: string
 }
 
@@ -40,8 +75,12 @@ interface ParsedDockerSandboxOptions {
   readonly workspace?: string
 }
 
+/** Provider-specific identity exposed through a Docker Sandbox lease. */
 export interface DockerSandboxHandle {
+  /** Opaque Docker container id returned by `docker run`. */
   readonly containerId: string
+
+  /** Stable provider-handle discriminant. */
   readonly kind: "docker"
 }
 
@@ -63,6 +102,11 @@ interface CommandRunner {
  * Starts a named image through the local Docker CLI.
  *
  * AML does not build the image or install its Agent dependencies.
+ * Each acquisition creates a disposable `--rm` container, bind-mounts the
+ * effective Workspace at `/workspace`, and removes the container on release.
+ * Read-only access is enforced on that mount, not on the container filesystem.
+ *
+ * @param options Image, mount source, setup command, user, and output budget.
  */
 export function dockerSandbox(options: DockerSandboxOptions = {}): Readonly<SandboxProvider<DockerSandboxHandle>> {
   return createDockerSandboxProvider(options, new NodeCommandRunner())

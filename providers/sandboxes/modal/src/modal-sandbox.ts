@@ -34,13 +34,60 @@ const execFileAsync = promisify(execFile)
  * Provider-native Modal configuration plus AML lifecycle conveniences.
  */
 export interface ModalSandboxOptions {
+  /**
+   * Modal app name opened with `createIfMissing: true`.
+   *
+   * Defaults to `"aml-jsx"`.
+   */
   readonly appName?: string
+
+  /**
+   * Preconstructed Modal client used for every acquisition.
+   *
+   * Omitted by default and mutually exclusive with `config`.
+   */
   readonly client?: ModalClient
+
+  /**
+   * Modal client configuration used to construct a client lazily.
+   *
+   * Omitted by default and mutually exclusive with `client`.
+   */
   readonly config?: ModalClientParams
+
+  /**
+   * Provider-native parameters forwarded to `client.sandboxes.create()`.
+   *
+   * Omitted by default. App and registry image identity remain root AML options.
+   */
   readonly create?: SandboxCreateParams
+
+  /**
+   * Registry image reference passed to `images.fromRegistry()`.
+   *
+   * Defaults to `"wearesingular/aml-agent-sandbox:latest"`. Pin an immutable
+   * version or digest when reproducibility matters.
+   */
   readonly image?: string
+
+  /**
+   * Maximum combined command output and Workspace transfer budget.
+   *
+   * Defaults to `4 * 1024 * 1024` bytes and must be a positive safe integer.
+   */
   readonly maxOutputBytes?: number
+
+  /**
+   * Shell source run through `sh -lc` after Workspace hydration and before the
+   * lease is returned. Omitted by default; a non-zero exit rejects acquisition.
+   */
   readonly setup?: string
+
+  /**
+   * Fallback local Workspace directory when no active `<Workspace>` exists.
+   *
+   * Omitted by default. An active Workspace materialization takes precedence.
+   */
   readonly workspace?: string
 }
 
@@ -50,8 +97,12 @@ interface ParsedModalSandboxOptions extends ModalSandboxOptions {
   readonly maxOutputBytes: number
 }
 
+/** Provider-specific handle exposed through a Modal Sandbox lease. */
 export interface ModalSandboxHandle {
+  /** Stable provider-handle discriminant. */
   readonly kind: "modal"
+
+  /** Live Modal SDK Sandbox object for provider-native inspection or APIs. */
   readonly sandbox: ModalSdkSandbox
 }
 
@@ -64,6 +115,12 @@ interface ModalSandboxResource {
 /**
  * Creates disposable Modal environments and transfers one Workspace into
  * `/workspace` for each acquisition.
+ *
+ * Writable release reconciles the full remote Workspace archive back to its
+ * local materialization before terminating the Sandbox; read-only release skips
+ * reconciliation. The local host must provide `tar` for transfer operations.
+ *
+ * @param options Modal client, app, image, creation, setup, and transfer controls.
  */
 export function modalSandbox(options: ModalSandboxOptions = {}): Readonly<SandboxProvider<ModalSandboxHandle>> {
   return defineSandboxProvider(new ModalSandboxProvider(parseOptions(options)))

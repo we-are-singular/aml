@@ -10,15 +10,55 @@ const AUTH_TOKEN_ENVIRONMENT_VARIABLES = ["COPILOT_GITHUB_TOKEN", "GH_TOKEN", "G
 
 /** Configures GitHub Copilot CLI's native ACP server. */
 export interface CopilotAgentOptions {
+  /**
+   * Extra Copilot arguments inserted before AML-owned ACP, isolation, model,
+   * and permission flags. Defaults to `[]`; entries cannot contain null bytes.
+   */
   readonly args?: readonly string[]
+
+  /**
+   * Copilot CLI executable or application-owned launcher.
+   *
+   * Defaults to `"copilot"`. AML does not install the CLI.
+   */
   readonly command?: string
+
+  /**
+   * Additional environment variables, including optional Copilot credentials.
+   *
+   * Defaults to `{}`. Explicit `COPILOT_GITHUB_TOKEN`, `GH_TOKEN`, or
+   * `GITHUB_TOKEN` values here take source precedence over the local process
+   * environment. AML-owned private-state variables are applied afterward.
+   */
   readonly env?: Readonly<Record<string, string>>
+
+  /**
+   * Provider-level model fallback.
+   *
+   * Defaults to `"auto"`, allowing Copilot to choose for the authenticated
+   * account. An `<Agent model>` prop takes precedence.
+   */
   readonly model?: string
+
+  /**
+   * Provider-native value passed through Copilot's reasoning-effort flag.
+   *
+   * Omitted by default. AML validates the normalized string but does not
+   * maintain an allowlist of values supported by a particular CLI version.
+   */
   readonly reasoningEffort?: string
+
+  /**
+   * Fallback working directory when no active Sandbox supplies one.
+   *
+   * Omit to use the application working directory.
+   */
   readonly workingDirectory?: string
 }
 
+/** Agent provider returned by {@link copilotAgent}. */
 export interface CopilotAgentProvider extends AgentProvider {
+  /** Stable provider identifier reported in Agent requests and traces. */
   readonly name: "copilot"
 }
 
@@ -142,6 +182,12 @@ class CopilotAcpProfile implements AcpAgentProfile<"copilot"> {
  * The selected host or Sandbox must contain `copilot` or the configured
  * command. Authentication follows the launched process environment; AML does
  * not import the interactive user's Copilot configuration.
+ *
+ * Options are validated and captured before process or Sandbox acquisition.
+ * AML maps portable permission denials into Copilot flags, while the enclosing
+ * Sandbox remains the process-level enforcement boundary.
+ *
+ * @param options CLI command, environment, model, and working-directory defaults.
  */
 export function copilotAgent(options: CopilotAgentOptions = {}): Readonly<CopilotAgentProvider> {
   const profile = new CopilotAcpProfile(captureOptions(options))

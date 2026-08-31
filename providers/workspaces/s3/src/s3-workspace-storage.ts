@@ -23,9 +23,15 @@ import {
 import { S3WorkspaceLock } from "./s3-workspace-lock.js"
 import type { ParsedS3WorkspaceOptions } from "./s3-workspace-options.js"
 
+/** Provider handle identifying the S3 namespace used by one Workspace lease. */
 export interface S3WorkspaceStorageHandle {
+  /** Bucket containing this logical Workspace's persistence objects. */
   readonly bucket: string
+
+  /** Stable storage-handle discriminant. */
   readonly kind: "s3-workspace"
+
+  /** Configured object-key namespace shared by AML Workspace objects. */
   readonly prefix: string
 }
 

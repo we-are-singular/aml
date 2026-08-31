@@ -12,6 +12,7 @@ import {
   type PersistentWorkspaceHandle,
   type WorkspacePersistenceFormat,
   type WorkspaceProvider,
+  type WorkspaceStorageAcquireRequest,
   type WorkspaceStorageAdapter,
   type WorkspaceStorageBody,
   type WorkspaceStorageLease,
@@ -23,27 +24,81 @@ import lockfile from "proper-lockfile"
 const LOCK_STALE_MS = 20 * 60 * 1_000
 const LOCK_UPDATE_MS = 5 * 60 * 1_000
 
+/** Durable local storage root for {@link FilesystemWorkspaceStorage}. */
 export interface FilesystemWorkspaceStorageOptions {
+  /**
+   * Host directory under which revision objects and indexes are stored.
+   *
+   * The path is resolved during construction. It need not exist yet; storage
+   * namespaces are created lazily during acquisition.
+   */
   readonly directory: string
 }
 
+/**
+ * Configuration for a staged, revisioned Workspace persisted on this host.
+ */
 export interface FilesystemWorkspaceOptions extends FilesystemWorkspaceStorageOptions {
+  /**
+   * Representation used for new revisions.
+   *
+   * Defaults to `"archive"`; `"folder"` stores selected files as individual
+   * objects. Existing revisions retain and restore their recorded format.
+   */
   readonly format?: WorkspacePersistenceFormat
+
+  /**
+   * Maximum compressed archive size accepted while saving or restoring.
+   *
+   * Defaults to `268_435_456` bytes (256 MiB) and must be a positive safe integer.
+   */
   readonly maxArchiveBytes?: number
+
+  /**
+   * Maximum number of selected archive entries, including the root where used.
+   *
+   * Defaults to `100_000` and must be a positive safe integer.
+   */
   readonly maxEntries?: number
+
+  /**
+   * Maximum total uncompressed bytes selected for one revision.
+   *
+   * Defaults to `1_073_741_824` bytes (1 GiB) and must be a positive safe integer.
+   */
   readonly maxExtractedBytes?: number
+
+  /**
+   * Parent directory for temporary per-acquisition materializations and archives.
+   *
+   * Defaults to `os.tmpdir()` and is resolved during provider construction.
+   */
   readonly temporaryDirectory?: string
 }
 
+/** Storage-layer identity exposed inside a Filesystem Workspace handle. */
 export interface FilesystemWorkspaceStorageHandle {
+  /** Host directory containing the acquired logical Workspace's storage objects. */
   readonly directory: string
+
+  /** Stable storage-handle discriminant. */
   readonly kind: "filesystem-workspace"
 }
 
+/**
+ * Persistent Workspace handle containing its staging directory, revision
+ * metadata, and {@link FilesystemWorkspaceStorageHandle}.
+ */
 export type FilesystemWorkspaceHandle = PersistentWorkspaceHandle<FilesystemWorkspaceStorageHandle>
 
 /**
  * Creates a safe staged Workspace whose revision store lives on this host.
+ *
+ * Each acquisition restores into a temporary directory, and configured saves
+ * publish an immutable revision plus a compare-and-swap index update. This is
+ * distinct from `localWorkspace()`, which exposes a directory directly.
+ *
+ * @param options Durable storage root, revision format, staging path, and limits.
  */
 export function filesystemWorkspace(
   options: FilesystemWorkspaceOptions
@@ -65,8 +120,15 @@ export function filesystemWorkspace(
  */
 export class FilesystemWorkspaceStorage implements WorkspaceStorageAdapter<FilesystemWorkspaceStorageHandle> {
   readonly #directory: string
+
+  /** Stable storage-adapter name included in provider references. */
   readonly name = "filesystem"
 
+  /**
+   * Captures and resolves a durable local storage root without creating it.
+   *
+   * @param options Directory beneath which logical Workspace namespaces live.
+   */
   constructor(options: FilesystemWorkspaceStorageOptions) {
     if (typeof options !== "object" || options === null) {
       throw new TypeError("Filesystem Workspace options must be an object")
@@ -83,12 +145,16 @@ export class FilesystemWorkspaceStorage implements WorkspaceStorageAdapter<Files
     this.#directory = path.resolve(options.directory)
   }
 
-  async acquire(request: {
-    readonly evaluationId: string
-    readonly id: string
-    readonly lock: boolean
-    readonly signal: AbortSignal
-  }): Promise<WorkspaceStorageLease<FilesystemWorkspaceStorageHandle>> {
+  /**
+   * Opens one logical Workspace namespace and optionally acquires its renewable
+   * cross-process writer lock.
+   *
+   * The returned lease implements atomic object replacement and conditional
+   * index writes. A held lock is released idempotently through `lease.release()`.
+   */
+  async acquire(
+    request: WorkspaceStorageAcquireRequest
+  ): Promise<WorkspaceStorageLease<FilesystemWorkspaceStorageHandle>> {
     request.signal.throwIfAborted()
     const root = path.join(this.#directory, workspaceStorageSegment(request.id))
     await mkdir(root, { recursive: true })

@@ -4,6 +4,13 @@ import path from "node:path"
  * Local durable directory captured by `localWorkspace()`.
  */
 export interface LocalWorkspaceOptions {
+  /**
+   * Existing durable host directory exposed directly as the Workspace.
+   *
+   * Relative paths are resolved when {@link localWorkspace} is called. The
+   * factory does not touch the filesystem; acquisition later resolves symlinks
+   * and requires this path to exist as a directory.
+   */
   readonly directory: string
 }
 

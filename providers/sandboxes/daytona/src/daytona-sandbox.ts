@@ -31,17 +31,62 @@ const DEFAULT_IMAGE = "wearesingular/aml-agent-sandbox:latest"
 const GUEST_ROOT = "workspace"
 const execFileAsync = promisify(execFile)
 
+/** Daytona SDK controls applied while creating the remote Sandbox. */
 export interface DaytonaSandboxCreateOptions {
+  /**
+   * Receives provider-native image snapshot creation log chunks.
+   *
+   * Omitted by default and used only for image-based creation; snapshot-based
+   * creation does not expose this callback in the Daytona SDK.
+   */
   readonly onSnapshotCreateLogs?: (chunk: string) => void
+
+  /**
+   * Daytona creation timeout in seconds.
+   *
+   * Omit for the Daytona SDK default of 60 seconds. The provider-native value
+   * `0` disables that timeout.
+   */
   readonly timeout?: number
 }
 
+/** Options shared by image- and snapshot-backed Daytona Sandboxes. */
 interface DaytonaSandboxSharedOptions {
+  /**
+   * Preconstructed Daytona client to use for every acquisition.
+   *
+   * Omitted by default and mutually exclusive with `config`.
+   */
   readonly client?: Daytona
+
+  /**
+   * Daytona SDK configuration used to construct a client lazily.
+   *
+   * Omitted by default and mutually exclusive with `client`.
+   */
   readonly config?: DaytonaConfig
+
+  /** Provider-native creation timeout and image snapshot log callback. */
   readonly createOptions?: DaytonaSandboxCreateOptions
+
+  /**
+   * Maximum combined command output and Workspace transfer budget.
+   *
+   * Defaults to `4 * 1024 * 1024` bytes and must be a positive safe integer.
+   */
   readonly maxOutputBytes?: number
+
+  /**
+   * Shell source run through `sh -lc` after Workspace hydration and before the
+   * lease is returned. Omitted by default; a non-zero exit rejects acquisition.
+   */
   readonly setup?: string
+
+  /**
+   * Fallback local Workspace directory when no active `<Workspace>` exists.
+   *
+   * Omitted by default. An active Workspace materialization takes precedence.
+   */
   readonly workspace?: string
 }
 
@@ -54,13 +99,31 @@ interface DaytonaSandboxSharedOptions {
 export type DaytonaSandboxOptions = DaytonaSandboxSharedOptions &
   (
     | {
+        /**
+         * Additional Daytona image-creation fields.
+         *
+         * `image` must remain at the factory root and cannot appear here.
+         */
         readonly create?: Omit<CreateSandboxFromImageParams, "image">
+
+        /** Image or declarative Daytona image used to create the environment. */
         readonly image: CreateSandboxFromImageParams["image"]
+
+        /** Snapshot creation is unavailable when an explicit image is selected. */
         readonly snapshot?: never
       }
     | {
+        /**
+         * Additional Daytona snapshot-creation fields.
+         *
+         * `snapshot` must remain at the factory root and cannot appear here.
+         */
         readonly create?: Omit<CreateSandboxFromSnapshotParams, "snapshot">
+
+        /** Image selection is unavailable on the snapshot branch. */
         readonly image?: never
+
+        /** Existing Daytona snapshot used for the environment. */
         readonly snapshot?: CreateSandboxFromSnapshotParams["snapshot"]
       }
   )
@@ -72,8 +135,12 @@ interface ParsedDaytonaSandboxOptions extends DaytonaSandboxSharedOptions {
   readonly snapshot?: CreateSandboxFromSnapshotParams["snapshot"]
 }
 
+/** Provider-specific handle exposed through a Daytona Sandbox lease. */
 export interface DaytonaSandboxHandle {
+  /** Stable provider-handle discriminant. */
   readonly kind: "daytona"
+
+  /** Live Daytona SDK Sandbox object for provider-native inspection or APIs. */
   readonly sandbox: DaytonaSdkSandbox
 }
 
@@ -87,6 +154,13 @@ interface DaytonaSandboxResource {
 /**
  * Creates disposable Daytona environments and transfers one Workspace into
  * `workspace` under Daytona's default working directory for each acquisition.
+ *
+ * Omitting both `image` and `snapshot` selects
+ * `wearesingular/aml-agent-sandbox:latest`. Writable release reconciles the
+ * remote Workspace back to its local materialization before destroying the
+ * environment; read-only release skips reconciliation.
+ *
+ * @param options Environment identity, Daytona client configuration, and lifecycle controls.
  */
 export function daytonaSandbox(options: DaytonaSandboxOptions = {}): Readonly<SandboxProvider<DaytonaSandboxHandle>> {
   return defineSandboxProvider(new DaytonaSandboxProvider(parseOptions(options)))

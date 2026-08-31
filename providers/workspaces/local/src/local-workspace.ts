@@ -26,6 +26,13 @@ export type { LocalWorkspaceOptions } from "./local-workspace-options.js"
 
 /**
  * Creates a lazy provider for one existing durable local directory.
+ *
+ * The directory itself is the materialization, so changes are already durable
+ * and `save()` acts only as a lock-health barrier. Acquisitions request an
+ * exclusive renewable cross-process lock by default; `<Workspace lock={false}>`
+ * opts out for application-coordinated access.
+ *
+ * @param options Existing host directory to expose directly.
  */
 export function localWorkspace(options: LocalWorkspaceOptions): Readonly<WorkspaceProvider<LocalWorkspaceHandle>> {
   return defineWorkspaceProvider(new LocalWorkspaceProvider(parseLocalWorkspaceOptions(options)))

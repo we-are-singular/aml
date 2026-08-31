@@ -1,12 +1,17 @@
 import { agent, methods, ndJsonStream, type SessionConfigOption } from "@agentclientprotocol/sdk"
+import type { Config as OpenCodeSdkConfig } from "@opencode-ai/sdk/v2"
 import { Agent, AmlRuntime, defineTool, evaluate, FollowUp, Sandbox, Tool, type SandboxProcess } from "@aml-jsx/sdk"
 import { DeterministicSandboxProvider } from "@aml-jsx/sdk/testing"
-import { describe, expect, it } from "vitest"
+import { describe, expect, expectTypeOf, it } from "vitest"
 import { z } from "zod"
 
-import { opencodeAgent } from "../src/index.js"
+import { opencodeAgent, type OpenCodeConfig } from "../src/index.js"
 
 describe("opencodeAgent()", () => {
+  it("keeps its documented configuration in exact parity with the bundled OpenCode SDK", () => {
+    expectTypeOf<OpenCodeConfig>().toEqualTypeOf<OpenCodeSdkConfig>()
+  })
+
   it("launches the native ACP Agent through the Sandbox process boundary", async () => {
     const spawned: Array<{
       readonly args: readonly string[]

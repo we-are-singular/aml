@@ -6,21 +6,72 @@ import {
   type AgentProvider,
 } from "@aml-jsx/sdk"
 
+/**
+ * Configures the community-maintained GLM ACP adapter and Coding Plan request.
+ */
 export interface GlmAgentOptions {
-  /** Z.AI Coding Plan API key; billed against plan quota, not pay-as-you-go API credit. */
+  /**
+   * Z.AI Coding Plan API key written to `Z_AI_API_KEY`.
+   *
+   * Omit to supply `env.Z_AI_API_KEY`. An explicit value takes precedence and
+   * advertises the adapter's `z-ai-api-key` authentication method.
+   */
   readonly apiKey?: string
+
+  /**
+   * Arguments appended to the adapter command exactly as supplied.
+   *
+   * Defaults to `[]`; entries cannot contain null bytes.
+   */
   readonly args?: readonly string[]
-  /** Overrides the GLM Coding Plan endpoint used by the adapter. */
+
+  /**
+   * Coding Plan endpoint written to `ACP_GLM_BASE_URL`.
+   *
+   * Omit to use the adapter's default endpoint.
+   */
   readonly baseUrl?: string
+
+  /**
+   * ACP adapter executable or application-owned launcher.
+   *
+   * Defaults to `"glm-acp-agent"`. AML does not install the adapter.
+   */
   readonly command?: string
+
+  /**
+   * Additional environment variables for the adapter process.
+   *
+   * Defaults to `{}`. AML-owned key, endpoint, model, token-limit, and private
+   * session variables are written afterward and take precedence when present.
+   */
   readonly env?: Readonly<Record<string, string>>
-  /** Upper bound for one model completion; the adapter default is 8192 tokens. */
+
+  /**
+   * Positive safe-integer completion limit written to `ACP_GLM_MAX_TOKENS`.
+   *
+   * Omit to use the adapter default, currently 8192 tokens.
+   */
   readonly maxTokens?: number
+
+  /**
+   * Provider-level model fallback written to `ACP_GLM_MODEL`.
+   *
+   * Omit to use the adapter's default. An `<Agent model>` prop takes precedence.
+   */
   readonly model?: string
+
+  /**
+   * Fallback working directory when no active Sandbox supplies one.
+   *
+   * Omit to use the application working directory.
+   */
   readonly workingDirectory?: string
 }
 
+/** Agent provider returned by {@link glmAgent}. */
 export interface GlmAgentProvider extends AgentProvider {
+  /** Stable provider identifier reported in Agent requests and traces. */
   readonly name: "glm"
 }
 
@@ -83,6 +134,11 @@ class GlmAcpProfile implements AcpAgentProfile<"glm"> {
  * configured command, plus a Z.AI Coding Plan API key. AML never installs the
  * adapter implicitly. This adapter is community-maintained and is not the
  * Z.ai ZCode harness; ZCode has no ACP implementation today.
+ *
+ * The adapter does not expose portable shell or network restrictions; use an
+ * enforcing Sandbox when those permissions are security requirements.
+ *
+ * @param options Adapter command, Coding Plan settings, environment, and defaults.
  */
 export function glmAgent(options: GlmAgentOptions = {}): Readonly<GlmAgentProvider> {
   const profile = new GlmAcpProfile(captureOptions(options))

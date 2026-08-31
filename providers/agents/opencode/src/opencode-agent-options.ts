@@ -1,14 +1,53 @@
-import type { Config } from "@opencode-ai/sdk/v2"
+import type { OpenCodeConfig } from "./opencode-config.js"
 
 /**
  * Configures the OpenCode ACP profile without selecting another lifecycle.
  */
 export interface OpenCodeAgentOptions {
+  /**
+   * Arguments appended after AML's `acp --pure --cwd <cwd>` arguments.
+   *
+   * Defaults to `[]`; entries cannot contain null bytes.
+   */
   readonly args?: readonly string[]
+
+  /**
+   * OpenCode executable or application-owned launcher.
+   *
+   * Defaults to `"opencode"`. AML does not install OpenCode.
+   */
   readonly command?: string
-  readonly config?: Config
+
+  /**
+   * Native OpenCode configuration captured before external work begins.
+   *
+   * Defaults to `{}` and must contain only finite, acyclic JSON values. AML
+   * preserves native settings, then applies its generated Agent profile,
+   * effective model, Tool configuration, and permission denials.
+   */
+  readonly config?: OpenCodeConfig
+
+  /**
+   * Fallback launch directory when no active Sandbox supplies one.
+   *
+   * Omit to use the application working directory.
+   */
   readonly directory?: string
+
+  /**
+   * Additional environment variables for credentials and provider settings.
+   *
+   * Defaults to `{}`. AML writes invocation-private OpenCode state variables
+   * afterward; only an explicit `XDG_DATA_HOME` is intentionally preserved.
+   */
   readonly env?: Readonly<Record<string, string>>
+
+  /**
+   * Provider-level model fallback.
+   *
+   * Precedence is `<Agent model>`, this option, then `config.model`, followed by
+   * OpenCode's own default.
+   */
   readonly model?: string
 }
 
@@ -18,7 +57,7 @@ export interface OpenCodeAgentOptions {
 export interface CapturedOpenCodeAgentOptions {
   readonly args: readonly string[]
   readonly command: string
-  readonly config: Readonly<Config>
+  readonly config: Readonly<OpenCodeConfig>
   readonly directory?: string
   readonly env: Readonly<Record<string, string>>
   readonly model?: string
@@ -59,7 +98,7 @@ export function captureOpenCodeAgentOptions(options: OpenCodeAgentOptions): Read
     throw new TypeError("OpenCode config must be an object")
   }
 
-  const capturedConfig = captureJson(config, "OpenCode config") as Readonly<Config>
+  const capturedConfig = captureJson(config, "OpenCode config") as Readonly<OpenCodeConfig>
 
   return Object.freeze({
     args: Object.freeze([...args]),
