@@ -1,6 +1,6 @@
 {
   "name": "@aml-jsx/agent-sandbox-image",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "private": true,
   "description": "AML's portable, tested runtime image for ACP coding Agents",
   "license": "MIT",
