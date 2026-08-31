@@ -37,7 +37,7 @@ const runtime = new AmlRuntime({
 })
 ```
 
-[`dockerSandbox()`](/docs/providers/sandboxes/docker/) defaults to `wearesingular/aml-agent-sandbox:latest`, AML's portable Agent runtime from its canonical Docker Hub release channel. The repository smoke matrix uses `ghcr.io/we-are-singular/aml-agent-sandbox:dev` while validating changes from `main`. Applications can override the default with an immutable version, digest, or custom image containing the compatible ACP executable, project dependencies, credentials strategy, and command-line tools their workflow needs. The provider does not build the image or install an Agent during acquisition.
+[`dockerSandbox()`](/docs/providers/sandboxes/docker/) defaults to the full `wearesingular/aml-agent-sandbox:latest` image from AML's canonical Docker Hub release channel. Stable releases also provide smaller images for each built-in Agent; select the [matching image variant](/docs/sandbox-images/#choose-a-variant) when the application always uses one Agent. The repository smoke matrix uses the full `ghcr.io/we-are-singular/aml-agent-sandbox:dev` image while validating changes from `main`. Applications can override the default with an immutable version, digest, or custom image containing the compatible ACP executable, project dependencies, credentials strategy, and command-line tools their workflow needs. The provider does not build the image or install an Agent during acquisition.
 
   </TabItem>
   <TabItem label="Durable revisions">

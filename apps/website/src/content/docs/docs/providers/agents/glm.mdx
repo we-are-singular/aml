@@ -59,9 +59,7 @@ glm-acp-agent --help
 
 This version is a repeatable repository baseline, not a guarantee that every newer adapter is compatible. Re-run the live provider path when it changes.
 
-For container execution, [AML Agent Sandbox](/docs/providers/sandboxes/images/#aml-agent-sandbox) includes this adapter
-baseline and is the default image for Docker, Daytona, and Modal. Local Sandbox still requires `glm-acp-agent` on the
-host.
+For container execution, the [GLM image variant](/docs/sandbox-images/#choose-a-variant) includes this adapter baseline. The default full image includes it too. Local Sandbox still requires `glm-acp-agent` on the host.
 
 <Aside type="caution" title="This is not ZCode">
   Z.ai does not currently publish or document a ZCode ACP entrypoint, so `glmAgent()` launches the separate community

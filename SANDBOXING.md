@@ -53,7 +53,7 @@ That environment is responsible for containing its operating-system dependencies
 
 For example, choosing Codex for a Modal Sandbox requires an image that already contains the compatible Codex ACP adapter and runtime. AML's default image satisfies that executable contract; an override must do the same. AML does not inspect an arbitrary image and install Codex automatically.
 
-AML publishes `aml-agent-sandbox` as a separate, versioned distribution artifact containing the supported Agents and useful coding tools. Docker Hub is the canonical stable registry, and provider factories select its `latest` tag by default. GHCR carries the public, mutable `dev` nightly/edge channel used by repository validation; it is not a stable mirror. Image construction, project dependencies, credentials, and deployment hardening remain outside the Sandbox runtime.
+AML publishes [`aml-agent-sandbox`](https://agent-markup-language.com/docs/sandbox-images/) as a separate, versioned distribution artifact containing useful coding tools and either every supported Agent in the default `full` variant or one selected Agent in a named variant. Docker Hub is the canonical stable registry, and provider factories select the full `latest` tag by default. GHCR carries the public, mutable, non-versioned full-image `dev` nightly/edge channel used by repository validation; it is not reduced to a single-Agent dependency set and is not a stable mirror. Image construction, project dependencies, credentials, and deployment hardening remain outside the Sandbox runtime.
 
 ### AML coordinator
 
@@ -310,7 +310,7 @@ The matrix supports selecting one Agent, one Sandbox, either complete axis, or t
 
 These are possible extensions, not implementation phases:
 
-- evaluate narrower or multi-architecture image variants only after provider evidence justifies their additional release cost
+- evaluate additional architectures only after provider evidence justifies their release cost
 - add Sandbox providers only when they preserve provider-native environment configuration
 - evaluate snapshots, warm starts, retries, and forks as control-plane capabilities
 - add authenticated service access only when an Agent requires it

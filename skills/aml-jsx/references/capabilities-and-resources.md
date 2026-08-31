@@ -102,6 +102,8 @@ An outer Sandbox acquires a lease. A nested Sandbox narrows the active lease; it
 
 Sandbox images and snapshots own their installed Agents and tools. AML does not build images or silently install dependencies. For experiments, provider factories may expose an explicit `setup` command that runs after the Workspace is visible and before the Agent starts.
 
+Fetch the [Sandbox image guide](https://agent-markup-language.com/docs/sandbox-images.md) before choosing the AML `full` image, a single-Agent stable variant, the bleeding-edge GHCR `dev` image, or a derived project image.
+
 Built-in coding Agents launch through `SandboxRuntime.spawn()` and the shared ACP engine. A provider must never fall
 back to a host SDK, embedded loop, or one-shot CLI when a Sandbox is active.
 

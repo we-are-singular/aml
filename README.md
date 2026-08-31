@@ -225,6 +225,8 @@ The public SDK includes the runtime, built-in integrations, and testing utilitie
 | Workspace | [S3 adapter](./providers/workspaces/s3)          | `s3Workspace()`         | Restores and publishes immutable archive or folder revisions through S3-compatible storage. R2 has repository smoke evidence; other backends require deployment-specific compatibility verification. |
 | Testing   | [Testing entry](./sdk/src/testing.ts)            | `@aml-jsx/sdk/testing`  | Supplies deterministic Agent, Sandbox, and Workspace providers plus reusable conformance suites.                                                                                                     |
 
+Docker, Daytona, and Modal default to the full `wearesingular/aml-agent-sandbox:latest` image. Stable Docker Hub releases also publish matching `codex`, `copilot`, `glm`, `opencode`, and `pi` variants, while `ghcr.io/we-are-singular/aml-agent-sandbox:dev` remains the mutable full image built from `main`. See [AML Agent Sandbox images](https://agent-markup-language.com/docs/sandbox-images/) for contents, registry links, tags, selection, pinning, and extension.
+
 The credentialed smoke runner exercises the complete built-in Agent × Sandbox matrix:
 
 | Sandbox \ Agent | Codex | Copilot | GLM | OpenCode | Pi  |
@@ -236,7 +238,7 @@ The credentialed smoke runner exercises the complete built-in Agent × Sandbox m
 
 Every cell launches its Agent through the same shared ACP engine and `SandboxRuntime.spawn()`. These proofs use read-write Workspaces where a provider cannot enforce read-only access. The selected host, image, or snapshot must contain the required executable. Sandbox providers do not install Agents implicitly.
 
-Docker, Daytona, and Modal smoke cells use `ghcr.io/we-are-singular/aml-agent-sandbox:dev`. Set `AML_SMOKE_SANDBOX_IMAGE` to run every image-backed cell against one explicit reference, such as an immutable version or digest. Provider factories default to `wearesingular/aml-agent-sandbox:latest`; applications can override it with their own image or snapshot.
+Docker, Daytona, and Modal smoke cells use the full GHCR `dev` image. Set `AML_SMOKE_SANDBOX_IMAGE` to run every image-backed cell against one explicit reference, such as an immutable version or digest.
 
 `<System>`, `<Skill>`, `<FollowUp>`, Context, and tree evaluation are runtime-owned. JavaScript Tools use one AML-owned invocation MCP bridge. Structured output uses one AML-owned submission Tool on the final authored turn and one shared, schema-bearing repair prompt if that turn omits the Tool call. Agent permissions default to read-write filesystem, shell, and network access; the active Sandbox remains the security boundary for model-controlled operations.
 
@@ -439,10 +441,7 @@ npm run release:sandbox
 
 `npm run release` remains an alias for `release:sdk`. Release It runs the release checks, prompts for the next version,
 updates the selected package and lockfile, pushes the release, and creates the matching GitHub release. SDK and CLI
-releases publish to npm and use `vX.Y.Z` and `cli-vX.Y.Z` tags. Stable Sandbox releases publish to Docker Hub and use
-`sandbox-vX.Y.Z`. npm prompts for OTP or passkey approval when required. Stable image publication uses a temporary Docker
-Hub browser login and a local Cosign installation. The active GitHub CLI account creates the source release. GitHub
-Actions separately publishes GHCR `dev` after relevant changes reach `main`.
+releases publish to npm and use `vX.Y.Z` and `cli-vX.Y.Z` tags. Stable Sandbox releases publish full and single-Agent variants to Docker Hub under one `sandbox-vX.Y.Z` source tag. Publication runs each Agent's real Docker smoke against its pushed variant before signing its digest and updating moving tags. npm prompts for OTP or passkey approval when required. Stable image publication uses a temporary Docker Hub browser login and a local Cosign installation. The active GitHub CLI account creates the source release. GitHub Actions separately publishes the full GHCR `dev` image after relevant changes reach `main`.
 
 Release notes follow those package lanes instead of including every repository commit. CLI notes include commits scoped
 to `cli`. SDK notes include commits scoped to `sdk` or an SDK-owned runtime, primitive, Agent, Sandbox, Workspace, or

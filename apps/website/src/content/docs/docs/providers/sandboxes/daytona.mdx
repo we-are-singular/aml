@@ -36,7 +36,7 @@ Daytona starts commands in the Sandbox user’s writable home. AML therefore use
 | `setup`          | `string`                              | None                                     | Runs through `sh -lc` after hydration and before the lease is returned.                             |
 | `workspace`      | `string`                              | None                                     | Fallback local Workspace path. An active `<Workspace />` materialization takes precedence.          |
 
-`image` and `snapshot` are mutually exclusive, but both may be omitted. With neither root option, AML selects `wearesingular/aml-agent-sandbox:latest`. Do not put either field inside `create`; the provider rejects that configuration to keep environment identity explicit.
+`image` and `snapshot` are mutually exclusive, but both may be omitted. With neither root option, AML selects the full `wearesingular/aml-agent-sandbox:latest` image. Choose and pin a full or single-Agent release with the [AML image guide](/docs/sandbox-images/). Do not put either field inside `create`; the provider rejects that configuration to keep environment identity explicit.
 
 ## Network egress and firewall tiers
 

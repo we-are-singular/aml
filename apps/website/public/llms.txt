@@ -20,6 +20,7 @@ Use the focused page that matches the task before loading the complete corpus. E
 ```sh
 curl -fsSL https://agent-markup-language.com/docs/getting-started.md
 curl -fsSL https://agent-markup-language.com/docs/cli.md
+curl -fsSL https://agent-markup-language.com/docs/sandbox-images.md
 curl -fsSL https://agent-markup-language.com/docs/providers/agents/codex.md
 curl -fsSL https://agent-markup-language.com/docs/providers/agents/copilot.md
 curl -fsSL https://agent-markup-language.com/docs/reference/primitives/agent.md
@@ -32,6 +33,7 @@ Use these primary documentation destinations:
 - Learn: https://agent-markup-language.com/docs/
 - CLI: https://agent-markup-language.com/docs/cli/
 - Providers: https://agent-markup-language.com/docs/providers/
+- Sandbox images: https://agent-markup-language.com/docs/sandbox-images/
 - Cookbook: https://agent-markup-language.com/docs/cookbook/
 - Reference: https://agent-markup-language.com/docs/reference/
 
@@ -152,15 +154,18 @@ Agent providers:
 
 - `codexAgent()` for Codex through `codex-acp`.
 - `copilotAgent()` for GitHub Copilot CLI's native `copilot --acp` server.
+- `glmAgent()` for Z.ai Coding Plan models through `glm-acp-agent`.
 - `opencodeAgent()` for OpenCode's ACP server.
 - `piAgent()` for `pi-acp` and Pi.
 
 Sandbox providers:
 
 - `localSandbox()` for trusted host development; it is not an isolation boundary.
-- `dockerSandbox()` for disposable container execution using an application-owned image.
+- `dockerSandbox()` for disposable container execution using AML's default image or an application override.
 - `daytonaSandbox()` for disposable Daytona environments.
 - `modalSandbox()` for disposable Modal Sandboxes.
+
+Docker, Daytona, and Modal default to AML's stable full image. Stable single-Agent variants and the mutable, full GHCR `dev` channel are documented at https://agent-markup-language.com/docs/sandbox-images/.
 
 Workspace providers:
 
