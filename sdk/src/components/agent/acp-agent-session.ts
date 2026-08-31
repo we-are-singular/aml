@@ -45,13 +45,23 @@ export type AcpPermissionPolicy = PermissionOptionKind
  */
 export type AcpSessionConfiguration =
   | {
+      /** Semantic ACP option category selected when ids vary by implementation. */
       readonly category: string
+
+      /** Excludes id-based matching from the category branch. */
       readonly id?: never
+
+      /** Boolean value or advertised selection id applied to the option. */
       readonly value: boolean | string
     }
   | {
+      /** Excludes category-based matching from the id branch. */
       readonly category?: never
+
+      /** Stable ACP session option id to configure. */
       readonly id: string
+
+      /** Boolean value or advertised selection id applied to the option. */
       readonly value: boolean | string
     }
 

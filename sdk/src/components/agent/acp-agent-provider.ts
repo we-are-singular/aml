@@ -33,13 +33,32 @@ import { spawnLocalProcess } from "./spawn-local-process.js"
  * Execution environment prepared once for an ACP Agent profile.
  */
 export interface AcpAgentLaunchContext {
-  /** Invocation-owned MCP server hosting AML JavaScript Tools and structured output. */
+  /**
+   * Invocation-owned MCP server hosting AML JavaScript Tools and structured output.
+   *
+   * Omitted when the request grants no JavaScript Tools and asks for no
+   * structured output.
+   */
   readonly amlMcpServerName?: string
+
+  /** Physical working directory in the host process or active Sandbox. */
   readonly cwd: string
+
   /** Whether the launched process inherits the AML host's `process.env`. */
   readonly inheritsProcessEnvironment: boolean
+
+  /** ACP transport descriptors already mapped from the Agent's MCP grants. */
   readonly mcpServers: readonly McpServer[]
+
+  /** Complete provider-neutral Agent request used to derive vendor settings. */
   readonly request: Readonly<AgentRequest>
+
+  /**
+   * Fresh writable directory owned by this invocation.
+   *
+   * Profiles may place configuration and credential-pointer files here. AML
+   * removes the directory during session cleanup.
+   */
   readonly stateDirectory: string
 }
 
@@ -47,8 +66,13 @@ export interface AcpAgentLaunchContext {
  * Invocation-private file requested by an Agent profile.
  */
 export interface AcpAgentLaunchFile {
+  /** UTF-8 contents written before the Agent process starts. */
   readonly content: string
+
+  /** Whether AML adds executable permission after writing; defaults to `false`. */
   readonly executable?: boolean
+
+  /** Portable relative path beneath the invocation `stateDirectory`. */
   readonly path: string
 }
 
@@ -56,16 +80,42 @@ export interface AcpAgentLaunchFile {
  * Process and protocol settings supplied by one thin ACP Agent profile.
  */
 export interface AcpAgentLaunch {
+  /** Literal process arguments; defaults to an empty array. */
   readonly args?: readonly string[]
+
+  /** ACP authentication method selected after initialization, when required. */
   readonly authenticationMethodId?: string
+
+  /** Executable started through the host or active Sandbox process runtime. */
   readonly command: string
+
+  /** ACP session configuration values applied before prompting. */
   readonly configuration?: readonly AcpSessionConfiguration[]
+
+  /** Environment entries supplied to the launched process. */
   readonly env?: Readonly<Record<string, string>>
+
+  /** Invocation-private files materialized before process startup. */
   readonly files?: readonly AcpAgentLaunchFile[]
+
+  /** Text prepended only to the initial authored prompt, when configured. */
   readonly initialPromptPrefix?: string
+
+  /** Maps AML permission requests onto ACP permission decisions. */
   readonly permissionPolicy: AcpPermissionPolicy
+
+  /**
+   * Complete ACP MCP list used for session creation.
+   *
+   * Omission uses the mapped `AcpAgentLaunchContext.mcpServers`; supplying this
+   * field replaces that list and is useful only for profile-specific mapping.
+   */
   readonly sessionMcpServers?: readonly McpServer[]
+
+  /** Profile-specific instruction used for AML's structured-result Tool turn. */
   readonly structuredOutputInstruction?: string
+
+  /** Optional final ACP text transformation applied before AML returns a turn. */
   readonly transformText?: AcpSessionTextTransform
 }
 
@@ -73,10 +123,21 @@ export interface AcpAgentLaunch {
  * Agent-specific configuration retained outside the shared ACP lifecycle.
  */
 export interface AcpAgentProfile<Name extends string> {
+  /** Literal provider name exposed by the resulting Agent provider. */
   readonly name: Name
+
+  /**
+   * Host working directory used outside a Sandbox.
+   *
+   * `undefined` defaults to `process.cwd()`. An active Sandbox supplies its own
+   * physical cwd and ignores this host-only setting.
+   */
   readonly workingDirectory: string | undefined
 
+  /** Builds invocation-specific process and ACP settings without starting work. */
   createLaunch(context: Readonly<AcpAgentLaunchContext>): Readonly<AcpAgentLaunch>
+
+  /** Reports whether this profile can map one provider-native MCP server name. */
   supportsNamedMcpServer?(name: string): boolean
 }
 
@@ -159,11 +220,20 @@ class AcpAgentProvider<Name extends string> extends AbstractAgentProvider<Name> 
 }
 
 /**
- * Defines an Agent provider backed by AML's shared ACP lifecycle.
+ * Defines an immutable Agent provider backed by AML's shared ACP lifecycle.
+ *
+ * The shared implementation owns process startup, Sandbox execution, MCP Tool
+ * bridging, ordered turns, cancellation, structured output, and cleanup. The
+ * profile owns only vendor-specific launch and capability mapping.
  */
 export function defineAcpAgentProvider<Name extends string>(
   profile: Readonly<AcpAgentProfile<Name>>
-): Readonly<AgentProvider & { readonly name: Name }> {
+): Readonly<
+  AgentProvider & {
+    /** Exact provider name captured from the ACP profile. */
+    readonly name: Name
+  }
+> {
   return defineAgentProvider(new AcpAgentProvider(profile))
 }
 

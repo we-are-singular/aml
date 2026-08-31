@@ -9,32 +9,72 @@ import { WorkspaceConflictError } from "../components/workspace/workspace-confli
  * Default opaque handle exposed by the deterministic Workspace fixture.
  */
 export interface DeterministicWorkspaceHandle {
+  /** Zero-based acquisition order for this fixture instance. */
   readonly acquisition: number
+
+  /** Stable default-handle discriminant. */
   readonly kind: "deterministic-workspace"
+
+  /** Exact acquisition request recorded by the provider. */
   readonly request: WorkspaceAcquireRequest
+}
+
+/** Lease identity passed to deterministic Workspace lifecycle hooks. */
+interface DeterministicWorkspaceLeaseIdentity<Handle> {
+  /** Materialization directory exposed by the lease. */
+  readonly directory: string
+
+  /** Handle returned by the configured creation strategy. */
+  readonly handle: Handle
+
+  /** Deterministic lease id in `<provider-name>-<one-based-index>` form. */
+  readonly id: string
 }
 
 /**
  * Configuration hooks for deterministic materialization and persistence.
  */
 export interface DeterministicWorkspaceProviderOptions<Handle> {
+  /**
+   * Creates the provider-specific handle for an acquisition.
+   *
+   * Defaults to a {@link DeterministicWorkspaceHandle}. `acquisition` is the
+   * zero-based call index.
+   */
   readonly createHandle?: (request: WorkspaceAcquireRequest, acquisition: number) => Handle | PromiseLike<Handle>
+
+  /**
+   * Materialization directory or a per-acquisition directory strategy.
+   *
+   * Defaults to `"/deterministic-workspace"`.
+   */
   readonly directory?: string | ((request: WorkspaceAcquireRequest, acquisition: number) => string)
+
+  /**
+   * Provider identifier used in lease ids.
+   *
+   * Defaults to `"deterministic-workspace"` and must be non-empty and trimmed.
+   */
   readonly name?: string
+
+  /**
+   * Hook invoked during lease release before writer ownership is cleared.
+   *
+   * Defaults to a no-op. Ownership is still cleared when this hook rejects so
+   * later tests cannot deadlock on fixture state.
+   */
   readonly release?: (
-    lease: Readonly<{
-      directory: string
-      handle: Handle
-      id: string
-    }>,
+    lease: Readonly<DeterministicWorkspaceLeaseIdentity<Handle>>,
     acquisition: number
   ) => void | PromiseLike<void>
+
+  /**
+   * Hook invoked when AML asks the lease to persist its materialization.
+   *
+   * Defaults to a no-op and runs after the lease id is recorded in `saves`.
+   */
   readonly save?: (
-    lease: Readonly<{
-      directory: string
-      handle: Handle
-      id: string
-    }>,
+    lease: Readonly<DeterministicWorkspaceLeaseIdentity<Handle>>,
     acquisition: number
   ) => void | PromiseLike<void>
 }
@@ -53,6 +93,7 @@ export class DeterministicWorkspaceProvider<
   readonly #releases: string[] = []
   readonly #save: NonNullable<DeterministicWorkspaceProviderOptions<Handle>["save"]>
   readonly #saves: string[] = []
+  /** Stable provider identifier configured for this fixture. */
   readonly name: string
 
   /**

@@ -5,7 +5,10 @@ import type { AgentRequest } from "./agent-request.js"
  * Normalizes one provider request into the exact authored turn order.
  *
  * Provider adapters may use this independently when they expose a lower-level
- * session test seam outside `AbstractAgentProvider`.
+ * session test seam outside `AbstractAgentProvider`. The initial prompt becomes
+ * index `0`; follow-ups follow in order; only the final turn receives the
+ * request's structured-output declaration. The returned array and turns are
+ * frozen.
  */
 export function createAgentProviderTurns(
   request: AgentRequest,

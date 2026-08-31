@@ -1,5 +1,10 @@
 /**
- * Portable data that may cross an AML provider boundary.
+ * Recursively immutable JSON-compatible data that may cross an AML provider
+ * boundary.
+ *
+ * Values exclude `undefined`, `bigint`, symbols, functions, class instances,
+ * and cyclic object graphs. Provider and tool contracts use this shape so data
+ * can be snapshotted without depending on application object identity.
  */
 export type AmlJsonValue =
   | boolean
@@ -7,4 +12,7 @@ export type AmlJsonValue =
   | number
   | string
   | readonly AmlJsonValue[]
-  | { readonly [key: string]: AmlJsonValue }
+  | {
+      /** JSON object properties, addressed by their serialized string keys. */
+      readonly [key: string]: AmlJsonValue
+    }

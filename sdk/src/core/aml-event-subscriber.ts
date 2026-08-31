@@ -5,7 +5,10 @@ import type { TraceSink } from "../observability/trace-sink.js"
  * Announces that one runtime evaluation is ready to execute its AML tree.
  */
 export interface AmlEvaluationStartEvent {
+  /** Opaque identifier shared by every event from this evaluation. */
   readonly runId: string
+
+  /** Evaluation-scoped signal that providers and listeners may observe. */
   readonly signal: AbortSignal
 }
 
@@ -13,9 +16,16 @@ export interface AmlEvaluationStartEvent {
  * Announces that one runtime evaluation has settled and is finishing cleanup.
  */
 export interface AmlEvaluationFinishEvent {
+  /** Failure that ended the evaluation; present only when `status` is `"error"`. */
   readonly error?: unknown
+
+  /** Opaque identifier shared by every event from this evaluation. */
   readonly runId: string
+
+  /** Evaluation-scoped signal, including any cancellation reason. */
   readonly signal: AbortSignal
+
+  /** Whether AML evaluation and owned resource cleanup completed successfully. */
   readonly status: "error" | "ok"
 }
 
@@ -23,11 +33,17 @@ export interface AmlEvaluationFinishEvent {
  * Maps every public runtime event to its immutable payload.
  */
 export interface AmlEventMap {
+  /** Payload emitted after evaluation and owned cleanup settle. */
   readonly finish: AmlEvaluationFinishEvent
+
+  /** Payload emitted immediately before AML begins evaluating the authored tree. */
   readonly start: AmlEvaluationStartEvent
+
+  /** Immutable observability event emitted during evaluation. */
   readonly trace: AmlTraceEvent
 }
 
+/** Names accepted by {@link AmlEventSubscriber.on} and `once`. */
 export type AmlEventName = keyof AmlEventMap
 
 /**
@@ -47,7 +63,17 @@ export type AmlEventListener<Name extends AmlEventName> = Name extends "trace"
  * events or observe concurrent evaluations through this boundary.
  */
 export interface AmlEventSubscriber {
+  /**
+   * Registers a listener for every matching event in this evaluation scope.
+   *
+   * Returns an idempotent function that unregisters this exact listener.
+   */
   on<Name extends AmlEventName>(name: Name, listener: AmlEventListener<Name>): () => void
 
+  /**
+   * Registers a listener that removes itself before its first matching event.
+   *
+   * Returns a function that can cancel the pending registration.
+   */
   once<Name extends AmlEventName>(name: Name, listener: AmlEventListener<Name>): () => void
 }

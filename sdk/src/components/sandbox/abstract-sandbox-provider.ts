@@ -14,14 +14,20 @@ export abstract class AbstractSandboxProvider<
   Handle,
   Resource,
 > implements SandboxProvider<Handle> {
+  /** Stable non-empty normalized provider identifier used in diagnostics. */
   readonly name: Name
 
+  /** Creates a staged provider base while retaining the literal name type. */
   protected constructor(name: Name) {
     this.name = name
   }
 
   /**
    * Provisions, initializes, and returns one immutable Sandbox lease.
+   *
+   * A pre-aborted request starts no work. Any failure after `provision` resolves
+   * is compensated through `cleanupProvisioned`; the returned `release` caches
+   * the complete `releaseResource` operation.
    */
   async acquire(request: SandboxAcquireRequest): Promise<SandboxLease<Handle>> {
     request.signal.throwIfAborted()
@@ -65,6 +71,9 @@ export abstract class AbstractSandboxProvider<
 
   /**
    * Builds the narrow runtime over one successfully provisioned environment.
+   *
+   * The runtime must enforce the request's effective access, root, cwd, literal
+   * argument semantics, cancellation, output bounds, and process cleanup.
    */
   protected abstract createRuntime(
     provisioned: Readonly<ProvisionedSandbox<Handle, Resource>>,
@@ -73,6 +82,9 @@ export abstract class AbstractSandboxProvider<
 
   /**
    * Performs post-provision setup before the lease becomes visible.
+   *
+   * The default performs no setup. Overrides may hydrate a Workspace or run
+   * trusted configuration and should honor `request.signal`.
    */
   protected async initialize(
     _provisioned: Readonly<ProvisionedSandbox<Handle, Resource>>,
@@ -82,6 +94,9 @@ export abstract class AbstractSandboxProvider<
 
   /**
    * Compensates failed initialization without assuming successful evaluation.
+   *
+   * The default delegates to `releaseResource`; override only when a partially
+   * initialized resource requires a different cleanup path.
    */
   protected async cleanupProvisioned(
     provisioned: Readonly<ProvisionedSandbox<Handle, Resource>>,
@@ -92,6 +107,10 @@ export abstract class AbstractSandboxProvider<
 
   /**
    * Reconciles and releases one successfully exposed provider resource.
+   *
+   * Implementations must release evaluation-owned executions and authority even
+   * when reconciliation fails. Shared durable infrastructure need not be
+   * destroyed, but this evaluation's lease must end.
    */
   protected abstract releaseResource(
     provisioned: Readonly<ProvisionedSandbox<Handle, Resource>>,

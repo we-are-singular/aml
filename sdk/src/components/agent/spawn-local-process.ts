@@ -3,11 +3,30 @@ import { Readable, Writable } from "node:stream"
 
 import type { SandboxProcess, SandboxProcessExit } from "../sandbox/sandbox-runtime.js"
 
+/** Process startup, cancellation, and cleanup options for trusted host execution. */
 export interface LocalProcessOptions {
+  /**
+   * Optional asynchronous hook invoked before AML terminates the process tree.
+   *
+   * It may release protocol state or request graceful shutdown. Failure is
+   * retained alongside any later operating-system termination failure.
+   */
   readonly beforeKill?: () => Promise<void>
+
+  /** Existing host directory used as the child process working directory. */
   readonly cwd: string
+
+  /** Environment entries overlaid on `process.env`; `PWD` is set to `cwd`. */
   readonly env?: Readonly<Record<string, string>>
+
+  /** Caller-owned signal whose abortion terminates the process tree. */
   readonly signal: AbortSignal
+
+  /**
+   * Optional process lifetime in milliseconds.
+   *
+   * Expiry requests the same repeat-safe tree termination as cancellation.
+   */
   readonly timeoutMs?: number
 }
 
@@ -15,7 +34,9 @@ export interface LocalProcessOptions {
  * Starts one trusted host command with queued output and process-tree cleanup.
  *
  * This is the local process transport used by the ACP engine and Local
- * Sandbox. It does not provide filesystem, access, or network isolation.
+ * Sandbox. It does not provide filesystem, access, or network isolation. The
+ * returned handle exposes Web streams, repeat-safe `kill()`, and a stable
+ * `wait()` result; a pre-aborted signal prevents startup.
  */
 export async function spawnLocalProcess(
   command: string,

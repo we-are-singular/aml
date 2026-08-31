@@ -9,11 +9,23 @@ import { StandardSchemaAdapter, type SchemaValidation } from "./standard-schema-
 import { ToolInputError } from "./tool-input-error.js"
 import { ToolOutputError } from "./tool-output-error.js"
 
+/** Value returned synchronously or through any Promise-compatible implementation. */
 type MaybePromise<Value> = PromiseLike<Value> | Value
 
+/** Fields shared by Tool definitions with and without an output schema. */
 interface DefineToolBase<InputSchema extends AmlToolSchema> {
+  /** Non-empty normalized model-facing description of the Tool operation. */
   readonly description: string
+
+  /**
+   * Standard Schema validator and Standard JSON Schema declaration for input.
+   *
+   * AML snapshots its JSON Schema at definition time and validates every model-
+   * or application-supplied value before calling `execute`.
+   */
   readonly input: InputSchema
+
+  /** Non-empty normalized Tool name used in Agent grants and allowlists. */
   readonly name: string
 }
 
@@ -26,17 +38,33 @@ export type DefineToolOptions<
 > = DefineToolBase<InputSchema> &
   (OutputSchema extends StandardSchemaV1
     ? {
+        /**
+         * Application operation invoked after input validation.
+         *
+         * It receives normalized input plus cancellation and trace context. Its
+         * return value is validated by `output`, then snapshotted as stable JSON.
+         */
         readonly execute: (
           input: StandardSchemaV1.InferOutput<InputSchema>,
           context: AgentToolExecutionContext
         ) => MaybePromise<StandardSchemaV1.InferInput<OutputSchema>>
+
+        /** Standard Schema that validates and may transform `execute` output. */
         readonly output: OutputSchema
       }
     : {
+        /**
+         * Application operation invoked after input validation.
+         *
+         * Without an output schema it must return a JSON-compatible value. AML
+         * snapshots that value before it crosses the provider boundary.
+         */
         readonly execute: (
           input: StandardSchemaV1.InferOutput<InputSchema>,
           context: AgentToolExecutionContext
         ) => MaybePromise<AmlJsonValue>
+
+        /** Omit to use AML's stable JSON boundary without output transformation. */
         readonly output?: undefined
       })
 
@@ -44,7 +72,9 @@ export type DefineToolOptions<
  * Defines one immutable, schema-validated callable JavaScript Tool.
  *
  * Calling the result invokes it through the active AML function component.
- * Its execute method retains the explicit low-level provider and test API.
+ * Its execute method retains the explicit low-level provider and test API. AML
+ * validates and snapshots the definition immediately, then freezes the callable
+ * exact identity; defining a Tool does not grant it to an Agent or run it.
  */
 export function defineTool<
   InputSchema extends AmlToolSchema,

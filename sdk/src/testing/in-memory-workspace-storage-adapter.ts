@@ -13,9 +13,15 @@ interface StoredObject {
   readonly version: WorkspaceStorageVersion
 }
 
+/** One storage call recorded by {@link InMemoryWorkspaceStorageAdapter}. */
 export interface WorkspaceStorageOperation {
+  /** Storage method that was invoked. */
   readonly kind: "delete" | "list" | "read" | "release" | "write"
+
+  /** Object path or list prefix; omitted for lease release operations. */
   readonly path?: string
+
+  /** Logical Workspace id whose namespace received the operation. */
   readonly workspaceId: string
 }
 
@@ -27,21 +33,40 @@ export class InMemoryWorkspaceStorageAdapter implements WorkspaceStorageAdapter 
   readonly #objects = new Map<string, Map<string, StoredObject>>()
   readonly #operations: WorkspaceStorageOperation[] = []
   #version = 0
+  /** Stable adapter name included in persistent Workspace provider references. */
   readonly name = "memory-workspace-storage"
 
+  /**
+   * Chronological, live view of storage calls made through this adapter.
+   *
+   * Entries are appended before each operation mutates in-memory state.
+   */
   get operations(): readonly Readonly<WorkspaceStorageOperation>[] {
     return this.#operations
   }
 
+  /** Returns sorted object paths currently stored for one logical Workspace. */
   keys(workspaceId: string): readonly string[] {
     return [...(this.#objects.get(workspaceId)?.keys() ?? [])].sort()
   }
 
+  /**
+   * Decodes one stored object as UTF-8 text for assertions.
+   *
+   * Returns `undefined` when the Workspace or object path does not exist.
+   */
   async text(workspaceId: string, objectPath: string): Promise<string | undefined> {
     const object = this.#objects.get(workspaceId)?.get(objectPath)
     return object === undefined ? undefined : Buffer.from(object.body).toString("utf8")
   }
 
+  /**
+   * Opens an in-memory object namespace and optionally claims its exclusive lock.
+   *
+   * Competing locked acquisitions of the same id reject with
+   * {@link WorkspaceConflictError}. The returned lease supports conditional
+   * writes and releases ownership idempotently.
+   */
   async acquire(request: WorkspaceStorageAcquireRequest): Promise<WorkspaceStorageLease> {
     request.signal.throwIfAborted()
 

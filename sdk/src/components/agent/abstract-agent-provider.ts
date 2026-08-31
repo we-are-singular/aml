@@ -16,8 +16,15 @@ import { executeAgentProviderSession } from "./execute-agent-provider-session.js
  * response selection, and failure-safe invocation cleanup.
  */
 export abstract class AbstractAgentProvider<Name extends string> implements AgentProvider {
+  /** Stable non-empty normalized identifier used in diagnostics and traces. */
   readonly name: Name
 
+  /**
+   * Creates a provider base with a literal name retained in the subclass type.
+   *
+   * Concrete subclasses should expose their own application-facing factory and
+   * implement `openSession` for exactly one AML Agent invocation.
+   */
   protected constructor(name: Name) {
     this.name = name
   }
@@ -64,6 +71,10 @@ export abstract class AbstractAgentProvider<Name extends string> implements Agen
 
   /**
    * Attaches session-wide capabilities and creates one fresh conversation.
+   *
+   * The returned session is consumed exactly once. `AbstractAgentProvider`
+   * guarantees ordered turns, cancellation notification, and `close()` after
+   * success or failure.
    */
   protected abstract openSession(request: AgentRequest, context: AgentExecutionContext): Promise<AgentProviderSession>
 }

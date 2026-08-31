@@ -4,19 +4,30 @@ import { EvaluationError } from "../../core/evaluation-error.js"
 
 /** Independent AML branches evaluated concurrently in authored order. */
 export interface ParallelProps {
+  /**
+   * Independent AML branches to evaluate concurrently.
+   *
+   * Nested child arrays are flattened, nullish and boolean children are ignored,
+   * and each Fragment remains one branch. Omission produces no branches.
+   */
   readonly children?: AmlRenderable
 }
 
 /** Identifies one failed Parallel branch without hiding its original cause. */
 export interface ParallelFailure {
+  /** Zero-based position of the rejected branch after child-array flattening. */
   readonly branchIndex: number
+
+  /** Original value with which the branch rejected. */
   readonly cause: unknown
 }
 
 /** Reports every failed Parallel branch in authored order. */
 export class ParallelError extends Error {
+  /** Every rejected branch, ordered by authored branch position. */
   readonly failures: readonly ParallelFailure[]
 
+  /** Creates an aggregate branch error without replacing the original causes. */
   constructor(failures: readonly ParallelFailure[]) {
     const branches = failures.map(failure => failure.branchIndex + 1).join(", ")
     super(failures.length === 1 ? `<Parallel> branch ${branches} failed` : `<Parallel> branches ${branches} failed`)
@@ -28,6 +39,10 @@ export class ParallelError extends Error {
 /**
  * Evaluates each flattened child concurrently and renders successful outputs
  * in authored order after every branch has settled.
+ *
+ * Completion order never changes the result order. The component waits for all
+ * branch cleanup and then throws one `ParallelError` when any branch failed;
+ * successful side effects are not rolled back.
  */
 export async function Parallel({ children }: ParallelProps): Promise<readonly string[]> {
   const branches = flattenBranches(children)

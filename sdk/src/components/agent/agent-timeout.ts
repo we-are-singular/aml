@@ -2,8 +2,10 @@ const AML_AGENT_TIMEOUT_ERROR = Symbol.for("@aml-jsx/sdk/agent-timeout-error")
 
 /** Error used as the cancellation reason when an Agent execution expires. */
 export class AgentTimeoutError extends Error {
+  /** Positive safe-integer timeout that expired, in milliseconds. */
   readonly timeoutMs: number
 
+  /** Creates the abort reason used when one Agent-local deadline expires. */
   constructor(timeoutMs: number) {
     super(`<Agent> execution timed out after ${timeoutMs}ms`)
     this.name = "AgentTimeoutError"

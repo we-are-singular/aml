@@ -9,10 +9,19 @@ import {
  * Local-process transport accepted by `defineMcpServer()`.
  */
 export interface DefineMcpStdioTransport {
+  /** Literal process arguments copied at definition time; omitted means none. */
   readonly args?: readonly string[]
+
+  /** Non-empty normalized executable name or path. */
   readonly command: string
+
+  /** Optional non-empty normalized cwd interpreted by the Agent provider. */
   readonly cwd?: string
+
+  /** Optional string environment record copied at definition time. */
   readonly env?: Readonly<Record<string, string>>
+
+  /** Selects a provider-owned process transport. */
   readonly type: "stdio"
 }
 
@@ -20,8 +29,13 @@ export interface DefineMcpStdioTransport {
  * Streamable HTTP input accepts URL objects before normalizing to text.
  */
 export interface DefineMcpStreamableHttpTransport {
+  /** Optional string request headers copied at definition time. */
   readonly headers?: Readonly<Record<string, string>>
+
+  /** Selects a remote Streamable HTTP transport. */
   readonly type: "streamable-http"
+
+  /** Absolute HTTP(S) endpoint; `URL` inputs are normalized to `url.href`. */
   readonly url: string | URL
 }
 
@@ -29,12 +43,20 @@ export interface DefineMcpStreamableHttpTransport {
  * Complete side-effect-free MCP definition input.
  */
 export interface DefineMcpServerOptions {
+  /** Non-empty normalized capability name used by `Mcp` and runtime allowlists. */
   readonly name: string
+
+  /** Stdio or Streamable HTTP connection settings to snapshot and normalize. */
   readonly transport: DefineMcpStdioTransport | DefineMcpStreamableHttpTransport
 }
 
 /**
  * Defines one immutable portable MCP server without connecting to it.
+ *
+ * AML captures each input once, validates and copies authority-bearing arrays
+ * and records, normalizes HTTP URLs, and registers the exact returned identity.
+ * Process startup, connection, authentication, discovery, and grants happen
+ * later at the selected Agent provider and `Mcp` boundaries.
  */
 export function defineMcpServer(options: DefineMcpServerOptions): Readonly<AmlMcpServer> {
   if (typeof options !== "object" || options === null) {

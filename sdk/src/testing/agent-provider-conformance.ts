@@ -5,7 +5,16 @@ import { validateAgentProvider } from "../components/agent/validate-agent-provid
 import { createAgentExecutionContext } from "./create-agent-execution-context.js"
 
 /**
- * Exercises the provider-neutral call boundary without a test-runner dependency.
+ * Exercises the provider-neutral Agent call boundary without a test-runner
+ * dependency.
+ *
+ * The check runs one request containing an initial prompt and FollowUp, requires
+ * a string response, then verifies that a pre-cancelled context rejects with the
+ * exact AbortSignal reason. A real provider may perform external work during the
+ * first call; supply isolated credentials and infrastructure in integration
+ * tests. The promise resolves only when every assertion passes.
+ *
+ * @param provider Provider instance to validate and exercise.
  */
 export async function agentProviderConformance(provider: AgentProvider): Promise<void> {
   const validatedProvider = validateAgentProvider(provider)

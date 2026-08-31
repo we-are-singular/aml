@@ -7,11 +7,22 @@ import type { SandboxExecOptions } from "./sandbox-runtime.js"
  * Captured and validated provider-neutral Sandbox command.
  */
 export class SandboxCommand {
+  /** Frozen literal argument list; empty when the caller supplied none. */
   readonly args: readonly string[]
+
+  /** Non-empty executable string captured without shell parsing. */
   readonly command: string
+
+  /** Normalized logical cwd constrained beneath the acquired Sandbox root. */
   readonly cwd: string
+
+  /** Frozen command-specific environment entries; empty when omitted. */
   readonly env: Readonly<Record<string, string>>
+
+  /** Effective command signal, defaulting to the acquisition signal. */
   readonly signal: AbortSignal
+
+  /** Positive timer-safe command limit in milliseconds, when supplied. */
   readonly timeoutMs: number | undefined
 
   private constructor(input: {
@@ -33,6 +44,11 @@ export class SandboxCommand {
 
   /**
    * Captures one runtime call without trusting mutable caller-owned values.
+   *
+   * Arguments default to `[]` and options to `{}`. The method snapshots arrays
+   * and environment records, validates portable cwd confinement and timer range,
+   * inherits missing cwd and signal values from acquisition, and rejects a
+   * pre-aborted effective signal.
    */
   static from(
     request: SandboxAcquireRequest,

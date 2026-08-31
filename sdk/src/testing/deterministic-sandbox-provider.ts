@@ -10,24 +10,73 @@ import type {
  * Default opaque handle exposed by the deterministic Sandbox fixture.
  */
 export interface DeterministicSandboxHandle {
+  /** Zero-based acquisition order for this fixture instance. */
   readonly acquisition: number
+
+  /** Stable default-handle discriminant. */
   readonly kind: "deterministic-sandbox"
+
+  /** Exact acquisition request recorded by the provider. */
   readonly request: SandboxAcquireRequest
+}
+
+/** Lease identity passed to deterministic Sandbox release hooks. */
+interface DeterministicSandboxLeaseIdentity<Handle> {
+  /** Handle returned by the configured creation strategy. */
+  readonly handle: Handle
+
+  /** Deterministic lease id in `<provider-name>-<one-based-index>` form. */
+  readonly id: string
 }
 
 /**
  * Configuration hooks for deterministic acquisition and release behavior.
  */
 export interface DeterministicSandboxProviderOptions<Handle> {
+  /**
+   * Creates the provider-specific handle for an acquisition.
+   *
+   * Defaults to a {@link DeterministicSandboxHandle}. `acquisition` is the
+   * zero-based call index.
+   */
   readonly createHandle?: (request: SandboxAcquireRequest, acquisition: number) => Handle | PromiseLike<Handle>
+
+  /**
+   * Implements deterministic buffered command execution.
+   *
+   * Defaults to exit code `0`, empty stderr, and stdout containing the command
+   * and arguments joined by spaces.
+   */
   readonly exec?: (
     command: string,
     args: readonly string[],
     request: SandboxAcquireRequest,
     options: Readonly<SandboxExecOptions>
   ) => SandboxExecResult | PromiseLike<SandboxExecResult>
+
+  /**
+   * Provider identifier used in lease ids.
+   *
+   * Defaults to `"deterministic-sandbox"` and must be non-empty and trimmed.
+   */
   readonly name?: string
-  readonly release?: (lease: Readonly<{ handle: Handle; id: string }>, acquisition: number) => void | PromiseLike<void>
+
+  /**
+   * Hook invoked when a lease is released, after its id is recorded.
+   *
+   * Defaults to a no-op. `acquisition` is the zero-based acquisition index.
+   */
+  readonly release?: (
+    lease: Readonly<DeterministicSandboxLeaseIdentity<Handle>>,
+    acquisition: number
+  ) => void | PromiseLike<void>
+
+  /**
+   * Implements deterministic streaming process execution.
+   *
+   * Defaults to an already-completed process whose stdout contains the command
+   * and arguments, stderr is empty, and exit code is `0`.
+   */
   readonly spawn?: (
     command: string,
     args: readonly string[],
@@ -43,9 +92,13 @@ export class DeterministicSandboxProvider<Handle = DeterministicSandboxHandle> i
   readonly #acquisitions: SandboxAcquireRequest[] = []
   readonly #createHandle: (request: SandboxAcquireRequest, acquisition: number) => Handle | PromiseLike<Handle>
   readonly #exec: NonNullable<DeterministicSandboxProviderOptions<Handle>["exec"]>
-  readonly #release: (lease: Readonly<{ handle: Handle; id: string }>, acquisition: number) => void | PromiseLike<void>
+  readonly #release: (
+    lease: Readonly<DeterministicSandboxLeaseIdentity<Handle>>,
+    acquisition: number
+  ) => void | PromiseLike<void>
   readonly #releases: string[] = []
   readonly #spawn: NonNullable<DeterministicSandboxProviderOptions<Handle>["spawn"]>
+  /** Stable provider identifier configured for this fixture. */
   readonly name: string
 
   /**

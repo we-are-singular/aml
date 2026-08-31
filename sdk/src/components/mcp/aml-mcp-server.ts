@@ -8,10 +8,30 @@ interface AmlMcpServerGlobal {
  * Portable local-process MCP transport owned at runtime by an Agent provider.
  */
 export interface AmlMcpStdioTransport {
+  /** Literal process arguments; omitted means no arguments. */
   readonly args?: readonly string[]
+
+  /** Non-empty normalized executable name or path. */
   readonly command: string
+
+  /**
+   * Provider-environment working directory for the server process.
+   *
+   * Omission leaves cwd selection to the Agent provider. The provider also
+   * determines whether this path belongs to the host, Sandbox, or another
+   * execution environment.
+   */
   readonly cwd?: string
+
+  /**
+   * String environment entries supplied to the server process.
+   *
+   * Omission adds no definition-specific entries. Treat values as potentially
+   * secret provider configuration.
+   */
   readonly env?: Readonly<Record<string, string>>
+
+  /** Transport discriminant for a provider-owned local process. */
   readonly type: "stdio"
 }
 
@@ -19,8 +39,18 @@ export interface AmlMcpStdioTransport {
  * Portable remote Streamable HTTP transport owned by an Agent provider.
  */
 export interface AmlMcpStreamableHttpTransport {
+  /**
+   * Request headers snapshotted when the server is defined.
+   *
+   * Omission sends no definition-specific headers. Values may contain secrets
+   * and are passed to the selected Agent provider.
+   */
   readonly headers?: Readonly<Record<string, string>>
+
+  /** Transport discriminant for a remote Streamable HTTP endpoint. */
   readonly type: "streamable-http"
+
+  /** Normalized absolute `http:` or `https:` endpoint URL. */
   readonly url: string
 }
 
@@ -37,7 +67,11 @@ export interface AmlMcpServer {
    * Non-enumerable authoring marker; runtime authenticity uses exact identity.
    */
   readonly __amlMcpServer: true
+
+  /** Non-empty normalized capability name used for grants and allowlists. */
   readonly name: string
+
+  /** Immutable normalized transport owned at runtime by the Agent provider. */
   readonly transport: AmlMcpTransport
 }
 
@@ -46,11 +80,17 @@ export interface AmlMcpServer {
  */
 export type AgentMcpServer =
   | {
+      /** Exact immutable server descriptor created by `defineMcpServer`. */
       readonly definition: AmlMcpServer
+
+      /** Discriminant for an explicitly configured transport. */
       readonly kind: "configured"
     }
   | {
+      /** Discriminant for a server configured natively by the Agent provider. */
       readonly kind: "named"
+
+      /** Non-empty normalized provider-native MCP server name. */
       readonly name: string
     }
 
