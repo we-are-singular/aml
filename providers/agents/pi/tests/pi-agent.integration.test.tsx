@@ -14,7 +14,7 @@ liveTest(
   async () => {
     const secret = randomUUID()
     const provider = piAgent({
-      model: process.env.AML_PI_MODEL ?? "opencode-go/glm-5.1",
+      model: process.env.AML_PI_MODEL ?? "opencode-go/deepseek-v4-flash",
       workingDirectory: process.cwd(),
     })
     const output = await new AmlRuntime({ agentProvider: provider }).evaluate(
@@ -39,7 +39,7 @@ liveTest(
     })
     const provider = piAgent({
       mcpAdapterPath: fileURLToPath(import.meta.resolve("pi-mcp-adapter")),
-      model: process.env.AML_PI_MODEL ?? "opencode-go/glm-5.1",
+      model: process.env.AML_PI_MODEL ?? "opencode-go/deepseek-v4-flash",
       workingDirectory: process.cwd(),
     })
 
@@ -73,7 +73,7 @@ liveTest(
     })
     const provider = piAgent({
       mcpAdapterPath: fileURLToPath(import.meta.resolve("pi-mcp-adapter")),
-      model: process.env.AML_PI_MODEL ?? "opencode-go/glm-5.1",
+      model: process.env.AML_PI_MODEL ?? "opencode-go/deepseek-v4-flash",
       workingDirectory: process.cwd(),
     })
     const output = await new AmlRuntime({ agentProvider: provider }).evaluate(

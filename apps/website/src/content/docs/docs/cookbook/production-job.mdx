@@ -35,7 +35,7 @@ AML does not install the executable, provision a model account, or turn [`localS
 import { Agent, AmlRuntime, createConsoleTracer, opencodeAgent } from "@aml-jsx/sdk"
 
 const agentProvider = opencodeAgent({
-  model: process.env.AML_MODEL ?? "opencode-go/minimax-m3",
+  model: process.env.AML_MODEL ?? "opencode-go/deepseek-v4-flash",
 })
 
 const runtime = new AmlRuntime({
@@ -81,7 +81,7 @@ npx vite-node recipe.tsx
 From an AML repository checkout, a separate maintained example proves a real OpenCode session can call an AML Tool:
 
 ```sh title="Terminal"
-AML_OPENCODE_MODEL=opencode-go/minimax-m3 npm run example -- opencode
+AML_OPENCODE_MODEL=opencode-go/deepseek-v4-flash npm run example -- opencode
 ```
 
 That example additionally proves that a real OpenCode session can call an AML Tool. It does not provide a deployment image or credentials for you.

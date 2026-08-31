@@ -22,7 +22,7 @@ This observes what crosses AML's ACP connection. It cannot reveal hidden vendor 
 
 - Node.js `>=26`, ESM TypeScript/TSX, `@aml-jsx/sdk`, and `zod`;
 - the OpenCode executable and model credentials available to the process;
-- `AML_OPENCODE_MODEL` when you do not want the example's `opencode-go/minimax-m3` default;
+- `AML_OPENCODE_MODEL` when you do not want the example's `opencode-go/deepseek-v4-flash` default;
 - a local terminal approved to receive prompt, Tool, thought, and response content.
 
 ## Building block 1: application-owned evidence
@@ -110,7 +110,7 @@ Trace activity goes to standard error and the final workflow result goes to stan
 From the repository root:
 
 ```sh title="Terminal"
-AML_OPENCODE_MODEL=opencode-go/minimax-m3 \
+AML_OPENCODE_MODEL=opencode-go/deepseek-v4-flash \
   npx vite-node examples/src/operations/observe-agent.tsx \
   > /tmp/incident-update.txt
 ```

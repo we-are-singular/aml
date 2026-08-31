@@ -109,7 +109,7 @@ import { piAgent } from "@aml-jsx/sdk"
 
 const Pi = piAgent({
   env: { OPENCODE_API_KEY: process.env.OPENCODE_API_KEY ?? "" },
-  model: "opencode-go/glm-5.1",
+  model: "opencode-go/deepseek-v4-flash",
 })
 ```
 
@@ -412,7 +412,7 @@ Matrix smoke files use a dedicated Vitest configuration and stay outside default
 
 The manual kitchen-sink smoke defaults to `--agent opencode --sandbox modal --workspace r2 --mcp context7`. It accepts any registered Agent or Sandbox, plus `local | r2` Workspaces and `context7 | none` MCP selection. The workflow exercises all twelve stable primitives, then reacquires the saved Workspace and verifies the persisted files. Run `npm run smoke:kitchen-sink -- --help` for the current selections. Context7 supports anonymous testing; `CONTEXT7_API_KEY` raises its rate limit when configured.
 
-The smoke runners load the repository's untracked `.env`. Codex, OpenCode, and Pi use `OPENAI_API_KEY` or `AML_CODEX_API_KEY`; `AML_CODEX_MODEL`, `AML_OPENCODE_MODEL`, and `AML_PI_MODEL` may override their models. Copilot uses `COPILOT_GITHUB_TOKEN`, `GH_TOKEN`, or `GITHUB_TOKEN` in that order and defaults to `gpt-5-mini`; `AML_COPILOT_GITHUB_TOKEN` and `AML_COPILOT_MODEL` are optional smoke-only overrides. GLM uses `Z_AI_API_KEY` or `AML_ZAI_API_KEY` and defaults to `glm-5.3`; `AML_GLM_MODEL` may override its model. Daytona uses `DAYTONA_API_KEY`. Modal uses the repository-local `MODAL_API_KEY` and `MODAL_API_SECRET` names as `tokenId` and `tokenSecret`; Modal's own ambient credential names remain `MODAL_TOKEN_ID` and `MODAL_TOKEN_SECRET`. The R2 Workspace accepts `R2_BUCKET`, `R2_ENDPOINT`, `R2_ACCESS_KEY_ID`, and `R2_SECRET_ACCESS_KEY`, with the existing `AML_S3_*` aliases. These environment names configure only the repository's smoke CLI. Applications configure providers through their native factory options and runtime environment.
+The smoke runners load the repository's untracked `.env`. Codex uses `OPENAI_API_KEY` or `AML_CODEX_API_KEY` and defaults to `gpt-5.6-luna` with low reasoning effort. OpenCode and Pi use `OPENCODE_API_KEY` and default to `opencode-go/deepseek-v4-flash`. `AML_CODEX_MODEL`, `AML_OPENCODE_MODEL`, and `AML_PI_MODEL` may override those models. Copilot uses `COPILOT_GITHUB_TOKEN`, `GH_TOKEN`, or `GITHUB_TOKEN` in that order and defaults to `gpt-5-mini`; `AML_COPILOT_GITHUB_TOKEN` and `AML_COPILOT_MODEL` are optional smoke-only overrides. GLM uses `Z_AI_API_KEY` or `AML_ZAI_API_KEY` and defaults to `glm-5.3`; `AML_GLM_MODEL` may override its model. Daytona uses `DAYTONA_API_KEY`. Modal uses the repository-local `MODAL_API_KEY` and `MODAL_API_SECRET` names as `tokenId` and `tokenSecret`; Modal's own ambient credential names remain `MODAL_TOKEN_ID` and `MODAL_TOKEN_SECRET`. The R2 Workspace accepts `R2_BUCKET`, `R2_ENDPOINT`, `R2_ACCESS_KEY_ID`, and `R2_SECRET_ACCESS_KEY`, with the existing `AML_S3_*` aliases. These environment names configure only the repository's smoke CLI. Applications configure providers through their native factory options and runtime environment.
 
 The full matrix and the default kitchen sink are manual release gates. Run both before every package release, and always before a major-version release:
 

@@ -102,7 +102,7 @@ const apiKey = process.env.OPENCODE_API_KEY
 if (!apiKey) throw new Error("OPENCODE_API_KEY is required")
 
 const provider = opencodeAgent({
-  model: "opencode-go/minimax-m3",
+  model: "opencode-go/deepseek-v4-flash",
   // Provider-native variables are forwarded to the OpenCode process.
   env: { OPENCODE_API_KEY: apiKey },
 })

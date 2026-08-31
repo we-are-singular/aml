@@ -196,7 +196,8 @@ if (!apiKey) throw new Error("OPENAI_API_KEY is required")
 const runtime = new AmlRuntime({
   agentProvider: codexAgent({
     apiKey,
-    model: "gpt-5.3-codex",
+    model: "gpt-5.6-luna",
+    reasoningEffort: "low",
   }),
 })
 const result = await runtime.evaluate(<Agent>Describe this project in three bullets.</Agent>)
@@ -222,13 +223,13 @@ Do not commit the key or place it in a Workspace. See the [Codex guide](/docs/pr
 ```tsx title="src/first-workflow.tsx"
 import { Agent, AmlRuntime, opencodeAgent } from "@aml-jsx/sdk"
 
-const apiKey = process.env.OPENAI_API_KEY
-if (!apiKey) throw new Error("OPENAI_API_KEY is required")
+const apiKey = process.env.OPENCODE_API_KEY
+if (!apiKey) throw new Error("OPENCODE_API_KEY is required")
 
 const runtime = new AmlRuntime({
   agentProvider: opencodeAgent({
-    env: { OPENAI_API_KEY: apiKey },
-    model: "openai/gpt-5.3-codex",
+    env: { OPENCODE_API_KEY: apiKey },
+    model: "opencode-go/deepseek-v4-flash",
   }),
 })
 const result = await runtime.evaluate(<Agent>Describe this project in three bullets.</Agent>)
@@ -241,7 +242,7 @@ Install and verify the OpenCode executable, then configure a model provider:
 ```sh
 npm install --global opencode-ai@1.18.18
 opencode --version
-export OPENAI_API_KEY="your-development-key"
+export OPENCODE_API_KEY="your-development-key"
 npm run aml
 ```
 
@@ -253,14 +254,14 @@ This tab deliberately uses an environment credential so the complete path is vis
 ```tsx title="src/first-workflow.tsx"
 import { Agent, AmlRuntime, piAgent } from "@aml-jsx/sdk"
 
-const apiKey = process.env.OPENAI_API_KEY
-if (!apiKey) throw new Error("OPENAI_API_KEY is required")
+const apiKey = process.env.OPENCODE_API_KEY
+if (!apiKey) throw new Error("OPENCODE_API_KEY is required")
 
 const runtime = new AmlRuntime({
   agentProvider: piAgent({
     command: "pi-acp",
-    env: { OPENAI_API_KEY: apiKey },
-    model: "openai/gpt-5.3-codex",
+    env: { OPENCODE_API_KEY: apiKey },
+    model: "opencode-go/deepseek-v4-flash",
     piCommand: "pi",
   }),
 })
@@ -275,11 +276,11 @@ Install and verify the ACP bridge and Pi CLI:
 npm install --global pi-acp@0.0.33 @earendil-works/pi-coding-agent@0.84.2
 pi --version
 command -v pi-acp
-export OPENAI_API_KEY="your-development-key"
+export OPENCODE_API_KEY="your-development-key"
 npm run aml
 ```
 
-This follows the repository smoke path with an OpenAI-backed model. If you select another Pi model provider, change the model identifier and forward that provider's credential instead. The [Pi guide](/docs/providers/agents/pi/) explains when AML generates a wrapper and how to install `pi-mcp-adapter` for Tools, authored MCP servers, or structured output.
+This follows the repository smoke path with DeepSeek V4 Flash through OpenCode Go. If you select another Pi model provider, change the model identifier and forward that provider's credential instead. The [Pi guide](/docs/providers/agents/pi/) explains when AML generates a wrapper and how to install `pi-mcp-adapter` for Tools, authored MCP servers, or structured output.
 
   </TabItem>
 </Tabs>

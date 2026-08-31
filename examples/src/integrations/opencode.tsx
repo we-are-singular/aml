@@ -19,7 +19,7 @@ const ExampleTool = defineTool({
  * Uses the real OpenCode adapter; AML finalizes its host after evaluation.
  */
 const ExampleProvider = opencodeAgent({
-  model: process.env.AML_OPENCODE_MODEL ?? "opencode-go/minimax-m3",
+  model: process.env.AML_OPENCODE_MODEL ?? "opencode-go/deepseek-v4-flash",
 })
 
 /**

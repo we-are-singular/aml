@@ -93,8 +93,7 @@ For container execution, the [Pi image variant](/docs/sandbox-images/#choose-a-v
 
 ## Complete basic example
 
-This uses Pi without MCP and therefore can use the native `piCommand` directly when AML permissions are the default.
-It deliberately selects the `opencode-go` model path, whose credential is `OPENCODE_API_KEY`. For the repository's OpenAI-backed smoke path, use `model: "openai/gpt-5.3-codex"` and forward `OPENAI_API_KEY` instead.
+This uses Pi without MCP and therefore can use the native `piCommand` directly when AML permissions are the default. It deliberately selects the `opencode-go` model path, whose credential is `OPENCODE_API_KEY`.
 
 ```tsx
 import { Agent, AmlRuntime, piAgent } from "@aml-jsx/sdk"
@@ -105,8 +104,7 @@ if (!apiKey) throw new Error("OPENCODE_API_KEY is required")
 const provider = piAgent({
   command: "pi-acp",
   piCommand: "pi",
-  model: "opencode-go/glm-5.1",
-  thinkingLevel: "medium",
+  model: "opencode-go/deepseek-v4-flash",
   env: {
     OPENCODE_API_KEY: apiKey,
   },
@@ -143,7 +141,7 @@ const releaseName = defineTool({
 
 const provider = piAgent({
   mcpAdapterPath: fileURLToPath(import.meta.resolve("pi-mcp-adapter")),
-  model: "opencode-go/glm-5.1",
+  model: "opencode-go/deepseek-v4-flash",
 })
 
 const result = await new AmlRuntime({ agentProvider: provider }).evaluate(

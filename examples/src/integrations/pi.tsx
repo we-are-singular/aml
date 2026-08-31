@@ -20,7 +20,7 @@ const ExampleTool = defineTool({
 const ExampleProvider = piAgent({
   ...(process.env.OPENCODE_API_KEY === undefined ? {} : { env: { OPENCODE_API_KEY: process.env.OPENCODE_API_KEY } }),
   mcpAdapterPath: fileURLToPath(import.meta.resolve("pi-mcp-adapter")),
-  model: process.env.AML_PI_MODEL ?? "opencode-go/glm-5.1",
+  model: process.env.AML_PI_MODEL ?? "opencode-go/deepseek-v4-flash",
 })
 
 /**

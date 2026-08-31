@@ -277,14 +277,14 @@ export const agentOptions: readonly AgentOption[] = [
     id: "opencode",
     label: "OpenCode",
     fn: "opencodeAgent",
-    construction: 'opencodeAgent({ model: "opencode-go/glm-5.1" })',
+    construction: 'opencodeAgent({ model: "opencode-go/deepseek-v4-flash" })',
     icon: providerVisuals.opencode.icon,
   },
   {
     id: "codex",
     label: "Codex",
     fn: "codexAgent",
-    construction: 'codexAgent({ model: "gpt-5.3-codex" })',
+    construction: 'codexAgent({ model: "gpt-5.6-luna", reasoningEffort: "low" })',
     icon: providerVisuals.codex.icon,
   },
   {
@@ -305,7 +305,7 @@ export const agentOptions: readonly AgentOption[] = [
     id: "pi",
     label: "Pi",
     fn: "piAgent",
-    construction: 'piAgent({ model: "opencode-go/glm-5.1" })',
+    construction: 'piAgent({ model: "opencode-go/deepseek-v4-flash" })',
     icon: providerVisuals.pi.icon,
   },
 ]

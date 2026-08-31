@@ -46,10 +46,10 @@ export const SMOKE_AGENTS = {
   codex: {
     create() {
       const apiKey = requiredOpenAiApiKey("Codex")
-      return { provider: codexAgent({ apiKey, env: { PATH: SMOKE_AGENT_PATH } }) }
+      return { provider: codexAgent({ apiKey, env: { PATH: SMOKE_AGENT_PATH }, reasoningEffort: "low" }) }
     },
     get model() {
-      return process.env.AML_CODEX_MODEL ?? "gpt-5.3-codex"
+      return process.env.AML_CODEX_MODEL ?? "gpt-5.6-luna"
     },
   },
   copilot: {
@@ -80,30 +80,30 @@ export const SMOKE_AGENTS = {
   },
   opencode: {
     create() {
-      const apiKey = requiredOpenAiApiKey("OpenCode")
+      const apiKey = requiredOpenCodeApiKey("OpenCode")
       return {
         provider: opencodeAgent({
-          env: { OPENAI_API_KEY: apiKey, PATH: SMOKE_AGENT_PATH },
-          model: process.env.AML_OPENCODE_MODEL ?? "openai/gpt-5.3-codex",
+          env: { OPENCODE_API_KEY: apiKey, PATH: SMOKE_AGENT_PATH },
+          model: process.env.AML_OPENCODE_MODEL ?? "opencode-go/deepseek-v4-flash",
         }),
       }
     },
     get model() {
-      return process.env.AML_OPENCODE_MODEL ?? "openai/gpt-5.3-codex"
+      return process.env.AML_OPENCODE_MODEL ?? "opencode-go/deepseek-v4-flash"
     },
   },
   pi: {
     create() {
-      const apiKey = requiredOpenAiApiKey("Pi")
+      const apiKey = requiredOpenCodeApiKey("Pi")
       return {
         provider: piAgent({
-          env: { OPENAI_API_KEY: apiKey, PATH: SMOKE_AGENT_PATH },
-          model: process.env.AML_PI_MODEL ?? "openai/gpt-5.3-codex",
+          env: { OPENCODE_API_KEY: apiKey, PATH: SMOKE_AGENT_PATH },
+          model: process.env.AML_PI_MODEL ?? "opencode-go/deepseek-v4-flash",
         }),
       }
     },
     get model() {
-      return process.env.AML_PI_MODEL ?? "openai/gpt-5.3-codex"
+      return process.env.AML_PI_MODEL ?? "opencode-go/deepseek-v4-flash"
     },
   },
 } satisfies Record<string, SmokeAgentRegistration>
@@ -342,6 +342,12 @@ export function parseKitchenSinkCommand(args: readonly string[]): KitchenSinkCom
 function requiredOpenAiApiKey(agent: string): string {
   const apiKey = process.env.AML_CODEX_API_KEY ?? process.env.OPENAI_API_KEY
   if (apiKey === undefined) throw new Error(`${agent} smoke requires AML_CODEX_API_KEY or OPENAI_API_KEY`)
+  return apiKey
+}
+
+function requiredOpenCodeApiKey(agent: string): string {
+  const apiKey = process.env.OPENCODE_API_KEY
+  if (apiKey === undefined) throw new Error(`${agent} smoke requires OPENCODE_API_KEY`)
   return apiKey
 }
 

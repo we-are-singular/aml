@@ -53,8 +53,8 @@ const runtime = new AmlRuntime({
   agentProvider: codexAgent({
     apiKey: codexApiKey,
     command: "codex-acp",
-    model: "gpt-5.3-codex",
-    reasoningEffort: "high",
+    model: "gpt-5.6-luna",
+    reasoningEffort: "low",
   }),
   sandboxProvider: dockerSandbox({
     // PLACEHOLDER: publish and pin an image containing codex-acp, Codex's

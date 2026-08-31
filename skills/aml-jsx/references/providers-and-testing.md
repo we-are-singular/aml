@@ -26,7 +26,7 @@ const Glm = glmAgent({
 
 const Pi = piAgent({
   env: { OPENCODE_API_KEY: process.env.OPENCODE_API_KEY ?? "" },
-  model: "opencode-go/glm-5.1",
+  model: "opencode-go/deepseek-v4-flash",
 })
 ```
 

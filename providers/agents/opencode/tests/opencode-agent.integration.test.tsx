@@ -16,7 +16,7 @@ liveTest(
     const childMarker = randomUUID()
     const provider = opencodeAgent({
       directory: process.cwd(),
-      model: process.env.AML_OPENCODE_MODEL ?? "opencode-go/minimax-m3",
+      model: process.env.AML_OPENCODE_MODEL ?? "opencode-go/deepseek-v4-flash",
     })
 
     try {
@@ -44,7 +44,7 @@ liveTest(
     const secret = randomUUID()
     const provider = opencodeAgent({
       directory: process.cwd(),
-      model: process.env.AML_OPENCODE_MODEL ?? "opencode-go/minimax-m3",
+      model: process.env.AML_OPENCODE_MODEL ?? "opencode-go/deepseek-v4-flash",
     })
 
     const output = await new AmlRuntime({ agentProvider: provider }).evaluate(
@@ -65,7 +65,7 @@ liveTest(
   async () => {
     const provider = opencodeAgent({
       directory: process.cwd(),
-      model: process.env.AML_OPENCODE_MODEL ?? "opencode-go/minimax-m3",
+      model: process.env.AML_OPENCODE_MODEL ?? "opencode-go/deepseek-v4-flash",
     })
 
     const output = await new AmlRuntime({ agentProvider: provider }).evaluate(
@@ -85,7 +85,7 @@ liveTest(
     const Result = z.object({ proof: z.string() })
     const provider = opencodeAgent({
       directory: process.cwd(),
-      model: process.env.AML_OPENCODE_MODEL ?? "opencode-go/minimax-m3",
+      model: process.env.AML_OPENCODE_MODEL ?? "opencode-go/deepseek-v4-flash",
     })
 
     async function StructuredProof() {
@@ -115,7 +115,7 @@ liveTest(
     const events: AmlTraceEvent[] = []
     const provider = opencodeAgent({
       directory: process.cwd(),
-      model: process.env.AML_OPENCODE_MODEL ?? "opencode-go/minimax-m3",
+      model: process.env.AML_OPENCODE_MODEL ?? "opencode-go/deepseek-v4-flash",
     })
 
     const output = await new AmlRuntime({ agentProvider: provider, trace: event => events.push(event) }).evaluate(

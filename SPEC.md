@@ -334,7 +334,7 @@ AML does not define `<If>`, `<Else>`, `<Map>`, or `<Sequence>`. Those would dupl
 An `<Agent>` is one Agent-session boundary. It may contain one initial input and multiple sequential provider turns through `<FollowUp>`.
 
 ```tsx
-<Agent model="opencode-go/minimax-m3" provider={openCode} system="You are a support operations lead.">
+<Agent model="opencode-go/deepseek-v4-flash" provider={openCode} system="You are a support operations lead.">
   <System>Prefer concrete operational evidence.</System>
   <Tool use={searchSupport} />
   Investigate customer 42.
@@ -1933,7 +1933,7 @@ const fast = claudeAgent({ model: "anthropic/claude-haiku-4-5" });
 const deep = codexAgent({ workingDirectory: process.cwd() });
 
 <Agent provider={fast}>Classify the request.</Agent>
-<Agent provider={deep} model="gpt-5.3-codex">
+<Agent provider={deep} model="gpt-5.6-luna">
   Audit the result.
 </Agent>
 ```
