@@ -170,6 +170,14 @@ npm run release:sandbox -- --recover
 
 Recovery requires `HEAD` to have the `sandbox-vX.Y.Z` tag matching this package's version. It safely reruns image publication and creates the GitHub Release if the first attempt did not reach that step.
 
+If every immutable image and smoke completed and the release failed only during Cosign signing, resume from the pushed digests without rebuilding or rerunning smoke:
+
+```sh
+npm run release:sandbox -- --recover-signing
+```
+
+Signing recovery accepts the matching release tag anywhere in the current `main` history. Before each keyless signature, publication waits for the maintainer to press Enter so the device-flow link is not created until they are ready to use it.
+
 Preview the versioning and Git release flow without publishing:
 
 ```sh

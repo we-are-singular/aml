@@ -1,4 +1,5 @@
-import { mkdtempSync, readFileSync, rmSync } from "node:fs"
+import { Buffer } from "node:buffer"
+import { mkdtempSync, readFileSync, readSync, rmSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { dirname, join, resolve } from "node:path"
 import { spawnSync } from "node:child_process"
@@ -11,6 +12,7 @@ const imageDirectory = resolve(dirname(fileURLToPath(import.meta.url)), "..")
 const repositoryRoot = resolve(imageDirectory, "../..")
 const dockerHubImage = "docker.io/wearesingular/aml-agent-sandbox"
 const version = process.argv[2]
+const resumesFromSigning = process.argv[3] === "--resume-signing"
 
 function main() {
   if (version === "--check") {
@@ -23,6 +25,9 @@ function main() {
   if (!/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(version ?? "")) {
     throw new Error("Expected a semantic version argument")
   }
+  if (process.argv[3] !== undefined && !resumesFromSigning) {
+    throw new Error(`Unknown publication option ${process.argv[3]}`)
+  }
 
   const packageVersion = JSON.parse(readFileSync(join(imageDirectory, "package.json"), "utf8")).version
   if (packageVersion !== version) {
@@ -33,29 +38,32 @@ function main() {
   const temporaryDirectory = mkdtempSync(join(tmpdir(), "aml-agent-sandbox-release-"))
 
   try {
-    const images = []
+    const images = resumesFromSigning ? publishedImages(version) : []
 
-    // Publish immutable tags first so every live smoke runs against the exact
-    // registry artifact that the stable aliases will eventually select.
-    for (const name of variantNames) {
-      const references = immutableTags(version, name).map(tag => `${dockerHubImage}:${tag}`)
-      const digest = buildVariant(name, references, revision, temporaryDirectory)
-      for (const reference of references) verifyDigest(reference, digest)
-      images.push({ digest, name })
+    if (!resumesFromSigning) {
+      // Publish immutable tags first so every live smoke runs against the exact
+      // registry artifact that the stable aliases will eventually select.
+      for (const name of variantNames) {
+        const references = immutableTags(version, name).map(tag => `${dockerHubImage}:${tag}`)
+        const digest = buildVariant(name, references, revision, temporaryDirectory)
+        for (const reference of references) verifyDigest(reference, digest)
+        images.push({ digest, name })
+      }
+
+      for (const image of images) {
+        const immutableReference = `${dockerHubImage}@${image.digest}`
+        run("node", ["scripts/check.mjs", image.name, immutableReference], imageDirectory)
+        run(
+          "npm",
+          ["run", "smoke", "--", "--sandbox", "docker", ...(image.name === "full" ? [] : ["--agent", image.name])],
+          repositoryRoot,
+          { ...process.env, AML_SMOKE_SANDBOX_IMAGE: immutableReference }
+        )
+      }
     }
 
     for (const image of images) {
-      const immutableReference = `${dockerHubImage}@${image.digest}`
-      run("node", ["scripts/check.mjs", image.name, immutableReference], imageDirectory)
-      run(
-        "npm",
-        ["run", "smoke", "--", "--sandbox", "docker", ...(image.name === "full" ? [] : ["--agent", image.name])],
-        repositoryRoot,
-        { ...process.env, AML_SMOKE_SANDBOX_IMAGE: immutableReference }
-      )
-    }
-
-    for (const image of images) {
+      waitForSigningConfirmation(image.name)
       run("cosign", ["sign", "--yes", `${dockerHubImage}@${image.digest}`], repositoryRoot)
     }
 
@@ -120,15 +128,46 @@ function createTag(reference, digest) {
   run("docker", ["buildx", "imagetools", "create", "--tag", reference, `${dockerHubImage}@${digest}`], repositoryRoot)
 }
 
+function publishedImages(version) {
+  return variantNames.map(name => {
+    const references = immutableTags(version, name).map(tag => `${dockerHubImage}:${tag}`)
+    const digest = resolvedDigest(references[0])
+    for (const reference of references) verifyDigest(reference, digest)
+    return { digest, name }
+  })
+}
+
+function waitForSigningConfirmation(name) {
+  if (!process.stdin.isTTY) {
+    throw new Error("Cosign signing requires an interactive terminal")
+  }
+
+  process.stdout.write(`\nPress Enter when you are ready to begin keyless Cosign signing for ${name}... `)
+  const input = Buffer.alloc(1)
+  while (readSync(process.stdin.fd, input, 0, 1, null) > 0) {
+    if (input[0] === 10 || input[0] === 13) return
+  }
+
+  throw new Error("Cosign signing confirmation was cancelled")
+}
+
 function verifyDigest(reference, expectedDigest) {
+  const digest = resolvedDigest(reference)
+  if (digest !== expectedDigest) {
+    throw new Error(`${reference} resolved to ${digest}, expected ${expectedDigest}`)
+  }
+}
+
+function resolvedDigest(reference) {
   const digest = output(
     "docker",
     ["buildx", "imagetools", "inspect", reference, "--format", "{{.Manifest.Digest}}"],
     repositoryRoot
   )
-  if (digest !== expectedDigest) {
-    throw new Error(`${reference} resolved to ${digest}, expected ${expectedDigest}`)
+  if (!/^sha256:[0-9a-f]{64}$/.test(digest)) {
+    throw new Error(`${reference} did not resolve to a valid image digest`)
   }
+  return digest
 }
 
 function requireCommand(command, args) {

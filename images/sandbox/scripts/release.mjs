@@ -7,13 +7,14 @@ import { pathToFileURL, URL } from "node:url"
 
 const releaseArguments = process.argv.slice(2)
 const skipsPublishing = releaseArguments.some(argument => ["--dry-run", "--help", "--version"].includes(argument))
-const recoversRelease = releaseArguments.includes("--recover")
+const resumesFromSigning = releaseArguments.includes("--recover-signing")
+const recoversRelease = releaseArguments.includes("--recover") || resumesFromSigning
 const publisherBuilder = "aml-agent-sandbox-publisher"
 
 export function main() {
   try {
     if (recoversRelease && releaseArguments.length !== 1) {
-      throw new Error(`--recover cannot be combined with other release arguments`)
+      throw new Error(`Release recovery cannot be combined with other arguments`)
     }
 
     if (skipsPublishing) {
@@ -53,7 +54,11 @@ function release() {
     runOrThrow("docker", ["login"], releaseEnvironment)
 
     if (recoveryVersion) {
-      runOrThrow("node", ["scripts/publish.mjs", recoveryVersion], releaseEnvironment)
+      runOrThrow(
+        "node",
+        ["scripts/publish.mjs", recoveryVersion, ...(resumesFromSigning ? ["--resume-signing"] : [])],
+        releaseEnvironment
+      )
       ensureGithubRelease(recoveryVersion, releaseEnvironment)
       process.stdout.write(`Recovered AML Agent Sandbox ${recoveryVersion}\n`)
       return 0
@@ -138,11 +143,25 @@ function readRecoveryVersion() {
   const packageVersion = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")).version
   const expectedTag = `sandbox-v${packageVersion}`
   const tagAtHead = output("git", ["tag", "--points-at", "HEAD", "--list", expectedTag], process.env)
-  if (tagAtHead !== expectedTag) {
+  if (!resumesFromSigning && tagAtHead !== expectedTag) {
     throw new Error(`HEAD must have tag ${expectedTag} to recover this release`)
   }
+  if (resumesFromSigning) requireAncestorTag(expectedTag)
 
   return packageVersion
+}
+
+function requireAncestorTag(tag) {
+  const result = spawnSync("git", ["merge-base", "--is-ancestor", tag, "HEAD"], {
+    encoding: "utf8",
+    env: process.env,
+  })
+  if (result.error?.code === "ENOENT") {
+    throw new Error(`git is required to recover the image release`)
+  }
+  if (result.status !== 0) {
+    throw new Error(`${tag} must exist in the current main branch to recover signing`)
+  }
 }
 
 function ensureGithubRelease(version, environment) {
@@ -163,8 +182,13 @@ function ensureGithubRelease(version, environment) {
     throw new Error(`Could not check GitHub Release ${tag}`)
   }
 
-  const previousTag = output("git", ["describe", "--tags", "--match=[ds]*-v*", "--abbrev=0", "HEAD^"], environment)
-  const notes = output("node", ["../../scripts/release-notes.ts", "sandbox", previousTag, "HEAD^"], environment)
+  const releaseParent = `${tag}^`
+  const previousTag = output(
+    "git",
+    ["describe", "--tags", "--match=[ds]*-v*", "--abbrev=0", releaseParent],
+    environment
+  )
+  const notes = output("node", ["../../scripts/release-notes.ts", "sandbox", previousTag, releaseParent], environment)
   runOrThrow(
     "gh",
     ["release", "create", tag, "--verify-tag", "--notes", notes, "--title", `sandbox v${version}`],
