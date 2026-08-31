@@ -1,6 +1,6 @@
 {
   "name": "@aml-jsx/cli",
-  "version": "0.3.2",
+  "version": "0.3.3",
   "description": "Execute trusted Agent Markup Language TypeScript, TSX, and JavaScript workflows directly.",
   "keywords": [
     "agents",
