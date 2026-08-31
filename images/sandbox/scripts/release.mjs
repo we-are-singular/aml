@@ -46,6 +46,8 @@ function release() {
 
   try {
     runOrThrow("node", ["scripts/publish.mjs", "--check"], releaseEnvironment)
+    // Overview sync uses the caller's metadata PAT, not the isolated image publication config.
+    runOrThrow("node", ["scripts/sync-description.mjs", "--check"], process.env)
     prepareBuildx(releaseEnvironment)
 
     // Release It uses the active CLI token for the source tag's GitHub Release.
@@ -60,13 +62,24 @@ function release() {
         releaseEnvironment
       )
       ensureGithubRelease(recoveryVersion, releaseEnvironment)
+      syncDescription()
       process.stdout.write(`Recovered AML Agent Sandbox ${recoveryVersion}\n`)
       return 0
     }
 
-    return run("release-it", releaseArguments, releaseEnvironment)
+    const status = run("release-it", releaseArguments, releaseEnvironment)
+    if (status === 0) syncDescription()
+    return status
   } finally {
     rmSync(dockerConfig, { recursive: true, force: true })
+  }
+}
+
+function syncDescription() {
+  if (run("node", ["scripts/sync-description.mjs"], process.env) !== 0) {
+    process.stderr.write(
+      "Warning: image publication succeeded, but the Docker Hub overview did not sync. Run npm run sync:description --prefix images/sandbox to retry.\n"
+    )
   }
 }
 
