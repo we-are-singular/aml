@@ -1,83 +1,202 @@
 ---
-title: Sandbox images
-description: Understand how AML's container-backed Sandbox providers use images and what the recommended default contains.
+title: AML Agent Sandbox images
+description: Choose, pin, use, and extend AML's full and single-Agent container images.
 ---
 
-import { Aside, Card, CardGrid } from "@astrojs/starlight/components"
+import { Aside, Card, CardGrid, LinkCard } from "@astrojs/starlight/components"
 
-A [`<Sandbox />`](/docs/reference/primitives/sandbox/) chooses where descendant Agents and Scripts execute. With Local,
-that place is the AML host. Docker, Daytona, and Modal instead create a disposable environment from a container image—
-often called a Docker image even when a remote provider runs it.
+AML publishes ready-to-use container images for running Agents and AML workflows with [Docker](/docs/providers/sandboxes/docker/), [Daytona](/docs/providers/sandboxes/daytona/), and [Modal](/docs/providers/sandboxes/modal/). The default `full` image contains every built-in Agent. Smaller stable variants contain one Agent while preserving the same AML and system runtime.
 
-The image is the filesystem and toolset available inside that environment. It supplies the operating system, shell,
-language runtimes, Agent executables, and command-line tools. The Sandbox provider starts the environment, attaches or
-transfers the Workspace, runs processes, and releases it. These are separate responsibilities.
+<CardGrid>
+  <LinkCard
+    title="Stable images on Docker Hub"
+    description="Browse versioned releases and moving full or Agent-specific tags."
+    href="https://hub.docker.com/r/wearesingular/aml-agent-sandbox/tags"
+  />
+  <LinkCard
+    title="Bleeding edge on GHCR"
+    description="Inspect the mutable, full dev image built from main."
+    href="https://github.com/orgs/we-are-singular/packages/container/package/aml-agent-sandbox"
+  />
+  <LinkCard
+    title="Image changelog"
+    description="Review changes released independently from the AML SDK and CLI."
+    href="/docs/reference/changelog/sandbox/"
+  />
+</CardGrid>
 
-## How each provider gets its environment
+## What every variant contains
 
-| Provider                                                 | Execution environment               | Image selection                                                         |
-| -------------------------------------------------------- | ----------------------------------- | ----------------------------------------------------------------------- |
-| [`localSandbox()`](/docs/providers/sandboxes/local/)     | Trusted processes on the AML host   | No image. Host-installed programs and files are used directly.          |
-| [`dockerSandbox()`](/docs/providers/sandboxes/docker/)   | A local disposable Docker container | OCI image reference; AML's recommended image is the default.            |
-| [`daytonaSandbox()`](/docs/providers/sandboxes/daytona/) | A remote disposable Daytona Sandbox | OCI image or Daytona snapshot; AML's recommended image is the default.  |
-| [`modalSandbox()`](/docs/providers/sandboxes/modal/)     | A remote disposable Modal Sandbox   | Registry image loaded by Modal; AML's recommended image is the default. |
+Every image variant is built from the same [`images/sandbox/Dockerfile`](https://github.com/we-are-singular/aml/blob/main/images/sandbox/Dockerfile) and includes:
 
-Docker, Daytona, and Modal select `wearesingular/aml-agent-sandbox:latest` when their factory receives no `image` or
-Daytona `snapshot` override. That image contains the exact Codex, GitHub Copilot, GLM, OpenCode, Pi, ACP, Node.js,
-Python, Git, and common command-line versions exercised by AML's Agent × Sandbox smoke matrix.
+- the `aml` CLI and `@aml-jsx/sdk`, installed outside `/workspace` so clean mounted workflows can import the SDK;
+- Node.js 26 and npm;
+- Python 3, pip, and `venv`;
+- Git, OpenSSH, curl, CA certificates, jq, ripgrep, patch, Bash, and common shell/archive utilities;
+- a Debian Bookworm/glibc runtime and the non-root `aml` user with writable home, `/tmp`, and `/workspace`.
 
-```ts title="Use AML's default image"
+The images deliberately exclude credentials, Agent login state, project dependencies, browsers, cloud CLIs, Docker-in-Docker, compilers, and broad language toolchains. Add project-specific software in a derived image instead of reinstalling it whenever a Sandbox starts.
+
+## Choose a variant
+
+Single-Agent variants are clean builds. They select their Agent dependencies before `npm install`; they do not inherit `full` and delete other Agents in a later layer. This makes the published image smaller both on disk and over the network.
+
+| Variant      | Use it when                                                                                                | Agent packages and commands                                      | Stable tags                             | Docker Hub                                                                                   |
+| ------------ | ---------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------- | --------------------------------------- | -------------------------------------------------------------------------------------------- |
+| **Full**     | The application may choose different Agents at runtime, or you want the most convenient development image. | Every Agent listed below.                                        | `X.Y.Z`, `X.Y.Z-full`, `latest`, `full` | [Full tags](https://hub.docker.com/r/wearesingular/aml-agent-sandbox/tags?name=full)         |
+| **Codex**    | Every workflow uses [`codexAgent()`](/docs/providers/agents/codex/).                                       | `codex-acp` `1.4.0` and `codex` `0.147.0`.                       | `X.Y.Z-codex`, `codex`                  | [Codex tags](https://hub.docker.com/r/wearesingular/aml-agent-sandbox/tags?name=codex)       |
+| **Copilot**  | Every workflow uses [`copilotAgent()`](/docs/providers/agents/copilot/).                                   | `copilot` `1.0.80`.                                              | `X.Y.Z-copilot`, `copilot`              | [Copilot tags](https://hub.docker.com/r/wearesingular/aml-agent-sandbox/tags?name=copilot)   |
+| **GLM**      | Every workflow uses [`glmAgent()`](/docs/providers/agents/glm/).                                           | `glm-acp-agent` `1.5.0`.                                         | `X.Y.Z-glm`, `glm`                      | [GLM tags](https://hub.docker.com/r/wearesingular/aml-agent-sandbox/tags?name=glm)           |
+| **OpenCode** | Every workflow uses [`opencodeAgent()`](/docs/providers/agents/opencode/).                                 | `opencode` `1.18.18`.                                            | `X.Y.Z-opencode`, `opencode`            | [OpenCode tags](https://hub.docker.com/r/wearesingular/aml-agent-sandbox/tags?name=opencode) |
+| **Pi**       | Every workflow uses [`piAgent()`](/docs/providers/agents/pi/).                                             | `pi` `0.84.2`, `pi-acp` `0.0.33`, and `pi-mcp-adapter` `2.26.0`. | `X.Y.Z-pi`, `pi`                        | [Pi tags](https://hub.docker.com/r/wearesingular/aml-agent-sandbox/tags?name=pi)             |
+
+The versions above describe the current repository build. The [image package manifest](https://github.com/we-are-singular/aml/blob/main/images/sandbox/package.json) is the source of truth when a dependency changes.
+
+Choose `full` when the Agent is selected dynamically. Choose a single-Agent variant when the application always uses one Agent and image size matters.
+
+<Aside type="caution" title="The image does not select the Agent">
+  `opencodeAgent()` selects OpenCode; the image only supplies its executable and runtime. Pairing `codexAgent()` with an
+  OpenCode-only image fails because `codex-acp` and `codex` are deliberately absent.
+</Aside>
+
+## Understand the stable tags
+
+[Docker Hub](https://hub.docker.com/r/wearesingular/aml-agent-sandbox) is the canonical stable registry.
+
+- `X.Y.Z` and `X.Y.Z-full` identify the same full release.
+- `X.Y.Z-<agent>` identifies the matching single-Agent release.
+- `latest` and `full` move to the newest validated full release.
+- `codex`, `copilot`, `glm`, `opencode`, and `pi` move to the newest validated release in that Agent lane.
+
+AML's release process treats versioned tags as immutable. It builds and publishes every versioned variant first, runs the matching real Agent smoke against each pushed digest, signs the digests, and only then advances the moving tags. Stable releases also include SBOM and provenance attestations.
+
+Use a versioned tag while evaluating a release, and pin its digest when the exact registry artifact must never change:
+
+```ts title="Pin a stable digest"
+import { dockerSandbox } from "@aml-jsx/sdk"
+
+const sandbox = dockerSandbox({
+  image: "wearesingular/aml-agent-sandbox@sha256:IMAGE_DIGEST",
+})
+```
+
+## Bleeding-edge dev image
+
+`ghcr.io/we-are-singular/aml-agent-sandbox:dev` is the public bleeding-edge image built from relevant changes on `main`.
+
+```sh title="Pull the bleeding-edge image"
+docker pull ghcr.io/we-are-singular/aml-agent-sandbox:dev
+```
+
+The `dev` image intentionally remains full and non-versioned. It is not reduced to a single-Agent dependency set: Codex, Copilot, GLM, OpenCode, and Pi are all present. Normal image cleanup still applies, but there are no `dev-codex`, `dev-opencode`, or other GHCR variant lanes.
+
+The [development image workflow](https://github.com/we-are-singular/aml/blob/main/.github/workflows/agent-sandbox-dev.yml) explicitly builds `IMAGE_VARIANT=full`, runs its deterministic image check and dependency audit, and replaces the mutable `dev` tag. AML's repository smoke matrix uses this channel so changes can be exercised before a stable Docker Hub release.
+
+<Aside type="caution" title="Do not treat dev as a production pin">
+  `dev` can change after any relevant merge to `main`, has no semantic version, and is not a stable mirror of Docker
+  Hub. Use it for unreleased integration testing. Use a Docker Hub version or digest for reproducible deployments.
+</Aside>
+
+## Pull and inspect an image
+
+Pull the full stable image when you want every Agent:
+
+```sh
+docker pull wearesingular/aml-agent-sandbox:latest
+```
+
+Pull a versioned single-Agent image when the Agent is fixed:
+
+```sh
+docker pull wearesingular/aml-agent-sandbox:X.Y.Z-opencode
+docker run --rm wearesingular/aml-agent-sandbox:X.Y.Z-opencode opencode --version
+```
+
+Replace `X.Y.Z` with a tag listed on [Docker Hub](https://hub.docker.com/r/wearesingular/aml-agent-sandbox/tags). You can also inspect the shared runtime directly:
+
+```sh
+docker run --rm wearesingular/aml-agent-sandbox:X.Y.Z-opencode sh -lc '
+  node --version
+  npm --version
+  python --version
+  pip --version
+  jq --version
+'
+```
+
+## Configure the image in AML
+
+Docker, Daytona, and Modal use the full `wearesingular/aml-agent-sandbox:latest` image when their factory receives no image or Daytona snapshot override:
+
+```ts title="Use the default full image"
 import { dockerSandbox } from "@aml-jsx/sdk"
 
 const sandbox = dockerSandbox()
 ```
 
-The default is a convenient tested starting point, not hidden installation. The provider passes the image reference to
-the selected runtime; it does not build an image or download Agent packages during Sandbox acquisition.
+To use a single-Agent image, configure the matching Agent and Sandbox providers together:
 
-## Release channels
+```ts title="Use the OpenCode variant"
+import { AmlRuntime, dockerSandbox, opencodeAgent } from "@aml-jsx/sdk"
 
-[Docker Hub](https://hub.docker.com/r/wearesingular/aml-agent-sandbox) is the canonical release registry. It receives
-semantic versions and `latest`; provider factories use `latest` by default.
-
-GHCR separately publishes `ghcr.io/we-are-singular/aml-agent-sandbox:dev` from relevant changes on `main`. The smoke
-matrix uses this mutable development image; it is not a Docker Hub release or production pin.
-
-<Aside type="caution" title="Pin deployments that must be reproducible">
-  `latest` moves when AML publishes a validated image release. Production applications should override it with an
-  immutable semantic version or digest after validating that release with their credentials, network policy, provider,
-  and project workload. Do not use GHCR `dev` as a production pin.
-</Aside>
-
-```ts title="Pin or replace the image"
-const sandbox = dockerSandbox({
-  image: "wearesingular/aml-agent-sandbox:X.Y.Z",
+const runtime = new AmlRuntime({
+  agentProvider: opencodeAgent({
+    env: { OPENAI_API_KEY: process.env.OPENAI_API_KEY! },
+  }),
+  sandboxProvider: dockerSandbox({
+    image: "wearesingular/aml-agent-sandbox:X.Y.Z-opencode",
+  }),
 })
 ```
 
-## The image is not the Sandbox policy
+The same image reference belongs on `daytonaSandbox({ image })` or `modalSandbox({ image })` when those platforms can pull it. Image identity belongs to the provider factory, not an `<Sandbox image="…" />` prop.
+
+## Extend a variant
+
+Start from the smallest variant that contains the selected Agent, then add only the project tools the workflow needs. This example adds the SQLite CLI to OpenCode:
+
+```dockerfile title="Dockerfile"
+FROM wearesingular/aml-agent-sandbox:X.Y.Z-opencode
+
+USER root
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends sqlite3 \
+    && rm -rf /var/lib/apt/lists/*
+
+USER aml
+WORKDIR /workspace
+```
+
+Build the derived image and pass it to AML:
+
+```sh
+docker build --tag example/aml-opencode:1 .
+```
+
+```ts
+import { dockerSandbox } from "@aml-jsx/sdk"
+
+const sandbox = dockerSandbox({
+  image: "example/aml-opencode:1",
+})
+```
+
+Pin the `FROM` reference before publishing the derived image. Build tools are not part of the shared runtime; add them only when a dependency requires compilation, and use a separate build stage when they do not belong in the final image. Keep model, repository, and registry credentials out of image layers.
+
+## Image and Sandbox responsibilities
 
 <CardGrid>
   <Card title="The image supplies software" icon="seti:docker">
-    Operating-system files, Agent executables, interpreters, package managers, and ordinary command-line tools.
+    Operating-system files, Agent executables, interpreters, package managers, and command-line tools.
   </Card>
   <Card title="The provider supplies execution" icon="setting">
     Container or remote-environment creation, Workspace attachment, process transport, cancellation, and cleanup.
   </Card>
   <Card title="The application supplies policy" icon="approve-check-circle">
-    Credentials, network access, resource limits, project dependencies, image pinning, and provider-specific hardening.
+    Credentials, network access, resource limits, project dependencies, image pinning, and deployment hardening.
   </Card>
 </CardGrid>
 
-`aml-agent-sandbox` intentionally omits credentials, Agent login state, project dependencies, Docker-in-Docker, browsers,
-cloud CLIs, compilers, and unrelated language ecosystems. Extend it when a project needs more software, or replace it
-with another compatible image. An override must still provide the shell and transfer tools required by its Sandbox
-provider plus the executable chain required by the selected Agent.
+An image is not a complete isolation policy. Validate the selected Agent, credentials, network policy, Workspace behavior, provider limits, and container hardening together before production use.
 
-The image is configured on `dockerSandbox({ image })`, `daytonaSandbox({ image })`, or `modalSandbox({ image })`—not as
-an `<Sandbox image="…" />` prop. Keeping that choice on the provider preserves provider-native options such as Daytona
-snapshots and Modal registry loading while the AML tree keeps portable `access`, `root`, and `cwd` intent.
-
-Continue with [Recommended Sandbox images](/docs/providers/sandboxes/images/) for exact contents, tags, extension and
-verification guidance, upstream alternatives, licensing, and provider-specific constraints. For a runnable walkthrough,
-use [Run AML in a Sandbox image](/docs/cookbook/sandbox-image/).
+Continue with [Run AML in a Sandbox image](/docs/cookbook/sandbox-image/) for a runnable Docker walkthrough, [alternative and custom images](/docs/providers/sandboxes/images/) for third-party recipes and verification guidance, and [production security](/docs/production/security/) for the deployment boundary.

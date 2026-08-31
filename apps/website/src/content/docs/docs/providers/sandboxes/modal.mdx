@@ -36,7 +36,7 @@ Modal is not a shared mount provider. The local Workspace is archived with host 
 
 The factory validates `image`, `appName`, `setup`, and `workspace` as non-empty strings. Inject either `client` or `config`, not both. The local host also needs `tar` and enough temporary disk for upload/download archives.
 
-Omitting `image` selects `wearesingular/aml-agent-sandbox:latest`. Pin an immutable version or digest when reproducibility matters, or provide an application image with additional project dependencies.
+Omitting `image` selects the full `wearesingular/aml-agent-sandbox:latest` image. Use the [AML image guide](/docs/sandbox-images/) to choose a stable full or single-Agent tag, pin a digest, or extend a variant with application dependencies.
 
 ## Image requirements
 
@@ -50,7 +50,7 @@ The registry image must contain:
 
 AML does not install an Agent into the image. `setup` can prepare an experimental environment after acquisition, but it runs every time and is not an image build or cache. For production, publish a versioned image with the executable and dependencies already installed.
 
-Modal's official OpenCode and Claude Code examples define custom Modal Images rather than publishing reusable registry tags. AML currently resolves registry images through `images.fromRegistry()`. [Recommended Sandbox images](/docs/providers/sandboxes/images/#modal-images) explains that distinction and the supported path for bringing those recipes into AML.
+Modal's official OpenCode and Claude Code examples define custom Modal Images rather than publishing reusable registry tags. AML currently resolves registry images through `images.fromRegistry()`. [Alternative and custom Sandbox images](/docs/providers/sandboxes/images/#modal-image-recipes) explains that distinction and the supported path for bringing those recipes into AML.
 
 ## Workspace semantics
 

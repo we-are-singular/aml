@@ -83,9 +83,7 @@ directory is explicitly staged, so the Agent does not import or persist interact
 
 The AML repository currently pins `opencode-ai@1.18.18` for its integration toolchain and `@opencode-ai/sdk@1.18.5` for the typed provider configuration. These versions are the repository's verification baseline, not a claim that every newer OpenCode release is compatible. Re-run the provider integration path when changing either side.
 
-For container execution, [AML Agent Sandbox](/docs/providers/sandboxes/images/#aml-agent-sandbox) includes this OpenCode
-baseline and is the default image for Docker, Daytona, and Modal. The image guide also documents Cloudflare's
-OpenCode-specific image as an alternative.
+For container execution, the [OpenCode image variant](/docs/sandbox-images/#choose-a-variant) includes this baseline. The default full image includes it too. The [alternative image guide](/docs/providers/sandboxes/images/#opencode-cloudflare-sandbox) also documents Cloudflare's OpenCode-specific image.
 
 <Aside type="caution" title="Install it where the Agent process runs">
   A host-global installation is available to [`localSandbox()`](/docs/providers/sandboxes/local/). Docker, Daytona,

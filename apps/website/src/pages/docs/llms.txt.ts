@@ -12,6 +12,7 @@ const sectionOrder = [
   "docs/examples",
   "docs/faq",
   "docs/concepts",
+  "docs/sandbox-images",
   "docs/ast",
   "docs/runtime",
   "docs/observability",

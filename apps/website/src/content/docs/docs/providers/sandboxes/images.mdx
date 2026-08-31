@@ -1,84 +1,25 @@
 ---
-title: Recommended Sandbox images
-description: Verified public container images and build guidance for running AML Agent providers inside container-backed Sandboxes.
+title: Alternative and custom Sandbox images
+description: Evaluate third-party images, custom image recipes, and compatibility requirements for AML Sandbox providers.
 ---
 
 import { Aside } from "@astrojs/starlight/components"
 
-Docker, Daytona, and Modal default to `wearesingular/aml-agent-sandbox:latest`. The image is AML's tested execution environment for Codex, GitHub Copilot, GLM, OpenCode, and Pi. Applications can use it directly, extend it with project dependencies, or replace it through the provider's `image` or `snapshot` option.
+AML's own full and single-Agent images, Docker Hub tags, bleeding-edge GHCR channel, usage, and extension model are documented in [AML Agent Sandbox images](/docs/sandbox-images/). Start there unless a third-party image or provider-native recipe is an explicit deployment requirement.
 
-This page distinguishes images we have actually inspected from useful upstream recipes and unverified possibilities. Pin a version or digest and repeat the checks in your own deployment before treating any image as production-ready.
+This page covers alternatives we have inspected and the compatibility checks required before replacing AML's image. A public image containing the desired Agent is useful evidence, but it does not prove model credentials, network policy, Workspace transfer, entrypoint behavior, or production isolation.
 
-## AML Agent Sandbox
+## Replacement image baseline
 
-The repository builds `aml-agent-sandbox` from [`images/sandbox/Dockerfile`](https://github.com/we-are-singular/aml/blob/main/images/sandbox/Dockerfile). It includes the AML CLI and SDK, the Agent/ACP packages used by AML's providers, and a practical coding environment. The Dockerfile and package manifests are the source of truth for the exact tools and versions in each release.
+An alternative or custom image must provide the complete executable chain required by the selected Agent plus the tools required by its Sandbox provider:
 
-Docker Hub is the canonical stable registry ([see all versions](/docs/reference/changelog/sandbox/)):
+- `sh`, `mkdir`, and `rm` for every image-backed provider;
+- `tar` for Daytona and Modal Workspace transfer;
+- the selected ACP Agent executable and its language/native runtime;
+- a writable home and Workspace path for the configured user;
+- project dependencies and every command launched by `<Script />` or the Agent.
 
-```text
-docker.io/wearesingular/aml-agent-sandbox:latest
-```
-
-Stable releases include provenance and an SBOM. The manual release process publishes semantic-version and `latest`
-tags to Docker Hub, verifies the published digest, and signs that digest.
-
-Relevant changes on `main` are published separately as `ghcr.io/we-are-singular/aml-agent-sandbox:dev` for repository
-development and smoke testing.
-
-| Reference           | Purpose                                                  |
-| ------------------- | -------------------------------------------------------- |
-| Docker Hub `latest` | Newest stable release and provider-factory default.      |
-| Docker Hub `X.Y.Z`  | Immutable semantic version for reproducible deployments. |
-| GHCR `dev`          | Mutable development build from `main`.                   |
-
-```tsx title="Provider default"
-import { AmlRuntime, dockerSandbox } from "@aml-jsx/sdk"
-
-const runtime = new AmlRuntime({
-  sandboxProvider: dockerSandbox(),
-})
-```
-
-For production, override the convenience default with an immutable version or digest:
-
-```ts
-const sandboxProvider = dockerSandbox({
-  image: "wearesingular/aml-agent-sandbox@sha256:IMAGE_DIGEST",
-})
-```
-
-```sh title="AML repository checkout"
-cd images/sandbox
-npm run build
-npm run check
-npm run smoke --prefix ../.. -- --sandbox docker
-```
-
-The image's `aml` command can run a clean mounted TypeScript, TSX, or JavaScript workflow that imports `@aml-jsx/sdk`
-without a local install. The packages live outside `/workspace`, and standard ancestor `node_modules` resolution keeps them
-visible when Docker replaces `/workspace` with a bind mount. The image deliberately omits credentials, Agent home state,
-other project dependencies, cloud CLIs, Docker-in-Docker, browsers, compilers, and additional language runtimes. It runs
-as the unprivileged `aml` user by default. AML's local Docker smoke passes the host UID/GID through
-[`dockerSandbox({ user })`](/docs/providers/sandboxes/docker/#options) so the process can access its bind-mounted
-Workspace. The image also ships its license, third-party notices, and GitHub Copilot CLI redistribution license.
-
-## Extend the image
-
-The default image is intentionally a general Agent runtime, not a complete application environment. Extend it when a workflow needs repository-specific compilers, package managers, database clients, or build tools:
-
-```dockerfile
-FROM wearesingular/aml-agent-sandbox:latest
-
-USER root
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends build-essential \
-    && rm -rf /var/lib/apt/lists/*
-
-USER aml
-WORKDIR /workspace
-```
-
-Pin the `FROM` reference before publishing the derived image. Keep model, repository, and registry credentials out of image layers; inject them when the Sandbox starts. Do not add Docker-in-Docker unless the provider and deployment explicitly support the additional daemon/security boundary.
+AML does not install missing packages when a Sandbox starts. Pin the alternative image by version or digest, then repeat the provider and Agent checks in the deployed identity and network environment before treating it as production-ready.
 
 ## Alternative public images
 
@@ -173,8 +114,7 @@ npm run build
 npm run check
 ```
 
-For release or deployment evaluation, set `AML_AGENT_SANDBOX_IMAGE` to the exact Docker Hub semantic version or digest
-being validated. Do not treat `latest` or GHCR `dev` as immutable inputs.
+For release or deployment evaluation, set `AML_AGENT_SANDBOX_IMAGE` to the exact Docker Hub semantic version or digest being validated. Do not treat `latest` or the [GHCR `dev` channel](/docs/sandbox-images/#bleeding-edge-dev-image) as immutable inputs.
 
 For another image, probe its required commands directly:
 

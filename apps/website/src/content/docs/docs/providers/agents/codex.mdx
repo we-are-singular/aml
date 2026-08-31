@@ -64,9 +64,7 @@ codex --version
 
 These versions are a repeatable repository baseline, not a guarantee that every newer adapter/CLI pair is compatible. Re-run the live provider path when either changes.
 
-For container execution, [AML Agent Sandbox](/docs/providers/sandboxes/images/#aml-agent-sandbox) includes this Codex and
-`codex-acp` baseline and is the default image for Docker, Daytona, and Modal. Local Sandbox still requires both commands
-on the host.
+For container execution, the [Codex image variant](/docs/sandbox-images/#choose-a-variant) includes this Codex and `codex-acp` baseline. The default full image includes them too. Local Sandbox still requires both commands on the host.
 
 <Aside type="caution" title="Read-only does not mean fully isolated">
   AML maps filesystem access to Codex's `INITIAL_AGENT_MODE`, but the provider implementation explicitly leaves shell

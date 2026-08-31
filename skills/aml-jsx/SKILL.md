@@ -96,7 +96,7 @@ Capabilities are lexical grants, not global registration. Never assume a Tool or
 
 Read [capabilities-and-resources.md](references/capabilities-and-resources.md) before adding Tools, MCP servers, Skills, Sandboxes, or Workspaces.
 
-Fetch the focused public guide when the task depends on a specific boundary: [Tools](https://agent-markup-language.com/docs/cookbook/tools.md), [MCP](https://agent-markup-language.com/docs/cookbook/mcp.md), [Sandboxes](https://agent-markup-language.com/docs/providers/sandboxes.md), or [Workspaces](https://agent-markup-language.com/docs/providers/workspaces.md).
+Fetch the focused public guide when the task depends on a specific boundary: [Tools](https://agent-markup-language.com/docs/cookbook/tools.md), [MCP](https://agent-markup-language.com/docs/cookbook/mcp.md), [Sandboxes](https://agent-markup-language.com/docs/providers/sandboxes.md), [Sandbox images](https://agent-markup-language.com/docs/sandbox-images.md), or [Workspaces](https://agent-markup-language.com/docs/providers/workspaces.md).
 
 ## Select providers at the boundary
 

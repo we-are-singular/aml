@@ -54,7 +54,7 @@ await new AmlRuntime({
         command="sh"
         args={[
           "-lc",
-          "python --version > runtime.txt 2>&1 && git --version >> runtime.txt && jq --version >> runtime.txt",
+          "node --version > runtime.txt && npm --version >> runtime.txt && python --version >> runtime.txt 2>&1 && pip --version >> runtime.txt && jq --version >> runtime.txt",
         ]}
       />
     </Sandbox>
@@ -72,8 +72,7 @@ Save the source as `recipe.tsx` in a project configured as shown in [Getting sta
 npx vite-node recipe.tsx
 ```
 
-The first run may pull the image. A successful run prints the installed Python, Git, and jq versions from inside the
-container. `runtime.txt` survives because Docker bind-mounts the local Workspace; the container itself is removed.
+The first run may pull the image. A successful run prints the installed Node.js, npm, Python, pip, and jq versions from inside the container. `runtime.txt` survives because Docker bind-mounts the local Workspace; the container itself is removed.
 
 ## How image selection works
 
@@ -112,6 +111,45 @@ const sandbox = dockerSandbox({
 The override must contain the programs the workflow launches. An Agent workflow also needs its ACP/native Agent
 executable chain; a generic Node or Python image is not automatically Agent-ready.
 
+## Extend a single-Agent image
+
+If an application always uses one Agent, derive its project image from that Agent's variant instead of `full`. This Dockerfile adds the SQLite CLI to OpenCode's image:
+
+```dockerfile title="Dockerfile"
+FROM wearesingular/aml-agent-sandbox:X.Y.Z-opencode
+
+USER root
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends sqlite3 \
+    && rm -rf /var/lib/apt/lists/*
+
+USER aml
+WORKDIR /workspace
+```
+
+Build it locally:
+
+```sh title="Terminal"
+docker build --tag example/aml-opencode:1 .
+```
+
+Then pair the derived image with `opencodeAgent()`:
+
+```ts
+import { AmlRuntime, dockerSandbox, opencodeAgent } from "@aml-jsx/sdk"
+
+const runtime = new AmlRuntime({
+  agentProvider: opencodeAgent({
+    env: { OPENAI_API_KEY: process.env.OPENAI_API_KEY! },
+  }),
+  sandboxProvider: dockerSandbox({
+    image: "example/aml-opencode:1",
+  }),
+})
+```
+
+The image supplies OpenCode and `sqlite3`; `opencodeAgent()` supplies Agent configuration, and the Sandbox provider supplies container lifecycle and process execution. Keep credentials out of the Dockerfile and inject them at runtime.
+
 <Aside type="caution" title="An image is not a complete security boundary">
   The image controls the initial filesystem and runtime software. The Docker daemon and application still own user
   identity, network policy, capabilities, seccomp/AppArmor, resource limits, secrets, and mounted files. Validate the
@@ -120,8 +158,8 @@ executable chain; a generic Node or Python image is not automatically Agent-read
 
 ## API and source links
 
-- [Sandbox images mental model](/docs/sandbox-images/)
-- [Recommended Sandbox images](/docs/providers/sandboxes/images/)
+- [AML Agent Sandbox images](/docs/sandbox-images/)
+- [Alternative and custom Sandbox images](/docs/providers/sandboxes/images/)
 - [`<Sandbox />`](/docs/reference/primitives/sandbox/)
 - [Docker Sandbox provider](/docs/providers/sandboxes/docker/)
 - [AML Agent Sandbox source](https://github.com/we-are-singular/aml/tree/main/images/sandbox)

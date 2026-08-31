@@ -84,9 +84,7 @@ const provider = piAgent({ mcpAdapterPath })
 
 The AML repository currently exercises `pi-acp@0.0.33`, `@earendil-works/pi-coding-agent@0.84.2`, and `pi-mcp-adapter@2.26.0`. Treat that set as a reproducible verification baseline, not an open-ended compatibility promise.
 
-For container execution, [AML Agent Sandbox](/docs/providers/sandboxes/images/#aml-agent-sandbox) includes this Pi,
-`pi-acp`, and `pi-mcp-adapter` baseline and is the default image for Docker, Daytona, and Modal. Local Sandbox still
-requires the complete chain on the host.
+For container execution, the [Pi image variant](/docs/sandbox-images/#choose-a-variant) includes this Pi, `pi-acp`, and `pi-mcp-adapter` baseline. The default full image includes the complete chain too. Local Sandbox still requires it on the host.
 
 <Aside type="caution" title="All three programs must share the execution environment">
   Installing Pi on the host does not make it visible inside Docker or a remote Sandbox. Verify `pi`, `pi-acp`, and the
