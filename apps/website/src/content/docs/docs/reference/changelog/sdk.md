@@ -10,6 +10,25 @@ This page tracks `@aml-jsx/sdk`. Entries are newest first. See [GitHub Releases]
 
 <!-- changelog:entries -->
 
+## SDK v0.7.2 — A documented and verified public API
+
+Released 2026-08-31.
+
+This release requires a documented public contract and backs it with a gate: every declaration `@aml-jsx/sdk` exports, and every locally-owned type shape reachable from it, must carry an adjacent JSDoc block, enforced during the SDK's lint task and guarded by conformance tests.
+
+### Highlights
+
+- **Documented public API contract** Every symbol exported from `@aml-jsx/sdk`, together with every locally-owned type shape reachable from it through references and inheritance, now carries an adjacent JSDoc block that explains its purpose, defaults, and constraints. Coverage spans the package root, `testing`, `jsx-runtime`, and `jsx-dev-runtime` entrypoints across the Agent, Sandbox, Workspace, Tool, MCP, Script, Skill, FollowUp, Loop, Parallel, context, evaluation, observability, and testing surfaces. [Runtime reference](/docs/reference/runtime) · [Testing reference](/docs/reference/testing)
+- **A documentation gate on the SDK lint task** A new `docs:check` audit is wired into the SDK's `lint` task. It builds the SDK, walks the resolved public type graph from the public entrypoints, and fails with a location-stamped list of any exported declaration or locally-owned nested shape missing JSDoc. The check follows recursion with cycle protection so a documented public property cannot conceal an undocumented nested type, and references owned by dependencies remain out of scope. Conformance tests guard the checker against both rejecting undocumented shapes and accepting correctly documented ones.
+
+### Commits
+
+- tools(sdk): enforce public api documentation (1917391)
+- docs(sdk): document public api contracts (2562b57)
+- release(sandbox): v0.3.3 (e964822)
+- release(sandbox): v0.3.2 (ae6ca89)
+- release(sandbox): v0.3.1 (1a762b1)
+
 ## SDK v0.7.1 — Preserved OpenCode native tools and ACP tool-call summaries
 
 Released 2026-08-29.
