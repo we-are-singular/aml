@@ -1,0 +1,55 @@
+name: Auto-Assign
+
+on:
+  pull_request:
+    types: [opened, ready_for_review]
+
+jobs:
+  auto-assign:
+    if: github.actor != 'dependabot[bot]'
+    name: Assign Author
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const author = context.payload.pull_request.user.login
+            const { owner, repo } = context.repo
+            const issue_number = context.issue.number
+
+            const { data: pullRequest } = await github.rest.pulls.get({
+              owner,
+              repo,
+              pull_number: issue_number,
+            })
+
+            if (pullRequest.assignees.some(assignee => assignee.login === author)) {
+              return
+            }
+
+            try {
+              await github.rest.issues.addAssignees({
+                owner,
+                repo,
+                issue_number,
+                assignees: [author],
+              })
+            } catch (error) {
+              if (error.status !== 422) {
+                throw error
+              }
+
+              const { data: latestPullRequest } = await github.rest.pulls.get({
+                owner,
+                repo,
+                pull_number: issue_number,
+              })
+
+              if (!latestPullRequest.assignees.some(assignee => assignee.login === author)) {
+                throw error
+              }
+            }
