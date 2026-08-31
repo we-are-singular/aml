@@ -62,7 +62,8 @@
   },
   "scripts": {
     "build": "vite build",
-    "lint": "tsc --noEmit && oxlint .",
+    "docs:check": "node scripts/check-public-api-docs.ts",
+    "lint": "tsc --noEmit && oxlint . && npm run docs:check",
     "package:check": "node scripts/check-package.ts",
     "prepublishOnly": "npm run build && npm run package:check",
     "release": "release-it",
