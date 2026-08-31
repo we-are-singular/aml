@@ -1,15 +1,30 @@
+/** Durable representation used for each Workspace revision artifact. */
 export type WorkspacePersistenceFormat = "archive" | "folder"
 
+/** One immutable revision recorded in the durable Workspace index. */
 export interface WorkspaceRevision {
+  /** Canonical ISO-8601 publication timestamp. */
   readonly createdAt: string
+
+  /** Representation used by this revision, independent of later defaults. */
   readonly format: WorkspacePersistenceFormat
+
+  /** Non-empty immutable revision identifier. */
   readonly id: string
+
+  /** Canonical storage path derived from `id` and `format`. */
   readonly path: string
 }
 
+/** Versioned durable metadata selecting and retaining Workspace revisions. */
 export interface WorkspaceIndex {
+  /** Revision ID materialized by the `"current"` selector. */
   readonly current: string
+
+  /** Retained revisions, newest first, including `current`. */
   readonly revisions: readonly WorkspaceRevision[]
+
+  /** On-storage index schema version. */
   readonly version: 1
 }
 

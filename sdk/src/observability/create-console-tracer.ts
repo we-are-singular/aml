@@ -2,22 +2,37 @@ import type { AmlTraceAttribute, AmlTraceEvent } from "./trace-event.js"
 import type { TraceSink } from "./trace-sink.js"
 
 /**
- * Console tracer configuration.
+ * Configuration for {@link createConsoleTracer}.
  */
 export interface ConsoleTracerOptions {
   /**
-   * Includes prompt and output fields explicitly marked sensitive by AML.
+   * Whether trace attributes may include prompts, output, error messages, and
+   * other fields explicitly marked sensitive by AML.
+   *
+   * Defaults to `false`. Enable only when the destination is approved to retain
+   * model-facing or application content.
    */
   readonly captureContent?: boolean
 
   /**
-   * Replaces console.log for deterministic tests and custom terminals.
+   * Writes one already-formatted trace line.
+   *
+   * Defaults to `console.log`. A returned promise is observed through the
+   * runtime's trace-error channel but is never awaited by workflow execution.
    */
   readonly write?: (line: string) => unknown
 }
 
 /**
- * Creates a compact tree-oriented trace consumer for local development.
+ * Creates a dependency-free, tree-oriented {@link TraceSink} for local
+ * development and terminal logs.
+ *
+ * The sink indents events by span ancestry, prints lifecycle markers and
+ * attributes without terminal color codes, and releases per-run state when the
+ * evaluation span ends. High-volume ACP message, thought, and tool-update
+ * chunks are omitted from this view; they remain available to other sinks.
+ *
+ * @param options Content policy and output destination. Both are captured once.
  */
 export function createConsoleTracer(options: ConsoleTracerOptions = {}): TraceSink {
   const captureContent = options.captureContent ?? false

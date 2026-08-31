@@ -7,6 +7,11 @@ import { AgentTimeoutError } from "./agent-timeout.js"
 /**
  * Executes a captured provider session and preserves lifecycle failures in
  * deterministic execution, abort, then cleanup order.
+ *
+ * Turns run serially. Cancellation requests optional provider `abort()`, waits
+ * for it, and then invokes `close()` exactly once. Multiple independent errors
+ * are retained in lifecycle order through `AggregateError`; only the final turn
+ * response is returned.
  */
 export async function executeAgentProviderSession(
   value: AgentProviderSession,

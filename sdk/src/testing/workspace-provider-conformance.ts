@@ -9,6 +9,15 @@ import { WorkspaceConflictError } from "../components/workspace/workspace-confli
 
 /**
  * Exercises exclusive acquisition, persistence, release, and restoration.
+ *
+ * The check acquires the fixed logical id `"conformance-workspace"`, requires a
+ * competing writer to fail with {@link WorkspaceConflictError}, saves and
+ * releases the first lease, then reacquires, saves, and releases it again. It
+ * preserves cleanup failures rather than abandoning acquired resources. A real
+ * provider may create durable or billable state; run against an isolated test
+ * namespace that may safely retain this id.
+ *
+ * @param provider Provider instance to validate and exercise.
  */
 export async function workspaceProviderConformance(provider: WorkspaceProvider): Promise<void> {
   const validated = validateWorkspaceProvider(provider)

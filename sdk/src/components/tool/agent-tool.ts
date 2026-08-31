@@ -22,7 +22,10 @@ export type AmlToolSchema<Input = unknown, Output = Input> = StandardSchemaV1<In
  * Invocation-scoped information supplied to a JavaScript Tool.
  */
 export interface AgentToolExecutionContext {
+  /** Evaluation signal that application Tool work must honor cooperatively. */
   readonly signal: AbortSignal
+
+  /** Trace identity of the Tool call inside its containing Agent turn. */
   readonly trace: AmlTraceIdentity
 }
 
@@ -30,14 +33,25 @@ export interface AgentToolExecutionContext {
  * Provider-facing JavaScript capability after AML has captured its contract.
  */
 export interface AgentJavaScriptTool {
+  /** Non-empty model-facing explanation of what the capability does. */
   readonly description: string
 
   /**
    * Executes the capability with provider-supplied input and evaluation context.
+   *
+   * AML validates input before application code runs and returns a stable
+   * JSON-compatible snapshot. Providers and conformance tests use this low-level
+   * method; application components normally call the `AmlTool` function.
    */
   execute(input: unknown, context: AgentToolExecutionContext): Promise<AmlJsonValue>
+
+  /** Immutable JSON Schema advertised to the model for Tool-call arguments. */
   readonly inputSchema: Readonly<Record<string, unknown>>
+
+  /** Provider-facing capability discriminant. */
   readonly kind: "javascript"
+
+  /** Non-empty normalized model-facing Tool name. */
   readonly name: string
 }
 
@@ -56,9 +70,19 @@ export type AgentTool = AgentJavaScriptTool
 export interface AmlTool<Input = never, Output = AmlJsonValue> extends AgentJavaScriptTool {
   /**
    * Invokes this Tool through the active AML function component.
+   *
+   * Calls inherit the component's cancellation, trace, and resource lifetime.
+   * Calling outside an active component fails; calling does not grant the Tool
+   * to any Agent.
    */
   (input: Input): Promise<Output>
 
+  /**
+   * Non-enumerable authoring marker present on `defineTool` results.
+   *
+   * Runtime authenticity uses exact registered identity rather than trusting
+   * this structurally reproducible field.
+   */
   readonly __amlTool: true
 }
 

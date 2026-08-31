@@ -18,6 +18,11 @@ export class DeterministicAgentProvider implements AgentProvider {
     callIndex: number
   ) => AgentResponse | PromiseLike<AgentResponse>
   readonly #supportsSandbox: ((sandbox: SandboxSession) => boolean) | undefined
+  /**
+   * Provider identifier recorded in Agent requests and traces.
+   *
+   * Defaults to `"deterministic"` and must be non-empty and already trimmed.
+   */
   readonly name: string
 
   /**
@@ -25,12 +30,24 @@ export class DeterministicAgentProvider implements AgentProvider {
    */
   constructor(
     options: {
+      /** Provider identifier; defaults to `"deterministic"`. */
       readonly name?: string
+      /**
+       * Response strategy invoked after the call is recorded.
+       *
+       * Defaults to returning the request prompt as response text. `callIndex`
+       * is zero-based and follows provider execution order.
+       */
       readonly respond?: (
         request: AgentRequest,
         context: AgentExecutionContext,
         callIndex: number
       ) => AgentResponse | PromiseLike<AgentResponse>
+      /**
+       * Sandbox compatibility predicate used by `supportsSandbox()`.
+       *
+       * Omit to report every Sandbox as unsupported.
+       */
       readonly supportsSandbox?: (sandbox: SandboxSession) => boolean
     } = {}
   ) {
@@ -53,7 +70,10 @@ export class DeterministicAgentProvider implements AgentProvider {
    * Returns recorded calls in provider execution order for behavioral assertions.
    */
   get calls(): readonly Readonly<{
+    /** Execution services and cancellation state supplied for this call. */
     context: AgentExecutionContext
+
+    /** Immutable provider-neutral Agent request received by the test double. */
     request: AgentRequest
   }>[] {
     return this.#calls

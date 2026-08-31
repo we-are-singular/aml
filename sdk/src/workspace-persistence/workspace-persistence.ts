@@ -36,28 +36,81 @@ const DEFAULT_MAX_ENTRIES = 100_000
 const DEFAULT_MAX_EXTRACTED_BYTES = 1024 * 1024 * 1024
 const MAX_INDEX_BYTES = 4 * 1024 * 1024
 
+/** Configuration for AML's revision protocol over a storage adapter. */
 export interface WorkspacePersistenceOptions<StorageHandle = unknown> {
+  /**
+   * Representation used for newly published revisions.
+   *
+   * Defaults to `"archive"`. Existing revisions retain and restore with the
+   * format recorded in their index entry.
+   */
   readonly format?: WorkspacePersistenceFormat
+
+  /**
+   * Maximum compressed archive bytes accepted during save or restore.
+   *
+   * Defaults to 256 MiB and must be a positive safe integer.
+   */
   readonly maxArchiveBytes?: number
+
+  /**
+   * Maximum selected filesystem entries in one snapshot.
+   *
+   * Defaults to `100000` and must be a positive safe integer.
+   */
   readonly maxEntries?: number
+
+  /**
+   * Maximum combined uncompressed bytes in one snapshot.
+   *
+   * Defaults to 1 GiB and must be a positive safe integer.
+   */
   readonly maxExtractedBytes?: number
+
+  /** Durable storage adapter owning namespaces, locking, and object I/O. */
   readonly storage: WorkspaceStorageAdapter<StorageHandle>
+
+  /**
+   * Parent directory for per-acquisition local staging.
+   *
+   * Defaults to `os.tmpdir()` and is resolved to an absolute host path.
+   */
   readonly temporaryDirectory?: string
 }
 
+/** Opaque handle exposed by a revision-backed Workspace materialization. */
 export interface PersistentWorkspaceHandle<StorageHandle = unknown> {
+  /** Format configured for the next save from this materialization. */
   readonly format: WorkspacePersistenceFormat
+
+  /** Stable discriminant for AML's shared persistence implementation. */
   readonly kind: "persistent-workspace"
+
+  /** Revision restored into this materialization, omitted for an empty start. */
   readonly revisionId?: string
+
+  /** Opaque handle returned by the underlying storage lease. */
   readonly storage: StorageHandle
 }
 
+/** Validated persistence configuration retained by WorkspacePersistence. */
 interface ParsedWorkspacePersistenceOptions<StorageHandle> {
+  /** Archive format used for subsequent Workspace saves. */
   readonly format: WorkspacePersistenceFormat
+
+  /** Maximum compressed archive size accepted during restore. */
   readonly maxArchiveBytes: number
+
+  /** Maximum number of entries accepted from one archive. */
   readonly maxEntries: number
+
+  /** Maximum total uncompressed bytes accepted during extraction. */
   readonly maxExtractedBytes: number
+
+  /** Durable object and writer-authority adapter. */
   readonly storage: WorkspaceStorageAdapter<StorageHandle>
+
+  /** Absolute host directory under which materializations are created. */
   readonly temporaryDirectory: string
 }
 
@@ -69,6 +122,11 @@ interface RestoredWorkspace {
 
 /**
  * Creates a revision-backed Workspace provider over one small storage adapter.
+ *
+ * Configuration is validated immediately without acquiring storage. The
+ * returned immutable provider owns local staging, revision restore, conditional
+ * index publication, retention, and cleanup; the adapter owns durable object
+ * semantics and writer authority.
  */
 export function createPersistentWorkspaceProvider<StorageHandle = unknown>(
   options: WorkspacePersistenceOptions<StorageHandle>
@@ -83,13 +141,21 @@ export class WorkspacePersistence<StorageHandle = unknown> implements WorkspaceP
   PersistentWorkspaceHandle<StorageHandle>
 > {
   readonly #options: Readonly<ParsedWorkspacePersistenceOptions<StorageHandle>>
+  /** Provider name inherited from the configured storage adapter. */
   readonly name: string
 
+  /** Validates and captures persistence limits and the storage adapter. */
   constructor(options: WorkspacePersistenceOptions<StorageHandle> | ParsedWorkspacePersistenceOptions<StorageHandle>) {
     this.#options = parseWorkspacePersistenceOptions(options)
     this.name = this.#options.storage.name
   }
 
+  /**
+   * Acquires storage authority, creates a unique local materialization, and
+   * restores the selected revision.
+   *
+   * Any failure removes partial local state and releases the storage lease.
+   */
   async acquire(request: WorkspaceAcquireRequest): Promise<WorkspaceLease<PersistentWorkspaceHandle<StorageHandle>>> {
     request.signal.throwIfAborted()
     const storage = await this.#options.storage.acquire({

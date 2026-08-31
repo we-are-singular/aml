@@ -11,6 +11,12 @@ const NOOP_EVENTS: AmlEventSubscriber = Object.freeze({
  *
  * Narrow overrides keep provider-specific clients local while one SDK fixture
  * absorbs additions to the portable Agent execution contract.
+ *
+ * Omitted fields receive a no-op event subscriber, a never-aborted signal, no
+ * Sandbox, and trace ids of `"agent-test"`. The returned context and trace
+ * identity are frozen; supplied provider-owned objects are not deep-cloned.
+ *
+ * @param overrides Portable context fields needed by the test under construction.
  */
 export function createAgentExecutionContext(
   overrides: Partial<AgentExecutionContext> = {}

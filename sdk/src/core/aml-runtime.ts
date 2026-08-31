@@ -214,74 +214,130 @@ type EvaluationFrame =
  */
 export interface AmlRuntimeOptions {
   /**
-   * Optional exact-name MCP server allowlist.
+   * Exact MCP server names that authored `<Mcp>` components may grant.
+   *
+   * Omit this option to allow every otherwise valid server. An empty array
+   * denies all authored MCP servers. Names must be non-empty, already-trimmed
+   * strings and are matched case-sensitively.
    */
   readonly allowedMcpServers?: readonly string[]
 
   /**
-   * Optional exact-name capability allowlist.
+   * Exact JavaScript tool names that authored `<Tool>` components may grant.
+   *
+   * Omit this option to allow every otherwise valid tool. An empty array
+   * denies all authored tools. Names must be non-empty, already-trimmed
+   * strings and are matched case-sensitively. Runtime-owned capabilities,
+   * such as Loop state, are not filtered by this authoring allowlist.
    */
   readonly allowedTools?: readonly string[]
 
   /**
-   * Default provider for Agents without an explicit provider prop.
+   * Provider used by each `<Agent>` that does not set its own `provider` prop.
+   *
+   * No provider is configured by default. Evaluating an Agent without either
+   * source of provider then throws an {@link EvaluationError}.
    */
   readonly agentProvider?: AgentProvider
 
   /**
-   * Base directory for relative local Skill files and host Script execution.
+   * Host directory used to resolve relative `<Skill src>` paths and as the
+   * default working directory for host-executed `<Script>` components.
+   *
+   * Defaults to `process.cwd()` when the runtime is constructed. An active
+   * Sandbox supplies its effective cwd to nested Scripts instead. A Workspace
+   * affects Script cwd only when it supplies the default cwd of an enclosing
+   * Sandbox.
    */
   readonly cwd?: string
 
   /**
-   * Maximum provider-backed Agent sessions. Zero disables the limit.
+   * Maximum number of provider-backed Agent sessions in one evaluation.
+   *
+   * Defaults to `32`. Use `0` to disable this limit. The value must be a
+   * non-negative safe integer and includes Agent calls made by nested
+   * component-local `evaluate()` operations.
    */
   readonly maxAgentCalls?: number
 
   /**
-   * Maximum active Agent provider calls. Zero disables the limit.
+   * Maximum number of Agent provider calls that may be active concurrently in
+   * one evaluation.
+   *
+   * Defaults to `4`. Use `0` to disable this limit. The value must be a
+   * non-negative safe integer. Calls beyond the limit wait for capacity rather
+   * than failing solely because the limit is occupied.
    */
   readonly maxConcurrentAgents?: number
 
   /**
-   * Maximum nested JSX node depth. Zero disables the limit.
+   * Maximum semantic nesting depth of JSX nodes in one evaluation.
    *
-   * Arrays and Promises do not add semantic depth; Fragments and components do.
+   * Defaults to `16`. Use `0` to disable this limit. The value must be a
+   * non-negative safe integer. Arrays and Promises do not add semantic depth;
+   * Fragments and components do.
    */
   readonly maxDepth?: number
 
   /**
-   * Maximum committed Loop transitions. Zero disables the limit.
+   * Maximum committed state transitions across all `<Loop>` components in one
+   * evaluation.
+   *
+   * Defaults to `16`. Use `0` to disable this limit. The value must be a
+   * non-negative safe integer.
    */
   readonly maxStateTransitions?: number
 
   /**
-   * Maximum authored inputs in one Agent session. Zero disables the limit.
+   * Maximum authored inputs sent during one Agent provider session.
+   *
+   * Defaults to `16`. Use `0` to disable this limit. The value must be a
+   * non-negative safe integer. The initial prompt and each `<FollowUp>` count
+   * as turns; provider tool-call traffic does not consume authored turns.
    */
   readonly maxTurnsPerAgent?: number
 
   /**
-   * Reports trace-consumer failures without changing workflow behavior.
+   * Handles exceptions and rejected promises produced by trace listeners.
+   *
+   * Trace observation never changes workflow success. When omitted, listener
+   * failures are ignored. The handler receives the error and the redacted event
+   * that was being observed.
    */
   readonly onTraceError?: TraceErrorHandler
 
   /**
-   * Default provider for outer Sandboxes without an explicit provider prop.
+   * Provider used by an outer `<Sandbox>` that does not set its own `provider`.
+   *
+   * No Sandbox provider is configured by default. Nested Sandboxes inherit the
+   * active lease and cannot switch providers.
    */
   readonly sandboxProvider?: SandboxProvider
 
   /**
-   * First system fragment supplied to every Agent in this runtime.
+   * Runtime-wide system instruction prepended to every Agent request.
+   *
+   * Defaults to no runtime instruction. This fragment precedes the Agent's
+   * `system` prop and nested `<System>` fragments in deterministic order.
    */
   readonly system?: string
 
   /**
-   * Receives immutable execution events for each evaluation.
+   * Listener that receives immutable trace events from every evaluation run by
+   * this runtime.
+   *
+   * Omitted by default. Trace delivery is observational and is not awaited by
+   * workflow execution. Content is redacted unless the sink explicitly opts in
+   * through the {@link TraceSink} contract.
    */
   readonly trace?: TraceSink
 
   /**
-   * Default provider for the one top-level Workspace in an evaluation.
+   * Provider used by the single top-level `<Workspace>` in an evaluation when
+   * that component does not set its own `provider`.
+   *
+   * No Workspace provider is configured by default. Nested Workspaces are not
+   * supported because one evaluation owns at most one durable materialization.
    */
   readonly workspaceProvider?: WorkspaceProvider
 }
@@ -292,12 +348,22 @@ export interface AmlRuntimeOptions {
 export interface AmlEvaluationOptions {
   /**
    * Caller-owned cancellation signal for this complete evaluation.
+   *
+   * When omitted, the runtime creates a never-aborted signal for the call.
+   * Cancellation is propagated to providers and resource cleanup. If already
+   * aborted, `evaluate()` rejects before starting the AML tree.
    */
   readonly signal?: AbortSignal
 }
 
 /**
- * Evaluates one authored AML tree into its final text.
+ * Evaluates authored AML trees with captured providers, policy, limits, and
+ * runtime-wide event listeners.
+ *
+ * A runtime is reusable and supports concurrent `evaluate()` calls. Each call
+ * owns its cancellation, budgets, Context state, resources, and trace identity;
+ * only the immutable constructor configuration and registered listeners are
+ * shared.
  */
 export class AmlRuntime {
   readonly #agentExecutor: AgentExecutor
@@ -318,7 +384,11 @@ export class AmlRuntime {
   readonly #workspaceEvaluator: WorkspaceEvaluator
 
   /**
-   * Captures one immutable set of runtime limits and Agent defaults.
+   * Captures one immutable set of provider defaults, capability policy, safety
+   * limits, and trace configuration.
+   *
+   * Mutable option arrays are copied during construction. Invalid numeric
+   * limits, capability names, or callback values throw synchronously.
    */
   constructor(options: AmlRuntimeOptions = {}) {
     const maxAgentCalls = options.maxAgentCalls ?? 32
@@ -373,24 +443,35 @@ export class AmlRuntime {
   }
 
   /**
-   * Registers one listener for every evaluation executed by this runtime.
+   * Registers a listener for each matching event emitted by this runtime.
+   *
+   * `start` and `finish` listeners are awaited at their lifecycle boundaries;
+   * `trace` listeners are observational and are not awaited. The returned
+   * function unregisters this exact listener and is safe to call repeatedly.
    */
   on<Name extends AmlEventName>(name: Name, listener: AmlEventListener<Name>): () => void {
     return this.#events.on(name, listener)
   }
 
   /**
-   * Registers one listener for the next matching runtime event.
+   * Registers a listener for the next matching event emitted by this runtime.
+   *
+   * The listener unregisters before it is invoked, so recursive or concurrent
+   * event delivery cannot invoke it twice. The returned function may be used to
+   * cancel the registration before that event occurs.
    */
   once<Name extends AmlEventName>(name: Name, listener: AmlEventListener<Name>): () => void {
     return this.#events.once(name, listener)
   }
 
   /**
-   * Resolves one AML tree post-order into its final string output.
+   * Resolves one AML tree to its final string output.
    *
-   * The evaluator uses an explicit frame stack so asynchronous components and
-   * deeply nested trees do not depend on JavaScript recursion.
+   * Empty values contribute no text, arrays preserve authored order, and
+   * numbers are stringified. Components and promises are resolved
+   * asynchronously. The returned promise rejects on invalid AML, provider or
+   * resource failures, exhausted limits, cycles, or cancellation. Cleanup is
+   * attempted before the promise settles.
    */
   async evaluate(value: AmlRenderable, options: AmlEvaluationOptions = {}): Promise<string> {
     const signal = options.signal ?? new AbortController().signal

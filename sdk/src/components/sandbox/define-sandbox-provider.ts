@@ -4,7 +4,9 @@ import { validateSandboxProvider } from "./validate-sandbox-provider.js"
 /**
  * Finalizes one Sandbox implementation as an immutable AML adapter.
  *
- * This definition step performs no acquisition or provider-specific setup.
+ * This definition step validates the provider name and `acquire` function, then
+ * shallow-freezes the original object. It performs no acquisition, proves no
+ * isolation property, and does not freeze provider-owned nested state.
  */
 export function defineSandboxProvider<const Provider extends SandboxProvider>(
   implementation: Provider
