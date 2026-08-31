@@ -4,7 +4,7 @@ import { URL } from "node:url"
 import { Agent, FollowUp, Script, System, evaluate, opencodeAgent } from "@aml-jsx/sdk"
 import { z } from "zod"
 
-type ReleaseLane = "cli" | "sdk"
+type ReleaseLane = "cli" | "sandbox" | "sdk"
 
 const DraftSchema = z.object({
   title: z.string().trim().min(1),
@@ -38,10 +38,18 @@ interface ChangelogProps {
 
 /** Authors and reviews one package changelog entry. */
 export async function Changelog({ lane }: ChangelogProps) {
-  const packageName = lane === "sdk" ? "SDK" : "CLI"
-  const packagePath = lane === "sdk" ? "sdk/package.json" : "apps/cli/package.json"
-  const changelogPath = `apps/website/src/content/docs/docs/reference/changelog/${lane}.md`
-  const tagMatch = lane === "sdk" ? "v[0-9]*" : "cli-v[0-9]*"
+  const packageName = lane === "sdk" ? "SDK" : lane === "cli" ? "CLI" : "Sandbox"
+  const packagePath =
+    lane === "sdk" ? "sdk/package.json" : lane === "cli" ? "apps/cli/package.json" : "images/sandbox/package.json"
+  const changelogPath =
+    lane === "sandbox"
+      ? "images/sandbox/CHANGELOG.md"
+      : `apps/website/src/content/docs/docs/reference/changelog/${lane}.md`
+  const tagMatch = lane === "sdk" ? "v[0-9]*" : lane === "cli" ? "cli-v[0-9]*" : "sandbox-v[0-9]*"
+  const insertionPoint =
+    lane === "sandbox"
+      ? "Insert the entry immediately after the top-level `# Changelog` heading."
+      : "Insert the entry immediately after the changelog entries marker."
 
   const draft = await evaluate(
     <Agent provider={provider} permissions={{ filesystem: "read-write", network: false, shell: true }}>
@@ -77,10 +85,9 @@ export async function Changelog({ lane }: ChangelogProps) {
       version; never infer the next version. If that version already has a changelog entry, stop without changing the
       file and explain that the package must be bumped first. The approved editorial draft is:
       {JSON.stringify(draft, null, 2)}
-      Insert the entry for the current package version immediately after the changelog entries marker. Use the visible
-      version heading to detect an existing entry; do not add per-release marker comments. Include the authoritative
-      commits produced by `node scripts/release-notes.ts` for this lane and the latest matching {tagMatch} tag. Run
-      Oxfmt on the changelog.
+      {insertionPoint} Use the visible version heading to detect an existing entry; do not add per-release marker
+      comments. Include the authoritative commits produced by `node scripts/release-notes.ts` for this lane and the
+      latest matching {tagMatch} tag. Run Oxfmt on the changelog.
       <FollowUp>
         Review the written entry against the draft, package version, authoritative commits, existing changelog style,
         and Markdown syntax. Correct any issue you find, run Oxfmt again, and inspect the final diff. Finish with a
@@ -92,3 +99,4 @@ export async function Changelog({ lane }: ChangelogProps) {
 
 export const sdk = <Changelog lane="sdk" />
 export const cli = <Changelog lane="cli" />
+export const sandbox = <Changelog lane="sandbox" />

@@ -2,7 +2,12 @@
   "$schema": "https://unpkg.com/release-it@21/schema/release-it.json",
   "verbose": true,
   "hooks": {
-    "after:bump": ["npm run update:aml", "git add package.json package-lock.json"],
+    "after:bump": [
+      "npm run update:aml",
+      "timeout --signal=INT --kill-after=15s 10m npm run changelog:sandbox --prefix ../..",
+      "npm run format --prefix ../.. -- images/sandbox/CHANGELOG.md",
+      "git add package.json package-lock.json CHANGELOG.md"
+    ],
     "before:release": "npm run release:check",
     "after:git:release": "node scripts/publish.mjs ${version}"
   },
