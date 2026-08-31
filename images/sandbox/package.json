@@ -16,6 +16,7 @@
     "check:all": "node scripts/check.mjs --all",
     "release": "node scripts/release.mjs",
     "release:check": "node --test scripts/*.test.mjs && npm audit --omit=dev && npm run build:all && npm run check:all",
+    "sync:description": "node scripts/sync-description.mjs",
     "update:aml": "npm install --save-exact --ignore-scripts @aml-jsx/cli@latest @aml-jsx/sdk@latest",
     "verify:release": "node scripts/verify-release.mjs"
   },
