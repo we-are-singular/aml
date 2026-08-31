@@ -10,12 +10,12 @@
     "directory": "images/sandbox"
   },
   "scripts": {
-    "build": "docker build --platform linux/amd64 --tag aml-agent-sandbox:dev .",
-    "check": "npm run check:runtime && npm run check:downstream",
-    "check:runtime": "docker run --rm --platform linux/amd64 --tmpfs /workspace:rw,uid=1000,gid=1000 --volume $PWD/fixtures/clean-workspace:/fixture:ro --volume $PWD/verify.sh:/verify.sh:ro ${AML_AGENT_SANDBOX_IMAGE:-aml-agent-sandbox:dev} /verify.sh",
-    "check:downstream": "docker build --platform linux/amd64 --build-arg AML_AGENT_SANDBOX_IMAGE=${AML_AGENT_SANDBOX_IMAGE:-aml-agent-sandbox:dev} --file fixtures/downstream.Dockerfile fixtures",
+    "build": "node scripts/build.mjs",
+    "build:all": "node scripts/build.mjs --all",
+    "check": "node scripts/check.mjs",
+    "check:all": "node scripts/check.mjs --all",
     "release": "node scripts/release.mjs",
-    "release:check": "node --test scripts/*.test.mjs && npm audit --omit=dev && npm run build && npm run check",
+    "release:check": "node --test scripts/*.test.mjs && npm audit --omit=dev && npm run build:all && npm run check:all",
     "update:aml": "npm install --save-exact --ignore-scripts @aml-jsx/cli@latest @aml-jsx/sdk@latest",
     "verify:release": "node scripts/verify-release.mjs"
   },
@@ -33,5 +33,8 @@
   },
   "devDependencies": {
     "release-it": "^21.0.0"
+  },
+  "allowScripts": {
+    "opencode-ai@1.18.18": true
   }
 }

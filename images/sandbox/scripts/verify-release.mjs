@@ -1,35 +1,38 @@
 import { spawnSync } from "node:child_process"
 import process from "node:process"
 
+import { immutableTags, movingTags, variantNames } from "./variants.mjs"
+
 const dockerHubImage = "docker.io/wearesingular/aml-agent-sandbox"
-const [version, digest, ...policyArguments] = process.argv.slice(2)
+const [version, ...policyArguments] = process.argv.slice(2)
 
 if (!/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(version ?? "")) {
   throw new Error("Expected a semantic version as the first argument")
 }
-if (!/^sha256:[0-9a-f]{64}$/.test(digest ?? "")) {
-  throw new Error("Expected an immutable sha256 digest as the second argument")
-}
 
 const policy = parsePolicy(policyArguments)
 const tag = `sandbox-v${version}`
+const images = []
 
-const references = [`${dockerHubImage}:${version}`, `${dockerHubImage}:latest`]
+for (const name of variantNames) {
+  const references = [...immutableTags(version, name), ...movingTags(name)].map(tag => `${dockerHubImage}:${tag}`)
+  const digest = resolveDigest(references[0])
+  for (const reference of references) verifyDigest(reference, digest)
+  const immutableReference = `${dockerHubImage}@${digest}`
 
-for (const reference of references) verifyDigest(reference, digest)
-const immutableReference = `${dockerHubImage}@${digest}`
+  run("cosign", [
+    "verify",
+    "--certificate-identity",
+    policy.identity,
+    "--certificate-oidc-issuer",
+    policy.issuer,
+    immutableReference,
+  ])
 
-run("cosign", [
-  "verify",
-  "--certificate-identity",
-  policy.identity,
-  "--certificate-oidc-issuer",
-  policy.issuer,
-  immutableReference,
-])
-
-verifyAttestation("SBOM", "{{if .SBOM}}present{{else}}missing{{end}}", immutableReference)
-verifyAttestation("provenance", "{{if .Provenance}}present{{else}}missing{{end}}", immutableReference)
+  verifyAttestation("SBOM", "{{if .SBOM}}present{{else}}missing{{end}}", immutableReference)
+  verifyAttestation("provenance", "{{if .Provenance}}present{{else}}missing{{end}}", immutableReference)
+  images.push({ digest, name, references })
+}
 
 const release = JSON.parse(output("gh", ["release", "view", tag, "--json", "tagName,isDraft,isPrerelease,url"]))
 if (release.tagName !== tag || release.isDraft || release.isPrerelease) {
@@ -37,7 +40,7 @@ if (release.tagName !== tag || release.isDraft || release.isPrerelease) {
 }
 
 process.stdout.write(
-  `Verified AML Agent Sandbox ${version}\nDigest: ${digest}\nTags: ${references.join(", ")}\nGitHub Release: ${release.url}\n`
+  `Verified AML Agent Sandbox ${version}\n${images.map(image => `${image.name}: ${image.digest} (${image.references.join(", ")})`).join("\n")}\nGitHub Release: ${release.url}\n`
 )
 
 function parsePolicy(args) {
@@ -60,8 +63,14 @@ function parsePolicy(args) {
 }
 
 function verifyDigest(reference, expectedDigest) {
-  const resolved = output("docker", ["buildx", "imagetools", "inspect", reference, "--format", "{{.Manifest.Digest}}"])
+  const resolved = resolveDigest(reference)
   if (resolved !== expectedDigest) throw new Error(`${reference} resolved to ${resolved}, expected ${expectedDigest}`)
+}
+
+function resolveDigest(reference) {
+  const digest = output("docker", ["buildx", "imagetools", "inspect", reference, "--format", "{{.Manifest.Digest}}"])
+  if (!/^sha256:[0-9a-f]{64}$/.test(digest)) throw new Error(`${reference} did not resolve to an immutable digest`)
+  return digest
 }
 
 function verifyAttestation(name, format, reference) {

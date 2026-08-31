@@ -39,6 +39,7 @@ jobs:
           platforms: linux/amd64
           tags: ${{ env.LOCAL_IMAGE }}
           build-args: |
+            IMAGE_VARIANT=full
             IMAGE_VERSION=dev
             VCS_REF=${{ github.sha }}
           cache-from: type=gha
