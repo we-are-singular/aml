@@ -21,8 +21,29 @@ const DEFAULT_MAX_OUTPUT_BYTES = 4 * 1024 * 1024
  * Trusted host-process configuration for `localSandbox()`.
  */
 export interface LocalSandboxOptions {
+  /**
+   * Maximum combined `stdout` and `stderr` collected from one command.
+   *
+   * Defaults to `4 * 1024 * 1024` bytes and must be a positive safe integer.
+   * Exceeding the budget kills the process and rejects the command.
+   */
   readonly maxOutputBytes?: number
+
+  /**
+   * Shell source run once per acquisition through `sh -lc` after path
+   * validation and before the lease is returned.
+   *
+   * Omitted by default. Because Local cannot execute safely under read-only
+   * access, configuring setup also requires an effective read-write Sandbox.
+   */
   readonly setup?: string
+
+  /**
+   * Fallback host Workspace directory used when no active `<Workspace>` exists.
+   *
+   * Omitted by default. Relative paths are resolved when the factory is called;
+   * an active Workspace materialization always takes precedence.
+   */
   readonly workspace?: string
 }
 
@@ -32,8 +53,12 @@ interface ParsedLocalSandboxOptions {
   readonly workspace?: string
 }
 
+/** Provider handle exposed through a Local Sandbox lease. */
 interface LocalSandboxHandle {
+  /** Resolved host directory represented by the Sandbox root. */
   readonly directory: string
+
+  /** Stable provider-handle discriminant. */
   readonly kind: "local"
 }
 
@@ -48,6 +73,10 @@ interface LocalSandboxResource {
  *
  * This provider is a composition and development proof, not an isolation
  * boundary. Use Docker or a remote provider for untrusted commands.
+ * Host commands require `access="read-write"`; Local rejects execution under
+ * read-only access because it cannot enforce that policy on an ordinary process.
+ *
+ * @param options Host Workspace, setup command, and command-output budget.
  */
 export function localSandbox(options: LocalSandboxOptions = {}): Readonly<SandboxProvider<LocalSandboxHandle>> {
   return defineSandboxProvider(new LocalSandboxProvider(parseOptions(options)))

@@ -13,7 +13,9 @@ import {
   type OpenCodeAgentOptions,
 } from "./opencode-agent-options.js"
 
+/** Agent provider returned by {@link opencodeAgent}. */
 export interface OpenCodeAgentProvider extends AgentProvider {
+  /** Stable provider identifier reported in Agent requests and traces. */
   readonly name: "opencode"
 }
 
@@ -143,6 +145,13 @@ class OpenCodeAcpProfile implements AcpAgentProfile<"opencode"> {
 
 /**
  * Creates an OpenCode Agent through its native ACP server.
+ *
+ * The selected host or Sandbox must contain the configured OpenCode command.
+ * Options are validated and captured before process acquisition. AML translates
+ * portable permissions into OpenCode Tool and permission denials, while the
+ * enclosing Sandbox remains the process-level enforcement boundary.
+ *
+ * @param options Native configuration, command, environment, model, and directory.
  */
 export function opencodeAgent(options: OpenCodeAgentOptions = {}): Readonly<OpenCodeAgentProvider> {
   const profile = new OpenCodeAcpProfile(captureOpenCodeAgentOptions(options))

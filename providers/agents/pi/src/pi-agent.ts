@@ -10,23 +10,70 @@ import {
  * Configures the maintained pi-acp adapter and underlying Pi command.
  */
 export interface PiAgentOptions {
+  /**
+   * Arguments appended to the `pi-acp` command exactly as supplied.
+   *
+   * Defaults to `[]`; entries cannot contain null bytes.
+   */
   readonly args?: readonly string[]
+
+  /**
+   * Outer ACP adapter executable or application-owned launcher.
+   *
+   * Defaults to `"pi-acp"`. AML does not install the adapter.
+   */
   readonly command?: string
+
+  /**
+   * Additional environment variables for credentials and native Pi settings.
+   *
+   * Defaults to `{}`. AML-owned private HOME, state, command, and version-check
+   * variables are written afterward.
+   */
   readonly env?: Readonly<Record<string, string>>
   /**
    * Path to the environment-installed pi-mcp-adapter entrypoint.
    *
    * When omitted, the launch wrapper resolves the installed package beside its
    * `pi-mcp-adapter` executable. AML never installs runtime software implicitly.
+   * The value must be a non-empty, already-trimmed path without null bytes.
    */
   readonly mcpAdapterPath?: string
+
+  /**
+   * Provider-level model fallback.
+   *
+   * Omit to let Pi choose its configured default. An `<Agent model>` prop takes
+   * precedence and is sent through ACP session configuration.
+   */
   readonly model?: string
+
+  /**
+   * Native Pi executable used directly or by AML's generated permission wrapper.
+   *
+   * Defaults to `"pi"`; this is distinct from the outer ACP `command`.
+   */
   readonly piCommand?: string
+
+  /**
+   * Provider-native Pi thought-level configuration value.
+   *
+   * Omitted by default. AML validates and forwards the normalized string but
+   * does not maintain an adapter-version-specific allowlist.
+   */
   readonly thinkingLevel?: string
+
+  /**
+   * Fallback working directory when no active Sandbox supplies one.
+   *
+   * Omit to use the application working directory.
+   */
   readonly workingDirectory?: string
 }
 
+/** Agent provider returned by {@link piAgent}. */
 export interface PiAgentProvider extends AgentProvider {
+  /** Stable provider identifier reported in Agent requests and traces. */
   readonly name: "pi"
 }
 
@@ -149,6 +196,13 @@ class PiAcpProfile implements AcpAgentProfile<"pi"> {
 
 /**
  * Creates a Pi coding Agent through the maintained pi-acp adapter.
+ *
+ * The selected host or Sandbox must contain `pi-acp`, Pi, and the MCP adapter
+ * when capabilities require it. AML generates a tool-restricting wrapper when
+ * permissions are narrowed or MCP is present; an enclosing Sandbox remains the
+ * process-level enforcement boundary.
+ *
+ * @param options Adapter command, native Pi command, environment, and defaults.
  */
 export function piAgent(options: PiAgentOptions = {}): Readonly<PiAgentProvider> {
   const profile = new PiAcpProfile(captureOptions(options))
