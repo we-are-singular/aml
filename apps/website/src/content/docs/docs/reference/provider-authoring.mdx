@@ -79,7 +79,7 @@ const internalReviewer: AgentProvider = {
 export const agentProvider = defineAgentProvider(internalReviewer)
 ```
 
-`AgentRequest` contains the assembled initial prompt, ordered `followUps`, system text, model override, portable permissions, Tools, MCP servers, trace identity, and optional structured-output request. One `run()` call represents one authored `<Agent />` session. If a later turn fails, the provider fails the complete call rather than substituting an earlier response.
+`AgentRequest` contains the assembled initial prompt, ordered `followUps`, system text, model override, portable permissions, Tools, MCP servers, staged Skills, trace identity, and optional structured-output request. Each `AgentSkill` exposes the concrete `.agents` home, package directory, and `SKILL.md` path; native-discovery providers consume those owned locations instead of deriving a root from path depth. One `run()` call represents one authored `<Agent />` session. If a later turn fails, the provider fails the complete call rather than substituting an earlier response.
 
 `AgentExecutionContext` supplies the evaluation signal, subscriber-only events, trace identity, and optional effective `SandboxSession`. Providers cannot publish AML trace events or invoke the application-owned output validator through this public context. AML still wraps retained provider sessions in portable `agent.session`, `agent.turn`, and `agent.cleanup` spans. A provider must reject a pre-aborted signal with its reason, observe cancellation during external work, and release invocation-owned clients, processes, streams, bridges, and temporary files before `run()` settles.
 

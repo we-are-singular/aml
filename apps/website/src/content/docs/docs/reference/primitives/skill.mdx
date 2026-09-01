@@ -53,7 +53,7 @@ import { Agent, Skill } from "@aml-jsx/sdk"
 
 ## Discovery and lifecycle
 
-The staged package always ends in `.agents/skills/<name>/SKILL.md`. Providers receive concrete paths to the staged package. Codex and OpenCode use native discovery mapping; providers that do not declare native discovery receive a short session-wide system fragment containing only the Skill name, description, and `SKILL.md` path. AML never inserts the Skill body into the prompt automatically.
+The staged package always ends in `.agents/skills/<name>/SKILL.md`. Providers receive the concrete `.agents` home, package directory, and `SKILL.md` path. Codex and OpenCode use native discovery mapping; providers that do not declare native discovery receive a short session-wide system fragment containing only the Skill name, description, and `SKILL.md` path. AML never inserts the Skill body into the prompt automatically.
 
 `<Skill />` is valid only in the containing Agent plan and remains available for its initial turn and every [`<FollowUp />`](/docs/reference/primitives/follow-up/). It is invalid as a standalone value or inside a System or FollowUp block. Duplicate Skill names in one Agent reject.
 
