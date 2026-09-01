@@ -149,17 +149,14 @@ export interface AcpAgentProfile<Name extends string> {
  */
 class AcpAgentProvider<Name extends string> extends AbstractAgentProvider<Name> {
   readonly #profile: Readonly<AcpAgentProfile<Name>>
-  declare readonly skillDiscovery?: "native"
+  readonly skillDiscovery?: "native"
 
   constructor(profile: Readonly<AcpAgentProfile<Name>>) {
     super(profile.name)
     this.#profile = profile
 
-    if (profile.skillDiscovery === "native") {
-      Object.defineProperty(this, "skillDiscovery", {
-        enumerable: true,
-        value: "native",
-      })
+    if (profile.skillDiscovery !== undefined) {
+      this.skillDiscovery = profile.skillDiscovery
     }
   }
 
