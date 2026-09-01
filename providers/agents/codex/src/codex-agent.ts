@@ -5,7 +5,6 @@ import {
   type AcpAgentProfile,
   type AgentProvider,
 } from "@aml-jsx/sdk"
-import path from "node:path"
 
 /** JSON configuration passed to the maintained Codex ACP adapter. */
 export type CodexConfigValue =
@@ -143,7 +142,7 @@ class CodexProfile implements AcpAgentProfile<"codex"> {
       this.#options.env.CODEX_API_KEY !== undefined ||
       this.#options.env.OPENAI_API_KEY !== undefined
     const mode = context.request.permissions.filesystem === "read-only" ? "read-only" : "agent-full-access"
-    const skillHome = codexSkillHome(context)
+    const skillHome = context.request.skills[0]?.skillHome
 
     return Object.freeze({
       args: this.#options.args,
@@ -165,16 +164,6 @@ class CodexProfile implements AcpAgentProfile<"codex"> {
       permissionPolicy: mode === "agent-full-access" ? "allow_always" : "allow_once",
     })
   }
-}
-
-function codexSkillHome(context: Readonly<AcpAgentLaunchContext>): string | undefined {
-  const homes = new Set(context.request.skills.map(skill => path.dirname(path.dirname(skill.directory))))
-
-  if (homes.size > 1) {
-    throw new Error("Codex Agent Skills must share one staging root")
-  }
-
-  return homes.values().next().value
 }
 
 /**
