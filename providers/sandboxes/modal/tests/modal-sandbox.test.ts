@@ -121,6 +121,25 @@ describe("modalSandbox()", () => {
     expect(fake.terminateCount).toBe(1)
   })
 
+  it("rejects an existing directory as a file replacement destination", async () => {
+    const workspace = await temporaryDirectory("aml-modal-directory-destination-")
+    await mkdir(path.join(workspace, "repository"), { recursive: true })
+    const fake = await FakeModal.create()
+    fake.directories.add("/workspace/generated")
+    const lease = await modalSandbox({
+      client: fake.client,
+      image: "alpine:3.22",
+      workspace,
+    }).acquire(request())
+
+    await expect(lease.runtime.writeFile("repository/generated", new TextEncoder().encode("content"))).rejects.toThrow(
+      "Modal Sandbox file replacement failed: destination is a directory"
+    )
+    expect([...fake.files.keys()]).not.toContainEqual(expect.stringContaining(".aml-file-"))
+
+    await lease.release()
+  })
+
   it("validates AML options without constructing a credentialed client", () => {
     expect(() => modalSandbox()).not.toThrow()
     expect(() => modalSandbox({ image: "node:26" })).not.toThrow()
@@ -167,6 +186,7 @@ class FakeModal {
   readonly client: ModalClient
   readonly commands: RecordedCommand[] = []
   readonly createCalls: Array<{ app: unknown; image: unknown; params: unknown }> = []
+  readonly directories = new Set<string>()
   downloadCount = 0
   readonly files = new Map<string, Uint8Array>()
   readonly imageCalls: string[] = []
@@ -191,13 +211,24 @@ class FakeModal {
         }
         this.commands.push(recorded)
 
+        let exitCode = 0
+        let stderr = ""
+
         if (command[0] === "mv") {
           const source = command.at(-2)
           const destination = command.at(-1)
           const content = source === undefined ? undefined : this.files.get(source)
 
           if (source !== undefined && content !== undefined && destination !== undefined) {
-            this.files.set(destination, content)
+            if (this.directories.has(destination) && command.includes("-T")) {
+              exitCode = 1
+              stderr = "destination is a directory"
+            } else {
+              const resolvedDestination = this.directories.has(destination)
+                ? path.posix.join(destination, path.posix.basename(source))
+                : destination
+              this.files.set(resolvedDestination, content)
+            }
             this.files.delete(source)
           }
         }
@@ -209,11 +240,12 @@ class FakeModal {
         const isRuntimeCommand = command[0] === "node"
         return processResult(
           isRuntimeCommand ? "command output" : "",
-          isRuntimeCommand ? "command error" : "",
+          isRuntimeCommand ? "command error" : stderr,
           params.mode === "binary",
           () => {
             this.stdinCloseCount += 1
-          }
+          },
+          exitCode
         )
       },
       filesystem: {
@@ -285,7 +317,7 @@ class FakeModal {
   }
 }
 
-function processResult(stdout: string, stderr: string, binary: boolean, closeStdin: () => void) {
+function processResult(stdout: string, stderr: string, binary: boolean, closeStdin: () => void, exitCode = 0) {
   return {
     closeStdin: async () => closeStdin(),
     stdin: {
@@ -294,7 +326,7 @@ function processResult(stdout: string, stderr: string, binary: boolean, closeStd
     },
     stderr: binary ? byteStream(stderr) : textStream(stderr),
     stdout: binary ? byteStream(stdout) : textStream(stdout),
-    wait: async () => 0,
+    wait: async () => exitCode,
   }
 }
 
