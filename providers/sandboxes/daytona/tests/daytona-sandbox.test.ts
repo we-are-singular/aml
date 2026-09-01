@@ -4,7 +4,7 @@ import os from "node:os"
 import path from "node:path"
 import { promisify } from "node:util"
 
-import type { Daytona, Sandbox as DaytonaSdkSandbox } from "@daytona/sdk"
+import { DaytonaFileNotFoundError, type Daytona, type Sandbox as DaytonaSdkSandbox } from "@daytona/sdk"
 import { afterEach, describe, expect, it } from "vitest"
 
 import type { SandboxAcquireRequest } from "@aml-jsx/sdk"
@@ -220,6 +220,24 @@ describe("daytonaSandbox()", () => {
     await lease.release()
   })
 
+  it("rejects directory and symbolic-link file destinations", async () => {
+    const workspace = await temporaryDirectory("aml-daytona-file-destination-")
+    await mkdir(path.join(workspace, "repository"), { recursive: true })
+    const fake = await FakeDaytona.create()
+    const lease = await daytonaSandbox({ client: fake.client, workspace }).acquire(request())
+    fake.directories.add("workspace/directory")
+    fake.files.set("workspace/link", Buffer.from("target"))
+    fake.fileModes.set("workspace/link", "lrwxrwxrwx")
+
+    await expect(lease.runtime.writeFile("repository/directory", new TextEncoder().encode("content"))).rejects.toThrow(
+      "file destination must be a regular file"
+    )
+    await expect(lease.runtime.writeFile("repository/link", new TextEncoder().encode("content"))).rejects.toThrow(
+      "file destination must be a regular file"
+    )
+    await lease.release()
+  })
+
   it("validates AML options without constructing a credentialed client", () => {
     expect(() => daytonaSandbox()).not.toThrow()
     expect(() =>
@@ -261,6 +279,7 @@ class FakeDaytona {
   readonly commands: RecordedCommand[] = []
   readonly createCalls: Array<{ options: unknown; params: unknown }> = []
   deleteCount = 0
+  readonly directories = new Set<string>(["/", "/tmp", "workspace"])
   downloadCount = 0
   readonly fileModes = new Map<string, string>()
   readonly files = new Map<string, Buffer>()
@@ -278,11 +297,17 @@ class FakeDaytona {
     this.#downloadArchive = path.join(directory, "download.tar")
     const sandbox = {
       fs: {
-        createFolder: async () => {},
+        createFolder: async (remotePath: string) => {
+          this.directories.add(remotePath)
+        },
         deleteFile: async (remotePath: string, recursive = false) => {
+          this.directories.delete(remotePath)
           this.files.delete(remotePath)
 
           if (recursive) {
+            for (const directoryPath of this.directories) {
+              if (directoryPath.startsWith(`${remotePath}/`)) this.directories.delete(directoryPath)
+            }
             for (const filePath of this.files.keys()) {
               if (filePath.startsWith(`${remotePath}/`)) this.files.delete(filePath)
             }
@@ -305,12 +330,19 @@ class FakeDaytona {
             return { isDir: false, mode: this.fileModes.get(remotePath) ?? "-rw-r--r--", size: content.byteLength }
           }
 
-          return { isDir: true, mode: "drwxr-xr-x", size: 0 }
+          if (this.directories.has(remotePath)) {
+            return { isDir: true, mode: "drwxr-xr-x", size: 0 }
+          }
+
+          throw new DaytonaFileNotFoundError(`missing remote path ${remotePath}`)
         },
         moveFiles: async (source: string, destination: string) => {
           const content = this.files.get(source)
           if (content === undefined) throw new Error(`missing remote file ${source}`)
-          this.files.set(destination, content)
+          const target = this.directories.has(destination)
+            ? path.posix.join(destination, path.posix.basename(source))
+            : destination
+          this.files.set(target, content)
           this.files.delete(source)
         },
         uploadFile: async (content: Buffer, remotePath: string) => {
