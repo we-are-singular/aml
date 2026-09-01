@@ -6,7 +6,7 @@ import { randomUUID } from "node:crypto"
 import {
   AbstractSandboxProvider,
   defineSandboxProvider,
-  HostSandboxFileSystem,
+  HostFilesystem,
   SandboxCommand,
   spawnLocalProcess,
   type ProvisionedSandbox,
@@ -169,13 +169,13 @@ function createRuntime(
   processes: Set<Readonly<SandboxProcess>>,
   maxOutputBytes: number
 ): Readonly<SandboxRuntime> {
-  const filesystem = new HostSandboxFileSystem(root)
+  const filesystem = new HostFilesystem(root)
   const runtime: SandboxRuntime = {
     access: request.access,
     async createFileStaging(options = {}) {
       options.signal?.throwIfAborted()
       const stagingRoot = await mkdtemp(path.join(os.tmpdir(), "aml-agent-"))
-      const stagingFilesystem = new HostSandboxFileSystem(stagingRoot)
+      const stagingFilesystem = new HostFilesystem(stagingRoot)
       let releasePromise: Promise<void> | undefined
 
       return Object.freeze({

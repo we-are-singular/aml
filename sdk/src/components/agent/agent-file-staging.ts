@@ -3,7 +3,7 @@ import os from "node:os"
 import path from "node:path"
 
 import { resolvePortablePath } from "../../core/resolve-portable-path.js"
-import { HostSandboxFileSystem } from "../sandbox/host-sandbox-filesystem.js"
+import { HostFilesystem } from "../file/host-filesystem.js"
 import type { SandboxSession } from "../sandbox/sandbox-provider.js"
 import type { SandboxFileStaging } from "../sandbox/sandbox-runtime.js"
 
@@ -11,6 +11,12 @@ interface AgentFileStagingResource {
   readonly root: string
   writeFile(path: string, content: Uint8Array): Promise<void>
   release(): Promise<void>
+}
+
+/** Concrete Agent-visible location of one staged file. */
+export interface AgentStagedFile {
+  readonly directory: string
+  readonly path: string
 }
 
 /**
@@ -32,8 +38,8 @@ export class AgentFileStaging {
     this.#signal = signal
   }
 
-  /** Writes bytes under one portable relative path and returns its Agent path. */
-  async writeFile(relativePath: string, content: Uint8Array): Promise<string> {
+  /** Writes bytes under one portable relative path and returns its concrete location. */
+  async writeFile(relativePath: string, content: Uint8Array): Promise<Readonly<AgentStagedFile>> {
     this.#signal.throwIfAborted()
 
     if (this.#releasePromise !== undefined) {
@@ -50,9 +56,15 @@ export class AgentFileStaging {
     await resource.writeFile(portablePath, Uint8Array.from(content))
     this.#signal.throwIfAborted()
 
-    return this.#sandbox === undefined
-      ? path.join(resource.root, ...portablePath.split("/"))
-      : path.posix.join(resource.root, portablePath)
+    const stagedPath =
+      this.#sandbox === undefined
+        ? path.join(resource.root, ...portablePath.split("/"))
+        : path.posix.join(resource.root, portablePath)
+
+    return Object.freeze({
+      directory: this.#sandbox === undefined ? path.dirname(stagedPath) : path.posix.dirname(stagedPath),
+      path: stagedPath,
+    })
   }
 
   /** Removes invocation-owned staging once, or does nothing when unused. */
@@ -85,7 +97,7 @@ export class AgentFileStaging {
 async function createHostStaging(signal: AbortSignal): Promise<Readonly<AgentFileStagingResource>> {
   signal.throwIfAborted()
   const root = await mkdtemp(path.join(os.tmpdir(), "aml-agent-"))
-  const filesystem = new HostSandboxFileSystem(root)
+  const filesystem = new HostFilesystem(root)
   let releasePromise: Promise<void> | undefined
 
   return Object.freeze({

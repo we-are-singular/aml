@@ -35,6 +35,7 @@ export type {
 } from "./core/aml-event-subscriber.js"
 export { FollowUp, type FollowUpProps } from "./components/follow-up/follow-up.js"
 export { File, type FileProps } from "./components/file/file.js"
+export { HostFilesystem } from "./components/file/host-filesystem.js"
 export { Block, type BlockProps } from "./components/block/block.js"
 export { Include, type IncludeProps } from "./components/include/include.js"
 export { type DeepReadonly, Loop, type LoopProps, type LoopRenderContext } from "./components/loop/loop.js"
@@ -71,7 +72,6 @@ export { AbstractSandboxProvider } from "./components/sandbox/abstract-sandbox-p
 export { defineSandboxProvider } from "./components/sandbox/define-sandbox-provider.js"
 export type { ProvisionedSandbox } from "./components/sandbox/provisioned-sandbox.js"
 export { SandboxCommand } from "./components/sandbox/sandbox-command.js"
-export { HostSandboxFileSystem } from "./components/sandbox/host-sandbox-filesystem.js"
 export {
   type SandboxAccess,
   type SandboxAcquireRequest,
