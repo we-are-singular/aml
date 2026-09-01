@@ -129,7 +129,7 @@ const provider = new DeterministicAgentProvider({
     }
 
     return {
-      text: "calculateInvoiceTotal returns an average instead of a total. Remove the division or rename the API to match. AML_REVIEW_COMPLETE",
+      text: "calculateInvoiceTotal divides the sum by the line count, so callers receive an average. Remove the division or rename the API to match. AML_REVIEW_COMPLETE",
     }
   },
 })
@@ -243,7 +243,7 @@ Those modes require the corresponding executable, credentials, and model configu
 The deterministic run ends with:
 
 ```text
-calculateInvoiceTotal returns an average instead of a total. Remove the division or rename the API to match. AML_REVIEW_COMPLETE
+calculateInvoiceTotal divides the sum by the line count, so callers receive an average. Remove the division or rename the API to match. AML_REVIEW_COMPLETE
 ```
 
 ## How it works
