@@ -74,7 +74,7 @@ Follow these semantics:
 - A nested Agent resolves before its parent Agent; its text becomes part of the parent prompt at the authored position.
 - Sibling JSX does not imply concurrency. Use `<Parallel>` for independent text-producing branches; use `Promise.all()` and `evaluate()` when component code needs individual or typed results.
 - Keep JavaScript control flow in TypeScript: use functions, arrays, conditions, loops, and promises rather than inventing markup primitives.
-- Use `<Block>` only for exact blank-line prompt structure; it does not add a lifecycle or control-flow scope.
+- Use `<Block>` for exact blank-line prompt structure and `tag="section-name"` when a model-facing section benefits from an explicit delimiter; it does not add message priority, a lifecycle, or a control-flow scope.
 - Inject providers through `<Agent provider={...}>` or runtime defaults so the tree remains provider-agnostic.
 - Scope `<Tool>`, `<Mcp>`, `<Skill>`, and `<FollowUp>` to their nearest Agent.
 - Use `<Sandbox>` for ephemeral execution policy and `<Workspace>` for durable files.

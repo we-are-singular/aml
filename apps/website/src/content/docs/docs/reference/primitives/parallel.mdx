@@ -23,10 +23,10 @@ function SecurityLane() {
 const result = await new AmlRuntime({ agentProvider }).evaluate(
   <Agent system="Synthesize only the supplied reviews.">
     <Parallel>
-      <Block>
+      <Block tag="correctness-review">
         <CorrectnessLane />
       </Block>
-      <Block>
+      <Block tag="security-review">
         <SecurityLane />
       </Block>
     </Parallel>
@@ -75,12 +75,12 @@ ordinary sequential semantics:
 </Parallel>
 ```
 
-Branch output is isolated while work is active. Completion order never changes the rendered result order, and AML does not insert separators between branch strings. Use [`<Block />`](/docs/reference/primitives/block/) when each branch should remain a distinct Markdown section:
+Branch output is isolated while work is active. Completion order never changes the rendered result order, and AML does not insert separators between branch strings. Use [`<Block />`](/docs/reference/primitives/block/) when each branch should remain a distinct section:
 
 ```tsx
 <Parallel>
   {reviewKinds.map(kind => (
-    <Block>
+    <Block tag={`${kind} review`}>
       ## {kind} review
       <Agent>Review {kind}.</Agent>
     </Block>

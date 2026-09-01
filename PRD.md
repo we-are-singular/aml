@@ -197,7 +197,7 @@ may implement it directly, but a provider that claims built-in coding-agent or S
 
 The 0.8 line deliberately replaces the legacy prompt-text meaning of `<Skill>` rather than preserving two concepts behind one name.
 
-- Add native `<Block>` for exact blank-line structure.
+- Add native `<Block>` for exact blank-line structure and optional kebab-cased model-facing sections.
 - Add `<Include src>` for application-owned prompt files and `<Include path>` for live active-filesystem reads, with bounded inline content and automatic staging of oversized local sources.
 - Extend `<File>` to copy local `src` text or resolved children into the nearest active filesystem, including guest-side Sandbox writes.
 - Redefine `<Skill src>` as a complete local Agent Skill package with canonical materialization, provider discovery mapping, progressive disclosure, and metadata fallback.

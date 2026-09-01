@@ -165,12 +165,12 @@ const [codexReview, openCodeReview] = await Promise.all([
     docsPath: "docs/reference/primitives/block/",
     signature: "<Block>…</Block>",
     description:
-      "Adds exact blank-line separation around authored content without creating a runtime, capability, or control-flow scope.",
-    note: "An empty <Block /> is one blank-line separator. Descriptors inside a non-empty Block retain their normal nearest owner.",
+      "Adds exact blank-line separation and optional kebab-cased XML-style section tags without creating a runtime, capability, or control-flow scope.",
+    note: "An empty <Block /> is one blank-line separator. A tag structures model-facing text but does not change instruction priority or descriptor ownership.",
     file: "block.tsx",
     code: `<Agent provider={OpenCode}>
   Review the implementation.
-  <Block>Report correctness before maintainability.</Block>
+  <Block tag="review-priority">Report correctness before maintainability.</Block>
   Cite concrete evidence.
 </Agent>`,
   },
