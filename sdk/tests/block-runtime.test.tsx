@@ -39,6 +39,31 @@ describe("<Block>", () => {
     ).resolves.toBe("before\n\nafter")
   })
 
+  it.each([
+    ["false", false],
+    ["true", true],
+    ["null", null],
+    ["undefined", undefined],
+  ] as const)("treats a direct %s child as an empty Block", async (_label, child) => {
+    await expect(
+      new AmlRuntime().evaluate(
+        <>
+          before<Block>{child}</Block>after
+        </>
+      )
+    ).resolves.toBe("before\n\nafter")
+  })
+
+  it("preserves zero as Block content", async () => {
+    await expect(
+      new AmlRuntime().evaluate(
+        <>
+          before<Block>{0}</Block>after
+        </>
+      )
+    ).resolves.toBe("before\n\n0\n\nafter")
+  })
+
   it("wraps content in a kebab-cased section tag", async () => {
     await expect(
       new AmlRuntime().evaluate(

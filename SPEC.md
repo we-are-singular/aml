@@ -359,9 +359,9 @@ AML does not define `<If>`, `<Else>`, `<Map>`, or `<Sequence>`. Those would dupl
 </Agent>
 ```
 
-Without `tag`, a Block with children contributes exactly `"\n\n"`, its ordinarily resolved children, then exactly `"\n\n"`. Without children, `<Block />` contributes exactly `"\n\n"` as a separator. With `tag`, Block additionally contributes `<tag>\n` before its children and `\n</tag>` after them, inside the same outer blank lines.
+Without `tag`, a Block with children contributes exactly `"\n\n"`, its ordinarily resolved children, then exactly `"\n\n"`. Without children, or with a direct AML-empty boolean, `null`, or `undefined` child, Block contributes exactly `"\n\n"` as a separator. With `tag`, Block additionally contributes `<tag>\n` before its children and `\n</tag>` after them, inside the same outer blank lines.
 
-AML normalizes `tag` to lowercase ASCII kebab-case. Camel-case boundaries and runs of non-ASCII letters, punctuation, whitespace, or underscores become one hyphen; leading and trailing hyphens are removed. `<` and `/` are neutralized before normalization so authored tag text cannot inject another XML-style tag. If normalization leaves no letters or digits, Block retains its untagged behavior.
+AML normalizes `tag` to lowercase ASCII kebab-case. Camel-case boundaries and runs of non-ASCII letters, punctuation, whitespace, or underscores become one hyphen; leading and trailing hyphens are removed. This punctuation normalization includes `<` and `/`, so authored tag text cannot inject another XML-style tag. If normalization leaves no letters or digits, Block retains its untagged behavior.
 
 Named Blocks are prompt structure only. They do not change message priority, protect or escape their children, or create a security boundary. Block does not trim, reorder, repeat, branch, catch errors, or create a new descriptor scope. Child descriptors remain owned by the same nearest Agent or resource boundary they would have without Block.
 
