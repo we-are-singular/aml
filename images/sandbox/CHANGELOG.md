@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.5.0
+
+Sandbox release pipeline polish.
+
+- **Releases now publish their own overview and changelog.** Each release pushes `DOCKERHUB.md` as the Docker Hub repository overview through Docker Hub's metadata API, using a read/write personal access token from the caller's normal Docker configuration that is kept separate from the temporary browser login used for image publication. The token is verified before building and the pushed overview is confirmed afterward; `npm run sync:description --prefix images/sandbox` resynchronizes just the overview. The release-it `after:bump` hook also drafts and writes the sandbox changelog entry straight into `images/sandbox/CHANGELOG.md`.
+- **Keyless signing is gated and safely awaited.** Keyless Cosign signing now waits for the maintainer to press Enter before each signature, so device-flow links are not opened until you are ready. Publication pauses once before the signing batch and Cosign's normal browser flow is restored so logins return through the local callback, with a Windows URL-handler shim under WSL to avoid File Explorer windows.
+- **Signing can resume without rebuilding.** If signing fails after every image and smoke completed, `npm run release:sandbox -- --recover-signing` resumes from the already-pushed digests without rebuilding or rerunning smoke, and accepts the matching release tag anywhere in current `main` history.
+
+### Commits
+
+- `feat(sandbox): sync Docker Hub overview` (02b39dc)
+- `feat(sandbox): automate release changelogs` (3fb9674)
+- `fix(sandbox): restore browser signing flow` (5619a72)
+- `fix(sandbox): await signing confirmation safely` (cbb51ee)
+- `fix(sandbox): gate keyless image signing` (41d9f8a)
+
 ## 0.4.1
 
 - Publish `full`, `codex`, `copilot`, `glm`, `opencode`, and `pi` images from one Dockerfile. Versioned and moving tags keep the existing unqualified image as the full variant while allowing deployments to select a smaller single-Agent runtime.
