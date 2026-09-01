@@ -1,13 +1,13 @@
 import { EvaluationError } from "../../core/evaluation-error.js"
 import { resolvePortablePath } from "../../core/resolve-portable-path.js"
-import { HostSandboxFileSystem } from "../sandbox/host-sandbox-filesystem.js"
+import { HostFilesystem } from "./host-filesystem.js"
 import type { SandboxSession } from "../sandbox/sandbox-provider.js"
 import type { SandboxFileStat } from "../sandbox/sandbox-runtime.js"
 import type { WorkspaceMaterializationReference } from "../workspace/workspace-provider.js"
 
 /** Live filesystem selected by the nearest lexical Sandbox or Workspace. */
 export class ActiveFilesystem {
-  readonly #host: HostSandboxFileSystem | undefined
+  readonly #host: HostFilesystem | undefined
   readonly #sandbox: Readonly<SandboxSession> | undefined
 
   private constructor(
@@ -15,8 +15,7 @@ export class ActiveFilesystem {
     sandbox: Readonly<SandboxSession> | undefined
   ) {
     this.#sandbox = sandbox
-    this.#host =
-      sandbox === undefined && workspace !== undefined ? new HostSandboxFileSystem(workspace.directory) : undefined
+    this.#host = sandbox === undefined && workspace !== undefined ? new HostFilesystem(workspace.directory) : undefined
   }
 
   /** Selects Sandbox guest first, then Workspace materialization. */
@@ -73,7 +72,7 @@ export class ActiveFilesystem {
     await this.#sandbox.lease.runtime.writeFile(path, content, { signal })
   }
 
-  #requiredHost(): HostSandboxFileSystem {
+  #requiredHost(): HostFilesystem {
     if (this.#host === undefined) {
       throw new Error("Active host filesystem is unavailable")
     }

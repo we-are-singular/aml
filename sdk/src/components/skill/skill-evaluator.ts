@@ -4,7 +4,7 @@ import path from "node:path"
 import { parseDocument } from "yaml"
 
 import { EvaluationError } from "../../core/evaluation-error.js"
-import type { AgentFileStaging } from "../agent/agent-file-staging.js"
+import type { AgentFileStaging, AgentStagedFile } from "../agent/agent-file-staging.js"
 import type { AgentSkill } from "./agent-skill.js"
 import type { SkillProps } from "./skill.js"
 
@@ -60,16 +60,16 @@ export class SkillEvaluator {
         )
       }
 
-      let stagedSkillFile: string | undefined
+      let stagedSkillFile: Readonly<AgentStagedFile> | undefined
 
       for (const file of files) {
-        const stagedPath = await staging.writeFile(
+        const stagedFile = await staging.writeFile(
           `.agents/skills/${frontmatter.name}/${file.relativePath}`,
           file.content
         )
 
         if (file.relativePath === "SKILL.md") {
-          stagedSkillFile = stagedPath
+          stagedSkillFile = stagedFile
         }
       }
 
@@ -79,9 +79,9 @@ export class SkillEvaluator {
 
       const skill: AgentSkill = Object.freeze({
         description: frontmatter.description,
-        directory: concreteDirectory(stagedSkillFile),
+        directory: stagedSkillFile.directory,
         name: frontmatter.name,
-        skillFile: stagedSkillFile,
+        skillFile: stagedSkillFile.path,
       })
 
       return Object.freeze({ files: files.length, skill })
@@ -217,8 +217,4 @@ function parseSkillFrontmatter(content: Uint8Array): Readonly<SkillFrontmatter> 
   }
 
   return Object.freeze({ description, name })
-}
-
-function concreteDirectory(skillFile: string): string {
-  return skillFile.includes("\\") ? path.dirname(skillFile) : path.posix.dirname(skillFile)
 }

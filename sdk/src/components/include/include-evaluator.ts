@@ -116,11 +116,11 @@ export class IncludeEvaluator {
         throw new EvaluationError("an oversized <Include src> requires a containing <Agent>")
       }
 
-      const stagedPath = await staging.writeFile(includeStagingPath(sourcePath), bytes)
+      const stagedFile = await staging.writeFile(includeStagingPath(sourcePath), bytes)
       return result(
         input,
-        stagedPath,
-        readInstruction(stagedPath, bytes.byteLength, input.maxBytes),
+        stagedFile.path,
+        readInstruction(stagedFile.path, bytes.byteLength, input.maxBytes),
         false,
         bytes.byteLength
       )

@@ -3,21 +3,21 @@ import { lstat, mkdir, readFile, realpath, rename, rm, writeFile } from "node:fs
 import path from "node:path"
 
 import { resolvePortablePath } from "../../core/resolve-portable-path.js"
-import type { SandboxFileOptions, SandboxFileStat } from "./sandbox-runtime.js"
+import type { SandboxFileOptions, SandboxFileStat } from "../sandbox/sandbox-runtime.js"
 
 /**
  * Safe complete-file operations beneath one trusted host directory.
  *
- * Local and bind-mounted Sandbox providers use this owner so component and
- * provider code share the same traversal, symlink, and atomic-write behavior.
+ * Workspace materializations, Agent staging, and host-backed Sandbox providers
+ * share this owner so traversal, symlink, and atomic-write behavior stay consistent.
  */
-export class HostSandboxFileSystem {
+export class HostFilesystem {
   readonly #root: string
 
   /** Captures the physical boundary without performing filesystem I/O. */
   constructor(root: string) {
     if (typeof root !== "string" || root.length === 0) {
-      throw new TypeError("Host Sandbox filesystem root must be a non-empty string")
+      throw new TypeError("Host filesystem root must be a non-empty string")
     }
 
     this.#root = path.resolve(root)
@@ -35,7 +35,7 @@ export class HostSandboxFileSystem {
   /** Returns regular-file or directory metadata without following symlinks. */
   async stat(portablePath: string, options: Readonly<SandboxFileOptions> = {}): Promise<Readonly<SandboxFileStat>> {
     options.signal?.throwIfAborted()
-    const normalized = resolvePortablePath(".", portablePath, "Sandbox file path")
+    const normalized = resolvePortablePath(".", portablePath, "Host filesystem path")
     const physicalRoot = await realpath(this.#root)
 
     if (normalized === ".") {
@@ -47,7 +47,7 @@ export class HostSandboxFileSystem {
     options.signal?.throwIfAborted()
 
     if (metadata.isSymbolicLink()) {
-      throw new TypeError("Sandbox file path must not resolve through a symbolic link")
+      throw new TypeError("Host filesystem path must not resolve through a symbolic link")
     }
 
     if (metadata.isFile()) {
@@ -58,7 +58,7 @@ export class HostSandboxFileSystem {
       return Object.freeze({ kind: "directory" as const, size: 0 })
     }
 
-    throw new TypeError("Sandbox file path must identify a regular file or directory")
+    throw new TypeError("Host filesystem path must identify a regular file or directory")
   }
 
   /** Creates safe parents and atomically replaces one regular file. */
@@ -70,13 +70,13 @@ export class HostSandboxFileSystem {
     options.signal?.throwIfAborted()
 
     if (!(content instanceof Uint8Array)) {
-      throw new TypeError("Sandbox file content must be a Uint8Array")
+      throw new TypeError("Host filesystem content must be a Uint8Array")
     }
 
-    const normalized = resolvePortablePath(".", portablePath, "Sandbox file path")
+    const normalized = resolvePortablePath(".", portablePath, "Host filesystem path")
 
     if (normalized === ".") {
-      throw new TypeError("Sandbox file path must identify a file")
+      throw new TypeError("Host filesystem path must identify a file")
     }
 
     const physicalRoot = await realpath(this.#root)
@@ -100,10 +100,10 @@ export class HostSandboxFileSystem {
   }
 
   async #resolveExisting(portablePath: string, expected: "file"): Promise<string> {
-    const normalized = resolvePortablePath(".", portablePath, "Sandbox file path")
+    const normalized = resolvePortablePath(".", portablePath, "Host filesystem path")
 
     if (normalized === ".") {
-      throw new TypeError(`Sandbox file path must identify a regular ${expected}`)
+      throw new TypeError(`Host filesystem path must identify a regular ${expected}`)
     }
 
     const physicalRoot = await realpath(this.#root)
@@ -111,7 +111,7 @@ export class HostSandboxFileSystem {
     const metadata = await lstat(target)
 
     if (metadata.isSymbolicLink() || !metadata.isFile()) {
-      throw new TypeError(`Sandbox file path must identify a regular ${expected}`)
+      throw new TypeError(`Host filesystem path must identify a regular ${expected}`)
     }
 
     return target
@@ -135,7 +135,7 @@ async function ensureSafeParent(physicalRoot: string, portableParent: string): P
       const metadata = await lstat(current)
 
       if (metadata.isSymbolicLink() || !metadata.isDirectory()) {
-        throw new TypeError(`Sandbox file parent "${segment}" is not a directory`)
+        throw new TypeError(`Host filesystem parent "${segment}" is not a directory`)
       }
     } catch (cause) {
       if (!hasErrorCode(cause, "ENOENT")) {
@@ -155,7 +155,7 @@ async function rejectUnsafeDestination(destination: string): Promise<void> {
     const metadata = await lstat(destination)
 
     if (metadata.isSymbolicLink() || !metadata.isFile()) {
-      throw new TypeError("Sandbox file destination must be a regular file")
+      throw new TypeError("Host filesystem destination must be a regular file")
     }
   } catch (cause) {
     if (!hasErrorCode(cause, "ENOENT")) {
@@ -168,7 +168,7 @@ function assertWithin(root: string, candidate: string): void {
   const relative = path.relative(root, candidate)
 
   if (path.isAbsolute(relative) || relative === ".." || relative.startsWith(`..${path.sep}`)) {
-    throw new TypeError("Sandbox file path resolves outside its root")
+    throw new TypeError("Host filesystem path resolves outside its root")
   }
 }
 
