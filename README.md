@@ -132,7 +132,7 @@ The command installs the skill into the current project. Add `-g` to make it ava
 | ------------- | -------------------------------------------------------------------------------------------------------------------- |
 | `<Agent>`     | Runs one Agent session and optionally validates its result with an Agent-owned `schema`.                             |
 | `<Parallel>`  | Evaluates independent AML branches concurrently, then contributes their text in authored order.                      |
-| `<Block>`     | Adds exact blank-line separation around authored content without creating a new runtime scope.                       |
+| `<Block>`     | Adds exact blank-line separation and optional kebab-cased section tags without creating a new runtime scope.         |
 | `<Include>`   | Reads an application file or active-filesystem path into a prompt, with bounded inline content.                      |
 | `<System>`    | Adds resolved content to the owning Agent's system prompt. Multiple System blocks are joined in authored order.      |
 | `<Tool>`      | Grants the owning Agent a JavaScript Tool created with `defineTool()`.                                               |
@@ -153,7 +153,7 @@ Prompt files and Agent Skills are deliberately separate:
   <Sandbox provider={sandbox}>
     <Agent>
       <Skill src="./skills/code-review" />
-      <Block>
+      <Block tag="review-brief">
         <Include path="brief.md" maxBytes={4_000} />
       </Block>
       Complete the review.
@@ -259,7 +259,7 @@ Every cell launches its Agent through the same shared ACP engine and `SandboxRun
 
 Docker, Daytona, and Modal smoke cells use the full GHCR `dev` image. Set `AML_SMOKE_SANDBOX_IMAGE` to run every image-backed cell against one explicit reference, such as an immutable version or digest.
 
-`<System>`, `<Include>`, `<Skill>`, `<FollowUp>`, Context, Agent staging, and tree evaluation are runtime-owned. `<Block>` is a transparent authoring component with exact separator output. JavaScript Tools use one AML-owned invocation MCP bridge. Structured output uses one AML-owned submission Tool on the final authored turn and one shared, schema-bearing repair prompt if that turn omits the Tool call. Agent permissions default to read-write filesystem, shell, and network access; the active Sandbox remains the security boundary for model-controlled operations.
+`<System>`, `<Include>`, `<Skill>`, `<FollowUp>`, Context, Agent staging, and tree evaluation are runtime-owned. `<Block>` is a transparent authoring component with exact separator output and optional XML-style section tags. JavaScript Tools use one AML-owned invocation MCP bridge. Structured output uses one AML-owned submission Tool on the final authored turn and one shared, schema-bearing repair prompt if that turn omits the Tool call. Agent permissions default to read-write filesystem, shell, and network access; the active Sandbox remains the security boundary for model-controlled operations.
 
 Provider factories retain typed vendor configuration and process environment inputs. Credentials normally remain in the selected host or Sandbox environment; an application may also pass explicit invocation environment variables without changing the AML tree.
 

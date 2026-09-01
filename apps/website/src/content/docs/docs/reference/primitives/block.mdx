@@ -1,28 +1,47 @@
 ---
 title: "<Block />"
-description: Add exact blank-line separation around authored AML content without creating a runtime scope.
+description: Add exact blank-line separation or a named model-facing section without creating a runtime scope.
 ---
 
-`<Block />` is a transparent authoring component for deliberate Markdown separation. With children it contributes exactly two newline characters before and after them; without children it contributes one `"\n\n"` separator.
+`<Block />` is a transparent authoring component for deliberate prompt separation. With children it contributes exactly two newline characters before and after them; without children it contributes one `"\n\n"` separator. Add `tag` when the content should also become an explicit XML-style section for the model.
 
 ```tsx
 import { Agent, Block } from "@aml-jsx/sdk"
 
-;<Agent>
-  Review the implementation.
-  <Block>Report correctness findings before maintainability suggestions.</Block>
-  Cite concrete evidence for every finding.
-</Agent>
+export default (
+  <Agent>
+    Review the implementation.
+    <Block tag="Review Priority">Report correctness findings before maintainability suggestions.</Block>
+    Cite concrete evidence for every finding.
+  </Agent>
+)
+```
+
+The Block above contributes actual newline characters and normalizes its section name to lowercase kebab-case:
+
+```text
+Review the implementation.
+
+<review-priority>
+Report correctness findings before maintainability suggestions.
+</review-priority>
+
+Cite concrete evidence for every finding.
 ```
 
 ## Props
 
-| Prop       | Type            | Default | Meaning                                                      |
-| ---------- | --------------- | ------- | ------------------------------------------------------------ |
-| `children` | `AmlRenderable` | empty   | Content placed between the leading and trailing blank lines. |
+| Prop       | Type            | Default  | Meaning                                                                                    |
+| ---------- | --------------- | -------- | ------------------------------------------------------------------------------------------ |
+| `children` | `AmlRenderable` | empty    | Content placed between the leading and trailing blank lines.                               |
+| `tag`      | `string`        | untagged | Optional section name normalized to lowercase ASCII kebab-case and wrapped around content. |
+
+`tag="Personal Data"`, `tag="personal_data"`, and `tag="personal-data"` all render `<personal-data>`. Camel-case boundaries and runs of punctuation or whitespace become one hyphen. `<` and `/` are neutralized before normalization; if no letters or digits remain, the Block stays untagged. AML does not trim or escape the children.
 
 ## Composition
 
 `<Block />` creates no evaluator primitive, lifecycle, capability scope, or control-flow boundary. Descriptors inside it retain their normal nearest owner, so a [`<Tool />`](/docs/reference/primitives/tool/) or [`<Skill />`](/docs/reference/primitives/skill/) inside a Block still belongs to the containing [`<Agent />`](/docs/reference/primitives/agent/).
 
-Use a Fragment when grouping alone is enough. Use `<Block />` when the exact blank-line serialization is part of the authored prompt. Keep conditions, branching, ordinary iteration, and sequencing policy in TypeScript rather than adding control-flow meaning to this component.
+Named Blocks are visible prompt delimiters, not message roles or security boundaries. A tag can help a model distinguish instructions, context, evidence, or output contracts, but it does not give that content higher priority or protect untrusted children.
+
+Use a Fragment when grouping alone is enough. Use `<Block />` when the exact blank-line serialization or named section is part of the authored prompt. Keep conditions, branching, ordinary iteration, and sequencing policy in TypeScript rather than adding control-flow meaning to this component.

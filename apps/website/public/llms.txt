@@ -135,7 +135,7 @@ Process telemetry uses an opaque `execution.id` for local and remote providers. 
 
 - `<Agent>` runs one provider-owned session after its prompt, system content, capabilities, and child Agent results resolve.
 - `<System>` contributes ordered system instructions to the nearest Agent.
-- `<Block>` adds exact blank-line separation without creating a runtime scope.
+- `<Block>` adds exact blank-line separation and optional kebab-cased XML-style section tags without creating a runtime scope or instruction priority.
 - `<Tool>` grants a provider-native Tool or a typed JavaScript Tool created with `defineTool()`.
 - `<Mcp>` grants a named or explicitly configured MCP server.
 - `<Skill>` stages a complete local Agent Skills package for native discovery or metadata-only fallback without inlining its body.

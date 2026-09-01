@@ -110,7 +110,7 @@ AML has two conceptual phases:
 Not every resolved child becomes prompt text:
 
 - text becomes message content
-- `<Block>` contributes deliberate blank-line separators around authored content
+- `<Block>` contributes deliberate blank-line separators and optional named sections around authored content
 - `<Include>` reads prompt content from an application file or the active filesystem
 - `<System>` becomes an Agent system-prompt fragment
 - `<Skill>` becomes an Agent-visible Skill package and discovery descriptor
@@ -224,7 +224,7 @@ AML cannot automatically roll back arbitrary effects already performed by an Age
 | `AmlRuntime`                       | Own one complete evaluation                                           | Final string               |
 | `<Agent>`                          | Execute one Agent boundary                                            | Final text                 |
 | `<Parallel>`                       | Evaluate independent AML branches concurrently                        | Ordered branch text        |
-| `<Block>`                          | Add explicit blank-line separation around authored content            | Text and child descriptors |
+| `<Block>`                          | Add explicit blank-line separation or a named model-facing section    | Text and child descriptors |
 | `<Include>`                        | Read a file inline or add an Agent-visible read reference             | Text                       |
 | `<System>`                         | Contribute resolved text to an Agent's system prompt                  | System descriptor          |
 | `defineAgentProvider()`            | Define an Agent harness adapter                                       | `AgentProvider`            |
@@ -347,19 +347,23 @@ AML does not define `<If>`, `<Else>`, `<Map>`, or `<Sequence>`. Those would dupl
 
 ### 4.3 `<Block>` authoring structure
 
-`<Block>` standardizes deliberate blank-line separation without creating another execution or control-flow boundary:
+`<Block>` standardizes deliberate blank-line separation and optional model-facing sections without creating another execution or control-flow boundary:
 
 ```tsx
 <Agent>
   Review the implementation.
-  <Block>
+  <Block tag="output-contract">
     <Include src="./prompts/output-contract.md" />
   </Block>
   Return only the final review.
 </Agent>
 ```
 
-With children, Block contributes exactly `"\n\n"`, its ordinarily resolved children, then exactly `"\n\n"`. Without children, `<Block />` contributes exactly `"\n\n"` as a separator. Block does not trim, reorder, repeat, branch, catch errors, or create a new descriptor scope. Child descriptors remain owned by the same nearest Agent or resource boundary they would have without Block.
+Without `tag`, a Block with children contributes exactly `"\n\n"`, its ordinarily resolved children, then exactly `"\n\n"`. Without children, `<Block />` contributes exactly `"\n\n"` as a separator. With `tag`, Block additionally contributes `<tag>\n` before its children and `\n</tag>` after them, inside the same outer blank lines.
+
+AML normalizes `tag` to lowercase ASCII kebab-case. Camel-case boundaries and runs of non-ASCII letters, punctuation, whitespace, or underscores become one hyphen; leading and trailing hyphens are removed. `<` and `/` are neutralized before normalization so authored tag text cannot inject another XML-style tag. If normalization leaves no letters or digits, Block retains its untagged behavior.
+
+Named Blocks are prompt structure only. They do not change message priority, protect or escape their children, or create a security boundary. Block does not trim, reorder, repeat, branch, catch errors, or create a new descriptor scope. Child descriptors remain owned by the same nearest Agent or resource boundary they would have without Block.
 
 ## 5. `<Agent>` sessions
 

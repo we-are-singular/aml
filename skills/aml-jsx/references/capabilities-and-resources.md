@@ -80,7 +80,7 @@ import { Agent, Block, File, Include, Sandbox, Skill, Workspace } from "@aml-jsx
   <Sandbox provider={Docker}>
     <Agent provider={OpenCode}>
       <Skill src="./skills/code-review" />
-      <Block>
+      <Block tag="review-brief">
         <Include path="brief.md" maxBytes={4_000} />
       </Block>
       Complete the review.
