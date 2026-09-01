@@ -124,9 +124,7 @@ semantics, provider guidance, and testing conventions:
 npx skills add we-are-singular/aml --skill aml-jsx
 ```
 
-The command installs the skill into the current project. Add `-g` to make it available globally. The skill is stored
-in [`skills/aml-jsx`](./skills/aml-jsx) and should be used whenever an agent builds, explains, tests, or debugs
-workflows with `@aml-jsx/sdk`.
+The command installs the skill into the current project. Add `-g` to make it available globally. The skill is stored in [`skills/aml-jsx`](./skills/aml-jsx) and should be used whenever an agent builds, explains, tests, or debugs workflows with `@aml-jsx/sdk`. This is an explicit developer installation step, not runtime registry access by AML's `<Skill>` component.
 
 ## Primitives
 
@@ -134,16 +132,37 @@ workflows with `@aml-jsx/sdk`.
 | ------------- | -------------------------------------------------------------------------------------------------------------------- |
 | `<Agent>`     | Runs one Agent session and optionally validates its result with an Agent-owned `schema`.                             |
 | `<Parallel>`  | Evaluates independent AML branches concurrently, then contributes their text in authored order.                      |
+| `<Block>`     | Adds exact blank-line separation around authored content without creating a new runtime scope.                       |
+| `<Include>`   | Reads an application file or active-filesystem path into a prompt, with bounded inline content.                      |
 | `<System>`    | Adds resolved content to the owning Agent's system prompt. Multiple System blocks are joined in authored order.      |
 | `<Tool>`      | Grants the owning Agent a JavaScript Tool created with `defineTool()`.                                               |
-| `<Skill>`     | Adds reusable inline or local-file instructions to the owning Agent.                                                 |
-| `<File>`      | Writes resolved text, including Agent output, beneath the active Workspace before later siblings run.                |
+| `<Skill>`     | Stages and registers a complete local Agent Skill package for one Agent session.                                     |
+| `<File>`      | Writes a local source or resolved text through the nearest Workspace or Sandbox filesystem.                          |
 | `<Mcp>`       | Grants the owning Agent a provider-native MCP server by name or an explicit server created with `defineMcpServer()`. |
 | `<FollowUp>`  | Adds a later turn to the same Agent session. FollowUps are flat, ordered, and resolved before the session starts.    |
 | `<Sandbox>`   | Acquires an ephemeral execution environment and scopes a narrowed filesystem policy to descendant Agents.            |
 | `<Script>`    | Executes resolved source or one literal command on the host or in the active Sandbox and returns standard output.    |
 | `<Workspace>` | Materializes durable files that can survive and be shared across disposable Sandbox leases.                          |
 | `<>...</>`    | Groups AML values without adding prompt text or another runtime boundary.                                            |
+
+Prompt files and Agent Skills are deliberately separate:
+
+```tsx
+<Workspace provider={workspace}>
+  <File path="brief.md">Review the authentication boundary.</File>
+  <Sandbox provider={sandbox}>
+    <Agent>
+      <Skill src="./skills/code-review" />
+      <Block>
+        <Include path="brief.md" maxBytes={4_000} />
+      </Block>
+      Complete the review.
+    </Agent>
+  </Sandbox>
+</Workspace>
+```
+
+`<Include src>` reads an application-owned file live from the runtime cwd. `<Include path>` reads the live nearest filesystem. Oversized local sources are staged automatically at an Agent-visible path. `<Skill src>` expects a local package directory containing `SKILL.md`; AML materializes the full package under the `.agents/skills/<name>/` suffix of a writable Agent staging root, uses native provider discovery when available, and otherwise emits only discovery metadata containing the concrete path. AML does not fetch or install remote Skill packages.
 
 ## Core APIs
 
@@ -236,11 +255,11 @@ The credentialed smoke runner exercises the complete built-in Agent × Sandbox m
 | Daytona         | Yes   | Yes     | Yes | Yes      | Yes |
 | Modal           | Yes   | Yes     | Yes | Yes      | Yes |
 
-Every cell launches its Agent through the same shared ACP engine and `SandboxRuntime.spawn()`. These proofs use read-write Workspaces where a provider cannot enforce read-only access. The selected host, image, or snapshot must contain the required executable. Sandbox providers do not install Agents implicitly.
+Every cell launches its Agent through the same shared ACP engine and `SandboxRuntime.spawn()`. Sandbox runtimes also expose portable stat, complete-file read, and atomic replacement write operations used by File, Include, and Agent staging. These proofs use read-write Workspaces where a provider cannot enforce read-only access. The selected host, image, or snapshot must contain the required executable. Sandbox providers do not install Agents implicitly.
 
 Docker, Daytona, and Modal smoke cells use the full GHCR `dev` image. Set `AML_SMOKE_SANDBOX_IMAGE` to run every image-backed cell against one explicit reference, such as an immutable version or digest.
 
-`<System>`, `<Skill>`, `<FollowUp>`, Context, and tree evaluation are runtime-owned. JavaScript Tools use one AML-owned invocation MCP bridge. Structured output uses one AML-owned submission Tool on the final authored turn and one shared, schema-bearing repair prompt if that turn omits the Tool call. Agent permissions default to read-write filesystem, shell, and network access; the active Sandbox remains the security boundary for model-controlled operations.
+`<System>`, `<Include>`, `<Skill>`, `<FollowUp>`, Context, Agent staging, and tree evaluation are runtime-owned. `<Block>` is a transparent authoring component with exact separator output. JavaScript Tools use one AML-owned invocation MCP bridge. Structured output uses one AML-owned submission Tool on the final authored turn and one shared, schema-bearing repair prompt if that turn omits the Tool call. Agent permissions default to read-write filesystem, shell, and network access; the active Sandbox remains the security boundary for model-controlled operations.
 
 Provider factories retain typed vendor configuration and process environment inputs. Credentials normally remain in the selected host or Sandbox environment; an application may also pass explicit invocation environment variables without changing the AML tree.
 
@@ -301,7 +320,10 @@ const status = await new AmlRuntime().evaluate(<Script cwd="apps/cli" command="g
 
     <Script shell="node">{`import { writeFileSync } from "node:fs"; writeFileSync("ready.txt", "yes")`}</Script>
 
-    <Agent provider={builder}>Read task.md, implement it, and write report.md.</Agent>
+    <Agent provider={builder}>
+      <Include path="task.md" maxBytes={8_000} />
+      Implement the task and write report.md.
+    </Agent>
   </Sandbox>
 </Workspace>
 ```
@@ -328,7 +350,7 @@ Every example is one self-contained AML component. Run one with `npm run example
 | [`context`](./examples/src/core/context.tsx)                             | Injects a session repository and captures it inside a JavaScript Tool without adding it to the prompt. |
 | [`programmatic-tool`](./examples/src/core/programmatic-tool.tsx)         | Calls a validated Tool from application component code without granting it to a model.                 |
 | [`follow-up`](./examples/src/core/follow-up.tsx)                         | Authors several turns inside one Agent session.                                                        |
-| [`skill`](./examples/src/capabilities/skill.tsx)                         | Adds reusable inline instructions to an Agent.                                                         |
+| [`skill`](./examples/src/capabilities/skill.tsx)                         | Stages a complete local Agent Skill package for progressive discovery.                                 |
 | [`mcp`](./examples/src/capabilities/mcp.tsx)                             | Grants one Agent an MCP server while proving sibling capability isolation.                             |
 | [`sandbox`](./examples/src/resources/sandbox.tsx)                        | Narrows nested Sandbox access while sharing one deterministic outer lease.                             |
 | [`script`](./examples/src/resources/script.tsx)                          | Selects a Script working directory relative to the active Sandbox root.                                |
@@ -410,7 +432,7 @@ docker compose down
 
 Matrix smoke files use a dedicated Vitest configuration and stay outside default unit tests. Omitting both matrix filters runs every registered Agent against every registered Sandbox. npm requires the `--` separator before smoke-runner options.
 
-The manual kitchen-sink smoke defaults to `--agent opencode --sandbox modal --workspace r2 --mcp context7`. It accepts any registered Agent or Sandbox, plus `local | r2` Workspaces and `context7 | none` MCP selection. The workflow exercises all twelve stable primitives, then reacquires the saved Workspace and verifies the persisted files. Run `npm run smoke:kitchen-sink -- --help` for the current selections. Context7 supports anonymous testing; `CONTEXT7_API_KEY` raises its rate limit when configured.
+The manual kitchen-sink smoke defaults to `--agent opencode --sandbox modal --workspace r2 --mcp context7`. It accepts any registered Agent or Sandbox, plus `local | r2` Workspaces and `context7 | none` MCP selection. The workflow exercises all fourteen stable primitives, then reacquires the saved Workspace and verifies the persisted files. Run `npm run smoke:kitchen-sink -- --help` for the current selections. Context7 supports anonymous testing; `CONTEXT7_API_KEY` raises its rate limit when configured.
 
 The smoke runners load the repository's untracked `.env`. Codex uses `OPENAI_API_KEY` or `AML_CODEX_API_KEY` and defaults to `gpt-5.6-luna` with low reasoning effort. OpenCode and Pi use `OPENCODE_API_KEY` and default to `opencode-go/deepseek-v4-flash`. `AML_CODEX_MODEL`, `AML_OPENCODE_MODEL`, and `AML_PI_MODEL` may override those models. Copilot uses `COPILOT_GITHUB_TOKEN`, `GH_TOKEN`, or `GITHUB_TOKEN` in that order and defaults to `gpt-5-mini`; `AML_COPILOT_GITHUB_TOKEN` and `AML_COPILOT_MODEL` are optional smoke-only overrides. GLM uses `Z_AI_API_KEY` or `AML_ZAI_API_KEY` and defaults to `glm-5.3`; `AML_GLM_MODEL` may override its model. Daytona uses `DAYTONA_API_KEY`. Modal uses the repository-local `MODAL_API_KEY` and `MODAL_API_SECRET` names as `tokenId` and `tokenSecret`; Modal's own ambient credential names remain `MODAL_TOKEN_ID` and `MODAL_TOKEN_SECRET`. The R2 Workspace accepts `R2_BUCKET`, `R2_ENDPOINT`, `R2_ACCESS_KEY_ID`, and `R2_SECRET_ACCESS_KEY`, with the existing `AML_S3_*` aliases. These environment names configure only the repository's smoke CLI. Applications configure providers through their native factory options and runtime environment.
 

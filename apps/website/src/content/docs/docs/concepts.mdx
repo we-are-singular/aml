@@ -18,7 +18,7 @@ Most AML workflows are easier to reason about when you separate three responsibi
 | [`<Sandbox />`](/docs/reference/primitives/sandbox/)     | Processes, working directory, filesystem permissions, and cleanup      | [Local, Docker, Daytona, and Modal](/docs/providers/sandboxes/)         |
 | [`<Workspace />`](/docs/reference/primitives/workspace/) | Durable files, revisions, locks, materialization, and publication      | [Local directory, filesystem, and S3](/docs/providers/workspaces/)      |
 
-`<Agent />` may run without an explicit `<Sandbox />` according to its provider. An unsandboxed `<Script />` uses trusted host execution. `<File />` and provider features that require a resource must still have the appropriate active boundary.
+`<Agent />` may run without an explicit `<Sandbox />` according to its provider. An unsandboxed `<Script />` uses trusted host execution. `<File />`, `<Include path>`, and provider features that require a resource must still have the appropriate active filesystem boundary.
 
 ### Choose the smallest boundary
 
@@ -57,8 +57,10 @@ Here TypeScript owns selection, the empty case, and concurrency. AML owns each p
 | `<Agent />`                         | The selected Agent provider and its ACP/native process; a compatible active Sandbox supplies its cwd and process runtime | Owns model turns and returns an `AgentResponse`. Agent-native permissions cannot widen the Sandbox.                                                                                         |
 | Callable JavaScript Tool            | AML application process                                                                                                  | An active component may call the value returned by [`defineTool()`](/docs/reference/primitives/tool/); `<Tool use>` separately grants it to a model. It is not code moved into the Sandbox. |
 | `<Mcp />`                           | The location chosen by the provider integration and transport                                                            | A stdio command or remote HTTP URL remains privileged deployment configuration. Do not assume it shares the Tool or Sandbox process.                                                        |
+| `<Skill />`                         | AML application plus invocation-private Agent staging                                                                    | Reads one complete local package, stages it at an Agent-visible path, and registers native discovery or metadata-only fallback without inlining the body.                                   |
+| `<Include />`                       | AML application for `src`; nearest active filesystem for `path`                                                          | Reads the current UTF-8 file into authored text, or emits a bounded Agent-visible read instruction when `maxBytes` is exceeded.                                                             |
 | `<Script />`                        | AML host, or the active Sandbox runtime                                                                                  | Defaults to the runtime or effective Sandbox cwd; an optional cwd resolves from the host cwd or Sandbox root.                                                                               |
-| `<File />`                          | Active Workspace materialization                                                                                         | Writes a validated logical Workspace path before descendants consume it. It does not write through an active Sandbox.                                                                       |
+| `<File />`                          | Nearest active filesystem: Sandbox guest first, otherwise Workspace materialization                                      | Replaces one complete UTF-8 file from resolved children or an application-owned local source.                                                                                               |
 | Workspace load/save                 | Workspace provider and its storage service                                                                               | Materializes before descendants, publishes according to save policy, and releases locks/temporary state after the subtree settles.                                                          |
 
 ### Provider selection and path rules
@@ -67,6 +69,8 @@ Here TypeScript owns selection, the empty case, and concurrency. AML owns each p
 - The outer `<Sandbox provider={...} />` selects the lease. Nested `<Sandbox />` components reuse it and may narrow access or root, but cannot switch providers or widen authority.
 - The top-level `<Workspace provider={...} />` wins over the runtime default. AML supports one top-level `<Workspace />` for an evaluation.
 - Workspace paths are logical. Each Sandbox provider must map the Workspace materialization into its host, container, or remote cwd; application code should not guess the provider's physical path.
+- `<File path>` and `<Include path>` use portable paths relative to the nearest active filesystem root. An active Sandbox wins over an enclosing Workspace because its guest is the live execution state.
+- `<File src>`, `<Include src>`, and `<Skill src>` are trusted application reads resolved from `AmlRuntimeOptions.cwd`; lexical resource scopes do not rewrite those source paths.
 - An unsandboxed `<Script />` starts from `AmlRuntimeOptions.cwd`, which defaults to `process.cwd()`. Its optional portable `cwd` resolves from that base; inside a Sandbox it resolves from the active Sandbox root. A cwd is convenience, not confinement.
 - `read-only` is a requested policy with provider-specific enforcement. It never grants writes, but the exact handling of process execution and mounted files differs by Sandbox.
 
@@ -180,7 +184,7 @@ scopes, budgets, tracing, and Agent scheduler.
 </Workspace>
 ```
 
-Nested `<Sandbox />` components reuse the outer lease. They may narrow `read-write` to `read-only`, or narrow a root path, but cannot widen permissions. `<File />` must be inside `<Workspace />` and cannot be used inside `<Sandbox />` because it writes through the durable Workspace boundary.
+Nested `<Sandbox />` components reuse the outer lease. They may narrow `read-write` to `read-only`, or narrow a root path, but cannot widen permissions. `<File />` and `<Include path>` use that live guest filesystem when nested inside the Sandbox; a read-only lease permits Include reads but rejects File writes.
 
 <Aside type="caution" title="Local is trusted execution">
   [`localSandbox()`](/docs/providers/sandboxes/local/) runs host processes. It provides the common Sandbox API but is

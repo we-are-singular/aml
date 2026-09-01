@@ -34,7 +34,7 @@ The workflow becomes scattered across provider SDK calls, prompt helpers, schema
 
 JSX is useful for agent orchestration because it expresses nesting, children, conditional composition, and reusable components while remaining ordinary TypeScript.
 
-AML earns a primitive only when the runtime must provide behavior that a normal function cannot provide. Provider calls, capabilities, same-session turns, transactional Loop state, Sandboxes, and Workspaces qualify. Prompt fragments, presets, conditions, and finite application logic usually do not.
+AML earns a primitive when the runtime must provide behavior that a normal function cannot provide. Provider calls, capabilities, same-session turns, transactional Loop state, Sandboxes, Workspaces, live filesystem inclusion, and Agent-visible package staging qualify. A small transparent authoring primitive such as `<Block>` may also standardize a broadly shared serialization convention, but it must remain ordinary composition rather than grow lifecycle or control-flow semantics. Prompt presets, conditions, and finite application logic usually remain TypeScript.
 
 ## Target users
 
@@ -87,6 +87,10 @@ FollowUps remain ordered turns in one provider-owned session. A structured contr
 ### Explicit resource ownership
 
 Sandbox and Workspace scopes acquire, expose, save, and release resources through explicit provider contracts. Working directories are not treated as security boundaries.
+
+Filesystem authoring follows nearest lexical ownership. Inside Sandbox, `<Include path>` and `<File>` use the live guest filesystem. Otherwise they use the active Workspace materialization. Application-owned `src` files remain live reads relative to the AML runtime cwd. Lexical placement chooses the owner; routing booleans do not duplicate that structure.
+
+Agent Skills are staged local packages, not prompt aliases. AML copies a validated package to the canonical `.agents/skills/<name>/` suffix beneath a writable Agent-visible staging root, lets built-in profiles use native discovery where available, and supplies metadata-only discovery text otherwise. Remote registries and package installation stay in application build or image construction because AML cannot audit that supply chain safely at evaluation time.
 
 ### Observable, bounded execution
 
@@ -176,6 +180,7 @@ AML separates three provider responsibilities:
 - Agent profiles own ACP executable selection, model and system mapping, native permission mapping, credentials, and provider-specific configuration.
 - Sandbox providers own disposable execution environments and expose bounded command execution plus safe long-lived process spawning.
 - Workspace providers own durable materialization, optional cross-process locking, persistence, and release.
+- The active filesystem boundary owns portable stat, complete-file read, and atomic replacement write operations used by Include, File, Skill staging, and provider preparation.
 
 These boundaries compose without pretending that every provider has identical capabilities. Unsupported combinations fail explicitly.
 
@@ -187,6 +192,19 @@ archive-or-folder persistence engine.
 
 `AgentProvider` remains a public structural extension point. Deterministic tests and application-specific providers
 may implement it directly, but a provider that claims built-in coding-agent or Sandbox portability must use ACP.
+
+### Breaking 0.8 authoring-filesystem goal
+
+The 0.8 line deliberately replaces the legacy prompt-text meaning of `<Skill>` rather than preserving two concepts behind one name.
+
+- Add native `<Block>` for exact blank-line structure.
+- Add `<Include src>` for application-owned prompt files and `<Include path>` for live active-filesystem reads, with bounded inline content and automatic staging of oversized local sources.
+- Extend `<File>` to copy local `src` text or resolved children into the nearest active filesystem, including guest-side Sandbox writes.
+- Redefine `<Skill src>` as a complete local Agent Skill package with canonical materialization, provider discovery mapping, progressive disclosure, and metadata fallback.
+- Add provider-neutral active-filesystem and per-Agent staging owners before implementing component behavior.
+- Migrate AML's legacy `<Skill src="...md">` prompt usages to `<Include>` in the same release. Downstream applications migrate only after that SDK is published.
+
+The release does not add `<If>`, `<Else>`, `<Map>`, or `<Sequence>`. Ordinary TypeScript remains the finite control-flow surface. `<Loop>` remains experimental and narrow because it owns validated staged state and repeated Agent sessions. A future `<Timeout>` or `<Race>` would need to own cancellation and cleanup rather than merely rename `Promise` APIs.
 
 ### Definition and capability rules
 
@@ -303,8 +321,8 @@ Research references:
 - network-mounted Workspaces, including SMB and NFS-style filesystems
 - SFTP Workspace storage
 - Google Drive Workspace storage
-- Workspace-owned Skill materialization
-- `<File>` host sources, append/create modes, binary content, and guest-side Sandbox writes
+- `<File>` append/create modes and authored binary content
+- remote Skill registry resolution, installation, or package-script execution
 
 Deferred ideas may enter the roadmap only after their behavior is accepted in `SPEC.md`.
 

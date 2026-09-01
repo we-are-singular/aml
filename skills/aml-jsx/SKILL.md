@@ -1,6 +1,6 @@
 ---
 name: aml-jsx
-description: Build, explain, test, or debug TypeScript agent workflows with Agent Markup Language and the @aml-jsx/sdk package. Use when a coding task involves AML, AML JSX/TSX trees, Agent/Parallel/System/Tool/Skill/Mcp/FollowUp components, provider-agnostic multi-agent orchestration, explicit parallel agents, structured agent output, Sandboxes, Workspaces, OpenCode, Codex, GitHub Copilot, GLM, or Pi providers, or custom AML providers.
+description: Build, explain, test, or debug TypeScript agent workflows with Agent Markup Language and the @aml-jsx/sdk package. Use when a coding task involves AML, AML JSX/TSX trees, Agent/Parallel/Block/Include/System/Tool/Skill/File/Mcp/FollowUp components, provider-agnostic multi-agent orchestration, structured agent output, Sandboxes, Workspaces, built-in coding-agent providers, or custom AML providers.
 ---
 
 # Build with AML JSX
@@ -74,6 +74,7 @@ Follow these semantics:
 - A nested Agent resolves before its parent Agent; its text becomes part of the parent prompt at the authored position.
 - Sibling JSX does not imply concurrency. Use `<Parallel>` for independent text-producing branches; use `Promise.all()` and `evaluate()` when component code needs individual or typed results.
 - Keep JavaScript control flow in TypeScript: use functions, arrays, conditions, loops, and promises rather than inventing markup primitives.
+- Use `<Block>` only for exact blank-line prompt structure; it does not add a lifecycle or control-flow scope.
 - Inject providers through `<Agent provider={...}>` or runtime defaults so the tree remains provider-agnostic.
 - Scope `<Tool>`, `<Mcp>`, `<Skill>`, and `<FollowUp>` to their nearest Agent.
 - Use `<Sandbox>` for ephemeral execution policy and `<Workspace>` for durable files.
@@ -89,7 +90,9 @@ Prefer AML's public definitions over provider-specific glue:
 - Define callable JavaScript Tools with `defineTool()`. Call them from active components for application-selected work; use `<Tool use={tool} />` only for an explicit model grant.
 - Configure native filesystem, shell, and network access with `<Agent permissions={...}>`; omitted permissions default optimistically on.
 - Define stdio or Streamable HTTP MCP servers with `defineMcpServer()` and grant them with `<Mcp use={server} />`.
-- Add reusable instructions with inline `<Skill>` content or `<Skill src="..." />`.
+- Add prompt files with `<Include src="..." />` or live active-filesystem content with `<Include path="..." />`.
+- Register a complete local Agent Skill package with `<Skill src="./skills/package-directory" />`; Skill does not accept inline prompt text.
+- Write resolved text or a local UTF-8 source through the nearest active filesystem with `<File>`.
 - Place Agents inside `<Sandbox>` and `<Workspace>` only when the workflow needs those boundaries.
 
 Capabilities are lexical grants, not global registration. Never assume a Tool or MCP server granted to one Agent is visible to its siblings.

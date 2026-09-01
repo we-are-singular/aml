@@ -27,7 +27,7 @@ Agent provider session
 
 ### Agent
 
-An Agent provider implements `run(request, context)` and returns the provider response. It must preserve the authored session semantics: the initial prompt and follow-ups share provider history and session-wide capabilities. If it supports `<Sandbox />`, its `supportsSandbox` handshake confirms structural compatibility with the effective runtime: the runtime shape, root, and access mode. The built-in ACP providers use the shared `supportsSandboxRuntime` check; it does not prove that the deployment actually enforces isolation, contains the required executable, or has working credentials and network access.
+An Agent provider implements `run(request, context)` and returns the provider response. It must preserve the authored session semantics: the initial prompt and follow-ups share provider history and session-wide capabilities. `request.skills` contains concrete staged package paths; a provider declaring `skillDiscovery: "native"` must map those paths into its native discovery mechanism, while omission selects AML's metadata-only system fallback. If the provider supports `<Sandbox />`, its `supportsSandbox` handshake confirms structural compatibility with the effective process and filesystem runtime. The built-in ACP providers use the shared `supportsSandboxRuntime` check; it does not prove that the deployment actually enforces isolation, contains the required executable, or has working credentials and network access.
 
 Agent providers own executable launch, model configuration, permission translation, and vendor protocol details. They do not install credentials or prove that a particular executable, model, image, or account is available.
 
@@ -39,6 +39,9 @@ The Sandbox contract acquires a lease for a validated portable policy: `access`,
 
 - `exec(command, args, options)` runs one executable with literal arguments and returns stdout, stderr, and an exit code.
 - `spawn(command, args, options)` exposes Web Streams for a long-lived process.
+- `readFile(path, options)` and `stat(path, options)` inspect complete regular files beneath the logical root.
+- `writeFile(path, content, options)` replaces one complete file and rejects read-only live filesystems.
+- `createFileStaging(options)` creates a unique writable Agent-visible root whose relative writes and cleanup stay outside durable Workspace state.
 - `kill()` is safe to repeat, and `wait()` returns the same captured exit result.
 - `release()` relinquishes every resource owned by the lease.
 

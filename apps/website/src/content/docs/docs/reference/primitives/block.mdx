@@ -1,0 +1,28 @@
+---
+title: "<Block />"
+description: Add exact blank-line separation around authored AML content without creating a runtime scope.
+---
+
+`<Block />` is a transparent authoring component for deliberate Markdown separation. With children it contributes exactly two newline characters before and after them; without children it contributes one `"\n\n"` separator.
+
+```tsx
+import { Agent, Block } from "@aml-jsx/sdk"
+
+;<Agent>
+  Review the implementation.
+  <Block>Report correctness findings before maintainability suggestions.</Block>
+  Cite concrete evidence for every finding.
+</Agent>
+```
+
+## Props
+
+| Prop       | Type            | Default | Meaning                                                      |
+| ---------- | --------------- | ------- | ------------------------------------------------------------ |
+| `children` | `AmlRenderable` | empty   | Content placed between the leading and trailing blank lines. |
+
+## Composition
+
+`<Block />` creates no evaluator primitive, lifecycle, capability scope, or control-flow boundary. Descriptors inside it retain their normal nearest owner, so a [`<Tool />`](/docs/reference/primitives/tool/) or [`<Skill />`](/docs/reference/primitives/skill/) inside a Block still belongs to the containing [`<Agent />`](/docs/reference/primitives/agent/).
+
+Use a Fragment when grouping alone is enough. Use `<Block />` when the exact blank-line serialization is part of the authored prompt. Keep conditions, branching, ordinary iteration, and sequencing policy in TypeScript rather than adding control-flow meaning to this component.

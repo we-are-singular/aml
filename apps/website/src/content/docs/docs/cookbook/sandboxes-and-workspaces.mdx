@@ -109,7 +109,7 @@ The temporary directory contains `reports/summary.md` until the operating system
 <Steps>
 
 1. `<Workspace />` acquires one materialization. By default it loads and locks; `save={false}` means this recipe does not publish a revision.
-2. `<File />` writes into the active materialized Workspace. It must be outside `<Sandbox />`; AML rejects `<File />` evaluation inside `<Sandbox />`.
+2. `<File />` writes into the active materialized Workspace because it appears before the Sandbox scope. If placed inside a read-write Sandbox it would instead write the live guest; this recipe's read-only Sandbox would reject that write.
 3. `<Sandbox access="read-only" />` reuses the Workspace and narrows the active root/cwd. Nested `<Sandbox />` components narrow one existing lease; they do not acquire another provider resource.
 4. `localSandbox()` executes trusted host processes. The deterministic `<Agent />` receives the Sandbox session and reports its narrowed cwd.
 

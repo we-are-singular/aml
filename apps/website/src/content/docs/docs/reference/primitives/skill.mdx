@@ -1,56 +1,62 @@
 ---
 title: "<Skill />"
-description: "Add reusable inline or local-file instructions at an authored position in an <Agent /> prompt or <System /> block."
+description: Stage and register one complete local Agent Skills package for a single Agent session.
 ---
 
-`<Skill />` resolves reusable instruction text. It may contain inline AML content, read a local text file through `src`, or combine both.
+`<Skill />` declares a real local [Agent Skills](https://agentskills.io/specification) package. AML validates and copies the complete package into an invocation-private Agent-visible staging root, then lets the provider expose it through native discovery or metadata-only fallback.
 
-```tsx
-import { Agent, AmlRuntime, Skill } from "@aml-jsx/sdk"
-import { DeterministicAgentProvider } from "@aml-jsx/sdk/testing"
-
-const runtime = new AmlRuntime({
-  agentProvider: new DeterministicAgentProvider(),
-})
-
-await runtime.evaluate(
-  <Agent>
-    <Skill name="House style" description="Editorial rules for release notes">
-      Prefer concrete examples and short sections.
-    </Skill>
-    Rewrite the release note.
-  </Agent>
-)
+```text
+skills/
+└── evidence-review/
+    ├── SKILL.md
+    ├── references/
+    │   └── checklist.md
+    └── scripts/
+        └── inspect.sh
 ```
 
-When both forms are present, file content comes first, followed by a newline and resolved inline content. Optional metadata is prepended as `Skill:` and `Description:` labels.
+```md title="skills/evidence-review/SKILL.md"
+---
+name: evidence-review
+description: Review code changes using concrete implementation evidence.
+---
 
-To load a local instruction file, set the runtime `cwd` deliberately and use the `src` form:
+# Evidence review
+
+Read `references/checklist.md` when performing a code review.
+```
 
 ```tsx
-const runtime = new AmlRuntime({ cwd: import.meta.dirname, agentProvider })
+import { Agent, Skill } from "@aml-jsx/sdk"
 
-await runtime.evaluate(
-  <Agent>
-    <Skill src="./skills/editorial.md" />
-    Rewrite the release note.
-  </Agent>
-)
+;<Agent provider={reviewer}>
+  <Skill src="./skills/evidence-review" />
+  Review the current change.
+</Agent>
 ```
 
 ## Props
 
-| Prop          | Type            | Default | Meaning                                          |
-| ------------- | --------------- | ------- | ------------------------------------------------ |
-| `src`         | `string`        | none    | Local text path resolved from the runtime `cwd`. |
-| `children`    | `AmlRenderable` | none    | Inline instruction content.                      |
-| `name`        | `string`        | none    | Normalized model-facing label.                   |
-| `description` | `string`        | none    | Normalized model-facing description.             |
+| Prop  | Type     | Required | Meaning                                                                             |
+| ----- | -------- | -------- | ----------------------------------------------------------------------------------- |
+| `src` | `string` | yes      | Local package directory resolved from [`AmlRuntime.cwd`](/docs/reference/runtime/). |
 
-At least one of `src` or `children` is required, and the combined content must be non-empty.
+`<Skill />` accepts no children, inline instruction text, remote URL, registry reference, or install command. Use [`<Include />`](/docs/reference/primitives/include/) for an application prompt file.
 
-## Placement and file access
+## Package contract
 
-`<Skill />` produces ordinary text at its authored position. Put it inside [`<Agent />`](/docs/reference/primitives/agent/) for prompt instructions or inside [`<System />`](/docs/reference/primitives/system/) for system instructions. A Skill file is read by the AML application process; it is not loaded from [`<Workspace />`](/docs/reference/primitives/workspace/) or [`<Sandbox />`](/docs/reference/primitives/sandbox/) unless the configured runtime cwd points there.
+- The directory must contain a root `SKILL.md`; its frontmatter must provide `name` and `description`.
+- `name` is a lowercase hyphenated segment of at most 64 characters and must match the source directory name.
+- `description` is normalized activation guidance of at most 1,024 characters.
+- AML copies regular files recursively, including binary resources, and rejects symbolic links or special filesystem entries.
+- AML reads and validates the package live for every evaluation. It never fetches remote content or executes package scripts while staging.
 
-This primitive is distinct from the installable [AML coding-agent skill](/docs/agent-skill/): `<Skill />` contributes workflow instructions at runtime, while the coding-agent skill teaches an external coding agent how to author AML.
+## Discovery and lifecycle
+
+The staged package always ends in `.agents/skills/<name>/SKILL.md`. Providers receive concrete paths to the staged package. Codex and OpenCode use native discovery mapping; providers that do not declare native discovery receive a short session-wide system fragment containing only the Skill name, description, and `SKILL.md` path. AML never inserts the Skill body into the prompt automatically.
+
+`<Skill />` is valid only in the containing Agent plan and remains available for its initial turn and every [`<FollowUp />`](/docs/reference/primitives/follow-up/). It is invalid as a standalone value or inside a System or FollowUp block. Duplicate Skill names in one Agent reject.
+
+One Agent owns one writable staging root shared by its Skills and oversized local Includes. AML removes that root after the provider session, before writable Sandbox reconciliation. Skill staging does not silently become durable Workspace state.
+
+This primitive is separate from the installable [AML coding-agent skill](/docs/agent-skill/): that package teaches an external coding agent how to author AML, while runtime `<Skill />` registers an application-selected package for one AML Agent session.

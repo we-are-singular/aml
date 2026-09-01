@@ -101,8 +101,9 @@ Do not commit Modal credentials. Configure them through the deployment environme
 4. Modal runs a remote shell command that clears `/workspace`, creates it, extracts the archive, and removes the temporary file.
 5. The optional setup hook runs through `sh -lc`. Failure rejects acquisition and terminates the Sandbox.
 6. `exec()` and `spawn()` use Modal’s process API with `/workspace/...` working directories. Output is read against a shared byte budget.
-7. On writable release, Modal archives the full `/workspace` tree, copies it to the host, and mirrors additions, changes, and deletions into the local materialization.
-8. Modal terminates the Sandbox. Reconciliation and termination failures are preserved together when both occur.
+7. Complete-file operations use Modal's filesystem API. Agent staging uses a unique `/tmp` directory and is removed before Sandbox release.
+8. On writable release, Modal archives the full `/workspace` tree, copies it to the host, and mirrors additions, changes, and deletions into the local materialization.
+9. Modal terminates the Sandbox. Reconciliation and termination failures are preserved together when both occur.
 
 Modal process cancellation does not always provide ordinary remote process signaling. AML uses process routing where available and can terminate the entire disposable Sandbox when necessary. During creation, cancellation may race the provider API; AML schedules termination if the Sandbox finishes provisioning after the evaluation has already been cancelled.
 
@@ -110,7 +111,7 @@ Modal process cancellation does not always provide ordinary remote process signa
 
 Modal rejects `exec()` and `spawn()` under `access="read-only"` because the transferred Workspace is not mounted read-only. Read-only release skips the download/reconcile step, but it does not turn the remote filesystem into a complete read-only environment.
 
-Use `read-write` for an ACP Agent unless the selected Agent and image have a separate supported launch contract. If you need command execution against a read-only Workspace, Docker’s read-only bind mount has different semantics; do not assume remote transfer providers are interchangeable.
+Use `read-write` for an ACP Agent unless the selected Agent and image have a separate supported launch contract. A read-only Modal Sandbox still supports live [`<Include path>`](/docs/reference/primitives/include/) reads and separate writable Agent staging. If you need command execution against a read-only Workspace, Docker’s read-only bind mount has different semantics; do not assume remote transfer providers are interchangeable.
 
 ## Security and production posture
 

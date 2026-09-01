@@ -43,8 +43,10 @@ The class is intentionally broad because the error message identifies the invali
 
 - `evaluate() is only available while an AML component is active` — move the call into an async AML component.
 - `Tools can only be called while an AML component is active` — call the function returned by `defineTool()` during active component evaluation, or use its explicit low-level `execute(input, context)` API only in provider/test infrastructure.
-- `<Tool> is only valid inside <Agent>` or `<Mcp> is only valid inside <Agent>` — move the capability under its owning [`<Agent />`](/docs/reference/primitives/agent/).
-- `<File> requires an enclosing <Workspace>` — write through [`<Workspace />`](/docs/reference/primitives/workspace/).
+- `<Tool> is only valid inside <Agent>`, `<Mcp> is only valid inside <Agent>`, or `<Skill> is only valid inside <Agent>` — move the capability into its owning [`<Agent />`](/docs/reference/primitives/agent/) plan.
+- `<File> requires an enclosing <Workspace> or <Sandbox>` — place the write under the intended active filesystem owner and use a read-write Sandbox for guest writes.
+- `<Include path> requires an enclosing <Workspace> or <Sandbox>` — use an active workflow filesystem path or switch to application-owned `src`.
+- `an oversized <Include src> requires a containing <Agent>` — move the Include into the Agent that will receive and read its staged file reference, or raise/remove `maxBytes`.
 - `A nested <Sandbox> cannot widen read-only access to read-write` — narrow the child [`<Sandbox />`](/docs/reference/primitives/sandbox/) policy or change the parent policy.
 - `AML evaluation exceeded maxAgentCalls ...` or `maxDepth ...` — increase a deliberate budget or reduce workflow breadth/depth.
 - `Structured evaluate() must resolve to exactly one <Agent>` — make the schema-bearing evaluation target one `<Agent />` result.

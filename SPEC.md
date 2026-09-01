@@ -110,7 +110,10 @@ AML has two conceptual phases:
 Not every resolved child becomes prompt text:
 
 - text becomes message content
+- `<Block>` contributes deliberate blank-line separators around authored content
+- `<Include>` reads prompt content from an application file or the active filesystem
 - `<System>` becomes an Agent system-prompt fragment
+- `<Skill>` becomes an Agent-visible Skill package and discovery descriptor
 - `<Tool>` becomes an Agent-scoped JavaScript capability
 - `<Mcp>` becomes an Agent-scoped MCP server grant
 - `<FollowUp>` becomes a staged later message
@@ -221,12 +224,14 @@ AML cannot automatically roll back arbitrary effects already performed by an Age
 | `AmlRuntime`                       | Own one complete evaluation                                           | Final string               |
 | `<Agent>`                          | Execute one Agent boundary                                            | Final text                 |
 | `<Parallel>`                       | Evaluate independent AML branches concurrently                        | Ordered branch text        |
+| `<Block>`                          | Add explicit blank-line separation around authored content            | Text and child descriptors |
+| `<Include>`                        | Read a file inline or add an Agent-visible read reference             | Text                       |
 | `<System>`                         | Contribute resolved text to an Agent's system prompt                  | System descriptor          |
 | `defineAgentProvider()`            | Define an Agent harness adapter                                       | `AgentProvider`            |
 | `<Tool>`                           | Grant a JavaScript capability                                         | Tool descriptor            |
 | `defineTool()`                     | Create a callable JavaScript Tool for application use or Agent grants | `AmlTool<Input, Output>`   |
-| `<Skill>`                          | Resolve reusable instruction text                                     | Text                       |
-| `<File>`                           | Materialize resolved text inside an active Workspace                  | No text                    |
+| `<Skill>`                          | Materialize and register a local Agent Skill package                  | Skill descriptor           |
+| `<File>`                           | Materialize local or resolved text in the active filesystem           | No text                    |
 | `<Sandbox>`                        | Scope an ephemeral execution lease and restrictive filesystem policy  | Descendant execution scope |
 | `defineSandboxProvider()`          | Define an ephemeral execution adapter                                 | `SandboxProvider`          |
 | `<Script>`                         | Execute an authored command on the host or in an active Sandbox       | Standard output            |
@@ -246,20 +251,22 @@ AML cannot automatically roll back arbitrary effects already performed by an Age
 
 The normative surface is delivered in phases so the public API grows only after each earlier boundary has deterministic proof.
 
-| Phase                  | Surface                                                                      | Purpose                                                                               |
-| ---------------------- | ---------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
-| Foundation             | JSX values, Fragments, async components, `AmlRuntime`                        | Prove single-invocation asynchronous evaluation                                       |
-| MVP 1                  | `<Agent>`, `<System>`, `defineAgentProvider()`                               | Establish the provider-neutral execution and message-channel boundary                 |
-| MVP 2                  | `<Tool>`, `defineTool()`                                                     | Add scoped JavaScript capabilities                                                    |
-| MVP 3                  | `<Skill>`                                                                    | Add reusable instruction resolution                                                   |
-| MVP 4                  | `<Sandbox>`, `defineSandboxProvider()`                                       | Add ephemeral execution scope                                                         |
-| MVP 5                  | `<Workspace>`, `defineWorkspaceProvider()`                                   | Add durable filesystem scope and complete the MVP                                     |
-| Post-MVP capabilities  | `<Mcp>`, `defineMcpServer()`                                                 | Attach MCP servers without making the SDK own an Agent harness                        |
-| Filesystem composition | `<File>`, `<Script>`                                                         | Materialize resolved text and run explicit commands on the host or in resource scopes |
-| Post-MVP orchestration | `evaluate()`, structured output, `<Parallel>`, `<FollowUp>`; draft: `<Loop>` | Add richer dataflow, explicit concurrency, and same-session or iterative execution    |
-| Draft late surface     | `createContext()`, `useContext()`, `<Context.Provider>`                      | Add immutable dependency scope only after the execution and resource model is stable  |
+| Phase                  | Surface                                                                      | Purpose                                                                                  |
+| ---------------------- | ---------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| Foundation             | JSX values, Fragments, async components, `AmlRuntime`                        | Prove single-invocation asynchronous evaluation                                          |
+| MVP 1                  | `<Agent>`, `<System>`, `defineAgentProvider()`                               | Establish the provider-neutral execution and message-channel boundary                    |
+| MVP 2                  | `<Tool>`, `defineTool()`                                                     | Add scoped JavaScript capabilities                                                       |
+| MVP 3                  | Legacy `<Skill>`                                                             | Add reusable instruction resolution; replaced by `<Include>` in the breaking 0.8 surface |
+| MVP 4                  | `<Sandbox>`, `defineSandboxProvider()`                                       | Add ephemeral execution scope                                                            |
+| MVP 5                  | `<Workspace>`, `defineWorkspaceProvider()`                                   | Add durable filesystem scope and complete the MVP                                        |
+| Post-MVP capabilities  | `<Mcp>`, `defineMcpServer()`                                                 | Attach MCP servers without making the SDK own an Agent harness                           |
+| Filesystem composition | `<Block>`, `<Include>`, `<File>`, `<Skill>`, `<Script>`                      | Structure prompts, read and stage files, register Skills, and run explicit commands      |
+| Post-MVP orchestration | `evaluate()`, structured output, `<Parallel>`, `<FollowUp>`; draft: `<Loop>` | Add richer dataflow, explicit concurrency, and same-session or iterative execution       |
+| Draft late surface     | `createContext()`, `useContext()`, `<Context.Provider>`                      | Add immutable dependency scope only after the execution and resource model is stable     |
 
 This is a delivery order, not a hierarchy of importance. Later primitives remain normative desired state, but they must not shape earlier implementations beyond the explicit extension points in their contracts.
+
+The authoring-filesystem surface is an accepted breaking change for SDK 0.8. Legacy prompt-file `<Skill>` usage migrates to `<Include>`. The new `<Skill>` accepts only local Agent Skill package directories and owns package discovery rather than prompt inclusion.
 
 ### 3.3 Reserved and non-normative surfaces
 
@@ -320,7 +327,7 @@ Use TypeScript for conditions and finite authored collections:
 function Reviewer({ deep }: { deep: boolean }) {
   return (
     <Agent>
-      {deep ? <Skill src="./skills/deep.md" /> : "Run a compact review."}
+      {deep ? <Include src="./prompts/deep.md" /> : "Run a compact review."}
       Review the patch.
     </Agent>
   )
@@ -328,6 +335,24 @@ function Reviewer({ deep }: { deep: boolean }) {
 ```
 
 AML does not define `<If>`, `<Else>`, `<Map>`, or `<Sequence>`. Those would duplicate the host language without adding runtime behavior.
+
+`<Loop>` remains a narrow runtime primitive because it owns a schema-validated state Tool, immutable snapshots, atomic state transitions, Agent-session repetition, tracing, and a transition budget. Future primitives such as `<Timeout>` or `<Race>` must meet the same bar by owning cancellation and cleanup semantics that ordinary `Promise` composition cannot safely provide.
+
+### 4.3 `<Block>` authoring structure
+
+`<Block>` standardizes deliberate blank-line separation without creating another execution or control-flow boundary:
+
+```tsx
+<Agent>
+  Review the implementation.
+  <Block>
+    <Include src="./prompts/output-contract.md" />
+  </Block>
+  Return only the final review.
+</Agent>
+```
+
+With children, Block contributes exactly `"\n\n"`, its ordinarily resolved children, then exactly `"\n\n"`. Without children, `<Block />` contributes exactly `"\n\n"` as a separator. Block does not trim, reorder, repeat, branch, catch errors, or create a new descriptor scope. Child descriptors remain owned by the same nearest Agent or resource boundary they would have without Block.
 
 ## 5. `<Agent>` sessions
 
@@ -381,13 +406,14 @@ Agent permissions are not a security boundary. An enclosing read-only Sandbox na
 
 For built-in coding agents, the selected provider executes this plan through one ACP session:
 
-1. launch the provider profile's ACP Agent through the active Sandbox process launcher or the trusted local launcher
-2. initialize ACP and negotiate capabilities
-3. create one session at the effective Workspace working directory with every explicit MCP server and AML-owned bridge, while applying profile policy for named native servers
-4. apply profile-owned mappings for the selected model, system instructions, and native capability policy
-5. send the initial prompt and each FollowUp sequentially through that session
-6. cancel through ACP when supported, then terminate the invocation-owned process tree during cleanup
-7. close all invocation-owned MCP bridges and process streams before `AgentProvider.run()` settles
+1. prepare the Agent-visible ephemeral staging filesystem used by local Include sources and Skill packages
+2. launch the provider profile's ACP Agent through the active Sandbox process launcher or the trusted local launcher
+3. initialize ACP and negotiate capabilities
+4. create one session at the effective Workspace working directory with every explicit MCP server and AML-owned bridge, while applying profile policy for named native servers
+5. apply profile-owned mappings for the selected model, system instructions, native capability policy, and Skill discovery
+6. send the initial prompt and each FollowUp sequentially through that session
+7. cancel through ACP when supported, then terminate the invocation-owned process tree during cleanup
+8. close all invocation-owned MCP bridges and process streams and remove ephemeral staging before `AgentProvider.run()` settles
 
 ACP session identifiers and protocol events remain provider implementation details. AML exposes only its provider-neutral result, trace, and lifecycle contracts.
 
@@ -404,6 +430,7 @@ interface AgentPlan {
   name?: string
   permissions: AgentPermissions
   schema?: AmlModelSchema<unknown, unknown>
+  skills: readonly AgentSkill[]
   system: string
   systemFragments: readonly string[]
   tools: readonly AgentTool[]
@@ -421,11 +448,13 @@ Resolution:
 3. Collect resolved System descriptors in authored order.
 4. Collect Agent-level Tool descriptors.
 5. Collect Agent-level MCP server descriptors.
-6. Collect flat FollowUp descriptors in authored order.
-7. Trim the initial prompt, each FollowUp prompt, and each system fragment.
-8. Build the provider system text from the runtime `system`, Agent `system` prop, and collected System descriptors, omitting empty fixed-text entries and joining the remaining entries with `"\n"`.
-9. Reject invalid or duplicate capabilities.
-10. Open one provider session and execute the plan.
+6. Collect Agent-level Skill descriptors and prepare their packages in authored order.
+7. Collect flat FollowUp descriptors in authored order.
+8. Resolve Include content against the prepared Agent filesystem.
+9. Trim the initial prompt, each FollowUp prompt, and each system fragment.
+10. Build the provider system text from the runtime `system`, Agent `system` prop, and collected System descriptors, omitting empty fixed-text entries and joining the remaining entries with `"\n"`.
+11. Reject invalid or duplicate capabilities.
+12. Open one provider session and execute the plan.
 
 Text children are concatenated without implicit separators. JSX indentation is ordinary authored text; developers should add deliberate whitespace where needed.
 
@@ -441,19 +470,19 @@ Text children are concatenated without implicit separators. JSX indentation is o
     </Agent>
   </System>
   <System>
-    <Skill src="./skills/evidence.md" />
+    <Include src="./prompts/evidence.md" />
   </System>
   Apply the generated rules to the request.
 </Agent>
 ```
 
-AML resolves each System subtree before opening the containing Agent session. Any AML subtree that ultimately resolves to text may contribute, including ordinary components, Skills, scoped resources, Loops, and child Agents. A child Agent inside `<System>` is a real child session; its final text becomes system text for the parent rather than initial-prompt text.
+AML resolves each System subtree before opening the containing Agent session. Any AML subtree that ultimately resolves to text may contribute, including ordinary components, Includes, scoped resources, Loops, and child Agents. A child Agent inside `<System>` is a real child session; its final text becomes system text for the parent rather than initial-prompt text.
 
 System rules:
 
 - `<System>` is valid only as an immediate message descriptor of its nearest Agent after component and Fragment expansion.
 - A System descriptor must resolve to non-empty text after trimming.
-- Tool, MCP, FollowUp, and nested System descriptors that escape a nested consumer and reach the System text boundary are invalid.
+- Tool, MCP, Skill, FollowUp, and nested System descriptors that escape a nested consumer and reach the System text boundary are invalid.
 - A Tool, Skill, or other capability used by a child Agent inside System remains scoped to that child Agent.
 - System output never contributes to the containing Agent's initial prompt.
 - Multiple System descriptors preserve authored order even when other prompt text appears between them.
@@ -493,7 +522,7 @@ An Agent with one input returns that input's response. An Agent with FollowUps r
 ```tsx
 <Agent>
   <Tool use={searchCode} />
-  <Skill src="./skills/review.md" />
+  <Skill src="./skills/review" />
   Investigate the authentication implementation.
   <FollowUp>Challenge your findings and check for counterexamples.</FollowUp>
   <FollowUp>Produce the final review.</FollowUp>
@@ -552,19 +581,19 @@ Tools and MCP servers are Agent-session capabilities and must be declared at Age
 
 AML does not promise turn-specific Tool or MCP grants. Provider support differs, and prompting a model not to use an available capability is not a security boundary. Use separate Agents when capability separation matters.
 
-`<Skill>` is instruction text rather than an executable capability. A Skill at Agent level contributes to the initial prompt. A Skill inside a FollowUp contributes only to that FollowUp's text:
+`<Include>` contributes file content to the prompt channel where it is authored. A local prompt fragment inside a FollowUp therefore uses Include:
 
 ```tsx
 <Agent>
   Inspect the implementation.
   <FollowUp>
-    <Skill src="./skills/adversarial-review.md" />
+    <Include src="./prompts/adversarial-review.md" />
     Re-evaluate the evidence.
   </FollowUp>
 </Agent>
 ```
 
-Model, provider, Sandbox, Workspace, system instructions, Tool grants, and MCP grants are session-wide.
+`<Skill>` is an Agent-session capability and must be declared at Agent level. Its package remains available throughout the initial turn and every FollowUp; a Skill inside System or FollowUp is invalid. Model, provider, Sandbox, Workspace, system instructions, Tool grants, MCP grants, and Skills are session-wide.
 
 ### 6.3 State between turns
 
@@ -621,46 +650,106 @@ FollowUps fail closed:
 
 Structured output applies to the final authored input. Intermediate responses are ordinary text owned by the provider session.
 
-## 7. `<Skill>`
+## 7. `<Include>` and `<Skill>`
 
-`<Skill>` contributes reusable instruction text at its authored position:
+`<Include>` places file content or a file reference in a prompt. `<Skill>` declares a real local [Agent Skills](https://agentskills.io/specification) package for progressive discovery by one Agent session. The two primitives share Agent-visible staging but have different model-context semantics: Include authors prompt text, while Skill materializes a package and normally contributes no prompt body.
+
+### 7.1 `<Include>`
+
+Include has two mutually exclusive source modes:
 
 ```tsx
 <Agent>
-  <Skill src="./skills/review.md" />
+  <Include src="./prompts/review.md" />
+  <Include path="brief.md" maxBytes={2_000} />
   Review the change.
 </Agent>
 ```
 
-### 7.1 Content
+Its public props are a discriminated union:
 
-Skill content comes from a local file, inline AML children, or both:
-
-```tsx
-<Skill src="./skills/reviewer.md" />
-
-<Skill name="evidence" description="Prefer implementation evidence.">
-  Verify each claim against code and tests.
-</Skill>
-
-<Skill src="./skills/base.md" name="generated-review">
-  Add this dynamically generated guidance: <GuidanceAgent />
-</Skill>
+```ts
+type IncludeProps =
+  | { src: string; path?: never; maxBytes?: number; title?: string | false }
+  | { path: string; src?: never; maxBytes?: number; title?: string | false }
 ```
 
-Rules:
+`src` identifies an application-owned UTF-8 file. Relative sources resolve from `AmlRuntimeOptions.cwd`, which defaults to `process.cwd()`; absolute sources remain absolute. AML reads the file live when the Include resolves. It does not embed the file at build time, read it at runtime construction, cache it across evaluations, or fetch remote URLs.
 
-- At least one of `src` or children is required.
-- `src` is a non-empty local filesystem path. Relative paths resolve from `AmlRuntimeOptions.cwd`, which defaults to `process.cwd()`. Absolute paths remain absolute.
-- The file is read during evaluation. AML does not embed Skill files at build time, cache their contents, fetch remote URLs, resolve registries, install supporting files, or execute scripts.
-- Inline children use ordinary post-order AML evaluation. A child Agent may therefore generate part or all of a Skill.
-- When both `src` and children exist, inline children resolve first, the file is read during the Skill completion step, and the final content is `fileContent + "\n" + childContent`.
-- The combined content must contain non-whitespace text.
-- `name` and `description` are optional non-empty strings without leading or trailing whitespace.
-- Metadata decorates the combined content deterministically. Present metadata lines are emitted in `Skill: {name}`, then `Description: {description}` order, followed by one blank line and the combined content.
-- Without metadata, the combined content is contributed unchanged.
-- Filesystem failures are attributed to `<Skill>`. Cancellation preserves the caller's `AbortSignal.reason`.
-- Local Skill access is not confinement. The future Sandbox and Workspace scopes define which filesystem paths an evaluation may access.
+`path` identifies a UTF-8 file in the nearest active filesystem scope. Inside Sandbox it reads the live guest filesystem. Otherwise it reads the active Workspace materialization. Without either scope, evaluation rejects. Portable paths are relative, use forward slashes, and cannot address the scope root, traverse parents, or escape through symbolic links.
+
+Authored order determines visibility:
+
+```tsx
+<Workspace provider={workspaceStore}>
+  <File path="brief.md">Review the authentication boundary.</File>
+  <Sandbox provider={sandboxProvider}>
+    <Agent>
+      <Include path="brief.md" maxBytes={2_000} />
+      Complete the review.
+    </Agent>
+  </Sandbox>
+</Workspace>
+```
+
+File writes the host materialization before Sandbox acquisition, Workspace hydration makes that file visible in the guest, and Include then reads the live guest copy before the Agent session begins.
+
+`maxBytes` is an optional positive safe integer measured against the file's encoded byte length. Omission inlines the complete file. At or below the limit, Include emits the content. Above the limit, Include emits an instruction containing the actual byte count and configured limit rather than the content. An oversized `path` source references the same authored Agent-visible path. An oversized `src` source is copied into the Agent's ephemeral staging filesystem at an AML-generated execution path and references that staged path; authors do not provide a second destination prop.
+
+The default rendered form is:
+
+```md
+## Contents of `path`
+
+file content or read instruction
+```
+
+For `path`, the default label is the authored path. For an inline `src`, it is the authored source. For an oversized `src`, it is the generated Agent-visible path. A non-empty `title` string replaces `Contents of \`path\``after the`## `marker.`title={false}` suppresses the heading and its following blank line. Include does not trim file content or add code fences.
+
+Include filesystem, decoding, size, staging, and cancellation failures are attributed to `<Include>`. Application-owned `src` access is trusted host access, not a confinement mechanism. Agent-visible staged files follow the active Sandbox and Agent permission boundaries after materialization.
+
+### 7.2 `<Skill>`
+
+Skill declares a local package rather than inline instructions:
+
+```tsx
+<Agent>
+  <Skill src="./skills/review" />
+  Review the current change.
+</Agent>
+```
+
+Its public props are:
+
+```ts
+interface SkillProps {
+  src: string
+}
+```
+
+`src` identifies an application-owned local package directory containing `SKILL.md`. Relative sources resolve from `AmlRuntimeOptions.cwd`; absolute sources remain absolute. AML reads and validates the package during each evaluation. The `SKILL.md` frontmatter supplies the canonical `name` and `description`; authored props cannot override package metadata. The name must be safe as one `.agents/skills` path segment. Package traversal, symbolic links, unsupported entry types, malformed metadata, missing `SKILL.md`, and duplicate canonical names in one Agent reject evaluation.
+
+AML copies the complete package into the canonical relative location `.agents/skills/<name>/` beneath an Agent-visible staging root, including supporting scripts, references, templates, and assets. A writable Workspace is not required: Sandbox providers supply separate invocation-owned staging even when the Agent's Workspace view is read-only. A built-in profile registers the concrete staged package through native provider discovery when available and maps or copies it into a provider-specific location when necessary. A custom provider receives the same package descriptor and must either expose it through native discovery or use AML's fallback discovery metadata.
+
+When native Skill discovery is unavailable, AML adds only this metadata to the initial prompt:
+
+```md
+## Available skill: `name`
+
+Use when: description.
+
+Read `{agent-visible staging root}/.agents/skills/name/SKILL.md` when this skill applies.
+```
+
+AML never inlines the Skill body automatically. Both native discovery and the metadata fallback preserve progressive disclosure by putting the package on disk and telling the Agent when and where to read it. Lack of native discovery is therefore not an error; invalid packages and failed materialization remain errors.
+
+Skill is an Agent-session descriptor. After component and Fragment expansion it must be declared at Agent level, where the package remains available to the initial input and every FollowUp. Skill inside System or FollowUp, outside Agent, or after the first FollowUp is invalid.
+
+Skill installation from skills.sh, another registry, or a remote URL is outside AML. Applications may audit and install remote packages during their own build or image construction, then pass the resulting local directory through `src`. AML neither runs package scripts nor grants extra permissions because a file belongs to a Skill.
+
+### 7.3 Shared Agent staging
+
+An Agent prepares one ephemeral Agent-visible staging filesystem before resolving prompt Includes and before opening its provider session. Skill packages and oversized local Includes copy through that boundary. Provider adapters map canonical locations to their native discovery mechanisms without changing the authored paths. AML removes invocation-owned staging after the session settles, including on failure or cancellation, while files deliberately written into a Workspace remain owned by that Workspace's save policy.
 
 ## 8. Tools
 
@@ -937,7 +1026,7 @@ const research = await evaluate(<Agent>Return structured research.</Agent>, Rese
 
 With a schema argument, the supplied AML must resolve to exactly one Agent, optionally through Fragments, Context Providers, or ordinary function components. Non-empty text outside that Agent is invalid because it would create a second result channel. AML generates and snapshots draft 2020-12 JSON Schema before the provider boundary, sends that portable JSON document through `AgentRequest.output.jsonSchema`, and validates the provider's returned unknown value again through the original Standard Schema. Providers never receive or invoke the application-owned schema object. The component receives Standard Schema's inferred output, including an authored transformation; only the provider-facing value and JSON Schema must remain JSON. An Agent `schema` prop cannot be combined with this evaluation-owned schema.
 
-`<Loop>` is invalid anywhere inside a schema-bearing `evaluate()` subtree, including the selected Agent's prompt, System, Skill, and FollowUp channels. A Loop may open multiple fresh Agent sessions and therefore cannot satisfy the structured call's exactly-one-Agent execution contract.
+`<Loop>` is invalid anywhere inside a schema-bearing `evaluate()` subtree, including the selected Agent's prompt, System, Include, and FollowUp channels. A Loop may open multiple fresh Agent sessions and therefore cannot satisfy the structured call's exactly-one-Agent execution contract.
 
 With FollowUps, either schema form applies only to the final authored turn.
 
@@ -1314,10 +1403,25 @@ interface SandboxSession<Handle = unknown> {
   root: string
 }
 
+interface SandboxFileStat {
+  kind: "directory" | "file"
+  size: number
+}
+
+interface SandboxFileStaging {
+  root: string
+  writeFile(path: string, content: Uint8Array, options?: { signal?: AbortSignal }): Promise<void>
+  release(): Promise<void>
+}
+
 interface SandboxRuntime {
   access: "read-only" | "read-write"
   cwd: string
   root: string
+  stat(path: string, options?: { signal?: AbortSignal }): Promise<SandboxFileStat>
+  readFile(path: string, options?: { signal?: AbortSignal }): Promise<Uint8Array>
+  writeFile(path: string, content: Uint8Array, options?: { signal?: AbortSignal }): Promise<void>
+  createFileStaging(options?: { signal?: AbortSignal }): Promise<SandboxFileStaging>
   exec(
     command: string,
     args?: readonly string[],
@@ -1376,11 +1480,15 @@ AML:
 
 Nested Sandboxes emit their own spans but do not acquire or release another lease. If subtree evaluation and release both fail, AML rejects with an `AggregateError` that preserves both errors.
 
-`SandboxLease.handle` remains opaque provider data for Workspace attachment and provider-specific optimization. Built-in Agent profiles use the lease's narrow `SandboxRuntime.spawn()` to launch one long-lived ACP process with an effective logical working directory. Sandboxed `<Script>`, trusted setup, and provider implementation details may use `exec()` for bounded literal commands. Agent turns must not use `exec()` as a second protocol. AML deliberately does not standardize files, images, snapshots, ports, or the union of provider SDK features.
+`SandboxLease.handle` remains opaque provider data for Workspace attachment and provider-specific optimization. Built-in Agent profiles use the lease's narrow `SandboxRuntime.spawn()` to launch one long-lived ACP process with an effective logical working directory. Sandboxed `<Script>`, trusted setup, and provider implementation details may use `exec()` for bounded literal commands. Agent turns must not use `exec()` as a second protocol. AML standardizes only the stat, complete-file read, atomic replacement write, invocation-owned file staging, exec, and spawn operations required by portable primitives; images, snapshots, ports, and the remaining union of provider SDK features stay provider-owned.
 
 Descendants receive only the immutable lease identity, handle, and runtime shown by `SandboxSession`; they never receive `release()` or the provider's `acquire()` method. AML retains both lifecycle capabilities privately because it alone owns acquisition and exactly-once release. The captured provider name is descriptive identity, not an authority-bearing provider object.
 
-The runtime's `root` and `cwd` use AML's logical Workspace namespace. A provider maps an `exec()` or `spawn()` working directory to its host, container, or remote filesystem. Both methods preserve argument boundaries. `exec()` returns non-zero process exit codes as results; transport failure, cancellation, timeout, and inability to start the command reject. Providers must bound captured `exec()` output.
+The runtime's `root` and `cwd` use AML's logical Workspace namespace. Portable file paths are relative to `root` and must remain beneath its physical boundary after symbolic-link resolution. `stat()` reports only regular files and directories and returns the complete encoded byte size for a file. `readFile()` returns a complete immutable byte snapshot. `writeFile()` is available only for read-write leases, creates missing parent directories, rejects symbolic-link or non-directory parents and symbolic-link destinations, and atomically replaces a regular file where the provider filesystem supports rename semantics. Components use these operations directly; they do not synthesize file access through shell commands.
+
+`createFileStaging()` creates a separate writable invocation-owned root that is visible to the Agent process even when the Workspace root is read-only. Its relative `writeFile()` follows the same parent and replacement guarantees. `release()` is repeat-safe and removes only that staging root. AML releases Agent staging after the provider session settles and before an enclosing Sandbox reconciles Workspace state.
+
+A provider maps an `exec()` or `spawn()` working directory to its host, container, or remote filesystem. Both methods preserve argument boundaries. `exec()` returns non-zero process exit codes as results; transport failure, cancellation, timeout, and inability to start the command reject. Providers must bound captured `exec()` output.
 
 `spawn()` returns a provider-neutral process handle. `id` is the portable identity because remote backends may expose only a command, exec, or session id rather than an operating-system PID. Input, standard output, and standard error use standard Web streams. Providers begin buffering output before the handle becomes visible. Closing `stdin` requests a pipe EOF when the backend supports one and always prevents later writes through that stream; callers must not depend on remote providers exposing a literal half-close. `wait()` captures one immutable exit result, and both `wait()` and `kill()` are repeatable. Termination targets the spawned process tree rather than only a shell wrapper. Process tracking is scoped to one lease so releasing one evaluation lane cannot terminate another lane's work. `exec()` implementations built over `spawn()` consume both output streams and wait for process completion concurrently so final output cannot race process exit.
 
@@ -1773,7 +1881,7 @@ conditional S3 operations used by locking and publication; the generic “S3-com
 
 ### 14.7 `<File>`
 
-`<File>` writes its resolved child text beneath the active Workspace materialization:
+`<File>` writes UTF-8 text through the nearest active filesystem:
 
 ```tsx
 <Workspace provider={workspaceStore}>
@@ -1784,16 +1892,18 @@ conditional S3 operations used by locking and publication; the generic “S3-com
 </Workspace>
 ```
 
-`path` is required, relative to the Workspace root, and uses portable forward-slash syntax. Absolute paths, parent
-traversal, the root itself, symbolic-link destinations, and symbolic-link or non-directory parents reject. Missing
-parent directories are created. The completed write atomically replaces a regular destination where the host
-filesystem supports rename semantics.
+Its public props accept exactly one content source:
 
-File requires children, permits empty resolved content, and contributes no text to its surrounding prompt. A nested
-Agent may therefore generate the file without duplicating its output into the parent Agent. File is valid only inside
-a Workspace and, in the initial contract, outside any active Sandbox. Remote Sandbox guests may hold a newer copy
-than the host materialization, so guest-side File writes remain unsupported until Sandbox exposes a portable file
-operation.
+```ts
+type FileProps =
+  { path: string; src: string; children?: never } | { path: string; src?: never; children: AmlRenderable }
+```
+
+`path` is required, relative to the active filesystem root, and uses portable forward-slash syntax. Inside Sandbox the active filesystem is the live guest. Otherwise it is the active Workspace materialization. Without either scope, evaluation rejects. Absolute paths, parent traversal, the root itself, symbolic-link destinations, and symbolic-link or non-directory parents reject. Missing parent directories are created. A read-only Sandbox rejects File before writing. The completed write atomically replaces a regular destination where the filesystem supports rename semantics.
+
+Children use ordinary post-order AML evaluation and may resolve to empty text. A nested Agent may therefore generate the file without duplicating its output into the parent Agent. `src` instead identifies an application-owned local UTF-8 file using the same live, runtime-relative resolution as `<Include src>`. Source and children are mutually exclusive because implicit concatenation would obscure byte size, ordering, and ownership.
+
+File contributes no text to its surrounding prompt. Lexical placement selects its owner; there are no Workspace or Sandbox routing props. A File written before Sandbox acquisition updates the Workspace materialization and is carried into the guest by hydration. A File evaluated inside Sandbox writes the guest through `SandboxRuntime.writeFile()` so it cannot accidentally update only a stale host replica.
 
 ## 15. Provider contract
 
@@ -1984,7 +2094,7 @@ The SDK provider interfaces remain public and structurally implementable. Direct
 
 The SDK also exports optional `AbstractAgentProvider` and `AbstractSandboxProvider` authoring templates. They do not replace the structural interfaces and AML never uses `instanceof` to recognize a provider. `AbstractAgentProvider` owns the stable provider-neutral turn template for custom structural providers. Built-in coding agents use the shared ACP engine directly and do not subclass it to create vendor-specific session lifecycles. `AbstractSandboxProvider` owns staged provisioning, post-provision initialization, failure compensation, immutable lease creation, and one shared release barrier around an acknowledged `ProvisionedSandbox`, while subclasses retain environment creation, runtime translation, reconciliation, and destruction.
 
-Every concrete Agent adapter must explicitly implement its Sandbox compatibility claim; the Agent base fails closed by default. Every Sandbox command adapter may use `SandboxCommand` to capture the common command, argument, cwd, environment, signal, and timeout contract before translating it to a backend. AML validates and freezes every `SandboxRuntime.exec()` result and `SandboxRuntime.spawn()` process handle before exposing it to an Agent.
+Every concrete Agent adapter must explicitly implement its Sandbox compatibility claim; the Agent base fails closed by default. Every Sandbox command adapter may use `SandboxCommand` to capture the common command, argument, cwd, environment, signal, and timeout contract before translating it to a backend. AML validates and freezes every Sandbox file result, `SandboxRuntime.exec()` result, and `SandboxRuntime.spawn()` process handle before exposing it to a component or Agent.
 
 These bases are implementation aids rather than additional observable provider authority. A structural implementation passed through `define*Provider()` remains equally valid, and conformance plus runtime validation—not inheritance—enforces the contract.
 
@@ -2019,20 +2129,20 @@ runtime.once("finish", async ({ status }) => {
 
 Defaults:
 
-| Option                |         Default | Meaning                                               |
-| --------------------- | --------------: | ----------------------------------------------------- |
-| `agentProvider`       |            none | Default provider for Agents without a `provider` prop |
-| `maxAgentCalls`       |            `32` | Maximum Agent sessions in one evaluation              |
-| `maxConcurrentAgents` |             `4` | Maximum active Agent sessions                         |
-| `maxDepth`            |            `16` | Maximum recursive AML evaluation depth                |
-| `maxStateTransitions` |            `16` | Maximum committed Loop transitions                    |
-| `maxTurnsPerAgent`    |            `16` | Maximum authored inputs in one Agent session          |
-| `onTraceError`        |     stderr once | Out-of-band trace failure handler                     |
-| `allowedMcpServers`   |    unrestricted | Optional MCP-server-name allowlist                    |
-| `allowedTools`        |    unrestricted | Optional Tool-name allowlist                          |
-| `cwd`                 | `process.cwd()` | Base directory for local Skill files and host Scripts |
-| `system`              |           empty | First system fragment for every Agent                 |
-| `trace`               |            none | Synchronous execution-event callback                  |
+| Option                |         Default | Meaning                                                                                |
+| --------------------- | --------------: | -------------------------------------------------------------------------------------- |
+| `agentProvider`       |            none | Default provider for Agents without a `provider` prop                                  |
+| `maxAgentCalls`       |            `32` | Maximum Agent sessions in one evaluation                                               |
+| `maxConcurrentAgents` |             `4` | Maximum active Agent sessions                                                          |
+| `maxDepth`            |            `16` | Maximum recursive AML evaluation depth                                                 |
+| `maxStateTransitions` |            `16` | Maximum committed Loop transitions                                                     |
+| `maxTurnsPerAgent`    |            `16` | Maximum authored inputs in one Agent session                                           |
+| `onTraceError`        |     stderr once | Out-of-band trace failure handler                                                      |
+| `allowedMcpServers`   |    unrestricted | Optional MCP-server-name allowlist                                                     |
+| `allowedTools`        |    unrestricted | Optional Tool-name allowlist                                                           |
+| `cwd`                 | `process.cwd()` | Base directory for application-owned Include, File, and Skill sources and host Scripts |
+| `system`              |           empty | First system fragment for every Agent                                                  |
+| `trace`               |            none | Synchronous execution-event callback                                                   |
 
 For every `max*` option, `0` means unlimited. Supplied values must be non-negative safe integers.
 
@@ -2129,7 +2239,7 @@ interface TraceSink {
 }
 ```
 
-The event stream covers evaluation and component execution, application-owned phases, Agent sessions and authored turns, System and Skill resolution, JavaScript Tool calls, committed Loop transitions, and Sandbox and Workspace scope lifecycles. Tool and MCP descriptor events describe capability grants; they do not claim that a provider completed a remote attachment lifecycle AML cannot observe. `capability.tool` identifies the JavaScript Tool `name`. `capability.mcp` identifies the server `name` and whether its `kind` is `named`, `stdio`, or `streamable-http`; it never includes transport configuration.
+The event stream covers evaluation and component execution, application-owned phases, Agent sessions and authored turns, System and Include resolution, Skill staging, JavaScript Tool calls, committed Loop transitions, and Sandbox and Workspace scope lifecycles. Tool and MCP descriptor events describe capability grants; they do not claim that a provider completed a remote attachment lifecycle AML cannot observe. `capability.tool` identifies the JavaScript Tool `name`. `capability.mcp` identifies the server `name` and whether its `kind` is `named`, `stdio`, or `streamable-http`; it never includes transport configuration.
 
 Every event includes `runId`, `spanId`, a monotonically increasing evaluation-local `sequence`, and a Unix-millisecond `timestamp`. Nested events include `parentSpanId`. `span.end` reuses its `span.start` identity and reports non-negative elapsed milliseconds. An evaluation span is the root ancestor of every other span, including component-local `evaluate()` calls and concurrently scheduled Agents. Each lexical execution boundary is the direct parent of the subtree it evaluates: a component returning an Agent owns that Agent span, and Workspace, Sandbox, Loop, System, and Skill descendants remain beneath their corresponding spans.
 
@@ -2143,7 +2253,7 @@ Trace sinks supplied through the compatibility `trace` runtime option are regist
 
 Compatibility trace sinks and listeners registered through `runtime.on("trace", ...)` share the same contract. A thrown error or returned Promise cannot change workflow behavior or suppress another listener. `onTraceError(error, event)` receives every listener failure through an isolated secondary channel; otherwise AML emits at most one compact stderr warning per evaluation. Errors and asynchronous rejections from the secondary handler are swallowed.
 
-Prompts, System and Skill contents, Tool input/output, MCP configuration, filesystem paths, and model output may be sensitive. These values are omitted by default. A sink with `captureContent: true` opts only that listener into the content fields the stable runtime owns. For an event with sensitive content, the runtime constructs separate deeply immutable redacted and content-bearing snapshots and selects between them per listener. One opted-in listener never exposes content to another listener. JavaScript Tool spans serialize the already captured transport input as `input` on `span.start` and the stable Tool result as `output` on a successful `span.end` only while the evaluation has at least one content listener. Serialization failure for unusually deep JSON omits optional content without replacing Tool validation or execution. Credential-bearing MCP configuration and provider-private diagnostics are never copied into AML events.
+Prompts, System and Include contents, Skill metadata and paths, Tool input/output, MCP configuration, filesystem paths, and model output may be sensitive. These values are omitted by default. A sink with `captureContent: true` opts only that listener into the content fields the stable runtime owns. For an event with sensitive content, the runtime constructs separate deeply immutable redacted and content-bearing snapshots and selects between them per listener. One opted-in listener never exposes content to another listener. JavaScript Tool spans serialize the already captured transport input as `input` on `span.start` and the stable Tool result as `output` on a successful `span.end` only while the evaluation has at least one content listener. Serialization failure for unusually deep JSON omits optional content without replacing Tool validation or execution. Credential-bearing MCP configuration and provider-private diagnostics are never copied into AML events.
 
 `createConsoleTracer()` renders the same event tree with indentation, span status, elapsed time, safe attributes, and optional captured content. It omits repetitive ACP `agent_message_chunk`, `agent_thought_chunk`, and `tool_call_update` point events without removing them from the trace stream, while an initial `tool_call` includes the optional programmatic `toolName` when supplied. A custom writer may be synchronous or asynchronous; throws and rejections are isolated and reported through the runtime trace-error channel. OpenTelemetry remains a possible consumer package after the event contract is proven; this phase does not export `createOpenTelemetryTraceSink()` or add an OpenTelemetry dependency.
 
@@ -2261,8 +2371,7 @@ AML does not specify:
 - SFTP Workspace storage
 - Google Drive Workspace storage
 - first-class Git checkout, worktree, commit, push, or pull-request behavior
-- Workspace-owned Skill materialization
-- File host sources, append/create modes, binary content, and guest-side writes
+- File append/create modes and authored binary content
 - independent nested Sandbox acquisition
 - installation or execution of remote Skill bundles
 
@@ -2290,7 +2399,7 @@ function Reviewer() {
   return (
     <Agent>
       <Tool use={loadPatch} />
-      <Skill src="./skills/evidence.md" />
+      <Include src="./prompts/evidence.md" />
       Review the patch and identify the highest-risk finding.
       <FollowUp>Challenge that finding against the surrounding implementation.</FollowUp>
       <FollowUp>Return the final finding as structured output.</FollowUp>

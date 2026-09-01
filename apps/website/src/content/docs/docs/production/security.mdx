@@ -79,7 +79,7 @@ The example’s implementation is intentionally illustrative: production code mu
 
 ## Filesystem and Workspace safety
 
-`<File />` and Agent filesystem actions require an active Workspace. A Workspace’s `id` selects the durable identity; `lock` rejects healthy competing writers, while `writeConcurrency="serial"` controls writable Sandbox scheduling within one evaluation. They are separate controls. The S3 lock is not a strict fencing primitive because ownership verification and deletion are separate requests; rely on conditional index publication to reject stale revision publication and use external fencing when the workload requires it.
+`<File />` uses the nearest active filesystem: a Sandbox guest first, otherwise a Workspace materialization. Agent filesystem actions follow the selected provider and Sandbox mapping. A Workspace’s `id` selects the durable identity; `lock` rejects healthy competing writers, while `writeConcurrency="serial"` controls writable Sandbox scheduling within one evaluation. They are separate controls. The S3 lock is not a strict fencing primitive because ownership verification and deletion are separate requests; rely on conditional index publication to reject stale revision publication and use external fencing when the workload requires it.
 
 Revision-backed providers publish a new artifact and then conditionally publish the current index. A stale writer must fail rather than silently overwrite a newer revision. Handle `WorkspaceConflictError` as an ownership conflict; do not classify every S3 precondition or save error as a lock conflict.
 

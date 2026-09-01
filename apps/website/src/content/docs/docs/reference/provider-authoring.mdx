@@ -158,8 +158,12 @@ const internalSandbox: SandboxProvider<{ environmentId: string }> = {
       access: request.access,
       cwd: request.cwd,
       root: request.root,
+      createFileStaging: options => environment.createFileStaging(options),
       exec: (command, args, options) => environment.exec(command, args, options),
+      readFile: (path, options) => environment.readFile(path, options),
       spawn: (command, args, options) => environment.spawn(command, args, options),
+      stat: (path, options) => environment.stat(path, options),
+      writeFile: (path, content, options) => environment.writeFile(path, content, options),
     }
 
     return {
@@ -174,16 +178,16 @@ const internalSandbox: SandboxProvider<{ environmentId: string }> = {
 export const sandboxProvider = defineSandboxProvider(internalSandbox)
 ```
 
-The runtime must preserve the acquired access, root, and cwd. `exec()` receives one executable plus literal arguments and returns bounded stdout, stderr, and exit code. `spawn()` exposes standard Web streams, repeat-safe `kill()`, and repeat-safe `wait()`. Provider shell quoting is an implementation detail; do not silently merge arbitrary arguments into one shell string.
+The runtime must preserve the acquired access, root, and cwd. `exec()` receives one executable plus literal arguments and returns bounded stdout, stderr, and exit code. `spawn()` exposes standard Web streams, repeat-safe `kill()`, and repeat-safe `wait()`. `readFile()`, `stat()`, and `writeFile()` operate on complete files beneath the logical Sandbox root; writes must replace rather than append and reject read-only access. `createFileStaging()` returns a unique writable Agent-visible root with confined relative writes and repeat-safe release, even when the live Workspace filesystem is read-only. Provider shell quoting is an implementation detail; do not silently merge arbitrary arguments into one shell string.
 
-The implementation owns path translation, timeouts, signal propagation, combined output limits, process-tree cleanup, access enforcement, and release after partial failure. If the backend cannot enforce read-only execution, reject command/process work under `access="read-only"` rather than recording a flag and continuing.
+The implementation owns path translation, traversal and symlink confinement, complete-file metadata and bytes, timeouts, signal propagation, combined output limits, process-tree cleanup, access enforcement, staging cleanup, and release after partial failure. If the backend cannot enforce read-only execution, reject command/process work under `access="read-only"` rather than recording a flag and continuing. Read-only live files may still be read, and invocation-private Agent staging must remain writable because it is outside durable Workspace state.
 
 ### Staged Sandbox base
 
 `AbstractSandboxProvider<Name, Handle, Resource>` owns the common acquisition barrier:
 
 1. `provision()` creates an acknowledged provider resource.
-2. `createRuntime()` translates it into AML's portable command runtime.
+2. `createRuntime()` translates it into AML's portable process and filesystem runtime.
 3. `initialize()` performs optional hydration or trusted setup.
 4. any failure after provisioning calls `cleanupProvisioned()`;
 5. the exposed lease memoizes `releaseResource()` so release is idempotent.
@@ -271,7 +275,7 @@ await sandboxProviderConformance(sandboxProvider)
 await workspaceProviderConformance(workspaceProvider)
 ```
 
-The helpers are ordinary async functions and do not require a particular test runner. They check the portable boundary, including pre-cancelled Agent execution, Sandbox lease shape and release, and Workspace conflict/save/release/restoration behavior.
+The helpers are ordinary async functions and do not require a particular test runner. They check the portable boundary, including pre-cancelled Agent execution, Sandbox lease and runtime shape plus release, and Workspace conflict/save/release/restoration behavior. Sandbox command and filesystem behavior remains the responsibility of provider-specific tests.
 
 <Aside type="caution" title="Conformance is not certification">
   Add provider-specific evidence for executable and protocol versions, credentials, image startup, output overflow,
