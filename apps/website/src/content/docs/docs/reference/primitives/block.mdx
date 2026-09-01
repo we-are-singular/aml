@@ -3,7 +3,7 @@ title: "<Block />"
 description: Add exact blank-line separation or a named model-facing section without creating a runtime scope.
 ---
 
-`<Block />` is a transparent authoring component for deliberate prompt separation. With children it contributes exactly two newline characters before and after them; without children it contributes one `"\n\n"` separator. Add `tag` when the content should also become an explicit XML-style section for the model.
+`<Block />` is a transparent authoring component for deliberate prompt separation. With children it contributes exactly two newline characters before and after them; without children, or with a direct AML-empty boolean, `null`, or `undefined` child, it contributes one `"\n\n"` separator. Add `tag` when the content should also become an explicit XML-style section for the model.
 
 ```tsx
 import { Agent, Block } from "@aml-jsx/sdk"
@@ -36,7 +36,7 @@ Cite concrete evidence for every finding.
 | `children` | `AmlRenderable` | empty    | Content placed between the leading and trailing blank lines.                               |
 | `tag`      | `string`        | untagged | Optional section name normalized to lowercase ASCII kebab-case and wrapped around content. |
 
-`tag="Personal Data"`, `tag="personal_data"`, and `tag="personal-data"` all render `<personal-data>`. Camel-case boundaries and runs of punctuation or whitespace become one hyphen. `<` and `/` are neutralized before normalization; if no letters or digits remain, the Block stays untagged. AML does not trim or escape the children.
+`tag="Personal Data"`, `tag="personal_data"`, and `tag="personal-data"` all render `<personal-data>`. Camel-case boundaries and runs of punctuation or whitespace become one hyphen, including `<` and `/`, so authored text cannot inject another XML-style tag. If no letters or digits remain, the Block stays untagged. AML does not trim or escape the children.
 
 ## Composition
 
