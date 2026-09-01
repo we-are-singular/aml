@@ -705,7 +705,7 @@ Authored order determines visibility:
 
 File writes the host materialization before Sandbox acquisition, Workspace hydration makes that file visible in the guest, and Include then reads the live guest copy before the Agent session begins.
 
-`maxBytes` is an optional positive safe integer measured against the file's byte length. Omission inlines the complete file. At or below the limit, Include decodes and emits valid UTF-8 content. Above the limit, Include emits an instruction containing the actual byte count and configured limit rather than the content. AML does not decode an oversized file: an oversized `path` source references the same authored Agent-visible path, while an oversized `src` source is copied byte-for-byte into the Agent's ephemeral staging filesystem at an AML-generated execution path and references that staged path. Authors do not provide a second destination prop.
+`maxBytes` is an optional positive safe integer measured against the file's byte length. Omission inlines the complete file. At or below the limit, Include decodes and emits valid UTF-8 content. Above the limit, Include emits an instruction containing the actual byte count and configured limit rather than the content. AML does not decode an oversized file. An oversized `path` inside a Sandbox references the live file relative to the effective Agent cwd without copying it. An oversized `path` backed only by a host Workspace and every oversized `src` are copied byte-for-byte into the containing Agent's ephemeral staging filesystem and reference that staged path. Authors do not provide a second destination prop, and an Include that requires staging is invalid outside an Agent.
 
 The default rendered form is:
 
@@ -758,7 +758,7 @@ Skill installation from skills.sh, another registry, or a remote URL is outside 
 
 ### 7.3 Shared Agent staging
 
-An Agent prepares one ephemeral Agent-visible staging filesystem before resolving prompt Includes and before opening its provider session. Skill packages and oversized local Includes copy through that boundary. Each staged Skill exposes its concrete `.agents` home, package directory, and `SKILL.md` path so provider adapters can map canonical locations to native discovery without deriving filesystem ownership from package depth. AML removes invocation-owned staging after the session settles, including on failure or cancellation, while files deliberately written into a Workspace remain owned by that Workspace's save policy.
+An Agent prepares one ephemeral Agent-visible staging filesystem before resolving prompt Includes and before opening its provider session. Skill packages and oversized Includes that cannot reference a live Sandbox path copy through that boundary. Each staged Skill exposes its concrete `.agents` home, package directory, and `SKILL.md` path so provider adapters can map canonical locations to native discovery without deriving filesystem ownership from package depth. AML removes invocation-owned staging after the session settles, including on failure or cancellation, while files deliberately written into a Workspace remain owned by that Workspace's save policy.
 
 ## 8. Tools
 

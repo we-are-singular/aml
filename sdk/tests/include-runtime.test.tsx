@@ -168,28 +168,73 @@ describe("<Include>", () => {
     }
   })
 
-  it("references an oversized active file without copying it", async () => {
+  it("stages an oversized host Workspace file at a readable Agent path", async () => {
     const directory = await temporaryDirectory("aml-include-path-limit-")
     const workspace = new DeterministicWorkspaceProvider({ directory })
+    let stagedPath = ""
+    const provider = new DeterministicAgentProvider({
+      async respond(request) {
+        stagedPath = /Read it at `([^`]+)`\./.exec(request.prompt)?.[1] ?? ""
+        expect(request.prompt).toBe(
+          [
+            "## Contents of `large.txt`",
+            "",
+            `The file is 10 bytes, exceeding the 4-byte inline limit. Read it at \`${stagedPath}\`.`,
+          ].join("\n")
+        )
+        expect(await readFile(stagedPath, "utf8")).toBe("0123456789")
+        return { text: "done" }
+      },
+    })
 
     try {
       await writeFile(path.join(directory, "large.txt"), "0123456789")
       await expect(
         new AmlRuntime().evaluate(
           <Workspace id="include-path-limit" provider={workspace}>
-            <Include maxBytes={4} path="large.txt" />
+            <Agent provider={provider}>
+              <Include maxBytes={4} path="large.txt" />
+            </Agent>
           </Workspace>
         )
-      ).resolves.toBe(
-        [
-          "## Contents of `large.txt`",
-          "",
-          "The file is 10 bytes, exceeding the 4-byte inline limit. Read it at `large.txt`.",
-        ].join("\n")
-      )
+      ).resolves.toBe("done")
+      expect(stagedPath).toContain(`${path.sep}.aml${path.sep}includes${path.sep}`)
+      await expect(access(stagedPath)).rejects.toMatchObject({ code: "ENOENT" })
     } finally {
       await rm(directory, { force: true, recursive: true })
     }
+  })
+
+  it("references an oversized Sandbox file relative to the effective Agent cwd", async () => {
+    const sandbox = new DeterministicSandboxProvider()
+    const provider = new DeterministicAgentProvider({
+      async respond(request, context) {
+        const readablePath = /Read it at `([^`]+)`\./.exec(request.prompt)?.[1] ?? ""
+        expect(request.prompt).toBe(
+          [
+            "## Contents of `large.txt`",
+            "",
+            "The file is 10 bytes, exceeding the 4-byte inline limit. Read it at `../large.txt`.",
+          ].join("\n")
+        )
+        expect(context.sandbox?.cwd).toBe("nested")
+        const resolvedPath = path.posix.normalize(path.posix.join(context.sandbox?.cwd ?? ".", readablePath))
+        expect(new TextDecoder().decode(await context.sandbox?.lease.runtime.readFile(resolvedPath))).toBe("0123456789")
+        return { text: "done" }
+      },
+      supportsSandbox: () => true,
+    })
+
+    await expect(
+      new AmlRuntime().evaluate(
+        <Sandbox access="read-write" cwd="nested" provider={sandbox}>
+          <File path="large.txt">0123456789</File>
+          <Agent provider={provider}>
+            <Include maxBytes={4} path="large.txt" />
+          </Agent>
+        </Sandbox>
+      )
+    ).resolves.toBe("done")
   })
 
   it("rejects missing scope, oversized source without an Agent, inline invalid UTF-8, and invalid props", async () => {
@@ -207,6 +252,13 @@ describe("<Include>", () => {
       await expect(runtime.evaluate(<Include maxBytes={4} src="./large.txt" />)).rejects.toThrow(
         "requires a containing <Agent>"
       )
+      await expect(
+        runtime.evaluate(
+          <Workspace id="include-path-without-agent" provider={new DeterministicWorkspaceProvider({ directory })}>
+            <Include maxBytes={4} path="large.txt" />
+          </Workspace>
+        )
+      ).rejects.toThrow("an oversized <Include path> in a host Workspace requires a containing <Agent>")
       await expect(runtime.evaluate(<Include src="./binary" />)).rejects.toThrow("must be valid UTF-8")
       await expect(runtime.evaluate(<Include src="./folder" />)).rejects.toThrow("must identify a regular file")
       await expect(runtime.evaluate(<Include maxBytes={0} src="./large.txt" />)).rejects.toThrow(

@@ -40,7 +40,7 @@ export class IncludeEvaluator {
 
     try {
       return captured.source === "path"
-        ? await this.#fromActivePath(captured, filesystem, signal)
+        ? await this.#fromActivePath(captured, filesystem, staging, signal)
         : await this.#fromLocalSource(captured, staging, signal)
     } catch (cause) {
       signal.throwIfAborted()
@@ -56,6 +56,7 @@ export class IncludeEvaluator {
   async #fromActivePath(
     input: CapturedIncludeProps,
     filesystem: ActiveFilesystem | undefined,
+    staging: AgentFileStaging | undefined,
     signal: AbortSignal
   ): Promise<Readonly<IncludeEvaluationResult>> {
     if (filesystem === undefined) {
@@ -70,28 +71,71 @@ export class IncludeEvaluator {
     }
 
     if (input.maxBytes !== undefined && metadata.size > input.maxBytes) {
-      return result(
+      return await this.#oversizedActivePath(
         input,
-        input.value,
-        readInstruction(input.value, metadata.size, input.maxBytes),
-        false,
-        metadata.size
+        filesystem,
+        staging,
+        resolvedPath,
+        input.maxBytes,
+        metadata.size,
+        signal
       )
     }
 
     const bytes = await filesystem.readFile(resolvedPath, signal)
 
     if (input.maxBytes !== undefined && bytes.byteLength > input.maxBytes) {
-      return result(
+      return await this.#oversizedActivePath(
         input,
-        input.value,
-        readInstruction(input.value, bytes.byteLength, input.maxBytes),
-        false,
-        bytes.byteLength
+        filesystem,
+        staging,
+        resolvedPath,
+        input.maxBytes,
+        bytes.byteLength,
+        signal,
+        bytes
       )
     }
 
     return result(input, input.value, decode(bytes), true, bytes.byteLength)
+  }
+
+  async #oversizedActivePath(
+    input: CapturedIncludeProps,
+    filesystem: ActiveFilesystem,
+    staging: AgentFileStaging | undefined,
+    resolvedPath: string,
+    maxBytes: number,
+    observedSize: number,
+    signal: AbortSignal,
+    content?: Uint8Array
+  ): Promise<Readonly<IncludeEvaluationResult>> {
+    const readablePath = filesystem.agentReadablePath(resolvedPath)
+
+    if (readablePath !== undefined) {
+      return result(input, input.value, readInstruction(readablePath, observedSize, maxBytes), false, observedSize)
+    }
+
+    if (staging === undefined) {
+      throw new EvaluationError("an oversized <Include path> in a host Workspace requires a containing <Agent>")
+    }
+
+    const bytes = content ?? (await filesystem.readFile(resolvedPath, signal))
+
+    // The file may change between stat and read; apply the limit to the bytes
+    // that will actually be staged or inlined.
+    if (bytes.byteLength <= maxBytes) {
+      return result(input, input.value, decode(bytes), true, bytes.byteLength)
+    }
+
+    const stagedFile = await staging.writeFile(includeStagingPath(input.value), bytes)
+    return result(
+      input,
+      input.value,
+      readInstruction(stagedFile.path, bytes.byteLength, maxBytes),
+      false,
+      bytes.byteLength
+    )
   }
 
   async #fromLocalSource(

@@ -41,7 +41,7 @@ Exactly one of `src` or `path` is required. `<Include />` does not accept childr
 
 `src` is trusted application-file access. AML resolves it from the runtime cwd and reads it live on every evaluation; an enclosing Workspace or Sandbox does not change that source. If the file exceeds `maxBytes`, `<Include src>` must be inside an Agent: AML copies the complete file byte-for-byte into that Agent's private staging area without decoding it and authors a read instruction containing the concrete Agent-visible path.
 
-`path` is workflow-file access. AML resolves it from the nearest lexical filesystem owner, preferring the live Sandbox guest over an enclosing Workspace materialization. It requires one of those scopes. If the file exceeds `maxBytes`, AML does not copy or decode it; the authored instruction names the same portable path supplied by the application.
+`path` is workflow-file access. AML resolves it from the nearest lexical filesystem owner, preferring the live Sandbox guest over an enclosing Workspace materialization. It requires one of those scopes. If the file exceeds `maxBytes` inside a Sandbox, AML leaves the file in place without decoding it and authors a path relative to the effective Agent cwd. Without a Sandbox, an oversized host-Workspace path must be inside an Agent; AML copies its bytes without decoding into that Agent's private staging area and authors the concrete staged path. The default heading still names the authored `path`.
 
 ```tsx
 <Workspace id="review" provider={workspace}>
@@ -53,4 +53,4 @@ Exactly one of `src` or `path` is required. `<Include />` does not accept childr
 </Workspace>
 ```
 
-Oversized local staging is ephemeral and released with the containing Agent. Use [`<File />`](/docs/reference/primitives/file/) when the intent is to write or copy a file into a Workspace or Sandbox filesystem, and use [`<Skill />`](/docs/reference/primitives/skill/) when the Agent should discover a complete Agent Skills package progressively instead of receiving prompt content immediately.
+Oversized staging is ephemeral and released with the containing Agent. Use [`<File />`](/docs/reference/primitives/file/) when the intent is to write or copy a file into a Workspace or Sandbox filesystem, and use [`<Skill />`](/docs/reference/primitives/skill/) when the Agent should discover a complete Agent Skills package progressively instead of receiving prompt content immediately.
