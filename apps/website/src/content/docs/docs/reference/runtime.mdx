@@ -64,7 +64,9 @@ Evaluation is post-order: child components resolve before their containing `<Age
 
 ## Component-local evaluation
 
-The `evaluate` export is available only inside an active function component. It inherits the current lexical context, Sandbox, Workspace, trace parent, limits, and cancellation. It does not create a new runtime or provider session, and detached work is rejected after its AML evaluation domain closes.
+The `evaluate` export is available only inside an active function component. It is the explicit **evaluate to collect** operation: the component pauses, AML resolves the supplied nested value, and TypeScript receives that result before the component continues and returns its next AML value. By contrast, returning JSX without evaluating it is **return to compose**: the function body ends and the returned subtree resolves naturally as the component's output. [The component mental model](/docs/concepts/#component-bodies-descend-results-ascend) explains the downward component-execution and upward result-flow directions.
+
+Component-local `evaluate()` inherits the current lexical context, Sandbox, Workspace, trace parent, limits, and cancellation. It does not create a new runtime or provider session, and detached work is rejected after its AML evaluation domain closes.
 
 | Call                              | Use it when…                                                                                                   |
 | --------------------------------- | -------------------------------------------------------------------------------------------------------------- |

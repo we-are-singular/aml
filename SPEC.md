@@ -309,6 +309,13 @@ All components are asynchronous computations even when their functions do not us
 
 AML invokes a component exactly once for each evaluated occurrence and awaits its result. Reusing the same JSX value in two authored positions creates two evaluated occurrences; AML does not memoize component results by element identity.
 
+Function component bodies execute as AML descends into their node during evaluation; they do not execute when the JSX descriptor is authored. After a component returns, AML resolves that returned value and its result flows upward. AML names the two authoring patterns **return to compose** and **evaluate to collect**:
+
+- `return <Bar />` finishes the component body and composes `Bar` into natural post-order resolution. The component does not receive `Bar`'s result as local data.
+- `const bar = await evaluate(<Bar />)` pauses the component, resolves `Bar` in the same evaluation domain, and collects its result before ordinary TypeScript continues.
+
+A value computed before `return <Bar />` cannot depend on work performed later by `Bar`. If later TypeScript must inspect, validate, transform, or branch on that result, it must await component-local `evaluate()` first.
+
 ```tsx
 async function Workflow() {
   const research = await evaluate(<Agent>Research the customer.</Agent>)

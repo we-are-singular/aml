@@ -10,7 +10,7 @@ component-local [`evaluate()`](/docs/reference/runtime/#component-local-evaluati
 cleanup, then contributes successful text in authored order.
 
 ```tsx
-import { Agent, AmlRuntime, Parallel } from "@aml-jsx/sdk"
+import { Agent, AmlRuntime, Block, Parallel } from "@aml-jsx/sdk"
 
 function CorrectnessLane() {
   return <Agent>Review correctness.</Agent>
@@ -23,8 +23,12 @@ function SecurityLane() {
 const result = await new AmlRuntime({ agentProvider }).evaluate(
   <Agent system="Synthesize only the supplied reviews.">
     <Parallel>
-      <CorrectnessLane />
-      <SecurityLane />
+      <Block>
+        <CorrectnessLane />
+      </Block>
+      <Block>
+        <SecurityLane />
+      </Block>
     </Parallel>
   </Agent>
 )
@@ -71,8 +75,20 @@ ordinary sequential semantics:
 </Parallel>
 ```
 
-Branch output is isolated while work is active. Completion order never changes the rendered result order, and AML does
-not insert separators between branch strings.
+Branch output is isolated while work is active. Completion order never changes the rendered result order, and AML does not insert separators between branch strings. Use [`<Block />`](/docs/reference/primitives/block/) when each branch should remain a distinct Markdown section:
+
+```tsx
+<Parallel>
+  {reviewKinds.map(kind => (
+    <Block>
+      ## {kind} review
+      <Agent>Review {kind}.</Agent>
+    </Block>
+  ))}
+</Parallel>
+```
+
+Without those Blocks, the first Agent's final character and the next heading may be adjacent in the parent prompt.
 
 ## Structured branch output
 

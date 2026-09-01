@@ -69,6 +69,8 @@ They are AML components. Each component adds one piece of the workflow. For exam
 
 They are TypeScript values rather than UI elements. The [component reference](/docs/reference/primitives/) lists each public component and links to focused examples.
 
+During evaluation, function component bodies run as AML descends into the tree and resolved values flow upward. [Component bodies descend; results ascend](/docs/concepts/#component-bodies-descend-results-ascend) explains when to return AML for natural composition and when to `await evaluate(...)` to collect a nested result before continuing.
+
 ### When does the work actually start?
 
 Creating JSX only builds a description of the workflow. No agent starts until your application asks AML to evaluate that value with `runtime.evaluate(tree)`, or the CLI evaluates an exported tree with `aml run`. This makes it possible to construct and inspect a workflow before it performs outside work.

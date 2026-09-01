@@ -92,6 +92,8 @@ and cleanup joining without adding a second evaluator primitive.
 
 `<Agent />` is a post-order consumer: its child content and descriptors resolve before the session starts. `<Workspace />` and `<Sandbox />` are lexical scopes: each enters before descendants and releases after them.
 
+Function component bodies run as AML descends into their descriptors. Returning AML then lets that value resolve naturally and flow upward; this is **return to compose**. If the component body instead needs a nested result before it can decide what to return, it must `await evaluate(...)`; this is **evaluate to collect**. [The component mental model](/docs/concepts/#component-bodies-descend-results-ascend) shows both forms and why neither happens at JSX authoring time.
+
 ```tsx
 <Workspace id="review" provider={workspaceProvider}>
   <Sandbox provider={sandboxProvider}>
@@ -120,7 +122,7 @@ The actual runtime uses an explicit frame stack rather than relying on JavaScrip
 
 ## Component-local `evaluate()`
 
-[`evaluate()`](/docs/reference/runtime/#component-local-evaluation) is only valid while an AML function component is active. It evaluates another value in the current domain and returns its text, or validates one [`<Agent />`](/docs/reference/primitives/agent/) result against a Standard Schema-compatible schema:
+[`evaluate()`](/docs/reference/runtime/#component-local-evaluation) is only valid while an AML function component is active. It is AML's **evaluate to collect** boundary: the component pauses, the nested value resolves in the current domain, and the call returns its text or validates one [`<Agent />`](/docs/reference/primitives/agent/) result against a Standard Schema-compatible schema before the component body continues:
 
 ```tsx
 import { Agent, evaluate } from "@aml-jsx/sdk"
