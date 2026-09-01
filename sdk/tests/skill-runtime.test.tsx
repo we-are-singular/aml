@@ -101,6 +101,35 @@ describe("<Skill>", () => {
     }
   })
 
+  it("collects an Agent-level Skill declared after a FollowUp as session metadata", async () => {
+    const directory = await temporaryDirectory()
+
+    try {
+      await writeSkill(directory, "review", "Review code.")
+      const provider = new DeterministicAgentProvider({
+        respond(request) {
+          expect(request.prompt).toBe("Inspect the change.")
+          expect(request.followUps).toEqual(["Re-check the evidence."])
+          expect(request.skills).toHaveLength(1)
+          expect(request.system).toContain("## Available skill: `review`")
+          return { text: "done" }
+        },
+      })
+
+      await expect(
+        new AmlRuntime({ cwd: directory }).evaluate(
+          <Agent provider={provider}>
+            Inspect the change.
+            <FollowUp>Re-check the evidence.</FollowUp>
+            <Skill src="./review" />
+          </Agent>
+        )
+      ).resolves.toBe("done")
+    } finally {
+      await rm(directory, { force: true, recursive: true })
+    }
+  })
+
   it("reads package metadata live for every evaluation", async () => {
     const directory = await temporaryDirectory()
     const descriptions: string[] = []

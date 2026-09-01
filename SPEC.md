@@ -752,7 +752,7 @@ Read `{agent-visible staging root}/.agents/skills/name/SKILL.md` when this skill
 
 AML never inlines the Skill body automatically. Both native discovery and the metadata fallback preserve progressive disclosure by putting the package on disk and telling the Agent when and where to read it. Lack of native discovery is therefore not an error; invalid packages and failed materialization remain errors.
 
-Skill is an Agent-session descriptor. After component and Fragment expansion it must be declared at Agent level, where the package remains available to the initial input and every FollowUp. Skill inside System or FollowUp, outside Agent, or after the first FollowUp is invalid.
+Skill is an Agent-session descriptor. After component and Fragment expansion it must be declared at Agent level, where the package remains available to the initial input and every FollowUp. Skill inside System or FollowUp, or outside Agent, is invalid. Agent-level declaration order relative to FollowUps does not change its session-wide lifetime because the complete Agent plan resolves before the first turn.
 
 Skill installation from skills.sh, another registry, or a remote URL is outside AML. Applications may audit and install remote packages during their own build or image construction, then pass the resulting local directory through `src`. AML neither runs package scripts nor grants extra permissions because a file belongs to a Skill.
 
