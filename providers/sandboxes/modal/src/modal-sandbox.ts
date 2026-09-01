@@ -421,7 +421,9 @@ function createRuntime(
 
       try {
         await abortable(sandbox.filesystem.writeBytes(content, temporary), signal)
-        const replacement = await runtime.exec("mv", ["--", temporary, destination], { signal })
+        // `mv` otherwise treats an existing directory as a container and reports
+        // success after moving the temporary file inside it.
+        const replacement = await runtime.exec("mv", ["-T", "--", temporary, destination], { signal })
 
         if (replacement.exitCode !== 0) {
           throw new Error(`Modal Sandbox file replacement failed: ${replacement.stderr.trim()}`)
