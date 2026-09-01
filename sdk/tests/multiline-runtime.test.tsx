@@ -3,15 +3,15 @@ import ts from "@typescript/typescript6"
 
 import { Block } from "../src/components/block/block.js"
 import { AmlRuntime } from "../src/core/aml-runtime.js"
-import { markdown } from "../src/core/markdown.js"
+import { multiline } from "../src/core/multiline.js"
 import { jsxDEV } from "../src/jsx-dev-runtime.js"
 
-describe("markdown", () => {
+describe("multiline", () => {
   it("preserves headings, paragraphs, and unordered and ordered lists", async () => {
     await expect(
       new AmlRuntime().evaluate(
         <Block>
-          {markdown`
+          {multiline`
             # Review
 
             Review the change:
@@ -36,7 +36,7 @@ describe("markdown", () => {
     await expect(
       new AmlRuntime().evaluate(
         <Block tag="Review Plan">
-          {markdown`
+          {multiline`
             ## Priority
 
             Check ${priority} first.
@@ -55,7 +55,7 @@ describe("markdown", () => {
       `
         const result = (
           <Block>
-            {markdown\`
+            {multiline\`
               Review the change:
 
               - Check behavior
@@ -74,9 +74,9 @@ describe("markdown", () => {
     ).outputText
 
     expect(transformed).toContain('from "@aml-jsx/sdk/jsx-dev-runtime"')
-    expect(transformed).toContain("children: markdown `\n              Review the change:")
+    expect(transformed).toContain("children: multiline `\n              Review the change:")
 
-    const content = markdown`
+    const content = multiline`
       Review the change:
 
       - Check behavior
@@ -87,6 +87,29 @@ describe("markdown", () => {
     await expect(new AmlRuntime().evaluate(developmentBlock)).resolves.toBe(
       "\n\nReview the change:\n\n- Check behavior\n- Check tests\n\n"
     )
+  })
+
+  it("dedents a direct string child through Block's convenience prop", async () => {
+    await expect(
+      new AmlRuntime().evaluate(
+        <Block multiline>{`
+          Review the change:
+
+          - Check behavior
+          - Check tests
+        `}</Block>
+      )
+    ).resolves.toBe("\n\nReview the change:\n\n- Check behavior\n- Check tests\n\n")
+  })
+
+  it("leaves non-string Block children unchanged in multiline mode", async () => {
+    await expect(
+      new AmlRuntime().evaluate(
+        <Block multiline>
+          before<Block>nested</Block>after
+        </Block>
+      )
+    ).resolves.toBe("\n\nbefore\n\nnested\n\nafter\n\n")
   })
 
   it("does not change ordinary JSX sibling concatenation", async () => {

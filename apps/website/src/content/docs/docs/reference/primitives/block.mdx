@@ -31,15 +31,15 @@ Cite concrete evidence for every finding.
 
 ## Multiline Markdown
 
-TypeScript's JSX transform collapses whitespace in natural multiline text children before AML receives them. Use the `markdown` template tag when headings, paragraphs, blank lines, or list boundaries are part of the prompt:
+TypeScript's JSX transform collapses whitespace in natural multiline text children before AML receives them. Add `multiline` to a Block with one direct template-literal string when headings, paragraphs, blank lines, or list boundaries are part of the prompt:
 
 ```tsx
-import { Block, markdown } from "@aml-jsx/sdk"
+import { Block } from "@aml-jsx/sdk"
 
 function Instructions() {
   return (
-    <Block>
-      {markdown`
+    <Block multiline>
+      {`
         Review the change:
 
         - Check behavior
@@ -61,14 +61,36 @@ Review the change:
 - Check documentation
 ```
 
-The tag removes an opening and closing blank source line plus the indentation shared by every non-blank line. It preserves additional indentation, intentional blank lines, and nested expressions such as `${priority}` or `${<Include src="./policy.md" />}`. Use `markdown` only where source line structure is semantic; ordinary JSX text and sibling concatenation remain unchanged.
+The Block removes an opening and closing blank source line plus the indentation shared by every non-blank line. It preserves additional indentation and intentional blank lines. The convenience applies only to a direct string child; non-string children retain normal Block behavior.
+
+Use the `multiline` template tag when the text needs nested AML expressions. Unlike an ordinary template literal, the tag keeps interpolated values as renderables instead of stringifying them:
+
+```tsx
+import { Block, Include, multiline } from "@aml-jsx/sdk"
+
+const scope = "implementation"
+const checks = <Include src="./checks.md" />
+
+export default (
+  <Block>
+    {multiline`
+      Review ${scope}:
+
+      ${checks}
+    `}
+  </Block>
+)
+```
+
+Both forms use the same indentation rules. Use them only where source line structure is semantic; ordinary JSX text and sibling concatenation remain unchanged.
 
 ## Props
 
-| Prop       | Type            | Default  | Meaning                                                                                    |
-| ---------- | --------------- | -------- | ------------------------------------------------------------------------------------------ |
-| `children` | `AmlRenderable` | empty    | Content placed between the leading and trailing blank lines.                               |
-| `tag`      | `string`        | untagged | Optional section name normalized to lowercase ASCII kebab-case and wrapped around content. |
+| Prop        | Type            | Default  | Meaning                                                                                    |
+| ----------- | --------------- | -------- | ------------------------------------------------------------------------------------------ |
+| `children`  | `AmlRenderable` | empty    | Content placed between the leading and trailing blank lines.                               |
+| `multiline` | `boolean`       | `false`  | Dedent one direct string child while preserving its semantic line structure.               |
+| `tag`       | `string`        | untagged | Optional section name normalized to lowercase ASCII kebab-case and wrapped around content. |
 
 `tag="Personal Data"`, `tag="personal_data"`, and `tag="personal-data"` all render `<personal-data>`. Camel-case boundaries and runs of punctuation or whitespace become one hyphen, including `<` and `/`, so authored text cannot inject another XML-style tag. If no letters or digits remain, the Block stays untagged. AML does not trim or escape the children.
 

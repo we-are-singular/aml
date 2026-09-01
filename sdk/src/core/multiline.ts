@@ -1,21 +1,21 @@
 import type { AmlRenderable } from "./aml-node.js"
 
 /**
- * Authors multiline Markdown without leaking surrounding TSX indentation.
+ * Authors multiline prompt text without leaking surrounding TSX indentation.
  *
  * The tag removes the first and last blank source lines and the indentation
  * shared by every non-blank line. Interpolated AML values retain their types
  * and authored positions so nodes, promises, and conditional content continue
  * through the normal evaluator rather than being stringified.
  */
-export function markdown(strings: TemplateStringsArray, ...values: readonly AmlRenderable[]): AmlRenderable {
+export function multiline(strings: TemplateStringsArray, ...values: readonly AmlRenderable[]): AmlRenderable[] {
   const markerPrefix = uniqueTemplateMarkerPrefix(strings)
   const source = strings.reduce(
     (result, string, index) =>
       result + string + (index < values.length ? templateValueMarker(markerPrefix, index) : ""),
     ""
   )
-  const content = stripFormattingIndentation(source)
+  const content = dedentMultilineText(source)
   const result: AmlRenderable[] = []
   let start = 0
 
@@ -31,17 +31,8 @@ export function markdown(strings: TemplateStringsArray, ...values: readonly AmlR
   return result
 }
 
-function uniqueTemplateMarkerPrefix(strings: TemplateStringsArray): string {
-  let prefix = "\u{e000}aml-markdown"
-  while (strings.some(string => string.includes(prefix))) prefix += "\u{e000}"
-  return prefix
-}
-
-function templateValueMarker(prefix: string, index: number): string {
-  return `${prefix}-${index}\u{e001}`
-}
-
-function stripFormattingIndentation(source: string): string {
+/** Removes source-formatting indentation while preserving semantic line structure. */
+export function dedentMultilineText(source: string): string {
   const lines = source.split("\n")
   if (lines[0]?.trim().length === 0) lines.shift()
   if (lines.at(-1)?.trim().length === 0) lines.pop()
@@ -54,4 +45,14 @@ function stripFormattingIndentation(source: string): string {
 
   if (indentation === undefined || indentation === 0) return lines.join("\n")
   return lines.map(line => (line.trim().length === 0 ? "" : line.slice(indentation))).join("\n")
+}
+
+function uniqueTemplateMarkerPrefix(strings: TemplateStringsArray): string {
+  let prefix = "\u{e000}aml-multiline"
+  while (strings.some(string => string.includes(prefix))) prefix += "\u{e000}"
+  return prefix
+}
+
+function templateValueMarker(prefix: string, index: number): string {
+  return `${prefix}-${index}\u{e001}`
 }
