@@ -171,6 +171,7 @@ needs named or typed results. AML's scheduler and budgets remain in charge in bo
 | Network mapping            | Enclosing Sandbox              | URL deny rule and web tool exclusion | Enclosing Sandbox                     | OpenCode `webfetch`/`websearch` tools and permission | Enclosing Sandbox/network policy          |
 | AML JavaScript Tools       | Shared ACP MCP bridge          | Shared ACP MCP bridge                | Shared ACP MCP bridge                 | Shared ACP MCP bridge                                | Pi MCP extension and generated wrapper    |
 | Authored MCP               | Shared ACP session             | Shared ACP session                   | Shared ACP session                    | Shared ACP session                                   | `agent/mcp.json` through `pi-mcp-adapter` |
+| Agent Skills discovery     | Native staged `CODEX_HOME`     | Metadata-only system fallback        | Metadata-only system fallback         | Native configured `skills.paths`                     | Metadata-only system fallback             |
 | Structured output          | Shared ACP path                | Shared ACP path                      | Shared ACP path                       | Shared ACP path                                      | `aml_submit_result` MCP call              |
 | Per-session state          | Codex home/config/sqlite/logs  | Private `COPILOT_HOME`               | Adapter `ACP_GLM_SESSION_DIR`         | OpenCode DB and XDG directories                      | Pi HOME, agent, and session directories   |
 
@@ -188,6 +189,10 @@ AML JavaScript Tools execute in the application process. They are validated by A
 ### MCP
 
 MCP server identity, allowlists, transport configuration, and lifecycle belong to AML's normalized Agent request. The provider maps that request into its ACP or native configuration. Executable stdio servers must exist in the provider environment; remote servers still require URL, headers, network access, and credential configuration. Use the [MCP guide](/docs/cookbook/mcp/) for transport examples and failure handling.
+
+### Skills
+
+[`<Skill />`](/docs/reference/primitives/skill/) stages a complete local Agent Skills package and passes concrete paths in the normalized Agent request. Codex maps the shared staging root to `CODEX_HOME`; OpenCode appends each package directory to configured `skills.paths`. Copilot, GLM, and Pi receive metadata-only system guidance naming each Skill, its activation description, and the concrete `SKILL.md` path. No provider receives the Skill body as automatic prompt text, and AML never fetches or installs remote packages.
 
 ### Structured output
 

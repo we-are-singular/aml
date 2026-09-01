@@ -10,7 +10,7 @@ import ProviderHero from "../../../../../components/docs/ProviderHero.astro"
   eyebrow="Execution layer"
   title="Sandbox providers"
   factory="localSandbox · dockerSandbox · daytonaSandbox · modalSandbox"
-  summary="A Sandbox is the process boundary around an AML workflow. It gives <Script /> components and Agent adapters a working directory, command execution, streaming processes, cancellation, and cleanup while the Workspace remains the durable working tree."
+  summary="A Sandbox is the process and live-filesystem boundary around an AML workflow. It gives <Script /> components, filesystem authoring primitives, and Agent adapters a working directory, complete-file access, command execution, streaming processes, cancellation, and cleanup while the Workspace remains the durable working tree."
   bestFor="Choosing the right host, container, or remote runtime for a workflow."
   caution="A Sandbox does not install an Agent or automatically make model-generated code safe. The selected environment must already contain the runtime and ACP executable your Agent profile needs."
 />
@@ -45,6 +45,8 @@ trusted setup hook (optional)
       ↓
 Agent ACP process, Script exec(), or long-lived spawn()
       ↓
+remove invocation-private Agent staging
+      ↓
 reconcile remote changes when the provider transferred the tree
       ↓
 Sandbox release
@@ -64,6 +66,7 @@ Read-only has provider-specific consequences:
 
 - Docker adds `:ro` to the Workspace bind mount. Commands can still execute against the image, but writes to the mounted Workspace fail.
 - Local, Daytona, and Modal reject `exec()` and `spawn()` in read-only mode because their host/remote transfer model cannot enforce read-only execution for the process runtime.
+- Every built-in permits [`<Include path>`](/docs/reference/primitives/include/) reads and separate writable Agent staging under read-only access. [`<File />`](/docs/reference/primitives/file/) writes to the live guest and therefore rejects.
 - A built-in ACP Agent generally needs a writable process environment for state, launch files, MCP bridges, or its own session. Use `read-write` unless the selected Agent image and provider contract explicitly support the narrower mode.
 
 ## Trusted local baseline

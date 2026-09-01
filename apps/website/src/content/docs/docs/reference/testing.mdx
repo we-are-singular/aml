@@ -37,7 +37,7 @@ const provider = new DeterministicAgentProvider({
 
 ## `DeterministicSandboxProvider`
 
-Records acquisition and release without creating infrastructure. Its default runtime returns successful deterministic command output; constructor hooks can replace handle creation, `exec`, `spawn`, and release behavior.
+Records acquisition and release without creating infrastructure. Its default runtime returns successful deterministic command output and maintains an invocation-local in-memory filesystem plus Agent staging; constructor hooks can replace handle creation, `exec`, `spawn`, and release behavior.
 
 | Member         | Contract                                                       |
 | -------------- | -------------------------------------------------------------- |
@@ -72,10 +72,10 @@ Records Workspace acquisition, save, and release. It supplies a deterministic di
 | Helper                           | Purpose                                                                   |
 | -------------------------------- | ------------------------------------------------------------------------- |
 | `agentProviderConformance()`     | Validates response shape and pre-cancelled execution behavior.            |
-| `sandboxProviderConformance()`   | Exercises the provider-neutral Sandbox lifecycle and runtime boundary.    |
+| `sandboxProviderConformance()`   | Validates Sandbox lease/runtime shape and release behavior.               |
 | `workspaceProviderConformance()` | Exercises acquisition, conflict, save, release, and failure behavior.     |
 | `createAgentExecutionContext()`  | Creates an immutable provider execution context for direct adapter tests. |
 
-The conformance helpers are test-runner independent and reject when a provider violates the checked contract. They do not prove vendor credentials, executable installation, remote availability, image contents, or production security.
+The conformance helpers are test-runner independent and reject when a provider violates the checked contract. Sandbox conformance does not execute commands or filesystem operations, which remain provider-specific behavior tests. The helpers do not prove vendor credentials, executable installation, remote availability, image contents, or production security.
 
 For complete Vitest examples and test-boundary guidance, see [Testing AML workflows](/docs/cookbook/testing/).

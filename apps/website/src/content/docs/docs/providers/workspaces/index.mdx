@@ -99,7 +99,7 @@ Do not catch every save or conditional-write error as `WorkspaceConflictError`. 
 
 ## Safe file writes
 
-[`<File />`](/docs/reference/primitives/file/) writes into the active materialization and therefore requires [`<Workspace />`](/docs/reference/primitives/workspace/). It is not a durable save by itself; enable the `<Workspace />` save policy if the file must become a revision.
+[`<File />`](/docs/reference/primitives/file/) writes into the active materialization when it is placed directly under [`<Workspace />`](/docs/reference/primitives/workspace/), as below. A File inside a Sandbox writes that live guest instead. A Workspace write is not a durable save by itself; enable the save policy if the file must become a revision.
 
 ```tsx
 import { File, Workspace, filesystemWorkspace } from "@aml-jsx/sdk"

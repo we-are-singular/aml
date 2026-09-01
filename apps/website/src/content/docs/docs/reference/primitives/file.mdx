@@ -1,50 +1,9 @@
 ---
 title: "<File />"
-description: Resolve AML text and atomically write it beneath the active host Workspace materialization.
+description: Replace one UTF-8 file through the nearest active Workspace or Sandbox filesystem.
 ---
 
-`<File />` writes resolved child text into its enclosing [`<Workspace />`](/docs/reference/primitives/workspace/) and contributes no text to the surrounding AML result. Later siblings can consume the materialized file.
-
-```tsx
-import { mkdtemp, readFile, rm } from "node:fs/promises"
-import { tmpdir } from "node:os"
-import { join } from "node:path"
-import { AmlRuntime, File, localWorkspace, Workspace } from "@aml-jsx/sdk"
-
-const directory = await mkdtemp(join(tmpdir(), "aml-file-"))
-
-try {
-  const runtime = new AmlRuntime({
-    workspaceProvider: localWorkspace({ directory }),
-  })
-
-  await runtime.evaluate(
-    <Workspace id="file-example" load={false} save={false}>
-      <File path="reports/summary.md">Review completed.</File>
-    </Workspace>
-  )
-
-  console.log(await readFile(join(directory, "reports/summary.md"), "utf8"))
-} finally {
-  await rm(directory, { recursive: true, force: true })
-}
-```
-
-## Props
-
-| Prop       | Type            | Required | Meaning                                                                          |
-| ---------- | --------------- | -------- | -------------------------------------------------------------------------------- |
-| `path`     | `string`        | yes      | Normalized logical file path beneath the Workspace root.                         |
-| `children` | `AmlRenderable` | yes      | Text content, including the resolved result of a child `<Agent />` or component. |
-
-## Placement and write behavior
-
-- `<File />` requires an active `<Workspace />` and is invalid inside [`<Sandbox />`](/docs/reference/primitives/sandbox/).
-- Parent directories are created without following symlinks out of the materialization.
-- An existing symlink or directory at the destination is rejected.
-- AML writes through a temporary file and renames it over the destination where the filesystem permits.
-- `<File />` does not append, write binary content, or accept a host source path.
-- The write affects the current materialization. The `<Workspace />` `save` policy decides whether a revision is published.
+`<File />` writes exactly one application-owned source or resolved AML subtree into the nearest active filesystem and contributes no text to the surrounding AML result. Inside [`<Sandbox />`](/docs/reference/primitives/sandbox/) it writes the live guest; otherwise it writes the active [`<Workspace />`](/docs/reference/primitives/workspace/) materialization.
 
 ```tsx
 <Workspace id="review-42" provider={workspace} save>
@@ -55,6 +14,36 @@ try {
 </Workspace>
 ```
 
-The first `<Agent />` completes before `<File />` writes its result; the later sibling `<Agent />` then sees that file. For commands or guest-side file changes, add [`<Sandbox />`](/docs/reference/primitives/sandbox/) and let `<Agent />` or [`<Script />`](/docs/reference/primitives/script/) write through its runtime instead.
+The first Agent completes before `<File />` writes its result, so the later sibling sees the complete file.
 
-See [Sandbox and Workspace composition](/docs/cookbook/sandboxes-and-workspaces/) and the [Workspace provider guides](/docs/providers/workspaces/).
+To copy an application file instead of resolving children, use `src`:
+
+```tsx
+const runtime = new AmlRuntime({ cwd: import.meta.dirname })
+
+await runtime.evaluate(
+  <Sandbox provider={sandbox} access="read-write">
+    <File src="./fixtures/policy.md" path=".agents/context/policy.md" />
+  </Sandbox>
+)
+```
+
+## Props
+
+| Prop       | Type            | Default   | Meaning                                                                                  |
+| ---------- | --------------- | --------- | ---------------------------------------------------------------------------------------- |
+| `path`     | `string`        | required  | Portable relative destination beneath the nearest active filesystem root.                |
+| `children` | `AmlRenderable` | exclusive | AML content resolved to the UTF-8 file body.                                             |
+| `src`      | `string`        | exclusive | Application-owned UTF-8 file resolved from [`AmlRuntime.cwd`](/docs/reference/runtime/). |
+
+Exactly one of `children` or `src` is required. Empty resolved child text is a valid empty file; a local source must be a regular file containing valid UTF-8.
+
+## Placement and write behavior
+
+- Lexical placement selects the owner. A Sandbox guest wins over an enclosing Workspace replica; there are no routing props.
+- Without an active Workspace or Sandbox, evaluation rejects.
+- A read-only Sandbox still permits private Agent staging, but `<File />` cannot write its live guest filesystem.
+- Parent directories are created where the provider permits, non-file destinations are rejected, and built-in providers replace complete files rather than append.
+- A Workspace write affects the current materialization. The Workspace `save` policy decides whether a revision is published.
+
+Use [`<Include />`](/docs/reference/primitives/include/) to read a live file into prompt text or emit a bounded Agent read instruction. See [Sandbox and Workspace composition](/docs/cookbook/sandboxes-and-workspaces/) for the two resource boundaries.

@@ -47,6 +47,8 @@ OpenCode still loads project rules from `AGENTS.md`, or
 not replace `HOME`; set `OPENCODE_DISABLE_CLAUDE_CODE_PROMPT=1` in `env` when that compatibility behavior is unwanted.
 Loaded rules remain OpenCode system instructions. AML-authored System content is delivered separately as a first-turn prelude.
 
+Authored [`<Skill />`](/docs/reference/primitives/skill/) packages use OpenCode's native discovery. AML preserves any configured `skills.paths` entries and appends each invocation-private staged package directory. It does not inline the Skill body or mutate the source package.
+
 ## Prerequisites
 
 <CardGrid>

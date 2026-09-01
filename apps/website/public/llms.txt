@@ -135,12 +135,14 @@ Process telemetry uses an opaque `execution.id` for local and remote providers. 
 
 - `<Agent>` runs one provider-owned session after its prompt, system content, capabilities, and child Agent results resolve.
 - `<System>` contributes ordered system instructions to the nearest Agent.
+- `<Block>` adds exact blank-line separation without creating a runtime scope.
 - `<Tool>` grants a provider-native Tool or a typed JavaScript Tool created with `defineTool()`.
 - `<Mcp>` grants a named or explicitly configured MCP server.
-- `<Skill>` contributes reusable inline or file-backed instructions.
+- `<Skill>` stages a complete local Agent Skills package for native discovery or metadata-only fallback without inlining its body.
 - `<FollowUp>` adds an ordered later turn to the same Agent session.
 - `<Workspace>` materializes durable files and may publish revision-backed state.
-- `<File>` writes resolved content beneath the active Workspace.
+- `<File>` writes authored children or a local UTF-8 source to the nearest active Workspace or Sandbox filesystem.
+- `<Include>` reads UTF-8 content from a local source or the nearest active filesystem and applies an optional prompt-inline byte limit.
 - `<Sandbox>` acquires ephemeral execution and scopes filesystem policy.
 - `<Script>` executes a literal command or resolved script on the trusted host or through the active Sandbox, with an optional portable relative cwd.
 - `AmlRuntime` owns complete root evaluation, limits, cancellation, events, tracing, and cleanup.

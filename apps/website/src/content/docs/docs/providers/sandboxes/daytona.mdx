@@ -122,8 +122,9 @@ Never commit `DAYTONA_API_KEY`; configure it through the deployment environment 
 4. Daytona runs a remote command that clears `workspace`, creates it, extracts the archive, and removes the temporary archive.
 5. The optional setup hook runs through `sh -lc`. Failure rejects acquisition and destroys the Sandbox.
 6. `exec()` and `spawn()` operate below the relative `workspace` root. Process timeouts are converted to provider-native seconds; output is bounded.
-7. On writable release, Daytona archives the complete remote `workspace` tree, downloads it, and mirrors additions, changes, and deletions into the local source.
-8. Daytona destroys the Sandbox. Reconciliation and cleanup errors are both retained when both fail.
+7. Complete-file operations use Daytona's filesystem API. Agent staging uses a unique `/tmp` directory and is removed before Sandbox release.
+8. On writable release, Daytona archives the complete remote `workspace` tree, downloads it, and mirrors additions, changes, and deletions into the local source.
+9. Daytona destroys the Sandbox. Reconciliation and cleanup errors are both retained when both fail.
 
 Cancellation during creation or hydration can trigger asynchronous provider cleanup. Cancellation or output overflow during a remote command can destroy the disposable Sandbox because Daytona does not provide equivalent per-command cancellation for every operation.
 
@@ -131,7 +132,7 @@ Cancellation during creation or hydration can trigger asynchronous provider clea
 
 Daytona rejects `exec()` and `spawn()` under `access="read-only"`. The Workspace is transferred into a writable remote directory; it is not a read-only mount. This is an intentional limitation, not a promise that commands execute safely without changing the remote tree.
 
-Use `read-write` for a Daytona ACP Agent unless the complete Agent/Sandbox contract you selected provides another supported launch path. A read-only Daytona Sandbox is suitable for structural composition or an operation that never invokes the runtime, not for ordinary [`<Script />`](/docs/reference/primitives/script/) components or ACP sessions.
+Use `read-write` for a Daytona ACP Agent unless the complete Agent/Sandbox contract you selected provides another supported launch path. A read-only Daytona Sandbox can serve live [`<Include path>`](/docs/reference/primitives/include/) reads and writable invocation-private Agent staging, but it cannot run ordinary [`<Script />`](/docs/reference/primitives/script/) components or ACP sessions because those require process execution.
 
 ## Failure modes and troubleshooting
 

@@ -63,8 +63,9 @@ The active Workspace wins over `localSandbox({ workspace })`. The fallback is us
 3. The optional `setup` command runs through `sh -lc`. A non-zero exit rejects acquisition.
 4. `exec()` starts a literal host process, closes stdin, collects bounded output, and waits for exit.
 5. `spawn()` starts a tracked process group with streaming input/output and repeatable `wait()`.
-6. Cancellation, timeout, output overflow, and lease release kill tracked process groups.
-7. Release does not copy files: writes already happened in the materialized local directory. Workspace persistence decides whether those writes are saved.
+6. Complete-file operations use confined host paths and atomic replacement; Agent staging uses a separate temporary directory.
+7. Cancellation, timeout, output overflow, and lease release kill tracked process groups.
+8. Release does not copy files: writes already happened in the materialized local directory. Workspace persistence decides whether those writes are saved.
 
 ## Read-only behavior
 
@@ -72,7 +73,7 @@ Local rejects both `exec()` and `spawn()` under `access="read-only"`:
 
 > Host processes cannot enforce the required read-only contract for this provider.
 
-That means a read-only Local Sandbox can be acquired for structural composition, but it cannot run `<Script />` or an ACP Agent process through the runtime. Use `read-write` for Local, or select a provider whose mount/runtime can enforce the requested policy.
+That means a read-only Local Sandbox can serve live [`<Include path>`](/docs/reference/primitives/include/) reads and separate writable Agent staging, but it cannot run `<Script />` or an ACP Agent process through the runtime. Use `read-write` for Local process execution, or select a provider whose mount/runtime can enforce the requested policy.
 
 ## Setup and safe example
 

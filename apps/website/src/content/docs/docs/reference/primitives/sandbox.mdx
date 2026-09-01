@@ -88,7 +88,9 @@ A nested `<Sandbox />` reuses the outer lease. It may narrow `root`, change `cwd
 - A descendant [`<Script />`](/docs/reference/primitives/script/) executes only through the active Sandbox runtime; it never falls back to the host from inside this scope. Its optional `cwd` resolves from this Sandbox's effective root.
 - A compatible [`<Agent />`](/docs/reference/primitives/agent/) receives the effective Sandbox session; its native permissions cannot widen it.
 - An enclosing [`<Workspace />`](/docs/reference/primitives/workspace/) supplies the materialized directory. The Sandbox provider maps logical paths into its host, container, or remote environment.
-- [`<File />`](/docs/reference/primitives/file/) is deliberately invalid inside `<Sandbox />` because it writes through the host Workspace materialization rather than the guest runtime.
+- [`<File />`](/docs/reference/primitives/file/) writes through the live guest filesystem and therefore requires `access="read-write"`.
+- [`<Include path>`](/docs/reference/primitives/include/) reads the live guest filesystem. [`<Include src>`](/docs/reference/primitives/include/) and `<File src>` still read their application-owned source from the runtime cwd before copying or rendering it.
+- [`<Skill />`](/docs/reference/primitives/skill/) and oversized local Includes use a separate writable Agent staging root even when the live guest filesystem is read-only.
 
 <Aside type="caution" title="Provider names do not prove isolation">
   [`localSandbox()`](/docs/providers/sandboxes/local/) is trusted host execution. Docker, Daytona, and Modal have

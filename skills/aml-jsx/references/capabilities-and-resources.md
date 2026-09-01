@@ -68,19 +68,34 @@ The supported explicit transports are:
 
 Use `<Mcp name="...">` only for a provider-native MCP name already configured in that provider's environment.
 
-## Skills
+## Authoring files and Skills
 
-Use `<Skill>` for reusable instructions scoped to one Agent:
+Use `<Include>` for prompt content and `<Skill>` for a real Agent Skill package:
 
 ```tsx
-<Agent provider={OpenCode}>
-  <Skill>Prefer concrete evidence and small, reversible changes.</Skill>
-  <Skill src="./skills/project-conventions.md" />
-  Review this repository.
-</Agent>
+import { Agent, Block, File, Include, Sandbox, Skill, Workspace } from "@aml-jsx/sdk"
+
+;<Workspace provider={Project}>
+  <File path="brief.md">Review the authentication boundary.</File>
+  <Sandbox provider={Docker}>
+    <Agent provider={OpenCode}>
+      <Skill src="./skills/code-review" />
+      <Block>
+        <Include path="brief.md" maxBytes={4_000} />
+      </Block>
+      Complete the review.
+    </Agent>
+  </Sandbox>
+</Workspace>
 ```
 
-Relative Skill files resolve from the runtime `cwd`. Keep secrets and dynamic credentials out of Skill content.
+`<Include src>` reads an application-owned UTF-8 file live relative to the runtime `cwd`. `<Include path>` reads the nearest active filesystem: the Sandbox guest when present, otherwise the Workspace materialization. `maxBytes` inlines small files and emits a read instruction for larger files; AML automatically stages an oversized local `src` at an Agent-visible path. Use `title={false}` only when the surrounding prompt already supplies its own structure.
+
+`<File>` accepts exactly one source: resolved children or local `src`. It writes through the nearest active filesystem and contributes no prompt text. Lexical placement selects Workspace or Sandbox ownership; do not add routing props.
+
+`<Skill src>` expects a local package directory containing `SKILL.md`. AML validates and stages the complete package under the `.agents/skills/<name>/` suffix of a writable Agent-visible staging root, uses native provider discovery when available, and otherwise adds only metadata containing the concrete path. Skill is session-wide, must be declared at Agent level, and never inlines its body automatically. AML does not fetch registries, install remote packages, or run package scripts.
+
+Keep secrets and dynamic credentials out of Include, File, and Skill content.
 
 ## Sandboxes
 
@@ -104,8 +119,7 @@ Sandbox images and snapshots own their installed Agents and tools. AML does not 
 
 Fetch the [Sandbox image guide](https://agent-markup-language.com/docs/sandbox-images.md) before choosing the AML `full` image, a single-Agent stable variant, the bleeding-edge GHCR `dev` image, or a derived project image.
 
-Built-in coding Agents launch through `SandboxRuntime.spawn()` and the shared ACP engine. A provider must never fall
-back to a host SDK, embedded loop, or one-shot CLI when a Sandbox is active.
+Built-in coding Agents launch through `SandboxRuntime.spawn()` and the shared ACP engine. Portable File, Include, and Agent staging use the runtime's stat, complete-file read, and atomic replacement write methods rather than shell commands. A provider must never fall back to a host SDK, embedded loop, or one-shot CLI when a Sandbox is active.
 
 Remote providers keep their vendor configuration shapes:
 
@@ -153,7 +167,7 @@ const Project = localWorkspace({ directory: "/absolute/path/to/project" })
 </Workspace>
 ```
 
-A Workspace provides durable materialization and identity. A Sandbox provides execution isolation. Use both only when the workflow needs both responsibilities.
+A Workspace provides durable materialization and identity. A Sandbox provides execution isolation. Use both only when the workflow needs both responsibilities. File and Include select the nearest active filesystem, while Skill staging remains invocation-owned and ephemeral unless the application deliberately authors the same package into durable Workspace content.
 
 ## Scope rules
 

@@ -1,15 +1,10 @@
 # Workspace architecture notebook
 
-Status: implemented core; non-normative future-work notes retained
+Status: implemented, including the 0.8 active-filesystem and Agent-staging expansion
 
-This document records the architecture and current direction for AML Workspaces. It is intentionally separate from
-[`SPEC.md`](./SPEC.md). Decisions become normative only after they are accepted, moved into the specification, and
-implemented.
+This document records the architecture and current direction for AML Workspaces. It is intentionally separate from [`SPEC.md`](./SPEC.md). Decisions become normative only after they are accepted and moved into the specification; implementation status remains explicit here.
 
-The repository contains the accepted Workspace implementation. It proves durable identity, optional cross-process
-locking, one provider-owned materialization, atomic revision publication, Sandbox attachment, save-after-execution,
-authored File inputs, and failure-safe release. This notebook also retains explicitly deferred extensions without
-making them part of the stable contract.
+The repository contains the accepted Workspace implementation. It proves durable identity, optional cross-process locking, one provider-owned materialization, atomic revision publication, Sandbox attachment, save-after-execution, nearest-filesystem authored File inputs, per-Agent staging, and failure-safe release.
 
 ## Product truths
 
@@ -32,13 +27,13 @@ The following constraints refine that model:
 - Storage providers implement transport operations and atomic metadata publication. They do not implement archive
   creation, extraction, revision selection, retention, or persistence-pattern matching.
 - Saving is opt-in. It defaults to successful evaluations only; `save.on: "always"` also publishes failed work.
-- `<File>` writes resolved text, including Agent output, beneath the active host Workspace before later siblings run.
-- Workspace-owned Skills are materialized at `.agents/skills/<skill-name>/SKILL.md` so compatible Agents discover
-  them through their normal filesystem conventions.
+- `<File>` writes a local UTF-8 source or resolved text, including Agent output, through the nearest active filesystem before later siblings run.
+- `<Include path>` reads the nearest active filesystem live; `<Include src>` reads an application-owned local file live.
+- `<Skill>` stages a complete local Agent Skill package at `.agents/skills/<skill-name>/` for one Agent session. Skill staging is ephemeral unless an application deliberately authors the same files into its Workspace.
 - Sandbox and Workspace remain separate responsibilities. Workspace owns files and persistence. Sandbox owns
   execution isolation and attachment.
 
-## Current contract and gap
+## Current contract and boundaries
 
 The implemented `<Workspace>` contract accepts `id`, `provider`, `cwd`, `load`, `lock`, `save`,
 `writeConcurrency`, and `children`:
@@ -62,11 +57,7 @@ The built-in local provider points directly at one existing directory. Filesyste
 Workspaces such as a client ID, user ID, Slack channel ID, or thread ID. Provider authorization must still prevent a
 caller from acquiring another caller's identity; naming is partitioning, not access control.
 
-The remaining contract does not yet express:
-
-- bulk directory inputs or host-source File copying
-- Workspace-owned Skills
-- Git repositories as input material
+The 0.8 contract adds host-source File copying, guest-side File and Include operations through portable Sandbox filesystem methods, and per-Agent staging for oversized local Includes and complete Skill packages. Bulk directory inputs and Git repositories as input material remain outside the component surface.
 
 The new design should evolve the proven lifecycle rather than create a parallel Workspace abstraction.
 
@@ -166,7 +157,7 @@ Keep these concepts distinct:
 - **logical cwd**: a relative path beneath the materialization root where the Agent starts
 - **guest root**: the Sandbox provider's path corresponding to the materialization root
 - **guest cwd**: the Sandbox path corresponding to the logical cwd
-- **input entry**: a File, Workspace-owned Skill, or another declared source applied before dependent work
+- **filesystem authoring operation**: a File write, Include read, or Agent staging copy applied in authored order before dependent work
 - **persistence selection**: the paths eligible for saving after execution
 - **persistence format**: the closed `"archive" | "folder"` representation selected when constructing a
   revision-backed provider
@@ -198,7 +189,8 @@ AML owns:
 - entering the Workspace before its descendants
 - applying AML-owned input entries in authored order
 - resolving the logical cwd beneath the materialization root
-- making Workspace-owned Skills available before dependent Agents start
+- selecting the nearest active filesystem for File and Include
+- preparing invocation-owned Agent staging and Skill discovery before dependent Agents start
 - preserving lifecycle order across Workspace, Sandbox, and Agent boundaries
 - requesting persistence after descendants and Sandbox reconciliation complete
 - preserving evaluation, persistence, and release failures without masking their causes
@@ -208,7 +200,7 @@ AML owns:
 
 AML does not own:
 
-- a generic remote filesystem API
+- the generic filesystem and artifact APIs exposed by each remote provider beyond portable stat, complete-file read, and atomic replacement write
 - provider credentials, network clients, or provider-native byte transport
 - Sandbox guest paths
 - Git credentials, hosting policy, or automatic pushes
@@ -290,7 +282,7 @@ interface WorkspaceProps {
 }
 ```
 
-The following shape illustrates the implemented File input and a future Workspace-owned Skill:
+The following shape illustrates authored Workspace input, guest-side inclusion, and per-Agent Skill staging:
 
 ```tsx
 <Workspace
@@ -305,9 +297,13 @@ The following shape illustrates the implemented File input and a future Workspac
 >
   <File path="AGENTS.md">Work only inside this Workspace. Run targeted tests before finishing.</File>
 
-  <Skill name="evidence">Ground conclusions in repository files and command output.</Skill>
-
-  <Agent>Read task.md and complete the requested work.</Agent>
+  <Sandbox provider={sandboxProvider}>
+    <Agent>
+      <Skill src="./skills/evidence" />
+      <Include path="AGENTS.md" maxBytes={4_000} />
+      Complete the requested work.
+    </Agent>
+  </Sandbox>
 </Workspace>
 ```
 
@@ -363,8 +359,13 @@ authored order, while each individual component completes after its own descenda
 ```tsx
 <Workspace>
   <File path="task.md">Inspect the API.</File>
-  <Skill name="review">Prefer implementation evidence.</Skill>
-  <Agent>Complete the task.</Agent>
+  <Sandbox provider={sandboxProvider}>
+    <Agent>
+      <Skill src="./skills/review" />
+      <Include path="task.md" />
+      Complete the task.
+    </Agent>
+  </Sandbox>
 </Workspace>
 ```
 
@@ -372,9 +373,11 @@ The observable order is:
 
 1. enter Workspace
 2. resolve and write `task.md`
-3. resolve and write `.agents/skills/review/SKILL.md`
-4. start the Agent
-5. complete and persist the Workspace
+3. acquire and hydrate Sandbox from the updated materialization
+4. prepare the Agent's ephemeral `.agents/skills/review/` package
+5. read the live guest `task.md`
+6. start the Agent
+7. reconcile and persist the Workspace
 
 This also permits generated files:
 
@@ -400,91 +403,72 @@ The same composition may occur inside an Agent before any Sandbox is active:
 </Workspace>
 ```
 
-Here the inner Agent runs, File writes its result, and the outer Agent starts afterward. File is a materialization
-side effect and contributes no duplicate file content to the outer prompt. File inside an active Sandbox remains
-future work because a remote guest may contain newer state than the host materialization.
+Here the inner Agent runs, File writes its result, and the outer Agent starts afterward. File is a materialization side effect and contributes no duplicate file content to the outer prompt. File inside an active Sandbox writes the live guest through the portable Sandbox filesystem so it cannot update only a stale host replica.
 
-Authored order is therefore meaningful. A File or Skill placed after an Agent does not retroactively affect that
-Agent. Guaranteeing that every declaration applies before every executable descendant regardless of position would
-require a separate compilation or preparation pass and is not the initial direction.
+Authored order is therefore meaningful. A File placed after an Agent does not retroactively affect that Agent. A Skill belongs to its containing Agent plan and is prepared before that Agent's prompt resolves; it does not mutate prior or sibling Agent sessions.
 
 ## `<File>`
 
-`<File>` is an AML-owned materialization descriptor, not a model-facing tool.
-
-Implemented form:
+`<File>` is an AML-owned filesystem effect, not a model-facing tool. It writes resolved children or a local source through the nearest active filesystem:
 
 ```tsx
 <File path="AGENTS.md">Inline text</File>
+
+<File src="./fixtures/policy.md" path=".agents/context/policy.md" />
 ```
 
-Implemented rules:
+Rules:
 
-- `path` is the destination relative to the materialization root.
-- Inline children use ordinary AML evaluation and must resolve to text.
-- A File requires children but may resolve to an empty text file.
+- `path` is the destination relative to the nearest active filesystem root.
+- Inside Sandbox, File writes the live guest; otherwise it writes the active Workspace materialization.
+- File without either scope rejects. A read-only Sandbox rejects before writing.
+- Exactly one content source is required: inline children or application-owned local `src`.
+- Inline children use ordinary AML evaluation and may resolve to an empty text file.
+- `src` reads a local UTF-8 file live relative to `AmlRuntime.cwd`; it is never resolved against Workspace or Sandbox.
 - Writes replace regular files.
 - Parent directories are created when needed.
 - Destination paths cannot be absolute, contain traversal, or escape through symlinks.
-- File writes happen atomically within the materialization where the host filesystem permits it.
+- File writes happen atomically where the active filesystem permits it.
 - Before Sandbox acquisition, File writes to the host staging materialization.
-- Inside an active Sandbox, File currently rejects. A future guest-side form requires a portable Sandbox file
-  capability so it cannot accidentally write only to a stale host replica.
+- Inside an active Sandbox, File uses `SandboxRuntime.writeFile()` rather than a shell command.
 - File returns no prompt text after materializing its content.
-- `<File>` outside `<Workspace>` is invalid.
 
 Deferred File extensions:
 
-- host `source` paths and the combination rule for source plus children
 - explicit append or create-only modes
 - whether binary inputs belong in `<File>` through a `Uint8Array` prop or require a separate entry API
 - whether input entries may declare read-only intent before Sandbox attachment
 
-## Workspace-owned `<Skill>`
+## Agent staging beside Workspaces
 
-The existing `<Skill>` contributes reusable instruction text to an Agent. A Workspace-owned Skill has a different
-consumer: the Workspace materializes the resolved instruction as a conventional skill file.
+`<Skill>` is owned by one Agent session rather than by Workspace. It accepts a local package directory containing `SKILL.md`, validates the package metadata and tree, and copies the complete package to the canonical `.agents/skills/<name>/` suffix beneath an Agent-visible staging root. Provider profiles map that concrete package to native discovery when available. Otherwise AML contributes metadata-only prompt guidance that tells the Agent when and where to read it.
 
-Proposed nearest-owner behavior:
-
-- a Skill owned by an Agent contributes prompt text as it does today
-- a Skill owned directly by a Workspace writes `.agents/skills/<name>/SKILL.md`
-- a Workspace-owned Skill requires a normalized `name`
-- Workspace Skill names cannot contain separators, traversal, or encoded path syntax
-- `description`, source content, and inline content retain the existing Skill resolution rules
-- the generated file must follow the Agent Skills `SKILL.md` format accepted by supported Agents
-- a Workspace-owned Skill is not also appended to surrounding evaluation text
+`<Include src>` shares the same staging owner when `maxBytes` prevents inlining. AML copies that application-owned file to an invocation-private Agent-visible path and renders a bounded read instruction. `<Include path>` never copies: it reads the nearest active filesystem live and references that same path when oversized.
 
 Example:
 
 ```tsx
-<Workspace>
-  <Skill name="review" description="Review repository changes carefully.">
-    Read the implementation before judging the diff.
-  </Skill>
-
-  <Agent>Review the current change.</Agent>
+<Workspace provider={workspaceStore}>
+  <Sandbox provider={sandboxProvider}>
+    <Agent>
+      <Skill src="./skills/review" />
+      <Include path="change.patch" maxBytes={8_000} />
+      Review the current change.
+    </Agent>
+  </Sandbox>
 </Workspace>
 ```
 
-The resulting path is:
-
-```text
-.agents/skills/review/SKILL.md
-```
-
-The initial phase covers only `SKILL.md`. Supporting scripts, references, templates, assets, registry installation,
-and remote skill packages remain later work. They can already be supplied through ordinary Workspace directory
-inputs when those inputs exist.
+Agent staging is ephemeral and cleaned with the provider session. It does not silently become durable Workspace state. An application that deliberately wants a persistent `.agents/skills` tree may author or restore those files as ordinary Workspace content, but `<Skill>` still declares which package belongs to the current Agent plan. Remote registry installation and package-script execution remain outside AML.
 
 ## Path model and cwd
 
-All portable authored paths are Workspace-relative:
+Portable paths are relative to the lexical owner that consumes them:
 
-- `cwd`
-- File destinations
+- Workspace `cwd`, Sandbox `root`, and persistence patterns are relative to the Workspace materialization root.
+- File destinations and Include `path` sources are relative to the nearest active filesystem root.
+- Agent staging exposes canonical `.agents/skills/<name>/` and AML-generated Include paths inside the Agent-visible ephemeral root.
 - Git repository destinations
-- persistence include and exclude patterns
 
 Path validation must be lexical and physical:
 
@@ -519,9 +503,7 @@ Proposed order:
 2. restore the provider's durable revision
 3. apply authored inputs in authored order
 
-Later authored entries therefore overlay restored state and earlier entries. This makes task files, current
-instructions, and current Skills authoritative for the new run while allowing selected outputs from a previous run
-to remain available.
+Later authored entries therefore overlay restored state and earlier entries. This makes current task files and instructions authoritative for the new run while allowing selected outputs from a previous run to remain available. Per-Agent Skill staging is separate and does not participate in Workspace layering unless those files were independently authored as Workspace content.
 
 Inputs and persisted state must not be confused:
 
@@ -1267,7 +1249,7 @@ Proof:
 
 ### Phase 3: `<File>` preparation
 
-Status: implemented for resolved text written to the host Workspace before Sandbox acquisition.
+Status: implemented, including local `src`, nearest-filesystem selection, and guest-side writes.
 
 Add text file inputs:
 
@@ -1276,33 +1258,41 @@ Add text file inputs:
 - safe parent creation
 - authored-order visibility
 - post-order generated content
+- mutually exclusive application-owned local `src`
+- nearest-filesystem selection
+- guest-side writes through portable Sandbox file operations
 
 Proof:
 
 - a File is visible to the following Agent
 - an Agent-generated File is visible to a later Agent
 - traversal and symlink escape reject
-- `<File>` outside Workspace rejects
+- `<File>` without Workspace or Sandbox rejects
+- a File inside Sandbox changes the live guest rather than a stale host replica
 
-Host text sources, append/create modes, binary data, guest-side Sandbox writes, and directory copying remain out
-until separately accepted.
+Append/create modes, authored binary data, and directory copying remain out until separately accepted.
 
-### Phase 4: Workspace-owned Skills
+### Phase 4: Include and Agent staging
 
-Extend Skill ownership:
+Status: implemented for 0.8.
 
-- require a safe name under Workspace
-- materialize `.agents/skills/<name>/SKILL.md`
-- retain Agent-owned prompt Skill behavior
-- ensure Workspace Skills do not also become surrounding text
+Add the narrow active-filesystem and per-Agent staging owners:
+
+- expose portable Sandbox stat, complete-file read, and atomic replacement write operations
+- add Include `src` and nearest-filesystem `path` modes
+- stage oversized application-owned Includes at AML-generated Agent-visible paths
+- redefine Skill as a validated complete local package
+- materialize `.agents/skills/<name>/` and map native provider discovery
+- add metadata-only discovery fallback without inlining the Skill body
+- clean invocation-owned staging without deleting Workspace-owned files
 
 Proof:
 
-- a compatible Agent discovers and follows the materialized Skill
-- Agent-owned and Workspace-owned Skills preserve their distinct behavior
-- authored ordering remains visible
-
-Supporting Skill assets remain ordinary input files or later work.
+- Include observes live guest changes and enforces byte limits
+- an oversized local Include is readable at the path named in its prompt
+- compatible Agents discover complete Skill packages including supporting resources
+- unsupported providers receive only fallback metadata and can read the canonical Skill path
+- cancellation and failure clean ephemeral staging
 
 ### Phase 5: Shared Workspace persistence and selection
 
@@ -1439,8 +1429,6 @@ This phase requires a distinct external-effects contract and must not silently e
 
 1. Does `<Workspace>` without `provider` create a staged local Workspace automatically?
 2. Is an omitted input set empty, or does it mean “stage the runtime cwd”?
-3. Is a Workspace-owned Skill identified by direct placement, nearest owner, or a distinct `<Workspace.Skill>` spelling?
-4. If `<File source>` is added, does it permit inline children, and how are they combined?
 
 ## External design references
 

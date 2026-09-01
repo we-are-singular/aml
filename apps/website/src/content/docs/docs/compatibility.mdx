@@ -9,14 +9,14 @@ Compatibility is a layered decision, not one support badge. AML can ship an adap
 
 ## Four layers of evidence
 
-| Layer           | Question                                                                | Evidence to require                                                      |
-| --------------- | ----------------------------------------------------------------------- | ------------------------------------------------------------------------ |
-| AML contract    | Does the adapter preserve acquire, run, save, release, and error rules? | Provider source, type checks, deterministic conformance, and fixtures.   |
-| Runtime shape   | Can the Agent consume the effective Sandbox root and access mode?       | `supportsSandboxRuntime` and the provider handshake.                     |
-| Deployment      | Are the executable, image, credentials, model, and network usable?      | A smoke run in the exact environment you will deploy.                    |
-| Vendor behavior | Does the upstream service preserve every operation AML relies on?       | Vendor documentation plus a real compatibility run against your account. |
+| Layer           | Question                                                                     | Evidence to require                                                      |
+| --------------- | ---------------------------------------------------------------------------- | ------------------------------------------------------------------------ |
+| AML contract    | Does the adapter preserve acquire, run, save, release, and error rules?      | Provider source, type checks, deterministic conformance, and fixtures.   |
+| Runtime shape   | Can the Agent consume the effective Sandbox process and filesystem boundary? | `supportsSandboxRuntime` and the provider handshake.                     |
+| Deployment      | Are the executable, image, credentials, model, and network usable?           | A smoke run in the exact environment you will deploy.                    |
+| Vendor behavior | Does the upstream service preserve every operation AML relies on?            | Vendor documentation plus a real compatibility run against your account. |
 
-`supportsSandboxRuntime` proves only a structural handshake. It does not inspect an image, authenticate a vendor account, enforce isolation, or prove that network and model access work.
+`supportsSandboxRuntime` proves only that the session and runtime expose matching access/root metadata plus the required process, complete-file, and Agent-staging methods. It does not inspect an image, authenticate a vendor account, enforce isolation, or prove that network and model access work.
 
 ## Implemented provider families
 

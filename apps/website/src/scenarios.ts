@@ -310,7 +310,7 @@ const AGENT_CODE = `import { Agent, Skill, System, Tool } from "@aml-jsx/sdk"
 const notes = (
   <Agent provider={OpenCode}>
     <System>You are a meticulous release engineer.</System>
-    <Skill>Prefer small, reversible changes.</Skill>
+    <Skill src="./skills/release-engineering" />
     <Tool use={ReadChangelog} />
     <Tool use={CreateTag} />
     Draft the v0.4.0 release notes.
@@ -353,7 +353,7 @@ const agent: Scenario = {
     { at: 950, kind: "node", id: "skill", state: "resolving" },
     { at: 950, kind: "code", lines: [5] },
     { at: 1250, kind: "node", id: "skill", state: "done" },
-    { at: 1250, kind: "trace", text: "skill:attach 1 instruction set", tone: "ok" },
+    { at: 1250, kind: "trace", text: "skill:stage release-engineering → native discovery", tone: "ok" },
     { at: 1300, kind: "node", id: "tool-a", state: "resolving" },
     { at: 1300, kind: "code", lines: [6] },
     { at: 1600, kind: "node", id: "tool-a", state: "done" },

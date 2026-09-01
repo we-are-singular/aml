@@ -1,0 +1,56 @@
+---
+title: "<Include />"
+description: Read a live UTF-8 file into authored prompt text, with an optional byte limit and Agent-visible fallback path.
+---
+
+`<Include />` reads exactly one file when AML evaluates it and contributes either the current UTF-8 content or a bounded instruction telling the Agent where to read that file.
+
+```tsx
+import { Agent, Block, Include } from "@aml-jsx/sdk"
+
+;<Agent>
+  Review the proposed policy.
+  <Block>
+    <Include src="./instructions/review-policy.md" maxBytes={16_384} />
+  </Block>
+</Agent>
+```
+
+By default AML renders a Markdown heading followed by the body:
+
+```md
+## Contents of `./instructions/review-policy.md`
+
+…file content…
+```
+
+Set `title="Review policy"` to replace the heading text or `title={false}` to emit only the body.
+
+## Props
+
+| Prop       | Type              | Default      | Meaning                                                                                          |
+| ---------- | ----------------- | ------------ | ------------------------------------------------------------------------------------------------ |
+| `src`      | `string`          | exclusive    | Application-owned local file resolved from [`AmlRuntime.cwd`](/docs/reference/runtime/).         |
+| `path`     | `string`          | exclusive    | File in the nearest active filesystem: Sandbox guest first, otherwise Workspace materialization. |
+| `maxBytes` | `number`          | unlimited    | Positive byte ceiling for prompt inlining.                                                       |
+| `title`    | `string \| false` | derived path | Markdown heading text, or `false` to omit the heading.                                           |
+
+Exactly one of `src` or `path` is required. `<Include />` does not accept children, and every inlined file must contain valid UTF-8.
+
+## Source modes
+
+`src` is trusted application-file access. AML resolves it from the runtime cwd and reads it live on every evaluation; an enclosing Workspace or Sandbox does not change that source. If the file exceeds `maxBytes`, `<Include src>` must be inside an Agent: AML copies the complete file into that Agent's private staging area and authors a read instruction containing the concrete Agent-visible path.
+
+`path` is workflow-file access. AML resolves it from the nearest lexical filesystem owner, preferring the live Sandbox guest over an enclosing Workspace materialization. It requires one of those scopes. If the file exceeds `maxBytes`, AML does not copy it; the authored instruction names the same portable path supplied by the application.
+
+```tsx
+<Workspace id="review" provider={workspace}>
+  <File path="reports/findings.md">Generated findings</File>
+  <Agent provider={reviewer}>
+    <Include path="reports/findings.md" maxBytes={8_192} />
+    Check these findings against the implementation.
+  </Agent>
+</Workspace>
+```
+
+Oversized local staging is ephemeral and released with the containing Agent. Use [`<File />`](/docs/reference/primitives/file/) when the intent is to write or copy a file into a Workspace or Sandbox filesystem, and use [`<Skill />`](/docs/reference/primitives/skill/) when the Agent should discover a complete Agent Skills package progressively instead of receiving prompt content immediately.

@@ -159,6 +159,22 @@ const [codexReview, openCodeReview] = await Promise.all([
 </Agent>`,
   },
   {
+    id: "block",
+    group: "Components",
+    name: "<Block />",
+    docsPath: "docs/reference/primitives/block/",
+    signature: "<Block>…</Block>",
+    description:
+      "Adds exact blank-line separation around authored content without creating a runtime, capability, or control-flow scope.",
+    note: "An empty <Block /> is one blank-line separator. Descriptors inside a non-empty Block retain their normal nearest owner.",
+    file: "block.tsx",
+    code: `<Agent provider={OpenCode}>
+  Review the implementation.
+  <Block>Report correctness before maintainability.</Block>
+  Cite concrete evidence.
+</Agent>`,
+  },
+  {
     id: "system",
     group: "Components",
     name: "<System />",
@@ -195,17 +211,32 @@ const [codexReview, openCodeReview] = await Promise.all([
 </Agent>`,
   },
   {
+    id: "include",
+    group: "Components",
+    name: "<Include />",
+    docsPath: "docs/reference/primitives/include/",
+    signature: '<Include src="./prompt.md" maxBytes={…} />',
+    description:
+      "Reads a live application file or nearest-filesystem path into prompt text, with an optional byte ceiling and Agent-visible read instruction for larger content.",
+    note: "src resolves from AmlRuntime.cwd. path selects the live Sandbox guest first, otherwise the active Workspace materialization.",
+    file: "include.tsx",
+    code: `<Agent provider={OpenCode}>
+  <Include src="./instructions/review.md" maxBytes={16_384} />
+  Review src/index.ts.
+</Agent>`,
+  },
+  {
     id: "skill",
     group: "Components",
     name: "<Skill />",
     docsPath: "docs/reference/primitives/skill/",
-    signature: '<Skill src="./style.md" />',
+    signature: '<Skill src="./skills/evidence-review" />',
     description:
-      "Adds reusable instructions to the owning <Agent /> — inline content or a local file — without wiring another capability.",
+      "Stages and registers one complete local Agent Skills package for the owning session, using native provider discovery or metadata-only fallback.",
+    note: "AML copies the package under a .agents/skills/<name>/ suffix, never inlines its instruction body, and never installs remote packages.",
     file: "skill.tsx",
     code: `<Agent provider={OpenCode}>
-  <Skill>Prefer small, reversible diffs.</Skill>
-  <Skill src="./skills/house-style.md" />
+  <Skill src="./skills/evidence-review" />
   Review src/index.ts.
 </Agent>`,
   },
@@ -216,8 +247,8 @@ const [codexReview, openCodeReview] = await Promise.all([
     docsPath: "docs/reference/primitives/file/",
     signature: '<File path="handoff/plan.md">…</File>',
     description:
-      "Writes resolved child text beneath the active <Workspace /> before later siblings run. A child <Agent /> can generate the contents, and <File /> does not duplicate that text into the surrounding prompt.",
-    note: "<File /> currently writes the host Workspace before Sandbox acquisition; guest-side writes remain explicit <Agent /> or <Script /> work.",
+      "Writes resolved child text or a local UTF-8 source through the nearest active filesystem without duplicating it into the surrounding prompt.",
+    note: "Lexical placement chooses the live Sandbox guest first, otherwise the active Workspace materialization. A child Agent may generate the complete file body.",
     file: "file.tsx",
     code: `<Workspace id="review-42" provider={Project} save>
   <File path="handoff/plan.md">

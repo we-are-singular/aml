@@ -31,11 +31,11 @@ import ProviderHero from "../../../../../components/docs/ProviderHero.astro"
   Codex model session
 ```
 
-Every acquisition receives a private `CODEX_HOME`, `CODEX_SQLITE_HOME`, and log directory under AML's temporary session state. This prevents concurrent evaluations from sharing adapter state accidentally. The state directory is released when the Agent session finishes.
+Every acquisition receives private Codex state. `CODEX_SQLITE_HOME` and logs live under AML's temporary session directory. Without authored Skills, `CODEX_HOME` uses that directory too; with [`<Skill />`](/docs/reference/primitives/skill/), AML points `CODEX_HOME` at the Agent's private staging home so Codex discovers the copied `.agents/skills/<name>/` packages. Both roots are released when the Agent session finishes.
 
 The private `CODEX_HOME` also prevents the operator's global Codex guidance from being inherited. Codex still discovers
 project-scoped `AGENTS.md` and `AGENTS.override.md` files from the repository root down to the effective working
-directory. AML's authored `system` content becomes `developer_instructions` in addition to that project guidance.
+directory. AML's authored `system` content becomes `developer_instructions` in addition to that project guidance. Skill bodies remain files for progressive discovery and are not inserted into `developer_instructions`.
 
 ## Prerequisites
 

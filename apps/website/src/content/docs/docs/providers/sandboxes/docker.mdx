@@ -91,8 +91,9 @@ For a real Agent, replace the image with one that contains the ACP executable an
 4. The optional setup command runs after the mount is ready. A non-zero result rejects acquisition and triggers container cleanup.
 5. `exec()` invokes `docker exec` with the logical guest cwd and explicit environment values.
 6. `spawn()` invokes a process-group wrapper inside the container, captures output from the beginning, and can kill the remote process group.
-7. Timeout or cancellation of `docker exec` removes the disposable container because the remote command may otherwise survive the local client process.
-8. Release removes the container. Because the Workspace is a same-host mount, writes are already present in the host materialization; Workspace save/revision behavior remains the Workspace provider’s responsibility.
+7. Complete-file reads and writes use confined guest paths plus `docker cp`; writes upload a temporary file and rename it over the destination. Agent staging uses a unique writable directory under `/tmp`.
+8. Timeout or cancellation of `docker exec` removes the disposable container because the remote command may otherwise survive the local client process.
+9. Release removes the container. Because the Workspace is a same-host mount, writes are already present in the host materialization; Workspace save/revision behavior remains the Workspace provider’s responsibility.
 
 ## Read-only behavior
 

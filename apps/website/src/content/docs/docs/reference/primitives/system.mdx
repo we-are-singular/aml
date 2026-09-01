@@ -41,4 +41,4 @@ The provider receives system text in this order: runtime `system`, `<Agent />` `
 - Multiple `<System />` blocks preserve authored order.
 - `<System />` changes the message channel, not provider selection, Sandbox authority, or Tool scope.
 
-Use [`<Skill />`](/docs/reference/primitives/skill/) for reusable instruction files and [`<FollowUp />`](/docs/reference/primitives/follow-up/) for later user turns in the same session.
+Use [`<Include />`](/docs/reference/primitives/include/) for reusable instruction files, [`<Skill />`](/docs/reference/primitives/skill/) for a complete Agent Skills package, and [`<FollowUp />`](/docs/reference/primitives/follow-up/) for later user turns in the same session. A Skill is session-wide and must be declared in the Agent plan rather than inside `<System />`.
