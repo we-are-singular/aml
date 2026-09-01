@@ -56,15 +56,26 @@ export class AgentFileStaging {
     await resource.writeFile(portablePath, Uint8Array.from(content))
     this.#signal.throwIfAborted()
 
-    const stagedPath =
-      this.#sandbox === undefined
-        ? path.join(resource.root, ...portablePath.split("/"))
-        : path.posix.join(resource.root, portablePath)
+    const stagedPath = this.#concretePath(resource.root, portablePath)
 
     return Object.freeze({
       directory: this.#sandbox === undefined ? path.dirname(stagedPath) : path.posix.dirname(stagedPath),
       path: stagedPath,
     })
+  }
+
+  /** Resolves one portable staging-relative path in the Agent's execution environment. */
+  async resolvePath(relativePath: string): Promise<string> {
+    this.#signal.throwIfAborted()
+
+    if (this.#releasePromise !== undefined) {
+      throw new Error("Agent file staging is already being released")
+    }
+
+    const portablePath = resolvePortablePath(".", relativePath, "Agent staged path")
+    const resource = await this.#getResource()
+    this.#signal.throwIfAborted()
+    return this.#concretePath(resource.root, portablePath)
   }
 
   /** Removes invocation-owned staging once, or does nothing when unused. */
@@ -86,6 +97,12 @@ export class AgentFileStaging {
     }
 
     return wrapSandboxStaging(staging, this.#signal)
+  }
+
+  #concretePath(root: string, portablePath: string): string {
+    return this.#sandbox === undefined
+      ? path.join(root, ...portablePath.split("/"))
+      : path.posix.join(root, portablePath)
   }
 
   async #release(): Promise<void> {
