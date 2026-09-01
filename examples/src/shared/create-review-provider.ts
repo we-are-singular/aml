@@ -27,7 +27,12 @@ export function createReviewProvider(name: string, directory: string): AgentProv
   return new DeterministicAgentProvider({
     respond(request) {
       if (request.output?.type === "json") {
-        if (!request.prompt.includes("src/invoice.ts") || request.skills.length !== 1) {
+        if (
+          !request.prompt.includes("<changed-files>") ||
+          !request.prompt.includes("<pull-request-diff>") ||
+          !request.prompt.includes("src/invoice.ts") ||
+          request.skills.length !== 1
+        ) {
           throw new Error("Review evidence or Skill registration was not resolved before the specialist Agent")
         }
 
@@ -54,8 +59,11 @@ export function createReviewProvider(name: string, directory: string): AgentProv
         }
       }
 
-      if (!/Validated findings:\n{2,}\[/u.test(request.prompt) || !/\]\n{2,}Return one concise/u.test(request.prompt)) {
-        throw new Error("Review synthesis sections were not separated by Block boundaries")
+      if (
+        !/<validated-findings>\n\[[\s\S]*\]\n<\/validated-findings>/u.test(request.prompt) ||
+        !/<output-contract>\nReturn one concise final review\./u.test(request.prompt)
+      ) {
+        throw new Error("Review synthesis sections were not wrapped by named Block boundaries")
       }
 
       return {
