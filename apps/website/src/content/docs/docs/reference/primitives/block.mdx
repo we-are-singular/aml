@@ -29,6 +29,40 @@ Report correctness findings before maintainability suggestions.
 Cite concrete evidence for every finding.
 ```
 
+## Multiline Markdown
+
+TypeScript's JSX transform collapses whitespace in natural multiline text children before AML receives them. Use the `markdown` template tag when headings, paragraphs, blank lines, or list boundaries are part of the prompt:
+
+```tsx
+import { Block, markdown } from "@aml-jsx/sdk"
+
+function Instructions() {
+  return (
+    <Block>
+      {markdown`
+        Review the change:
+
+        - Check behavior
+        - Check tests
+        - Check documentation
+      `}
+    </Block>
+  )
+}
+```
+
+This renders the authored structure without its surrounding TSX indentation:
+
+```text
+Review the change:
+
+- Check behavior
+- Check tests
+- Check documentation
+```
+
+The tag removes an opening and closing blank source line plus the indentation shared by every non-blank line. It preserves additional indentation, intentional blank lines, and nested expressions such as `${priority}` or `${<Include src="./policy.md" />}`. Use `markdown` only where source line structure is semantic; ordinary JSX text and sibling concatenation remain unchanged.
+
 ## Props
 
 | Prop       | Type            | Default  | Meaning                                                                                    |
