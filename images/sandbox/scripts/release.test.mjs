@@ -1,7 +1,7 @@
 import assert from "node:assert/strict"
 import test from "node:test"
 
-import { parseBuildxDriver } from "./release.mjs"
+import { parseBuildxDriver, windowsBrowserOpenerScript } from "./release.mjs"
 
 test("parses the legacy Docker driver", () => {
   assert.equal(parseBuildxDriver("Name: default\nDriver: docker\n"), "docker")
@@ -15,4 +15,11 @@ test("parses attestation-capable Buildx drivers", () => {
 
 test("rejects inspect output without a driver", () => {
   assert.throws(() => parseBuildxDriver("Name: unavailable\n"), /did not report its selected driver/)
+})
+
+test("passes browser URLs directly to the Windows registered handler", () => {
+  assert.equal(
+    windowsBrowserOpenerScript("/mnt/c/WINDOWS/system32/rundll32.exe"),
+    '#!/bin/sh\nexec "/mnt/c/WINDOWS/system32/rundll32.exe" url.dll,FileProtocolHandler "$1"\n'
+  )
 })

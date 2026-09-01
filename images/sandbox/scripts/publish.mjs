@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, rmSync } from "node:fs"
+import { closeSync, createReadStream, createWriteStream, mkdtempSync, openSync, readFileSync, rmSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { dirname, join, resolve } from "node:path"
 import { createInterface } from "node:readline/promises"
@@ -142,17 +142,45 @@ function publishedImages(version) {
 }
 
 async function waitForSigningConfirmation(imageCount) {
-  if (!process.stdin.isTTY) {
-    throw new Error("Cosign signing requires an interactive terminal")
-  }
-
-  const prompt = createInterface({ input: process.stdin, output: process.stdout })
+  const terminal = signingTerminal()
+  const prompt = createInterface({ input: terminal.input, output: terminal.output })
   try {
     await prompt.question(
       `\nPress Enter when you are ready to begin keyless Cosign signing for ${imageCount} images... `
     )
   } finally {
     prompt.close()
+    terminal.close()
+  }
+}
+
+/** Uses the controlling terminal when Release It does not preserve a TTY stdin for hooks. */
+export function signingTerminal(
+  stdin = process.stdin,
+  stdout = process.stdout,
+  openTerminal = openControllingTerminal
+) {
+  if (stdin.isTTY) return { close() {}, input: stdin, output: stdout }
+
+  try {
+    return openTerminal()
+  } catch (error) {
+    throw new Error("Cosign signing requires an interactive terminal", { cause: error })
+  }
+}
+
+function openControllingTerminal() {
+  const descriptor = openSync("/dev/tty", "r+")
+  const input = createReadStream("/dev/tty", { autoClose: false, fd: descriptor })
+  const output = createWriteStream("/dev/tty", { autoClose: false, fd: descriptor })
+  return {
+    close() {
+      input.destroy()
+      output.destroy()
+      closeSync(descriptor)
+    },
+    input,
+    output,
   }
 }
 

@@ -140,16 +140,21 @@ function createReleaseEnvironment(environment) {
     DOCKER_CONFIG: dockerConfig,
   }
 
-  // Raw Explorer opens a File Explorer window before forwarding the URL. Use
-  // Windows' registered URL handler so browser and profile selection stay local.
-  const windowsCommand = "/mnt/c/WINDOWS/system32/cmd.exe"
+  // Raw Explorer opens a File Explorer window before forwarding the URL. Invoke
+  // the registered handler directly so cmd.exe cannot parse OAuth query strings.
+  const windowsCommand = "/mnt/c/WINDOWS/system32/rundll32.exe"
   if (environment.BROWSER?.toLowerCase().endsWith("/explorer.exe") && existsSync(windowsCommand)) {
     const browserOpener = join(dockerConfig, "open-windows-browser")
-    writeFileSync(browserOpener, `#!/bin/sh\nexec "${windowsCommand}" /d /c start "" "$1"\n`, { mode: 0o700 })
+    writeFileSync(browserOpener, windowsBrowserOpenerScript(windowsCommand), { mode: 0o700 })
     releaseEnvironment.BROWSER = browserOpener
   }
 
   return releaseEnvironment
+}
+
+/** Opens one URL through Windows without a command-shell parsing boundary. */
+export function windowsBrowserOpenerScript(command) {
+  return `#!/bin/sh\nexec "${command}" url.dll,FileProtocolHandler "$1"\n`
 }
 
 function readRecoveryVersion() {
