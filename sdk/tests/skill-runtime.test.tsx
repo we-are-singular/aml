@@ -33,6 +33,7 @@ describe("<Skill>", () => {
             description: "Review code with evidence.",
             name: "review",
           })
+          expect(skill?.directory).toBe(path.join(skill?.skillHome ?? "", "skills", "review"))
           expect(request.prompt).toBe("Inspect the change.")
           expect(request.system).toBe(
             [

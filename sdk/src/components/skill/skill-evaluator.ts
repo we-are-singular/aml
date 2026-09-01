@@ -77,10 +77,12 @@ export class SkillEvaluator {
         throw new Error("Skill package staging omitted SKILL.md")
       }
 
+      const skillHome = await staging.resolvePath(".agents")
       const skill: AgentSkill = Object.freeze({
         description: frontmatter.description,
         directory: stagedSkillFile.directory,
         name: frontmatter.name,
+        skillHome,
         skillFile: stagedSkillFile.path,
       })
 

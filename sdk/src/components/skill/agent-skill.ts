@@ -15,6 +15,9 @@ export interface AgentSkill {
   /** Safe Agent Skills package name from the package frontmatter. */
   readonly name: string
 
+  /** Concrete `.agents` home shared by every staged package in this Agent. */
+  readonly skillHome: string
+
   /** Concrete path to the package's staged `SKILL.md`. */
   readonly skillFile: string
 }
