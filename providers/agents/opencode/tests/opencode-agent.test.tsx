@@ -7,9 +7,11 @@ import path from "node:path"
 import {
   Agent,
   AmlRuntime,
+  defineMcpServer,
   defineTool,
   evaluate,
   FollowUp,
+  Mcp,
   Sandbox,
   Skill,
   Tool,
@@ -246,13 +248,22 @@ describe("opencodeAgent()", () => {
   })
 
   it("names generated OpenCode MCP tools in structured turns", async () => {
+    let mcpServerNames: readonly string[] = []
     const prompts: string[] = []
     const sandboxProvider = new DeterministicSandboxProvider({
       exec: command => ({ exitCode: 0, stderr: "", stdout: command === "pwd" ? "/sandbox/repository\n" : "" }),
       spawn(command) {
         if (command === "node") return relayFixtureProcess()
-        return acpFixtureProcess(prompt => prompts.push(prompt))
+        return acpFixtureProcess(prompt => prompts.push(prompt), {
+          onMcpServers(servers) {
+            mcpServerNames = servers.map(server => server.name)
+          },
+        })
       },
+    })
+    const collidingServer = defineMcpServer({
+      name: "tools",
+      transport: { type: "streamable-http", url: "https://example.test/mcp" },
     })
     const Result = z.object({ proof: z.string() })
     const readEvidence = defineTool({
@@ -266,6 +277,7 @@ describe("opencodeAgent()", () => {
       return JSON.stringify(
         await evaluate(
           <Agent system="Follow the system.">
+            <Mcp use={collidingServer} />
             <Tool use={readEvidence} />
             Submit proof.
           </Agent>,
@@ -275,7 +287,13 @@ describe("opencodeAgent()", () => {
     }
 
     await expect(
-      new AmlRuntime({ agentProvider: opencodeAgent() }).evaluate(
+      new AmlRuntime({
+        agentProvider: opencodeAgent({
+          config: {
+            mcp: { tools_2: { type: "remote", url: "https://example.test/native-mcp" } },
+          },
+        }),
+      }).evaluate(
         <Sandbox provider={sandboxProvider}>
           <StructuredResult />
         </Sandbox>
@@ -283,11 +301,12 @@ describe("opencodeAgent()", () => {
     ).rejects.toThrow('Agent "opencode"')
 
     expect(prompts).toHaveLength(2)
+    expect(mcpServerNames).toEqual(["tools", "tools_3"])
     expect(prompts[0]).toMatch(
-      /^<SYSTEM>\nFollow the system\.\n<\/SYSTEM>\n\nAML JavaScript Tools use these OpenCode MCP tool names:\n- read_evidence: aml_[a-f0-9]+_read_evidence\n\nSubmit proof\.\n\nCall the OpenCode MCP tool "aml_[a-f0-9]+_aml_submit_result"/u
+      /^<SYSTEM>\nFollow the system\.\n<\/SYSTEM>\n\nAML JavaScript Tools use these OpenCode MCP tool names:\n- read_evidence: tools_3_read_evidence\n\nSubmit proof\.\n\nCall the OpenCode MCP tool "tools_3_aml_submit_result"/u
     )
     expect(prompts[1]).toMatch(
-      /^The previous turn ended without submitting a valid structured result\.\n\nCall the OpenCode MCP tool "aml_[a-f0-9]+_aml_submit_result"/u
+      /^The previous turn ended without submitting a valid structured result\.\n\nCall the OpenCode MCP tool "tools_3_aml_submit_result"/u
     )
     expect(prompts[1]).toContain('"proof"')
   })
@@ -380,6 +399,7 @@ function acpFixtureProcess(
     readonly advertisedModels?: readonly string[]
     readonly applyModel?: boolean
     readonly currentModel?: string
+    readonly onMcpServers?: (servers: readonly { readonly name: string }[]) => void
     readonly onModel?: (value: string) => void
   } = {}
 ): Readonly<SandboxProcess> {
@@ -403,10 +423,13 @@ function acpFixtureProcess(
       agentCapabilities: { mcpCapabilities: { http: true } },
       protocolVersion: params.protocolVersion,
     }))
-    .onRequest(methods.agent.session.new, () => ({
-      configOptions: configOptions(),
-      sessionId: "opencode-test-session",
-    }))
+    .onRequest(methods.agent.session.new, ({ params }) => {
+      options.onMcpServers?.(params.mcpServers)
+      return {
+        configOptions: configOptions(),
+        sessionId: "opencode-test-session",
+      }
+    })
     .onRequest(methods.agent.session.setConfigOption, ({ params }) => {
       if (params.configId === "model" && typeof params.value === "string") {
         if (options.applyModel !== false) currentModel = params.value

@@ -66,6 +66,8 @@ describe("AcpMcpBridge", () => {
     const client = await connectMcp(connection)
 
     try {
+      expect(connection.name).toBe("tools")
+      expect(connection.headers.Authorization).toMatch(/^Bearer [0-9a-f-]{36}$/u)
       expect(bridge.instruction).toContain("Call aml_submit_result once")
       expect(bridge.instruction).toContain("If the Tool returns an error, correct the result and retry")
       expect(bridge.instruction).toContain("After the Tool accepts a result, do not call it again")
@@ -90,6 +92,18 @@ describe("AcpMcpBridge", () => {
       expect(execute).toHaveBeenCalledOnce()
     } finally {
       await client.close()
+      await bridge.close()
+    }
+  })
+
+  it("uses a compact numeric suffix when authored MCP server names collide", async () => {
+    const context = createAgentExecutionContext()
+    const bridge = new AcpMcpBridge([], undefined, context, undefined, ["tools", "tools_2", "unrelated"])
+    const connection = await bridge.start(context.signal)
+
+    try {
+      expect(connection.name).toBe("tools_3")
+    } finally {
       await bridge.close()
     }
   })

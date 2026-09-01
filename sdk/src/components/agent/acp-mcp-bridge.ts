@@ -31,7 +31,7 @@ export class AcpMcpBridge implements AcpStructuredOutputController {
   readonly #authToken = randomUUID()
   readonly #context: AgentExecutionContext
   readonly #http: HttpServer
-  readonly #name = `aml_${randomUUID().replaceAll("-", "")}`
+  readonly #name: string
   readonly #output: AgentOutputRequest | undefined
   readonly #outputServices: Readonly<AgentStructuredOutputServices> | undefined
   readonly #tools: ReadonlyMap<string, AgentJavaScriptTool>
@@ -54,7 +54,8 @@ export class AcpMcpBridge implements AcpStructuredOutputController {
     tools: readonly AgentJavaScriptTool[],
     output: AgentOutputRequest | undefined,
     context: AgentExecutionContext,
-    outputServices?: Readonly<AgentStructuredOutputServices>
+    outputServices?: Readonly<AgentStructuredOutputServices>,
+    reservedServerNames: Iterable<string> = []
   ) {
     if (tools.some(tool => tool.name === ACP_STRUCTURED_OUTPUT_TOOL_NAME)) {
       throw new TypeError(`AML JavaScript Tool name "${ACP_STRUCTURED_OUTPUT_TOOL_NAME}" is reserved`)
@@ -65,6 +66,7 @@ export class AcpMcpBridge implements AcpStructuredOutputController {
     }
 
     this.#context = context
+    this.#name = availableServerName(reservedServerNames)
     this.#output = output
     this.#outputServices = outputServices
     this.#tools = new Map(tools.map(tool => [tool.name, tool]))
@@ -353,6 +355,21 @@ export class AcpMcpBridge implements AcpStructuredOutputController {
     return {
       content: [{ text: "Structured result accepted.", type: "text" as const }],
     }
+  }
+}
+
+/**
+ * Keeps the model-facing bridge name readable while avoiding authored MCP names.
+ */
+function availableServerName(reservedServerNames: Iterable<string>): string {
+  const reserved = new Set(reservedServerNames)
+  const baseName = "tools"
+
+  if (!reserved.has(baseName)) return baseName
+
+  for (let suffix = 2; ; suffix += 1) {
+    const candidate = `${baseName}_${suffix}`
+    if (!reserved.has(candidate)) return candidate
   }
 }
 

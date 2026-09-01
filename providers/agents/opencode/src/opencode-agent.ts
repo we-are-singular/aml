@@ -32,6 +32,10 @@ class OpenCodeAcpProfile implements AcpAgentProfile<"opencode"> {
     return this.#options.directory
   }
 
+  get reservedMcpServerNames(): readonly string[] {
+    return Object.freeze(Object.keys(configTable(this.#options.config.mcp)))
+  }
+
   createLaunch(context: Readonly<AcpAgentLaunchContext>): Readonly<AcpAgentLaunch> {
     const configuration: NonNullable<AcpAgentLaunch["configuration"]>[number][] = []
     const initialPromptSections: string[] = []

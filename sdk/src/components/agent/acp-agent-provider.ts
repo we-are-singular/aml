@@ -126,6 +126,9 @@ export interface AcpAgentProfile<Name extends string> {
   /** Literal provider name exposed by the resulting Agent provider. */
   readonly name: Name
 
+  /** Provider-native MCP names that share the launched Agent's namespace. */
+  readonly reservedMcpServerNames?: readonly string[]
+
   /** Declares that `createLaunch()` maps staged packages into native discovery. */
   readonly skillDiscovery?: "native"
 
@@ -179,7 +182,11 @@ class AcpAgentProvider<Name extends string> extends AbstractAgentProvider<Name> 
           javaScriptTools,
           request.output,
           context,
-          request.output === undefined ? undefined : agentStructuredOutputServices(context)
+          request.output === undefined ? undefined : agentStructuredOutputServices(context),
+          [
+            ...request.mcpServers.map(server => (server.kind === "named" ? server.name : server.definition.name)),
+            ...(this.#profile.reservedMcpServerNames ?? []),
+          ]
         )
         let connection = await bridge.start(context.signal)
 
