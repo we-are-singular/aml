@@ -25,6 +25,7 @@ const request: AgentRequest = Object.freeze({
   }),
   permissions: Object.freeze({ filesystem: "read-write", network: true, shell: true }),
   prompt: "first",
+  skills: Object.freeze([]),
   system: "",
   tools: Object.freeze([]),
 })
@@ -149,12 +150,22 @@ describe("AbstractAgentProvider", () => {
           id: "lease",
           runtime: {
             access: "read-write",
+            async createFileStaging() {
+              return emptyFileStaging()
+            },
             cwd: ".",
             async exec() {
               return { exitCode: 0, stderr: "", stdout: "" }
             },
+            async readFile() {
+              return new Uint8Array()
+            },
             root: ".",
             spawn: async () => completedTestProcess(),
+            async stat() {
+              return { kind: "file", size: 0 } as const
+            },
+            async writeFile() {},
           },
         },
         nested: false,
@@ -199,12 +210,22 @@ class RecordingSandboxProvider extends AbstractSandboxProvider<
     this.events.push("runtime")
     return Object.freeze({
       access: request.access,
+      async createFileStaging() {
+        return emptyFileStaging()
+      },
       cwd: request.cwd,
       async exec() {
         return Object.freeze({ exitCode: 0, stderr: "", stdout: "" })
       },
+      async readFile() {
+        return new Uint8Array()
+      },
       root: request.root,
       spawn: async () => completedTestProcess(),
+      async stat() {
+        return Object.freeze({ kind: "file" as const, size: 0 })
+      },
+      async writeFile() {},
     })
   }
 
@@ -223,6 +244,14 @@ class RecordingSandboxProvider extends AbstractSandboxProvider<
       throw this.releaseError
     }
   }
+}
+
+function emptyFileStaging() {
+  return Object.freeze({
+    async release() {},
+    root: "/tmp/aml-test-staging",
+    async writeFile() {},
+  })
 }
 
 const sandboxRequest: SandboxAcquireRequest = Object.freeze({
@@ -295,6 +324,7 @@ describe("validated Sandbox runtime", () => {
     const runtime = validateSandboxRuntime(
       {
         access: "read-write",
+        ...fixtureFileRuntime(),
         cwd: ".",
         async exec() {
           return result
@@ -315,6 +345,7 @@ describe("validated Sandbox runtime", () => {
     const runtime = validateSandboxRuntime(
       {
         access: "read-write",
+        ...fixtureFileRuntime(),
         cwd: ".",
         async exec() {
           return { exitCode: "0", stderr: "", stdout: "" }
@@ -353,6 +384,7 @@ describe("validated Sandbox runtime", () => {
     const runtime = validateSandboxRuntime(
       {
         access: "read-write",
+        ...fixtureFileRuntime(),
         cwd: ".",
         async exec() {
           return { exitCode: 0, stderr: "", stdout: "" }
@@ -394,4 +426,19 @@ function completedTestProcess() {
       return Object.freeze({ exitCode: 0 })
     },
   })
+}
+
+function fixtureFileRuntime() {
+  return {
+    async createFileStaging() {
+      return emptyFileStaging()
+    },
+    async readFile() {
+      return new Uint8Array()
+    },
+    async stat() {
+      return Object.freeze({ kind: "file" as const, size: 0 })
+    },
+    async writeFile() {},
+  }
 }

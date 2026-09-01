@@ -1,5 +1,6 @@
 import type { AmlTraceIdentity } from "../../core/trace-identity.js"
 import type { AgentMcpServer } from "../mcp/aml-mcp-server.js"
+import type { AgentSkill } from "../skill/agent-skill.js"
 import type { AgentTool } from "../tool/agent-tool.js"
 import type { AgentOutputRequest } from "./agent-output-request.js"
 import type { AgentPermissions } from "./agent.js"
@@ -36,6 +37,9 @@ export interface AgentRequest {
 
   /** Trimmed initial user prompt; it may be empty when the Agent has no text. */
   readonly prompt: string
+
+  /** Complete staged Agent Skill packages in authored order; empty when absent. */
+  readonly skills: readonly AgentSkill[]
 
   /** Joined runtime, Agent, and child `System` text; empty when none exists. */
   readonly system: string

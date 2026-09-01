@@ -7,7 +7,6 @@ import { Loop } from "../src/components/loop/loop.js"
 import { defineMcpServer } from "../src/components/mcp/define-mcp-server.js"
 import { Mcp } from "../src/components/mcp/mcp.js"
 import { Sandbox } from "../src/components/sandbox/sandbox.js"
-import { Skill } from "../src/components/skill/skill.js"
 import { System } from "../src/components/system/system.js"
 import { defineTool } from "../src/components/tool/define-tool.js"
 import { Tool } from "../src/components/tool/tool.js"
@@ -56,9 +55,6 @@ describe("observability", () => {
       return (
         <Agent provider={provider}>
           <System>PRIVATE_SYSTEM</System>
-          <Skill description="PRIVATE_DESCRIPTION" name="evidence">
-            PRIVATE_SKILL
-          </Skill>
           <Tool use={lookup} />
           <Mcp name="project" />
           PRIVATE_PROMPT
@@ -100,7 +96,6 @@ describe("observability", () => {
     const componentStart = events.find(
       event => event.type === "span.start" && event.kind === "component" && event.name === "Review"
     )
-    const skillStart = events.find(event => event.type === "span.start" && event.kind === "skill")
     const systemStart = events.find(event => event.type === "span.start" && event.kind === "system")
 
     expect(rootStart).toMatchObject({
@@ -132,9 +127,6 @@ describe("observability", () => {
     })
     expect(toolStart).toMatchObject({
       name: "lookup",
-      parentSpanId: agentStart?.spanId,
-    })
-    expect(skillStart).toMatchObject({
       parentSpanId: agentStart?.spanId,
     })
     expect(systemStart).toMatchObject({

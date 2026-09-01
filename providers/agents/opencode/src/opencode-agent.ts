@@ -21,6 +21,7 @@ export interface OpenCodeAgentProvider extends AgentProvider {
 
 class OpenCodeAcpProfile implements AcpAgentProfile<"opencode"> {
   readonly name = "opencode"
+  readonly skillDiscovery = "native"
   readonly #options: Readonly<CapturedOpenCodeAgentOptions>
 
   constructor(options: Readonly<CapturedOpenCodeAgentOptions>) {
@@ -91,6 +92,10 @@ class OpenCodeAcpProfile implements AcpAgentProfile<"opencode"> {
       typeof this.#options.config.permission === "string"
         ? { "*": this.#options.config.permission }
         : (this.#options.config.permission ?? {})
+    const configuredSkills = configTable(this.#options.config.skills)
+    const configuredSkillPaths = Array.isArray(configuredSkills.paths)
+      ? configuredSkills.paths.filter((entry): entry is string => typeof entry === "string")
+      : []
     const model = context.request.model ?? this.#options.model ?? this.#options.config.model
     if (model !== undefined) {
       // OpenCode ACP owns the session model after launch. File and environment
@@ -111,6 +116,14 @@ class OpenCodeAcpProfile implements AcpAgentProfile<"opencode"> {
       // OpenCode merges top-level permissions into every native agent profile,
       // so task subagents receive the same portable AML restrictions.
       permission: { ...configuredPermission, ...inheritedPermission },
+      ...(context.request.skills.length === 0
+        ? {}
+        : {
+            skills: {
+              ...configuredSkills,
+              paths: [...configuredSkillPaths, ...context.request.skills.map(skill => skill.directory)],
+            },
+          }),
       ...(model === undefined ? {} : { model }),
     }
 

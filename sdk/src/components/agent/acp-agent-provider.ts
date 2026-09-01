@@ -126,6 +126,9 @@ export interface AcpAgentProfile<Name extends string> {
   /** Literal provider name exposed by the resulting Agent provider. */
   readonly name: Name
 
+  /** Declares that `createLaunch()` maps staged packages into native discovery. */
+  readonly skillDiscovery?: "native"
+
   /**
    * Host working directory used outside a Sandbox.
    *
@@ -146,10 +149,18 @@ export interface AcpAgentProfile<Name extends string> {
  */
 class AcpAgentProvider<Name extends string> extends AbstractAgentProvider<Name> {
   readonly #profile: Readonly<AcpAgentProfile<Name>>
+  declare readonly skillDiscovery?: "native"
 
   constructor(profile: Readonly<AcpAgentProfile<Name>>) {
     super(profile.name)
     this.#profile = profile
+
+    if (profile.skillDiscovery === "native") {
+      Object.defineProperty(this, "skillDiscovery", {
+        enumerable: true,
+        value: "native",
+      })
+    }
   }
 
   override supportsSandbox(sandbox: NonNullable<AgentExecutionContext["sandbox"]>): boolean {

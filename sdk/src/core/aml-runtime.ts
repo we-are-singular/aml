@@ -1,11 +1,13 @@
 import type { StandardSchemaV1 } from "@standard-schema/spec"
 
 import type { AgentProps } from "../components/agent/agent.js"
+import { AgentFileStaging } from "../components/agent/agent-file-staging.js"
 import type { AgentProvider } from "../components/agent/agent-provider.js"
 import { AgentExecutor } from "../components/agent/agent-executor.js"
 import { ModelSchema } from "../components/agent/model-schema.js"
 import type { ValidatedAgentProvider } from "../components/agent/validate-agent-provider.js"
 import { type FileEvaluation, FileEvaluator } from "../components/file/file-evaluator.js"
+import { ActiveFilesystem } from "../components/file/active-filesystem.js"
 import type { FileProps } from "../components/file/file.js"
 import type { FollowUpProps } from "../components/follow-up/follow-up.js"
 import { ContextRegistry } from "../components/context/context-registry.js"
@@ -15,12 +17,16 @@ import { LoopEvaluator } from "../components/loop/loop-evaluator.js"
 import type { LoopProps } from "../components/loop/loop.js"
 import { McpCollection } from "../components/mcp/mcp-collection.js"
 import type { McpProps } from "../components/mcp/mcp.js"
+import { IncludeEvaluator } from "../components/include/include-evaluator.js"
+import type { IncludeProps } from "../components/include/include.js"
 import { type SandboxEvaluationScope, SandboxEvaluator } from "../components/sandbox/sandbox-evaluator.js"
 import type { SandboxProvider, SandboxSession } from "../components/sandbox/sandbox-provider.js"
 import type { SandboxProps } from "../components/sandbox/sandbox.js"
 import { type ScriptEvaluation, ScriptEvaluator } from "../components/script/script-evaluator.js"
 import type { ScriptProps } from "../components/script/script.js"
-import { type SkillEvaluation, SkillEvaluator } from "../components/skill/skill-evaluator.js"
+import { SkillCollection } from "../components/skill/skill-collection.js"
+import { SkillEvaluator } from "../components/skill/skill-evaluator.js"
+import type { SkillProps } from "../components/skill/skill.js"
 import type { SystemProps } from "../components/system/system.js"
 import { ToolCollection } from "../components/tool/tool-collection.js"
 import { registeredAmlTool, type AgentJavaScriptTool, type AmlTool } from "../components/tool/agent-tool.js"
@@ -51,7 +57,8 @@ interface TextTarget {
   readonly kind: "text"
   readonly parentSpanId: string | undefined
   readonly sandbox: Readonly<SandboxSession> | undefined
-  readonly source: "evaluation" | "file" | "follow-up" | "script" | "skill" | "system"
+  readonly source: "evaluation" | "file" | "follow-up" | "script" | "system"
+  readonly staging: AgentFileStaging | undefined
   readonly runtimeTool?: AgentJavaScriptTool
   readonly structured: StructuredEvaluation | undefined
   readonly workspace: Readonly<WorkspaceMaterializationReference> | undefined
@@ -66,6 +73,8 @@ interface AgentTarget {
   readonly parentSpanId: string
   readonly promptChunks: string[]
   readonly sandbox: Readonly<SandboxSession> | undefined
+  readonly skills: SkillCollection
+  readonly staging: AgentFileStaging
   readonly structured: StructuredEvaluation | undefined
   readonly systemFragments: string[]
   readonly tools: ToolCollection
@@ -103,6 +112,7 @@ interface EvaluationScope {
   readonly depth: number
   readonly parentSpanId: string | undefined
   readonly sandbox: Readonly<SandboxSession> | undefined
+  readonly staging: AgentFileStaging | undefined
   readonly workspace: Readonly<WorkspaceMaterializationReference> | undefined
 }
 
@@ -182,14 +192,6 @@ interface CompleteSystemFrame {
   readonly target: TextTarget
 }
 
-interface CompleteSkillFrame {
-  readonly kind: "complete-skill"
-  readonly plan: SkillEvaluation
-  readonly span: TraceSpan
-  readonly target: ResolutionTarget
-  readonly text: TextTarget
-}
-
 interface CompleteComponentFrame {
   readonly kind: "complete-component"
   readonly span: TraceSpan
@@ -203,7 +205,6 @@ type EvaluationFrame =
   | CompleteFollowUpFrame
   | CompleteSandboxFrame
   | CompleteScriptFrame
-  | CompleteSkillFrame
   | CompleteSystemFrame
   | CompleteWorkspaceFrame
   | ReleaseFrame
@@ -241,8 +242,9 @@ export interface AmlRuntimeOptions {
   readonly agentProvider?: AgentProvider
 
   /**
-   * Host directory used to resolve relative `<Skill src>` paths and as the
-   * default working directory for host-executed `<Script>` components.
+   * Host directory used to resolve local `<Include src>`, `<File src>`, and
+   * `<Skill src>` paths and as the default working directory for host-executed
+   * `<Script>` components.
    *
    * Defaults to `process.cwd()` when the runtime is constructed. An active
    * Sandbox supplies its effective cwd to nested Scripts instead. A Workspace
@@ -370,7 +372,8 @@ export class AmlRuntime {
   readonly #allowedMcpServers: ReadonlySet<string> | undefined
   readonly #allowedTools: ReadonlySet<string> | undefined
   readonly #events = new AmlEventBus()
-  readonly #fileEvaluator = new FileEvaluator()
+  readonly #fileEvaluator: FileEvaluator
+  readonly #includeEvaluator: IncludeEvaluator
   readonly #maxAgentCalls: number
   readonly #maxConcurrentAgents: number
   readonly #maxDepth: number
@@ -437,6 +440,8 @@ export class AmlRuntime {
     this.#loopAgentSelector = new LoopAgentSelector(maxDepth)
     this.#sandboxEvaluator = new SandboxEvaluator(options.sandboxProvider)
     const cwd = options.cwd ?? process.cwd()
+    this.#fileEvaluator = new FileEvaluator(cwd)
+    this.#includeEvaluator = new IncludeEvaluator(cwd)
     this.#scriptEvaluator = new ScriptEvaluator(cwd)
     this.#skillEvaluator = new SkillEvaluator(cwd)
     this.#workspaceEvaluator = new WorkspaceEvaluator(options.workspaceProvider)
@@ -507,6 +512,7 @@ export class AmlRuntime {
           depth: 0,
           parentSpanId: domain.context.rootTrace.spanId,
           sandbox: undefined,
+          staging: undefined,
           workspace: undefined,
         },
         undefined
@@ -540,6 +546,7 @@ export class AmlRuntime {
     // the caller's logical branch. Copying its ancestry preserves cycle
     // detection while keeping concurrent nested calls independent.
     const activeValues = new Set(activeAncestors)
+    const activeAgentStagingScopes: AgentFileStaging[] = []
     const activeSandboxScopes: SandboxEvaluationScope[] = []
     const activeTraceSpans: TraceSpan[] = []
     let activeWorkspaceScope: WorkspaceEvaluationScope | undefined
@@ -559,6 +566,7 @@ export class AmlRuntime {
       parentSpanId: scope.parentSpanId,
       sandbox: scope.sandbox,
       source: "evaluation",
+      staging: scope.staging,
       structured,
       workspace: scope.workspace,
       ...(runtimeTool === undefined ? {} : { runtimeTool }),
@@ -740,23 +748,6 @@ export class AmlRuntime {
           continue
         }
 
-        if (frame.kind === "complete-skill") {
-          let content: string
-
-          try {
-            content = await this.#skillEvaluator.complete(frame.plan, frame.text.chunks.join(""), context.signal)
-            appendText(frame.target, content)
-          } catch (error) {
-            removeActiveTraceSpan(activeTraceSpans, frame.span)
-            context.failTraceSpan(frame.span, error)
-            throw error
-          }
-
-          removeActiveTraceSpan(activeTraceSpans, frame.span)
-          context.endTraceSpan(frame.span, "ok", {}, { content })
-          continue
-        }
-
         if (frame.kind === "complete-script") {
           let result: Readonly<{ exitCode: number; stderr: string; stdout: string }>
 
@@ -790,11 +781,34 @@ export class AmlRuntime {
             provider: frame.provider,
             props: frame.props,
             sandbox: frame.sandbox,
+            skills: frame.plan.skills.values(),
             systemFragments: frame.plan.systemFragments,
             tools: frame.plan.tools.values(),
             trace: frame.trace,
           })
           const response = execution.response
+          const staging = activeAgentStagingScopes.pop()
+
+          if (staging !== frame.plan.staging) {
+            throw new EvaluationError("Agent staging scopes completed out of lifecycle order")
+          }
+
+          // Staging remains readable through the complete provider session, but
+          // is removed before outer Sandbox reconciliation can persist it.
+          try {
+            await staging.release()
+          } catch (releaseError) {
+            if (context.signal.aborted) {
+              throw new AggregateError(
+                [context.signal.reason, releaseError],
+                "AML evaluation was cancelled and Agent staging cleanup failed"
+              )
+            }
+
+            throw releaseError
+          }
+
+          context.signal.throwIfAborted()
 
           if (frame.schema !== undefined && frame.collectStructured) {
             const collector = frame.target.structured
@@ -906,6 +920,8 @@ export class AmlRuntime {
               throw error
             }
 
+            const staging = new AgentFileStaging(sandbox, context.signal)
+
             const plan: AgentTarget = {
               acceptsMessageDescriptors: true,
               contextScope: frame.target.contextScope,
@@ -915,6 +931,8 @@ export class AmlRuntime {
               parentSpanId: trace.spanId,
               promptChunks: [],
               sandbox: frame.target.sandbox,
+              skills: new SkillCollection(),
+              staging,
               structured: frame.target.structured,
               systemFragments: [],
               tools: new ToolCollection(this.#allowedTools),
@@ -928,6 +946,7 @@ export class AmlRuntime {
             // Push completion before children: the LIFO stack gives AML its
             // bottom-up execution semantics without suspending a component.
             activeValues.add(current)
+            activeAgentStagingScopes.push(staging)
             activeTraceSpans.push(span)
             frames.push({ kind: "release", value: current })
             frames.push({
@@ -1035,6 +1054,7 @@ export class AmlRuntime {
                         depth: nestedDepth,
                         parentSpanId,
                         sandbox: frame.target.sandbox,
+                        staging: frame.target.staging,
                         workspace: frame.target.workspace,
                       },
                       modelSchema,
@@ -1051,6 +1071,7 @@ export class AmlRuntime {
                     depth: selection.parentDepth,
                     parentSpanId: trace.spanId,
                     sandbox: frame.target.sandbox,
+                    staging: frame.target.staging,
                     workspace: frame.target.workspace,
                   },
                   undefined,
@@ -1091,6 +1112,7 @@ export class AmlRuntime {
               parentSpanId: frame.target.parentSpanId,
               sandbox: frame.target.sandbox,
               source: "follow-up",
+              staging: frame.target.staging,
               structured: frame.target.structured,
               workspace: frame.target.workspace,
             }
@@ -1178,6 +1200,7 @@ export class AmlRuntime {
               parentSpanId: trace.spanId,
               sandbox: frame.target.sandbox,
               source: "file",
+              staging: frame.target.staging,
               structured: frame.target.structured,
               workspace: frame.target.workspace,
             }
@@ -1218,6 +1241,7 @@ export class AmlRuntime {
               parentSpanId: trace.spanId,
               sandbox: frame.target.sandbox,
               source: "script",
+              staging: frame.target.staging,
               structured: frame.target.structured,
               workspace: frame.target.workspace,
             }
@@ -1298,6 +1322,33 @@ export class AmlRuntime {
             continue
           }
 
+          // <Include> reads one live source now. It appends bounded prompt text
+          // while oversized local sources use the containing Agent's staging.
+          if (primitiveKind === "include") {
+            const trace = context.createObservationTrace(frame.target.parentSpanId)
+            const span = context.startTraceSpan(trace, "include", "Include")
+
+            try {
+              const result = await this.#includeEvaluator.evaluate(
+                current.props as Readonly<IncludeProps>,
+                ActiveFilesystem.capture(frame.target.workspace, frame.target.sandbox),
+                frame.target.staging,
+                context.signal
+              )
+              appendText(frame.target, result.content)
+              context.endTraceSpan(span, "ok", {
+                inline: result.inline,
+                size: result.size,
+                source: result.source,
+              })
+            } catch (error) {
+              context.failTraceSpan(span, error)
+              throw error
+            }
+
+            continue
+          }
+
           // <Mcp> is metadata for the nearest Agent, not prompt text.
           if (primitiveKind === "mcp") {
             if (frame.target.kind !== "agent") {
@@ -1330,56 +1381,34 @@ export class AmlRuntime {
             continue
           }
 
-          // Skills combine an optional local file with post-order child text.
-          // They remain prompt text rather than a provider-specific capability.
+          // <Skill> is Agent metadata backed by a complete staged package. Its
+          // body remains out of context until the Agent chooses to read it.
           if (primitiveKind === "skill") {
-            const plan = this.#skillEvaluator.prepare(current.props)
-            const trace = context.createObservationTrace(frame.target.parentSpanId)
-            const span = context.startTraceSpan(
-              trace,
-              "skill",
-              plan.name ?? "Skill",
-              {
-                hasInlineContent: plan.hasChildren,
-                hasSource: plan.source !== undefined,
-              },
-              {
-                ...(plan.description === undefined ? {} : { description: plan.description }),
-                ...(plan.source === undefined ? {} : { source: plan.source }),
+            if (frame.target.kind !== "agent") {
+              if (frame.target.source === "follow-up") {
+                throw new EvaluationError("<Skill> is invalid inside <FollowUp>")
               }
-            )
 
-            const skillTarget: TextTarget = {
-              chunks: [],
-              contextScope: frame.target.contextScope,
-              kind: "text",
-              parentSpanId: trace.spanId,
-              sandbox: frame.target.sandbox,
-              source: "skill",
-              structured: frame.target.structured,
-              workspace: frame.target.workspace,
+              throw new EvaluationError("<Skill> is only valid inside <Agent>")
             }
 
-            activeValues.add(current)
-            activeTraceSpans.push(span)
-            frames.push({ kind: "release", value: current })
-            frames.push({
-              kind: "complete-skill",
-              plan,
-              span,
-              target: frame.target,
-              text: skillTarget,
-            })
+            const trace = context.createObservationTrace(frame.target.parentSpanId)
+            const span = context.startTraceSpan(trace, "skill", "Skill")
 
-            // Source-only Skills complete immediately; inline AML still follows
-            // the evaluator's ordinary post-order and cycle semantics.
-            if (plan.hasChildren) {
-              frames.push({
-                depth: nodeDepth,
-                kind: "resolve",
-                target: skillTarget,
-                value: plan.children,
+            try {
+              const result = await this.#skillEvaluator.evaluate(
+                current.props as Readonly<SkillProps>,
+                frame.target.staging,
+                context.signal
+              )
+              frame.target.skills.add(result.skill)
+              context.endTraceSpan(span, "ok", {
+                files: result.files,
+                name: result.skill.name,
               })
+            } catch (error) {
+              context.failTraceSpan(span, error)
+              throw error
             }
 
             continue
@@ -1408,6 +1437,7 @@ export class AmlRuntime {
               parentSpanId: trace.spanId,
               sandbox: frame.target.sandbox,
               source: "system",
+              staging: frame.target.staging,
               structured: frame.target.structured,
               workspace: frame.target.workspace,
             }
@@ -1457,6 +1487,7 @@ export class AmlRuntime {
                     depth: nodeDepth,
                     parentSpanId,
                     sandbox: frame.target.sandbox,
+                    staging: frame.target.staging,
                     workspace: frame.target.workspace,
                   },
                   modelSchema,
@@ -1523,6 +1554,20 @@ export class AmlRuntime {
 
       // Resource cleanup is LIFO so future independently acquired scopes keep
       // the same ownership order as the evaluator frame stack.
+      while (activeAgentStagingScopes.length > 0) {
+        const staging = activeAgentStagingScopes.pop()
+
+        if (staging === undefined) {
+          break
+        }
+
+        try {
+          await staging.release()
+        } catch (releaseError) {
+          releaseErrors.push(releaseError)
+        }
+      }
+
       while (activeSandboxScopes.length > 0) {
         const scope = activeSandboxScopes.pop()
 

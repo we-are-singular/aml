@@ -3,6 +3,7 @@ import { EvaluationError } from "../../core/evaluation-error.js"
 import type { AmlTraceIdentity } from "../../core/trace-identity.js"
 import type { AgentMcpServer } from "../mcp/aml-mcp-server.js"
 import type { SandboxSession } from "../sandbox/sandbox-provider.js"
+import type { AgentSkill } from "../skill/agent-skill.js"
 import type { AgentTool } from "../tool/agent-tool.js"
 import { instrumentAgentTools } from "../tool/instrument-agent-tools.js"
 import type { AgentProps } from "./agent.js"
@@ -54,6 +55,8 @@ export class AgentRequestPlan {
     readonly runtimeSystem: string
     readonly sandbox: Readonly<SandboxSession> | undefined
     readonly signal?: AbortSignal
+    readonly skillDiscovery: "native" | undefined
+    readonly skills: readonly AgentSkill[]
     readonly systemFragments: readonly string[]
     readonly tools: readonly AgentTool[]
     readonly trace: AmlTraceIdentity
@@ -70,6 +73,10 @@ export class AgentRequestPlan {
     }
 
     systemFragments.push(...input.systemFragments)
+
+    if (input.skillDiscovery !== "native" && input.skills.length > 0) {
+      systemFragments.push(skillFallback(input.skills))
+    }
 
     const prompt = input.prompt.trim()
     const followUps = input.followUps.map(followUp => {
@@ -110,6 +117,7 @@ export class AgentRequestPlan {
           }),
       permissions,
       prompt,
+      skills: input.skills,
       system: systemFragments.join("\n"),
       ...(input.props.timeoutMs === undefined ? {} : { timeoutMs: input.props.timeoutMs }),
       tools,
@@ -158,6 +166,13 @@ export class AgentRequestPlan {
       })
     }
 
+    for (const skill of input.skills) {
+      input.context.traceEvent(input.trace, "capability.skill", {
+        name: skill.name,
+        native: input.skillDiscovery === "native",
+      })
+    }
+
     return new AgentRequestPlan({
       context,
       followUps: Object.freeze(followUps),
@@ -166,4 +181,17 @@ export class AgentRequestPlan {
       tools,
     })
   }
+}
+
+function skillFallback(skills: readonly AgentSkill[]): string {
+  return skills
+    .map(skill => {
+      const description = /[.!?]$/.test(skill.description) ? skill.description : `${skill.description}.`
+      return [
+        `## Available skill: \`${skill.name}\``,
+        `Use when: ${description}`,
+        `Read \`${skill.skillFile}\` when this skill applies.`,
+      ].join("\n")
+    })
+    .join("\n\n")
 }

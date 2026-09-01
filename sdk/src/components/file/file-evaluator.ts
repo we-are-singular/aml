@@ -1,77 +1,75 @@
-import { randomUUID } from "node:crypto"
-import { lstat, mkdir, realpath, rename, rm, writeFile } from "node:fs/promises"
+import { lstat, readFile } from "node:fs/promises"
 import path from "node:path"
 
 import { EvaluationError } from "../../core/evaluation-error.js"
-import { resolvePortablePath } from "../../core/resolve-portable-path.js"
 import type { SandboxSession } from "../sandbox/sandbox-provider.js"
 import type { WorkspaceMaterializationReference } from "../workspace/workspace-provider.js"
+import { ActiveFilesystem } from "./active-filesystem.js"
 import type { FileProps } from "./file.js"
 
+/** Immutable File destination and source captured before child effects. */
 export interface FileEvaluation {
-  readonly destination: string
+  readonly filesystem: ActiveFilesystem
+  readonly hasChildren: boolean
   readonly path: string
-  readonly root: string
+  readonly source: string | undefined
 }
 
-/**
- * Validates and writes one authored file beneath the active Workspace root.
- */
+/** Owns File source validation and nearest-filesystem writes. */
 export class FileEvaluator {
-  /**
-   * Captures the destination before child Agents or components perform effects.
-   */
+  readonly #cwd: string
+
+  /** Captures the application directory for local `src` reads. */
+  constructor(cwd: string) {
+    if (typeof cwd !== "string" || cwd.length === 0) {
+      throw new TypeError("cwd must be a non-empty string")
+    }
+
+    this.#cwd = path.resolve(cwd)
+  }
+
+  /** Captures the destination before child Agents or components perform effects. */
   prepare(
     props: Readonly<FileProps>,
     workspace: Readonly<WorkspaceMaterializationReference> | undefined,
     sandbox: Readonly<SandboxSession> | undefined
   ): Readonly<FileEvaluation> {
-    if (workspace === undefined) {
-      throw new EvaluationError("<File> requires an enclosing <Workspace>")
+    const filesystem = ActiveFilesystem.capture(workspace, sandbox)
+
+    if (filesystem === undefined) {
+      throw new EvaluationError("<File> requires an enclosing <Workspace> or <Sandbox>")
     }
 
-    // A remote Sandbox may hold a newer guest copy than the host materialization.
-    // Guest-side writes need a separate portable filesystem capability.
-    if (sandbox !== undefined) {
-      throw new EvaluationError("<File> inside <Sandbox> is not supported")
+    const children = Reflect.get(props, "children")
+    const source = Reflect.get(props, "src")
+    const hasChildren = children !== undefined
+    const hasSource = source !== undefined
+
+    if (hasChildren === hasSource) {
+      throw new EvaluationError("<File> requires exactly one of src or children")
     }
 
-    if (Reflect.get(props, "children") === undefined) {
-      throw new EvaluationError("<File> requires children")
+    if (hasSource && (typeof source !== "string" || source.length === 0 || source !== source.trim())) {
+      throw new EvaluationError("<File> src must be a non-empty normalized string")
     }
 
-    const portablePath = resolvePortablePath(".", Reflect.get(props, "path"), "<File> path")
-
-    if (portablePath === ".") {
-      throw new EvaluationError("<File> path must identify a file")
-    }
-
-    const root = path.resolve(workspace.directory)
     return Object.freeze({
-      destination: path.resolve(root, portablePath),
-      path: portablePath,
-      root,
+      filesystem,
+      hasChildren,
+      path: filesystem.resolvePath(Reflect.get(props, "path"), "<File> path"),
+      source: hasSource ? path.resolve(this.#cwd, source as string) : undefined,
     })
   }
 
-  /**
-   * Creates safe parents and atomically replaces the destination where possible.
-   */
-  async complete(plan: Readonly<FileEvaluation>, content: string, signal: AbortSignal): Promise<void> {
+  /** Reads the chosen source and replaces the destination through its owner. */
+  async complete(plan: Readonly<FileEvaluation>, childContent: string, signal: AbortSignal): Promise<void> {
     signal.throwIfAborted()
+    let content: Uint8Array
 
     try {
-      await ensureSafeParent(plan.root, path.dirname(plan.path))
-      await rejectSymbolicLink(plan.destination)
-
-      const temporary = path.join(path.dirname(plan.destination), `.aml-file-${randomUUID()}.tmp`)
-
-      try {
-        await writeFile(temporary, content, { encoding: "utf8", flag: "wx", signal })
-        await rename(temporary, plan.destination)
-      } finally {
-        await rm(temporary, { force: true })
-      }
+      content =
+        plan.source === undefined ? new TextEncoder().encode(childContent) : await readLocalUtf8(plan.source, signal)
+      await plan.filesystem.writeFile(plan.path, content, signal)
     } catch (cause) {
       signal.throwIfAborted()
 
@@ -84,46 +82,24 @@ export class FileEvaluator {
   }
 }
 
-/**
- * Rejects existing symlink parents instead of following them outside the root.
- */
-async function ensureSafeParent(root: string, portableParent: string): Promise<void> {
-  const physicalRoot = await realpath(root)
-  let current = physicalRoot
-
-  for (const segment of portableParent === "." ? [] : portableParent.split("/")) {
-    current = path.join(current, segment)
-
-    try {
-      const metadata = await lstat(current)
-
-      if (metadata.isSymbolicLink() || !metadata.isDirectory()) {
-        throw new EvaluationError(`<File> parent "${segment}" is not a directory`)
-      }
-    } catch (cause) {
-      if (!hasErrorCode(cause, "ENOENT")) {
-        throw cause
-      }
-
-      await mkdir(current)
-    }
-  }
-}
-
-async function rejectSymbolicLink(destination: string): Promise<void> {
+async function readLocalUtf8(source: string, signal: AbortSignal): Promise<Uint8Array> {
   try {
-    const metadata = await lstat(destination)
+    const metadata = await lstat(source)
 
-    if (metadata.isSymbolicLink() || metadata.isDirectory()) {
-      throw new EvaluationError("<File> destination must be a regular file")
+    if (!metadata.isFile()) {
+      throw new EvaluationError("<File> src must identify a regular file")
     }
+
+    const content = await readFile(source, { signal })
+    new TextDecoder("utf-8", { fatal: true }).decode(content)
+    return Uint8Array.from(content)
   } catch (cause) {
-    if (!hasErrorCode(cause, "ENOENT")) {
+    signal.throwIfAborted()
+
+    if (cause instanceof EvaluationError) {
       throw cause
     }
-  }
-}
 
-function hasErrorCode(value: unknown, code: string): boolean {
-  return typeof value === "object" && value !== null && Reflect.get(value, "code") === code
+    throw new EvaluationError(`<File> could not read local source "${source}"`, { cause })
+  }
 }

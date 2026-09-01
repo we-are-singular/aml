@@ -1,15 +1,18 @@
-import { realpath, stat } from "node:fs/promises"
+import { mkdtemp, realpath, rm, stat } from "node:fs/promises"
+import os from "node:os"
 import path from "node:path"
 import { randomUUID } from "node:crypto"
 
 import {
   AbstractSandboxProvider,
   defineSandboxProvider,
+  HostSandboxFileSystem,
   SandboxCommand,
   spawnLocalProcess,
   type ProvisionedSandbox,
   type SandboxAcquireRequest,
   type SandboxExecResult,
+  type SandboxFileOptions,
   type SandboxProcess,
   type SandboxProvider,
   type SandboxRuntime,
@@ -166,8 +169,24 @@ function createRuntime(
   processes: Set<Readonly<SandboxProcess>>,
   maxOutputBytes: number
 ): Readonly<SandboxRuntime> {
+  const filesystem = new HostSandboxFileSystem(root)
   const runtime: SandboxRuntime = {
     access: request.access,
+    async createFileStaging(options = {}) {
+      options.signal?.throwIfAborted()
+      const stagingRoot = await mkdtemp(path.join(os.tmpdir(), "aml-agent-"))
+      const stagingFilesystem = new HostSandboxFileSystem(stagingRoot)
+      let releasePromise: Promise<void> | undefined
+
+      return Object.freeze({
+        release: () => (releasePromise ??= rm(stagingRoot, { force: true, recursive: true })),
+        root: stagingRoot,
+        writeFile: async (filePath: string, content: Uint8Array, writeOptions: Readonly<SandboxFileOptions> = {}) => {
+          const signal = writeOptions.signal ?? options.signal
+          await stagingFilesystem.writeFile(filePath, content, signal === undefined ? {} : { signal })
+        },
+      })
+    },
     cwd: request.cwd,
     async exec(command, args = [], options = {}) {
       if (request.access !== "read-write") {
@@ -185,6 +204,9 @@ function createRuntime(
       }
       return await collectProcess(process, maxOutputBytes)
     },
+    async readFile(filePath, options = {}) {
+      return await filesystem.readFile(rootRelativeFilePath(request.root, filePath), options)
+    },
     root: request.root,
     async spawn(command, args = [], options = {}) {
       if (request.access !== "read-write") {
@@ -194,6 +216,16 @@ function createRuntime(
       const captured = SandboxCommand.from(request, command, args, options)
       const cwd = await resolveDirectory(workspace, captured.cwd, root, "command cwd")
       return await startProcess(captured, cwd, processes)
+    },
+    async stat(filePath, options = {}) {
+      return await filesystem.stat(rootRelativeFilePath(request.root, filePath), options)
+    },
+    async writeFile(filePath, content, options = {}) {
+      if (request.access !== "read-write") {
+        throw new Error("Local Sandbox filesystem is read-only")
+      }
+
+      await filesystem.writeFile(rootRelativeFilePath(request.root, filePath), content, options)
     },
   }
 
@@ -277,6 +309,30 @@ async function resolveDirectory(
   }
 
   return target
+}
+
+/** Maps one logical runtime path into the physical Sandbox root. */
+function rootRelativeFilePath(root: string, filePath: string): string {
+  if (typeof filePath !== "string" || filePath.trim().length === 0) {
+    throw new TypeError("Local Sandbox file path must be a non-empty string")
+  }
+
+  if (
+    filePath.includes("\\") ||
+    path.posix.isAbsolute(filePath) ||
+    path.win32.isAbsolute(filePath) ||
+    filePath.split("/").includes("..")
+  ) {
+    throw new TypeError("Local Sandbox file path must be a confined forward-slash path")
+  }
+
+  const relative = path.posix.relative(path.posix.normalize(root), path.posix.normalize(filePath))
+
+  if (path.posix.isAbsolute(relative) || relative === ".." || relative.startsWith("../")) {
+    throw new TypeError("Local Sandbox file path resolves outside its configured root")
+  }
+
+  return relative === "" ? "." : relative
 }
 
 function assertPathWithin(root: string, candidate: string, label: string): void {

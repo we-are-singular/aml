@@ -14,9 +14,19 @@ import { DeterministicAgentProvider, DeterministicSandboxProvider, sandboxProvid
 
 const fixtureRuntime: Readonly<SandboxRuntime> = Object.freeze({
   access: "read-only",
+  async createFileStaging() {
+    return Object.freeze({
+      async release() {},
+      root: "/tmp/fixture-staging",
+      async writeFile() {},
+    })
+  },
   cwd: ".",
   async exec() {
     return { exitCode: 0, stderr: "", stdout: "" }
+  },
+  async readFile() {
+    return new Uint8Array()
   },
   root: ".",
   async spawn() {
@@ -31,6 +41,10 @@ const fixtureRuntime: Readonly<SandboxRuntime> = Object.freeze({
       },
     }
   },
+  async stat() {
+    return Object.freeze({ kind: "file" as const, size: 0 })
+  },
+  async writeFile() {},
 })
 
 describe("<Sandbox>", () => {

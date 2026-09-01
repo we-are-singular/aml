@@ -7,6 +7,7 @@ type AmlPrimitiveKind =
   | "context"
   | "file"
   | "follow-up"
+  | "include"
   | "loop"
   | "mcp"
   | "sandbox"
@@ -131,6 +132,7 @@ export class AmlNode<Props = Record<string, unknown>> {
       kind === "context" ||
       kind === "file" ||
       kind === "follow-up" ||
+      kind === "include" ||
       kind === "loop" ||
       kind === "mcp" ||
       kind === "sandbox" ||

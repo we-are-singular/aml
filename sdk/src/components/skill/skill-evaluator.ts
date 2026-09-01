@@ -1,131 +1,224 @@
-import { readFile } from "node:fs/promises"
-import { resolve } from "node:path"
+import { lstat, readdir, readFile } from "node:fs/promises"
+import path from "node:path"
 
-import type { AmlRenderable } from "../../core/aml-node.js"
+import { parseDocument } from "yaml"
+
 import { EvaluationError } from "../../core/evaluation-error.js"
+import type { AgentFileStaging } from "../agent/agent-file-staging.js"
+import type { AgentSkill } from "./agent-skill.js"
 import type { SkillProps } from "./skill.js"
 
-/**
- * Immutable Skill inputs captured before any child AML effects begin.
- */
-export interface SkillEvaluation {
-  readonly children: AmlRenderable
-  readonly description: string | undefined
-  readonly hasChildren: boolean
-  readonly name: string | undefined
-  readonly source: string | undefined
+/** Safe trace metadata produced while staging one complete Skill package. */
+export interface SkillEvaluationResult {
+  readonly files: number
+  readonly skill: Readonly<AgentSkill>
 }
 
-/**
- * Owns local Skill validation, file access, combination, and prompt formatting.
- */
+/** Owns local Agent Skill package validation, copying, and metadata capture. */
 export class SkillEvaluator {
   readonly #cwd: string
 
-  /**
-   * Captures the working directory used by relative local Skill paths.
-   */
+  /** Captures the application directory used by local Skill sources. */
   constructor(cwd: unknown) {
     if (typeof cwd !== "string" || cwd.length === 0) {
       throw new TypeError("cwd must be a non-empty string")
     }
 
-    this.#cwd = resolve(cwd)
+    this.#cwd = path.resolve(cwd)
   }
 
-  /**
-   * Validates and snapshots Skill props before evaluating their children.
-   */
-  prepare(props: Readonly<SkillProps>): SkillEvaluation {
-    // Capture public props once so getters cannot change the completion plan
-    // after child Agents or components have performed effects.
-    const children = Reflect.get(props, "children") as AmlRenderable
-    const description = SkillEvaluator.#metadata(Reflect.get(props, "description"), "description")
-    const name = SkillEvaluator.#metadata(Reflect.get(props, "name"), "name")
-    const source = Reflect.get(props, "src")
-    const hasChildren = children !== undefined
-    const hasSource = source !== undefined
+  /** Validates and stages one complete package before its Agent starts. */
+  async evaluate(
+    props: Readonly<SkillProps>,
+    staging: AgentFileStaging,
+    signal: AbortSignal
+  ): Promise<Readonly<SkillEvaluationResult>> {
+    const source = captureSource(props)
+    const sourceDirectory = path.resolve(this.#cwd, source)
 
-    if (!hasChildren && !hasSource) {
-      throw new EvaluationError("<Skill> requires src, children, or both")
+    try {
+      signal.throwIfAborted()
+      const metadata = await lstat(sourceDirectory)
+
+      if (metadata.isSymbolicLink() || !metadata.isDirectory()) {
+        throw new EvaluationError("<Skill> src must identify a local package directory")
+      }
+
+      const files = await readPackageFiles(sourceDirectory, signal)
+      const skillFile = files.find(file => file.relativePath === "SKILL.md")
+
+      if (skillFile === undefined) {
+        throw new EvaluationError('<Skill> package must contain a root "SKILL.md"')
+      }
+
+      const frontmatter = parseSkillFrontmatter(skillFile.content)
+      const sourceName = path.basename(sourceDirectory)
+
+      if (sourceName !== frontmatter.name) {
+        throw new EvaluationError(
+          `<Skill> frontmatter name "${frontmatter.name}" must match package directory "${sourceName}"`
+        )
+      }
+
+      let stagedSkillFile: string | undefined
+
+      for (const file of files) {
+        const stagedPath = await staging.writeFile(
+          `.agents/skills/${frontmatter.name}/${file.relativePath}`,
+          file.content
+        )
+
+        if (file.relativePath === "SKILL.md") {
+          stagedSkillFile = stagedPath
+        }
+      }
+
+      if (stagedSkillFile === undefined) {
+        throw new Error("Skill package staging omitted SKILL.md")
+      }
+
+      const skill: AgentSkill = Object.freeze({
+        description: frontmatter.description,
+        directory: concreteDirectory(stagedSkillFile),
+        name: frontmatter.name,
+        skillFile: stagedSkillFile,
+      })
+
+      return Object.freeze({ files: files.length, skill })
+    } catch (cause) {
+      signal.throwIfAborted()
+
+      if (cause instanceof EvaluationError) {
+        throw cause
+      }
+
+      throw new EvaluationError(`<Skill> could not prepare local package "${sourceDirectory}"`, { cause })
     }
+  }
+}
 
-    if (hasSource && (typeof source !== "string" || source.length === 0)) {
-      throw new EvaluationError("<Skill> src must be a non-empty local path")
+interface PackageFile {
+  readonly content: Uint8Array
+  readonly relativePath: string
+}
+
+interface SkillFrontmatter {
+  readonly description: string
+  readonly name: string
+}
+
+function captureSource(props: Readonly<SkillProps>): string {
+  const children = Reflect.get(props, "children")
+  const source = Reflect.get(props, "src")
+
+  if (children !== undefined) {
+    throw new EvaluationError("<Skill> does not accept children")
+  }
+
+  if (typeof source !== "string" || source.length === 0 || source !== source.trim()) {
+    throw new EvaluationError("<Skill> src must be a non-empty normalized local path")
+  }
+
+  if (/^[a-z][a-z\d+.-]*:\/\//i.test(source)) {
+    throw new EvaluationError("<Skill> src must be local; remote URLs are not supported")
+  }
+
+  return source
+}
+
+async function readPackageFiles(root: string, signal: AbortSignal): Promise<readonly PackageFile[]> {
+  const files: PackageFile[] = []
+
+  // Directory entries are sorted at every level so provider requests and tests
+  // do not depend on filesystem enumeration order.
+  const visit = async (physicalDirectory: string, relativeDirectory: string): Promise<void> => {
+    signal.throwIfAborted()
+    const entries = await readdir(physicalDirectory, { withFileTypes: true })
+    entries.sort((left, right) => left.name.localeCompare(right.name))
+
+    for (const entry of entries) {
+      const physicalPath = path.join(physicalDirectory, entry.name)
+      const relativePath = relativeDirectory === "" ? entry.name : `${relativeDirectory}/${entry.name}`
+
+      if (entry.isSymbolicLink()) {
+        throw new EvaluationError(`<Skill> package must not contain symbolic link "${relativePath}"`)
+      }
+
+      if (entry.isDirectory()) {
+        await visit(physicalPath, relativePath)
+        continue
+      }
+
+      if (!entry.isFile()) {
+        throw new EvaluationError(`<Skill> package contains unsupported entry "${relativePath}"`)
+      }
+
+      const content = await readFile(physicalPath, { signal })
+      files.push(Object.freeze({ content: Uint8Array.from(content), relativePath }))
     }
+  }
 
-    return Object.freeze({
-      children,
-      description,
-      hasChildren,
-      name,
-      source: hasSource ? source : undefined,
+  await visit(root, "")
+  return Object.freeze(files)
+}
+
+function parseSkillFrontmatter(content: Uint8Array): Readonly<SkillFrontmatter> {
+  let source: string
+
+  try {
+    source = new TextDecoder("utf-8", { fatal: true }).decode(content)
+  } catch (cause) {
+    throw new EvaluationError('<Skill> package "SKILL.md" must be valid UTF-8', { cause })
+  }
+
+  const match = /^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/.exec(source)
+
+  if (match === null) {
+    throw new EvaluationError('<Skill> package "SKILL.md" must begin with YAML frontmatter')
+  }
+
+  const document = parseDocument(match[1] ?? "", {
+    logLevel: "silent",
+    schema: "core",
+  })
+
+  if (document.errors.length > 0) {
+    throw new EvaluationError('<Skill> package "SKILL.md" has invalid YAML frontmatter', {
+      cause: document.errors[0],
     })
   }
 
-  /**
-   * Reads any file after child AML resolves, then produces final prompt text.
-   */
-  async complete(plan: SkillEvaluation, childContent: string, signal: AbortSignal): Promise<string> {
-    let content = childContent
+  let value: unknown
 
-    // Reading at completion preserves AML's post-order rule. An inline child
-    // may intentionally create or update the local Skill before it is consumed.
-    if (plan.source !== undefined) {
-      const fileContent = await this.#read(plan.source, signal)
-      content = plan.hasChildren ? `${fileContent}\n${childContent}` : fileContent
-    }
-
-    if (content.trim().length === 0) {
-      throw new EvaluationError("<Skill> must resolve to non-empty text")
-    }
-
-    const metadata: string[] = []
-
-    if (plan.name !== undefined) {
-      metadata.push(`Skill: ${plan.name}`)
-    }
-
-    if (plan.description !== undefined) {
-      metadata.push(`Description: ${plan.description}`)
-    }
-
-    return metadata.length === 0 ? content : `${metadata.join("\n")}\n\n${content}`
+  try {
+    value = document.toJS({ mapAsMap: false, maxAliasCount: 0 })
+  } catch (cause) {
+    throw new EvaluationError('<Skill> package "SKILL.md" has unsafe YAML frontmatter', { cause })
   }
 
-  /**
-   * Reads one local file at evaluation time without caching its contents.
-   */
-  async #read(source: string, signal: AbortSignal): Promise<string> {
-    const path = resolve(this.#cwd, source)
-
-    try {
-      const content = await readFile(path, {
-        encoding: "utf8",
-        signal,
-      })
-      signal.throwIfAborted()
-      return content
-    } catch (cause) {
-      // Cancellation is caller-owned control flow rather than a filesystem
-      // failure attributed to the Skill.
-      signal.throwIfAborted()
-      throw new EvaluationError(`<Skill> could not read local file "${path}"`, { cause })
-    }
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    throw new EvaluationError('<Skill> package "SKILL.md" frontmatter must be a mapping')
   }
 
-  /**
-   * Captures one optional normalized prompt label.
-   */
-  static #metadata(value: unknown, prop: "description" | "name"): string | undefined {
-    if (value === undefined) {
-      return undefined
-    }
+  const name = Reflect.get(value, "name")
+  const description = Reflect.get(value, "description")
 
-    if (typeof value !== "string" || value.length === 0 || value !== value.trim()) {
-      throw new EvaluationError(`<Skill> ${prop} must be a non-empty normalized string`)
-    }
-
-    return value
+  if (typeof name !== "string" || name.length > 64 || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(name)) {
+    throw new EvaluationError("<Skill> frontmatter name must be a safe lowercase hyphenated segment")
   }
+
+  if (
+    typeof description !== "string" ||
+    description.length === 0 ||
+    description.length > 1024 ||
+    description !== description.trim()
+  ) {
+    throw new EvaluationError("<Skill> frontmatter description must be a normalized string of at most 1024 characters")
+  }
+
+  return Object.freeze({ description, name })
+}
+
+function concreteDirectory(skillFile: string): string {
+  return skillFile.includes("\\") ? path.dirname(skillFile) : path.posix.dirname(skillFile)
 }

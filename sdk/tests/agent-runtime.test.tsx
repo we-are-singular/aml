@@ -561,6 +561,7 @@ describe("defineAgentProvider", () => {
         mcpServers: [],
         permissions: { filesystem: "read-write", network: true, shell: true },
         prompt: "prompt",
+        skills: [],
         system: "",
         tools: [],
       })

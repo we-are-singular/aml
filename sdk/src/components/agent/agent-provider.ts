@@ -15,6 +15,15 @@ export interface AgentProvider {
   readonly name: string
 
   /**
+   * Declares that the adapter maps `request.skills` into native discovery.
+   *
+   * Omission keeps every package available through AML's metadata-only prompt
+   * fallback. Native adapters must use the concrete staged paths in the request
+   * rather than assuming a host or Workspace location.
+   */
+  readonly skillDiscovery?: "native"
+
+  /**
    * Executes one isolated provider session for the complete authored turn plan.
    *
    * The initial prompt and every request FollowUp share provider history and

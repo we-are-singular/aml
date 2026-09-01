@@ -11,7 +11,8 @@ import {
  * The check acquires a read-only Sandbox with logical root and cwd `"."`,
  * validates the returned lease and runtime metadata, and releases the resource
  * even when validation fails after a release function becomes available. It
- * does not execute commands. A real provider may create billable external
+ * does not execute commands or filesystem operations; provider-specific tests
+ * must exercise their behavior. A real provider may create billable external
  * infrastructure; use an isolated test account and cleanup policy.
  *
  * @param provider Provider instance to validate and exercise.

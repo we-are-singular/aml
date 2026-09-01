@@ -1,4 +1,8 @@
-import { Agent, AmlRuntime, Sandbox, type AmlTraceEvent, type SandboxProcess } from "@aml-jsx/sdk"
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises"
+import os from "node:os"
+import path from "node:path"
+
+import { Agent, AmlRuntime, Sandbox, Skill, type AmlTraceEvent, type SandboxProcess } from "@aml-jsx/sdk"
 import { DeterministicSandboxProvider } from "@aml-jsx/sdk/testing"
 import { describe, expect, it } from "vitest"
 
@@ -103,6 +107,41 @@ describe("codexAgent()", () => {
     ).rejects.toThrow()
 
     expect(config).toMatchObject({ model: "provider-model" })
+  })
+
+  it("points CODEX_HOME at the canonical staged Skills root", async () => {
+    const directory = await mkdtemp(path.join(os.tmpdir(), "aml-codex-skill-"))
+    let environment: Readonly<Record<string, string>> | undefined
+    const sandboxProvider = new DeterministicSandboxProvider({
+      exec: command => ({ exitCode: 0, stderr: "", stdout: command === "pwd" ? "/sandbox/repository\n" : "" }),
+      spawn(_command, _args, _request, options) {
+        environment = options.env
+        return completedProcess()
+      },
+    })
+
+    try {
+      await mkdir(path.join(directory, "review"))
+      await writeFile(
+        path.join(directory, "review", "SKILL.md"),
+        "---\nname: review\ndescription: Review code.\n---\n\n# Review\n"
+      )
+
+      await expect(
+        new AmlRuntime({ agentProvider: codexAgent({ env: { CODEX_HOME: "/ignored" } }), cwd: directory }).evaluate(
+          <Sandbox access="read-write" provider={sandboxProvider}>
+            <Agent>
+              <Skill src="./review" />
+            </Agent>
+          </Sandbox>
+        )
+      ).rejects.toThrow()
+
+      expect(environment?.CODEX_HOME).toMatch(/^\/tmp\/aml-agent-[^/]+\/\.agents$/u)
+      expect(environment?.CODEX_CONFIG).not.toContain("Available skill")
+    } finally {
+      await rm(directory, { force: true, recursive: true })
+    }
   })
 
   it("keeps native delegation enabled in the mapped read-only Codex mode", async () => {

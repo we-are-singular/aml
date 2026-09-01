@@ -160,14 +160,80 @@ export class DeterministicSandboxProvider<Handle = DeterministicSandboxHandle> i
     this.#acquisitions.push(request)
     const handle = await this.#createHandle(request, acquisition)
     const id = `${this.name}-${acquisition + 1}`
+    const directories = new Set<string>([request.root])
+    const files = new Map<string, Uint8Array>()
+    const addParents = (filePath: string): void => {
+      let parent = filePath.includes("/") ? filePath.slice(0, filePath.lastIndexOf("/")) : "."
+
+      while (parent !== "." && !directories.has(parent)) {
+        directories.add(parent)
+        parent = parent.includes("/") ? parent.slice(0, parent.lastIndexOf("/")) : "."
+      }
+    }
     const runtime: SandboxRuntime = Object.freeze({
       access: request.access,
+      createFileStaging: async () => {
+        const root = `/tmp/aml-agent-${id}`
+        let released = false
+
+        return Object.freeze({
+          async release() {
+            if (released) {
+              return
+            }
+
+            released = true
+
+            for (const filePath of files.keys()) {
+              if (filePath.startsWith(`${root}/`)) {
+                files.delete(filePath)
+              }
+            }
+          },
+          root,
+          async writeFile(filePath: string, content: Uint8Array) {
+            const destination = `${root}/${filePath}`
+            addParents(destination)
+            files.set(destination, Uint8Array.from(content))
+          },
+        })
+      },
       cwd: request.cwd,
       exec: async (command: string, args: readonly string[] = [], options = {}) =>
         await this.#exec(command, args, request, options),
+      async readFile(filePath: string) {
+        const content = files.get(filePath)
+
+        if (content === undefined) {
+          throw new Error(`Deterministic Sandbox file "${filePath}" does not exist`)
+        }
+
+        return Uint8Array.from(content)
+      },
       root: request.root,
       spawn: async (command: string, args: readonly string[] = [], options = {}) =>
         await this.#spawn(command, args, request, options),
+      async stat(filePath: string) {
+        const content = files.get(filePath)
+
+        if (content !== undefined) {
+          return Object.freeze({ kind: "file" as const, size: content.byteLength })
+        }
+
+        if (directories.has(filePath)) {
+          return Object.freeze({ kind: "directory" as const, size: 0 })
+        }
+
+        throw new Error(`Deterministic Sandbox file "${filePath}" does not exist`)
+      },
+      async writeFile(filePath: string, content: Uint8Array) {
+        if (request.access !== "read-write") {
+          throw new Error("Deterministic Sandbox filesystem is read-only")
+        }
+
+        addParents(filePath)
+        files.set(filePath, Uint8Array.from(content))
+      },
     })
 
     return Object.freeze({
