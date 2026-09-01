@@ -1,227 +1,286 @@
-import { mkdtemp, rm, writeFile } from "node:fs/promises"
-import { tmpdir } from "node:os"
-import { join } from "node:path"
+import { access, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises"
+import os from "node:os"
+import path from "node:path"
 
 import { describe, expect, it } from "vitest"
 
 import { Agent } from "../src/components/agent/agent.js"
+import type { AgentProvider } from "../src/components/agent/agent-provider.js"
+import { FollowUp } from "../src/components/follow-up/follow-up.js"
 import { Skill } from "../src/components/skill/skill.js"
-import { System } from "../src/components/system/system.js"
 import { AmlRuntime } from "../src/core/aml-runtime.js"
-import { EvaluationError } from "../src/core/evaluation-error.js"
+import type { AmlTraceEvent } from "../src/observability/trace-event.js"
 import { DeterministicAgentProvider } from "../src/testing/deterministic-agent-provider.js"
 
-describe("Skill", () => {
-  it("combines local, inline, metadata, and Agent-generated content", async () => {
-    const directory = await mkdtemp(join(tmpdir(), "aml-skill-"))
+describe("<Skill>", () => {
+  it("stages a complete package and supplies metadata-only fallback", async () => {
+    const directory = await temporaryDirectory()
 
     try {
-      await writeFile(join(directory, "local.md"), "local")
-      await writeFile(join(directory, "base.md"), "base")
-      const provider = new DeterministicAgentProvider({
-        respond(request) {
-          if (request.prompt === "generate guidance") {
-            return { text: "generated" }
-          }
+      await writeSkill(directory, "review", "Review code with evidence.", {
+        "references/checklist.md": "Check behavior before style.\n",
+        "scripts/probe.bin": new Uint8Array([0, 1, 2, 255]),
+      })
 
-          expect(request.prompt).toBe(
+      let stagedDirectory = ""
+      let stagedSkillFile = ""
+      const provider = new DeterministicAgentProvider({
+        async respond(request) {
+          const [skill] = request.skills
+
+          expect(skill).toBeDefined()
+          expect(skill).toMatchObject({
+            description: "Review code with evidence.",
+            name: "review",
+          })
+          expect(request.prompt).toBe("Inspect the change.")
+          expect(request.system).toBe(
             [
-              "Start.",
-              "local",
-              "Skill: evidence\nDescription: Prefer concrete evidence.\n\ninline",
-              "Skill: generated-review\n\nbase\ngenerated",
-              "Finish.",
-            ].join("")
+              "## Available skill: `review`",
+              "Use when: Review code with evidence.",
+              `Read \`${skill?.skillFile}\` when this skill applies.`,
+            ].join("\n")
           )
+          expect(await readFile(skill?.skillFile ?? "", "utf8")).toContain("name: review")
+          expect(await readFile(path.join(skill?.directory ?? "", "references/checklist.md"), "utf8")).toBe(
+            "Check behavior before style.\n"
+          )
+          expect(await readFile(path.join(skill?.directory ?? "", "scripts/probe.bin"))).toEqual(
+            Buffer.from([0, 1, 2, 255])
+          )
+          expect(Object.isFrozen(request.skills)).toBe(true)
+          expect(Object.isFrozen(skill)).toBe(true)
+          stagedDirectory = skill?.directory ?? ""
+          stagedSkillFile = skill?.skillFile ?? ""
           return { text: "done" }
         },
       })
-      const runtime = new AmlRuntime({
-        agentProvider: provider,
-        cwd: directory,
-      })
 
       await expect(
-        runtime.evaluate(
-          <Agent>
-            {[
-              "Start.",
-              <Skill src="./local.md" />,
-              <Skill name="evidence" description="Prefer concrete evidence.">
-                inline
-              </Skill>,
-              <Skill src="./base.md" name="generated-review">
-                <Agent>generate guidance</Agent>
-              </Skill>,
-              "Finish.",
-            ]}
+        new AmlRuntime({ cwd: directory }).evaluate(
+          <Agent provider={provider}>
+            <Skill src="./review" />
+            Inspect the change.
           </Agent>
         )
       ).resolves.toBe("done")
-      expect(provider.calls).toHaveLength(2)
+
+      expect(stagedDirectory).toContain(`${path.sep}.agents${path.sep}skills${path.sep}review`)
+      expect(stagedSkillFile).toBe(path.join(stagedDirectory, "SKILL.md"))
+      await expect(access(stagedDirectory)).rejects.toMatchObject({ code: "ENOENT" })
     } finally {
       await rm(directory, { force: true, recursive: true })
     }
   })
 
-  it("preserves the exact one-newline separator between file and children", async () => {
-    const directory = await mkdtemp(join(tmpdir(), "aml-skill-separator-"))
+  it("omits fallback when the provider declares native discovery", async () => {
+    const directory = await temporaryDirectory()
 
     try {
-      await writeFile(join(directory, "base.md"), "base\n")
-
-      await expect(new AmlRuntime({ cwd: directory }).evaluate(<Skill src="./base.md">extra</Skill>)).resolves.toBe(
-        "base\n\nextra"
-      )
-    } finally {
-      await rm(directory, { force: true, recursive: true })
-    }
-  })
-
-  it("reads the file after inline AML children finish", async () => {
-    const directory = await mkdtemp(join(tmpdir(), "aml-skill-order-"))
-    const path = join(directory, "mutable.md")
-
-    try {
-      await writeFile(path, "before")
-
-      // This child effect proves Skill file access belongs to the post-order
-      // completion frame rather than the initial node-dispatch branch.
-      async function UpdateSkill() {
-        await writeFile(path, "after")
-        return "child"
+      await writeSkill(directory, "review", "Review code.")
+      const provider: AgentProvider = {
+        name: "native-skills",
+        async run(request) {
+          expect(request.skills).toHaveLength(1)
+          expect(request.system).toBe("authored system")
+          return { text: "native" }
+        },
+        skillDiscovery: "native",
       }
 
       await expect(
         new AmlRuntime({ cwd: directory }).evaluate(
-          <Skill src="./mutable.md">
-            <UpdateSkill />
-          </Skill>
+          <Agent provider={provider} system="authored system">
+            <Skill src="./review" />
+          </Agent>
         )
-      ).resolves.toBe("after\nchild")
+      ).resolves.toBe("native")
     } finally {
       await rm(directory, { force: true, recursive: true })
     }
   })
 
-  it("routes Skill text through a containing System channel", async () => {
+  it("reads package metadata live for every evaluation", async () => {
+    const directory = await temporaryDirectory()
+    const descriptions: string[] = []
     const provider = new DeterministicAgentProvider({
       respond(request) {
-        expect(request.prompt).toBe("prompt")
-        expect(request.system).toBe("Skill: policy\n\nUse the repository policy.")
+        descriptions.push(request.skills[0]?.description ?? "missing")
         return { text: "done" }
       },
     })
-
-    await expect(
-      new AmlRuntime({ agentProvider: provider }).evaluate(
-        <Agent>
-          <System>
-            <Skill name="policy">Use the repository policy.</Skill>
-          </System>
-          prompt
-        </Agent>
-      )
-    ).resolves.toBe("done")
-  })
-
-  it("reads local files on every evaluation instead of caching them", async () => {
-    const directory = await mkdtemp(join(tmpdir(), "aml-skill-reload-"))
-    const path = join(directory, "skill.md")
+    const runtime = new AmlRuntime({ cwd: directory })
 
     try {
-      const runtime = new AmlRuntime({ cwd: directory })
-      await writeFile(path, "first")
-      await expect(runtime.evaluate(<Skill src="./skill.md" />)).resolves.toBe("first")
+      await writeSkill(directory, "review", "First description.")
+      await runtime.evaluate(
+        <Agent provider={provider}>
+          <Skill src="./review" />
+        </Agent>
+      )
+      await writeSkill(directory, "review", "Second description.")
+      await runtime.evaluate(
+        <Agent provider={provider}>
+          <Skill src="./review" />
+        </Agent>
+      )
 
-      await writeFile(path, "second")
-      await expect(runtime.evaluate(<Skill src="./skill.md" />)).resolves.toBe("second")
+      expect(descriptions).toEqual(["First description.", "Second description."])
     } finally {
       await rm(directory, { force: true, recursive: true })
     }
   })
 
-  it("rejects a missing file before the containing Agent executes", async () => {
-    const directory = await mkdtemp(join(tmpdir(), "aml-skill-missing-"))
+  it("cleans staging when provider execution fails", async () => {
+    const directory = await temporaryDirectory()
+    let stagedDirectory = ""
+
+    try {
+      await writeSkill(directory, "review", "Review code.")
+      const provider = new DeterministicAgentProvider({
+        respond(request) {
+          stagedDirectory = request.skills[0]?.directory ?? ""
+          throw new Error("provider failed")
+        },
+      })
+
+      await expect(
+        new AmlRuntime({ cwd: directory }).evaluate(
+          <Agent provider={provider}>
+            <Skill src="./review" />
+          </Agent>
+        )
+      ).rejects.toThrow('Agent "deterministic"')
+      await expect(access(stagedDirectory)).rejects.toMatchObject({ code: "ENOENT" })
+    } finally {
+      await rm(directory, { force: true, recursive: true })
+    }
+  })
+
+  it("traces package staging and its Agent capability grant without content", async () => {
+    const directory = await temporaryDirectory()
+    const events: AmlTraceEvent[] = []
+
+    try {
+      await writeSkill(directory, "review", "PRIVATE_DESCRIPTION", {
+        "references/private.md": "PRIVATE_BODY",
+      })
+
+      await new AmlRuntime({
+        cwd: directory,
+        trace(event) {
+          events.push(event)
+        },
+      }).evaluate(
+        <Agent provider={new DeterministicAgentProvider()}>
+          <Skill src="./review" />
+        </Agent>
+      )
+
+      expect(events.find(event => event.type === "span.end" && event.kind === "skill")).toMatchObject({
+        attributes: { files: 2, name: "review" },
+        status: "ok",
+      })
+      expect(events.find(event => event.type === "event" && event.name === "capability.skill")).toMatchObject({
+        attributes: { name: "review", native: false },
+      })
+      expect(JSON.stringify(events)).not.toContain("PRIVATE_DESCRIPTION")
+      expect(JSON.stringify(events)).not.toContain("PRIVATE_BODY")
+    } finally {
+      await rm(directory, { force: true, recursive: true })
+    }
+  })
+
+  it("rejects duplicate names and placement outside an Agent", async () => {
+    const directory = await temporaryDirectory()
+
+    try {
+      await writeSkill(directory, "review", "Review code.")
+      const runtime = new AmlRuntime({ cwd: directory })
+
+      await expect(runtime.evaluate(<Skill src="./review" />)).rejects.toThrow("<Skill> is only valid inside <Agent>")
+      await expect(
+        runtime.evaluate(
+          <Agent provider={new DeterministicAgentProvider()}>
+            <FollowUp>
+              <Skill src="./review" />
+            </FollowUp>
+          </Agent>
+        )
+      ).rejects.toThrow("<Skill> is invalid inside <FollowUp>")
+      await expect(
+        runtime.evaluate(
+          <Agent provider={new DeterministicAgentProvider()}>
+            <Skill src="./review" />
+            <Skill src="./review" />
+          </Agent>
+        )
+      ).rejects.toThrow('Agent declares duplicate Skill "review"')
+    } finally {
+      await rm(directory, { force: true, recursive: true })
+    }
+  })
+
+  it("rejects invalid packages, remote sources, and symbolic links", async () => {
+    const directory = await temporaryDirectory()
     const provider = new DeterministicAgentProvider()
 
     try {
-      await expect(
-        new AmlRuntime({
-          agentProvider: provider,
-          cwd: directory,
-        }).evaluate(
-          <Agent>
-            <Skill src="./missing.md" />
-            prompt
+      await mkdir(path.join(directory, "missing"))
+      await mkdir(path.join(directory, "mismatch"))
+      await writeFile(
+        path.join(directory, "mismatch", "SKILL.md"),
+        "---\nname: another\ndescription: Mismatch.\n---\nBody.\n"
+      )
+      await writeSkill(directory, "linked", "Linked package.")
+      await symlink("../linked/SKILL.md", path.join(directory, "linked", "alias.md"))
+
+      const evaluateSkill = async (src: string) =>
+        await new AmlRuntime({ cwd: directory }).evaluate(
+          <Agent provider={provider}>
+            <Skill src={src} />
           </Agent>
         )
-      ).rejects.toMatchObject({
-        cause: expect.objectContaining({ code: "ENOENT" }),
-        message: expect.stringContaining("<Skill> could not read local file"),
-      })
-      expect(provider.calls).toHaveLength(0)
-    } finally {
-      await rm(directory, { force: true, recursive: true })
-    }
-  })
 
-  it("rejects missing, invalid, and empty Skill content", async () => {
-    const runtime = new AmlRuntime()
-    const UnsafeSkill = Skill as (props: Record<string, unknown>) => never
+      await expect(evaluateSkill("./missing")).rejects.toThrow('must contain a root "SKILL.md"')
+      await expect(evaluateSkill("./mismatch")).rejects.toThrow("must match package directory")
+      await expect(evaluateSkill("./linked")).rejects.toThrow("must not contain symbolic link")
+      await expect(evaluateSkill("https://skills.example/review")).rejects.toThrow("remote URLs are not supported")
 
-    await expect(runtime.evaluate(<Skill />)).rejects.toThrow("<Skill> requires src, children, or both")
-    await expect(runtime.evaluate(<UnsafeSkill src="" />)).rejects.toThrow("src must be a non-empty local path")
-    await expect(runtime.evaluate(<UnsafeSkill src={42} />)).rejects.toThrow("src must be a non-empty local path")
-    await expect(runtime.evaluate(<Skill name=" trimmed ">content</Skill>)).rejects.toThrow(
-      "name must be a non-empty normalized string"
-    )
-    await expect(runtime.evaluate(<Skill description="">content</Skill>)).rejects.toThrow(
-      "description must be a non-empty normalized string"
-    )
-    await expect(runtime.evaluate(<Skill> </Skill>)).rejects.toThrow("<Skill> must resolve to non-empty text")
-  })
-
-  it("preserves caller cancellation identity during file access", async () => {
-    const directory = await mkdtemp(join(tmpdir(), "aml-skill-abort-"))
-    const cancellation = new Error("cancel Skill evaluation")
-    const controller = new AbortController()
-
-    try {
-      await writeFile(join(directory, "skill.md"), "content")
-      const pending = new AmlRuntime({ cwd: directory }).evaluate(<Skill src="./skill.md" />, {
-        signal: controller.signal,
-      })
-
-      // evaluate() has entered the asynchronous read before returning its
-      // promise, so this probes the Skill I/O boundary rather than preflight.
-      controller.abort(cancellation)
-
-      await expect(pending).rejects.toBe(cancellation)
-    } finally {
-      await rm(directory, { force: true, recursive: true })
-    }
-  })
-
-  it("validates the runtime working directory", () => {
-    expect(() => new AmlRuntime({ cwd: "" })).toThrow("cwd must be a non-empty string")
-    expect(() => new AmlRuntime({ cwd: 42 as never })).toThrow("cwd must be a non-empty string")
-  })
-
-  it("attributes Skill file failures with EvaluationError", async () => {
-    const directory = await mkdtemp(join(tmpdir(), "aml-skill-error-"))
-
-    try {
-      const error = await new AmlRuntime({ cwd: directory })
-        .evaluate(<Skill src="./missing.md" />)
-        .catch((cause: unknown) => cause)
-
-      expect(error).toBeInstanceOf(EvaluationError)
-      expect(error).toMatchObject({
-        cause: expect.objectContaining({ code: "ENOENT" }),
-      })
+      const UnsafeSkill = Skill as unknown as (props: Record<string, unknown>) => never
+      await expect(
+        new AmlRuntime({ cwd: directory }).evaluate(
+          <Agent provider={provider}>
+            <UnsafeSkill src="" />
+          </Agent>
+        )
+      ).rejects.toThrow("src must be a non-empty normalized local path")
     } finally {
       await rm(directory, { force: true, recursive: true })
     }
   })
 })
+
+async function temporaryDirectory(): Promise<string> {
+  return await mkdtemp(path.join(os.tmpdir(), "aml-skill-test-"))
+}
+
+async function writeSkill(
+  root: string,
+  name: string,
+  description: string,
+  files: Readonly<Record<string, string | Uint8Array>> = {}
+): Promise<void> {
+  const directory = path.join(root, name)
+  await mkdir(directory, { recursive: true })
+  await writeFile(
+    path.join(directory, "SKILL.md"),
+    `---\nname: ${name}\ndescription: ${description}\n---\n\n# ${name}\n\nPackage instructions.\n`
+  )
+
+  for (const [relativePath, content] of Object.entries(files)) {
+    const destination = path.join(directory, ...relativePath.split("/"))
+    await mkdir(path.dirname(destination), { recursive: true })
+    await writeFile(destination, content)
+  }
+}

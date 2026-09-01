@@ -1,6 +1,20 @@
 import { agent, methods, ndJsonStream, type SessionConfigOption } from "@agentclientprotocol/sdk"
 import type { Config as OpenCodeSdkConfig } from "@opencode-ai/sdk/v2"
-import { Agent, AmlRuntime, defineTool, evaluate, FollowUp, Sandbox, Tool, type SandboxProcess } from "@aml-jsx/sdk"
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises"
+import os from "node:os"
+import path from "node:path"
+
+import {
+  Agent,
+  AmlRuntime,
+  defineTool,
+  evaluate,
+  FollowUp,
+  Sandbox,
+  Skill,
+  Tool,
+  type SandboxProcess,
+} from "@aml-jsx/sdk"
 import { DeterministicSandboxProvider } from "@aml-jsx/sdk/testing"
 import { describe, expect, expectTypeOf, it } from "vitest"
 import { z } from "zod"
@@ -93,6 +107,48 @@ describe("opencodeAgent()", () => {
     ).resolves.toBe("")
 
     expect(prompts).toEqual(["<SYSTEM>\nFollow the system.\n</SYSTEM>\n\nInitial", "Second"])
+  })
+
+  it("adds canonical staged package paths to native Skill discovery", async () => {
+    const directory = await mkdtemp(path.join(os.tmpdir(), "aml-opencode-skill-"))
+    let config: Record<string, unknown> | undefined
+    const sandboxProvider = new DeterministicSandboxProvider({
+      exec: command => ({ exitCode: 0, stderr: "", stdout: command === "pwd" ? "/sandbox/repository\n" : "" }),
+      spawn(_command, _args, _request, options) {
+        config = JSON.parse(options.env?.OPENCODE_CONFIG_CONTENT ?? "")
+        return completedProcess()
+      },
+    })
+
+    try {
+      await mkdir(path.join(directory, "review"))
+      await writeFile(
+        path.join(directory, "review", "SKILL.md"),
+        "---\nname: review\ndescription: Review code.\n---\n\n# Review\n"
+      )
+
+      await expect(
+        new AmlRuntime({
+          agentProvider: opencodeAgent({ config: { skills: { paths: ["/configured/skills"] } } }),
+          cwd: directory,
+        }).evaluate(
+          <Sandbox access="read-write" provider={sandboxProvider}>
+            <Agent>
+              <Skill src="./review" />
+            </Agent>
+          </Sandbox>
+        )
+      ).rejects.toThrow()
+
+      expect(config).toMatchObject({
+        skills: {
+          paths: ["/configured/skills", expect.stringMatching(/^\/tmp\/aml-agent-[^/]+\/\.agents\/skills\/review$/u)],
+        },
+      })
+      expect(JSON.stringify(config)).not.toContain("Available skill")
+    } finally {
+      await rm(directory, { force: true, recursive: true })
+    }
   })
 
   it("does not add a first-turn prelude when System content is empty", async () => {

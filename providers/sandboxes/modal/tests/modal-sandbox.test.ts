@@ -77,6 +77,15 @@ describe("modalSandbox()", () => {
     })
     expect(fake.stdinCloseCount).toBeGreaterThanOrEqual(2)
 
+    await lease.runtime.writeFile("repository/context.txt", new TextEncoder().encode("context"))
+    expect(await lease.runtime.stat("repository/context.txt")).toEqual({ kind: "file", size: 7 })
+    expect(new TextDecoder().decode(await lease.runtime.readFile("repository/context.txt"))).toBe("context")
+    const staging = await lease.runtime.createFileStaging()
+    await staging.writeFile(".agents/skills/review/SKILL.md", new TextEncoder().encode("skill"))
+    expect(fake.files.get(`${staging.root}/.agents/skills/review/SKILL.md`)).toEqual(new TextEncoder().encode("skill"))
+    await staging.release()
+    expect([...fake.files.keys()]).not.toContainEqual(expect.stringContaining(staging.root))
+
     const spawned = await lease.runtime.spawn("node", ["server.mjs"], {
       cwd: "repository/src",
     })
@@ -159,6 +168,7 @@ class FakeModal {
   readonly commands: RecordedCommand[] = []
   readonly createCalls: Array<{ app: unknown; image: unknown; params: unknown }> = []
   downloadCount = 0
+  readonly files = new Map<string, Uint8Array>()
   readonly imageCalls: string[] = []
   readonly remoteWorkspace: string
   stdinCloseCount = 0
@@ -181,6 +191,17 @@ class FakeModal {
         }
         this.commands.push(recorded)
 
+        if (command[0] === "mv") {
+          const source = command.at(-2)
+          const destination = command.at(-1)
+          const content = source === undefined ? undefined : this.files.get(source)
+
+          if (source !== undefined && content !== undefined && destination !== undefined) {
+            this.files.set(destination, content)
+            this.files.delete(source)
+          }
+        }
+
         if (command[0] === "tar" && command.includes("-cf")) {
           await execFileAsync("tar", ["-C", this.remoteWorkspace, "-cf", this.#downloadArchive, "."])
         }
@@ -202,6 +223,30 @@ class FakeModal {
         copyToLocal: async (_remotePath: string, localPath: string) => {
           this.downloadCount += 1
           await cp(this.#downloadArchive, localPath)
+        },
+        makeDirectory: async () => {},
+        readBytes: async (remotePath: string) => {
+          const content = this.files.get(remotePath)
+          if (content === undefined) throw new Error(`missing remote file ${remotePath}`)
+          return Uint8Array.from(content)
+        },
+        remove: async (remotePath: string, options: { recursive?: boolean } = {}) => {
+          this.files.delete(remotePath)
+
+          if (options.recursive) {
+            for (const filePath of this.files.keys()) {
+              if (filePath.startsWith(`${remotePath}/`)) this.files.delete(filePath)
+            }
+          }
+        },
+        stat: async (remotePath: string) => {
+          const content = this.files.get(remotePath)
+
+          if (content === undefined) throw new Error(`missing remote file ${remotePath}`)
+          return { size: content.byteLength, type: "file" }
+        },
+        writeBytes: async (content: Uint8Array, remotePath: string) => {
+          this.files.set(remotePath, Uint8Array.from(content))
         },
       },
       sandboxId: "sb-test",

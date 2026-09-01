@@ -6,7 +6,6 @@ import type { AgentProvider } from "../src/components/agent/agent-provider.js"
 import { FollowUp } from "../src/components/follow-up/follow-up.js"
 import { Loop } from "../src/components/loop/loop.js"
 import { Sandbox } from "../src/components/sandbox/sandbox.js"
-import { Skill } from "../src/components/skill/skill.js"
 import { System } from "../src/components/system/system.js"
 import { Workspace } from "../src/components/workspace/workspace.js"
 import type { AmlRenderable } from "../src/core/aml-node.js"
@@ -404,12 +403,6 @@ describe("component-local evaluate()", () => {
         <System>
           <Loop initial={{ done: false }} render={() => <Agent provider={provider}>system</Agent>} schema={State} />
         </System>
-        prompt
-      </Agent>,
-      <Agent provider={provider}>
-        <Skill>
-          <Loop initial={{ done: false }} render={() => <Agent provider={provider}>skill</Agent>} schema={State} />
-        </Skill>
         prompt
       </Agent>,
       <Agent provider={provider}>

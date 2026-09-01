@@ -6,7 +6,6 @@ import {
   defineWorkspaceProvider,
   EvaluationError,
   Sandbox,
-  Skill,
   Workspace,
   WorkspaceConflictError,
   type WorkspaceAcquireRequest,
@@ -230,16 +229,6 @@ describe("<Workspace>", () => {
             invalid
           </Workspace>
         </Agent>
-      )
-    ).rejects.toThrow("<Workspace> must be a top-level resource boundary")
-
-    await expect(
-      new AmlRuntime().evaluate(
-        <Skill>
-          <Workspace id="skill" provider={workspaceProvider}>
-            invalid
-          </Workspace>
-        </Skill>
       )
     ).rejects.toThrow("<Workspace> must be a top-level resource boundary")
 

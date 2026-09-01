@@ -1,6 +1,11 @@
+import path from "node:path"
+
 import type {
   SandboxExecOptions,
   SandboxExecResult,
+  SandboxFileOptions,
+  SandboxFileStaging,
+  SandboxFileStat,
   SandboxProcess,
   SandboxProcessExit,
   SandboxRuntime,
@@ -16,17 +21,25 @@ export function validateSandboxRuntime(value: unknown, providerName: string): Re
 
   const candidate = value as Partial<Record<keyof SandboxRuntime, unknown>>
   let access: unknown
+  let createFileStaging: unknown
   let cwd: unknown
   let exec: unknown
+  let readFile: unknown
   let root: unknown
   let spawn: unknown
+  let stat: unknown
+  let writeFile: unknown
 
   try {
     access = candidate.access
+    createFileStaging = candidate.createFileStaging
     cwd = candidate.cwd
     exec = candidate.exec
+    readFile = candidate.readFile
     root = candidate.root
     spawn = candidate.spawn
+    stat = candidate.stat
+    writeFile = candidate.writeFile
   } catch (cause) {
     throw new TypeError(`Sandbox provider "${providerName}" returned an unreadable runtime`, { cause })
   }
@@ -46,8 +59,28 @@ export function validateSandboxRuntime(value: unknown, providerName: string): Re
     throw new TypeError(`Sandbox provider "${providerName}" returned a runtime without spawn()`)
   }
 
+  if (typeof createFileStaging !== "function") {
+    throw new TypeError(`Sandbox provider "${providerName}" returned a runtime without createFileStaging()`)
+  }
+
+  if (typeof readFile !== "function") {
+    throw new TypeError(`Sandbox provider "${providerName}" returned a runtime without readFile()`)
+  }
+
+  if (typeof stat !== "function") {
+    throw new TypeError(`Sandbox provider "${providerName}" returned a runtime without stat()`)
+  }
+
+  if (typeof writeFile !== "function") {
+    throw new TypeError(`Sandbox provider "${providerName}" returned a runtime without writeFile()`)
+  }
+
   const runtime: SandboxRuntime = {
     access,
+    createFileStaging: async (options?: Readonly<SandboxFileOptions>): Promise<Readonly<SandboxFileStaging>> => {
+      const staging = await Reflect.apply(createFileStaging, value, [options])
+      return validateSandboxFileStaging(staging, providerName)
+    },
     cwd,
     exec: async (
       command: string,
@@ -56,6 +89,16 @@ export function validateSandboxRuntime(value: unknown, providerName: string): Re
     ): Promise<Readonly<SandboxExecResult>> => {
       const result = await Reflect.apply(exec, value, [command, args, options])
       return validateSandboxExecResult(result, providerName)
+    },
+    readFile: async (path: string, options?: Readonly<SandboxFileOptions>): Promise<Uint8Array> => {
+      assertFilePath(path, providerName, "readFile() path", false, root as string)
+      const content = await Reflect.apply(readFile, value, [path, options])
+
+      if (!(content instanceof Uint8Array)) {
+        throw new TypeError(`Sandbox provider "${providerName}" returned invalid file content`)
+      }
+
+      return Uint8Array.from(content)
     },
     root,
     spawn: async (
@@ -66,9 +109,122 @@ export function validateSandboxRuntime(value: unknown, providerName: string): Re
       const process = await Reflect.apply(spawn, value, [command, args, options])
       return validateSandboxProcess(process, providerName)
     },
+    stat: async (path: string, options?: Readonly<SandboxFileOptions>): Promise<Readonly<SandboxFileStat>> => {
+      assertFilePath(path, providerName, "stat() path", true, root as string)
+      const metadata = await Reflect.apply(stat, value, [path, options])
+      return validateSandboxFileStat(metadata, providerName)
+    },
+    writeFile: async (path: string, content: Uint8Array, options?: Readonly<SandboxFileOptions>): Promise<void> => {
+      assertFilePath(path, providerName, "writeFile() path", false, root as string)
+      assertFileContent(content, providerName)
+      await Reflect.apply(writeFile, value, [path, Uint8Array.from(content), options])
+    },
   }
 
   return Object.freeze(runtime)
+}
+
+/** Captures one invocation-owned writable staging lease. */
+function validateSandboxFileStaging(value: unknown, providerName: string): Readonly<SandboxFileStaging> {
+  if (typeof value !== "object" || value === null) {
+    throw new TypeError(`Sandbox provider "${providerName}" returned invalid file staging`)
+  }
+
+  let release: unknown
+  let root: unknown
+  let writeFile: unknown
+
+  try {
+    release = Reflect.get(value, "release")
+    root = Reflect.get(value, "root")
+    writeFile = Reflect.get(value, "writeFile")
+  } catch (cause) {
+    throw new TypeError(`Sandbox provider "${providerName}" returned unreadable file staging`, { cause })
+  }
+
+  if (typeof root !== "string" || root.length === 0 || root !== root.trim() || root.includes("\0")) {
+    throw new TypeError(`Sandbox provider "${providerName}" returned file staging with invalid root`)
+  }
+
+  if (typeof writeFile !== "function" || typeof release !== "function") {
+    throw new TypeError(`Sandbox provider "${providerName}" returned invalid file staging`)
+  }
+
+  let releasePromise: Promise<void> | undefined
+
+  return Object.freeze({
+    release: () =>
+      (releasePromise ??= Promise.resolve().then(async () => {
+        await Reflect.apply(release, value, [])
+      })),
+    root,
+    writeFile: async (path: string, content: Uint8Array, options?: Readonly<SandboxFileOptions>): Promise<void> => {
+      assertFilePath(path, providerName, "staging writeFile() path", false, ".")
+      assertFileContent(content, providerName)
+      await Reflect.apply(writeFile, value, [path, Uint8Array.from(content), options])
+    },
+  })
+}
+
+function validateSandboxFileStat(value: unknown, providerName: string): Readonly<SandboxFileStat> {
+  if (typeof value !== "object" || value === null) {
+    throw new TypeError(`Sandbox provider "${providerName}" returned invalid file metadata`)
+  }
+
+  let kind: unknown
+  let size: unknown
+
+  try {
+    kind = Reflect.get(value, "kind")
+    size = Reflect.get(value, "size")
+  } catch (cause) {
+    throw new TypeError(`Sandbox provider "${providerName}" returned unreadable file metadata`, { cause })
+  }
+
+  if ((kind !== "directory" && kind !== "file") || !Number.isSafeInteger(size) || (size as number) < 0) {
+    throw new TypeError(`Sandbox provider "${providerName}" returned invalid file metadata`)
+  }
+
+  return Object.freeze({ kind, size: size as number })
+}
+
+function assertFileContent(value: unknown, providerName: string): asserts value is Uint8Array {
+  if (!(value instanceof Uint8Array)) {
+    throw new TypeError(`Sandbox provider "${providerName}" file content must be a Uint8Array`)
+  }
+}
+
+function assertFilePath(
+  value: unknown,
+  providerName: string,
+  field: string,
+  allowRoot: boolean,
+  root: string
+): asserts value is string {
+  if (
+    typeof value !== "string" ||
+    value.length === 0 ||
+    value !== value.trim() ||
+    value.includes("\0") ||
+    value.includes("\\") ||
+    value.startsWith("/")
+  ) {
+    throw new TypeError(`Sandbox provider "${providerName}" ${field} must be a normalized relative path`)
+  }
+
+  const segments = value.split("/")
+  const normalized = path.posix.normalize(value)
+  const relative = path.posix.relative(root, normalized)
+
+  if (
+    segments.includes("..") ||
+    path.posix.isAbsolute(relative) ||
+    relative === ".." ||
+    relative.startsWith("../") ||
+    (!allowRoot && relative === "")
+  ) {
+    throw new TypeError(`Sandbox provider "${providerName}" ${field} must remain beneath its root`)
+  }
 }
 
 /**

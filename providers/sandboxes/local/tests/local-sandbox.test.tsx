@@ -1,4 +1,4 @@
-import { mkdtemp, mkdir, readFile, rm, symlink, writeFile } from "node:fs/promises"
+import { access, mkdtemp, mkdir, readFile, rm, symlink, writeFile } from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
 
@@ -77,6 +77,57 @@ describe("localSandbox()", () => {
       stderr: "",
       stdout: path.join(workspace, "repository"),
     })
+    await lease.release()
+  })
+
+  it("provides confined complete-file operations and ephemeral Agent staging", async () => {
+    const workspace = await createWorkspace()
+    const lease = await localSandbox({ workspace }).acquire(request())
+
+    expect(await lease.runtime.stat("repository/fixture.txt")).toEqual({ kind: "file", size: 7 })
+    expect(new TextDecoder().decode(await lease.runtime.readFile("repository/fixture.txt"))).toBe("fixture")
+    await lease.runtime.writeFile("repository/generated/report.txt", new TextEncoder().encode("report"))
+    expect(await readFile(path.join(workspace, "repository/generated/report.txt"), "utf8")).toBe("report")
+
+    const staging = await lease.runtime.createFileStaging()
+    await staging.writeFile(".agents/skills/review/SKILL.md", new TextEncoder().encode("skill"))
+    expect(await readFile(path.join(staging.root, ".agents/skills/review/SKILL.md"), "utf8")).toBe("skill")
+    await Promise.all([staging.release(), staging.release()])
+    await expect(access(staging.root)).rejects.toMatchObject({ code: "ENOENT" })
+    await lease.release()
+  })
+
+  it("confines file operations to a nested Sandbox root through real paths", async () => {
+    const workspace = await createWorkspace()
+    const nestedRoot = path.join(workspace, "repository", "nested")
+    await mkdir(nestedRoot)
+    await symlink("..", path.join(nestedRoot, "escape"))
+    const lease = await localSandbox({ workspace }).acquire(
+      request({ cwd: "repository/nested", root: "repository/nested" })
+    )
+    const escapedFile = "repository/nested/escape/fixture.txt"
+
+    await expect(lease.runtime.readFile(escapedFile)).rejects.toThrow("outside its root")
+    await expect(lease.runtime.stat(escapedFile)).rejects.toThrow("outside its root")
+    await expect(
+      lease.runtime.writeFile("repository/nested/escape/generated.txt", new TextEncoder().encode("escaped"))
+    ).rejects.toThrow("not a directory")
+    await expect(readFile(path.join(workspace, "repository", "fixture.txt"), "utf8")).resolves.toBe("fixture")
+    await lease.release()
+  })
+
+  it("allows reads and staging but rejects active-filesystem writes under read-only access", async () => {
+    const workspace = await createWorkspace()
+    const lease = await localSandbox({ workspace }).acquire(request({ access: "read-only" }))
+
+    expect(new TextDecoder().decode(await lease.runtime.readFile("repository/fixture.txt"))).toBe("fixture")
+    await expect(
+      lease.runtime.writeFile("repository/blocked.txt", new TextEncoder().encode("blocked"))
+    ).rejects.toThrow("filesystem is read-only")
+    const staging = await lease.runtime.createFileStaging()
+    await staging.writeFile("available.txt", new TextEncoder().encode("available"))
+    expect(await readFile(path.join(staging.root, "available.txt"), "utf8")).toBe("available")
+    await staging.release()
     await lease.release()
   })
 

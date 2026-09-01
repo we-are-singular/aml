@@ -7,7 +7,6 @@ import { FollowUp, type FollowUpProps } from "../src/components/follow-up/follow
 import { defineMcpServer } from "../src/components/mcp/define-mcp-server.js"
 import { Mcp } from "../src/components/mcp/mcp.js"
 import { Sandbox } from "../src/components/sandbox/sandbox.js"
-import { Skill } from "../src/components/skill/skill.js"
 import { System } from "../src/components/system/system.js"
 import { Tool } from "../src/components/tool/tool.js"
 import { defineTool } from "../src/components/tool/define-tool.js"
@@ -90,7 +89,7 @@ describe("FollowUp", () => {
     ).resolves.toBe("first|second|third")
   })
 
-  it("resolves Skills and child Agents into a FollowUp before the parent session", async () => {
+  it("resolves text and child Agents into a FollowUp before the parent session", async () => {
     const calls: string[] = []
     const child = new DeterministicAgentProvider({
       name: "child",
@@ -103,9 +102,7 @@ describe("FollowUp", () => {
       name: "parent",
       respond(request) {
         calls.push(`parent:${request.prompt}`)
-        expect(request.followUps).toEqual([
-          ["Skill: adversarial", "", "Prefer counterexamples.", "Use child evidence."].join("\n"),
-        ])
+        expect(request.followUps).toEqual(["Prefer counterexamples.\nUse child evidence."])
         return { text: "done" }
       },
     })
@@ -115,7 +112,7 @@ describe("FollowUp", () => {
         <Agent>
           Inspect the change.
           <FollowUp>
-            <Skill name="adversarial">Prefer counterexamples.</Skill>
+            Prefer counterexamples.
             {"\n"}
             Use <Agent provider={child}>find evidence</Agent>.
           </FollowUp>

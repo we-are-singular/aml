@@ -1,5 +1,6 @@
 import { execFile } from "node:child_process"
-import { realpath, stat } from "node:fs/promises"
+import { mkdtemp, readFile, realpath, rm, stat, writeFile } from "node:fs/promises"
+import os from "node:os"
 import path from "node:path"
 import { randomUUID } from "node:crypto"
 
@@ -12,6 +13,7 @@ import {
   type SandboxAcquireRequest,
   type SandboxExecOptions,
   type SandboxExecResult,
+  type SandboxFileOptions,
   type SandboxProcess,
   type SandboxProvider,
   type SandboxRuntime,
@@ -214,8 +216,136 @@ class DockerSandboxProvider
     request: SandboxAcquireRequest
   ): Readonly<SandboxRuntime> {
     const containerId = provisioned.resource
+    const runDocker = async (args: readonly string[], signal: AbortSignal) =>
+      await this.#runner.run("docker", args, {
+        maxOutputBytes: this.#options.maxOutputBytes,
+        signal,
+      })
+
+    const inspectGuestPath = async (guestFilePath: string, signal: AbortSignal) => {
+      const result = await runDocker(["exec", containerId, "stat", "--format=%f:%s", "--", guestFilePath], signal)
+
+      if (result.exitCode !== 0) {
+        return undefined
+      }
+
+      const [modeValue, sizeValue] = result.stdout.trim().split(":")
+      const mode = Number.parseInt(modeValue ?? "", 16) & 0xf000
+      const size = Number.parseInt(sizeValue ?? "", 10)
+
+      if (!Number.isSafeInteger(size) || size < 0) {
+        throw new TypeError("Docker Sandbox returned invalid file metadata")
+      }
+
+      const kind = mode === 0x8000 ? "file" : mode === 0x4000 ? "directory" : "unsupported"
+      return Object.freeze({ kind, size })
+    }
+
+    const assertGuestPath = async (
+      guestFilePath: string,
+      signal: AbortSignal,
+      existing: boolean,
+      boundary: string
+    ): Promise<void> => {
+      const result = await runDocker(
+        [
+          "exec",
+          containerId,
+          "realpath",
+          existing ? "--canonicalize-existing" : "--canonicalize-missing",
+          "--",
+          existing ? guestFilePath : path.posix.dirname(guestFilePath),
+        ],
+        signal
+      )
+
+      if (result.exitCode !== 0) {
+        throw new Error(`Docker Sandbox could not resolve file path: ${result.stderr.trim()}`)
+      }
+
+      assertGuestPathWithin(boundary, result.stdout.trim())
+    }
+
+    const writeGuestFile = async (
+      guestFilePath: string,
+      content: Uint8Array,
+      signal: AbortSignal,
+      boundary = "/workspace"
+    ): Promise<void> => {
+      await assertGuestPath(guestFilePath, signal, false, boundary)
+      const existing = await inspectGuestPath(guestFilePath, signal)
+
+      if (existing !== undefined && existing.kind !== "file") {
+        throw new TypeError("Docker Sandbox file destination must be a regular file")
+      }
+
+      const parent = path.posix.dirname(guestFilePath)
+      const prepare = await runDocker(["exec", containerId, "mkdir", "-p", "--", parent], signal)
+
+      if (prepare.exitCode !== 0) {
+        throw new Error(`Docker Sandbox could not prepare file directory: ${prepare.stderr.trim()}`)
+      }
+
+      const hostDirectory = await mkdtemp(path.join(os.tmpdir(), "aml-docker-file-"))
+      const hostFile = path.join(hostDirectory, "content")
+      const guestTemporary = path.posix.join(parent, `.aml-file-${randomUUID()}.tmp`)
+
+      try {
+        await writeFile(hostFile, content, { signal })
+        const upload = await runDocker(["cp", hostFile, `${containerId}:${guestTemporary}`], signal)
+
+        if (upload.exitCode !== 0) {
+          throw new Error(`Docker Sandbox file upload failed: ${upload.stderr.trim()}`)
+        }
+
+        const replace = await runDocker(["exec", containerId, "mv", "--", guestTemporary, guestFilePath], signal)
+
+        if (replace.exitCode !== 0) {
+          throw new Error(`Docker Sandbox file replacement failed: ${replace.stderr.trim()}`)
+        }
+      } finally {
+        await rm(hostDirectory, { force: true, recursive: true })
+        await runDocker(["exec", containerId, "rm", "-f", "--", guestTemporary], new AbortController().signal).catch(
+          () => undefined
+        )
+      }
+    }
+
     const runtime: SandboxRuntime = {
       access: request.access,
+      createFileStaging: async (options = {}) => {
+        const signal = options.signal ?? request.signal
+        signal.throwIfAborted()
+        const stagingRoot = `/tmp/aml-agent-${randomUUID()}`
+        const prepare = await runDocker(["exec", containerId, "mkdir", "-p", "--", stagingRoot], signal)
+
+        if (prepare.exitCode !== 0) {
+          throw new Error(`Docker Sandbox could not prepare Agent staging: ${prepare.stderr.trim()}`)
+        }
+
+        let releasePromise: Promise<void> | undefined
+
+        return Object.freeze({
+          release: () =>
+            (releasePromise ??= runDocker(
+              ["exec", containerId, "rm", "-rf", "--", stagingRoot],
+              new AbortController().signal
+            ).then(result => {
+              if (result.exitCode !== 0) {
+                throw new Error(`Docker Sandbox Agent staging cleanup failed: ${result.stderr.trim()}`)
+              }
+            })),
+          root: stagingRoot,
+          writeFile: async (filePath: string, content: Uint8Array, writeOptions: Readonly<SandboxFileOptions> = {}) => {
+            await writeGuestFile(
+              path.posix.join(stagingRoot, filePath),
+              content,
+              writeOptions.signal ?? signal,
+              stagingRoot
+            )
+          },
+        })
+      },
       cwd: request.cwd,
       exec: async (command, args = [], options = {}) => {
         const captured = SandboxCommand.from(request, command, args, options)
@@ -238,6 +368,31 @@ class DockerSandboxProvider
           // alive, so terminate the disposable Sandbox before propagating.
           await this.#removeContainer(containerId)
           throw cause
+        }
+      },
+      readFile: async (filePath, options = {}) => {
+        const signal = options.signal ?? request.signal
+        const guestFilePath = guestPath(request.root, filePath)
+        const metadata = await inspectGuestPath(guestFilePath, signal)
+
+        if (metadata?.kind !== "file") {
+          throw new TypeError("Docker Sandbox file path must identify a regular file")
+        }
+
+        await assertGuestPath(guestFilePath, signal, true, "/workspace")
+        const hostDirectory = await mkdtemp(path.join(os.tmpdir(), "aml-docker-read-"))
+        const hostFile = path.join(hostDirectory, "content")
+
+        try {
+          const download = await runDocker(["cp", `${containerId}:${guestFilePath}`, hostFile], signal)
+
+          if (download.exitCode !== 0) {
+            throw new Error(`Docker Sandbox file download failed: ${download.stderr.trim()}`)
+          }
+
+          return Uint8Array.from(await readFile(hostFile, { signal }))
+        } finally {
+          await rm(hostDirectory, { force: true, recursive: true })
         }
       },
       root: request.root,
@@ -289,6 +444,29 @@ class DockerSandboxProvider
             )
           },
         ])
+      },
+      stat: async (filePath, options = {}) => {
+        const signal = options.signal ?? request.signal
+        const guestFilePath = guestPath(request.root, filePath)
+        const metadata = await inspectGuestPath(guestFilePath, signal)
+
+        if (metadata === undefined || metadata.kind === "unsupported") {
+          throw new TypeError("Docker Sandbox file path must identify a regular file or directory")
+        }
+
+        await assertGuestPath(guestFilePath, signal, true, "/workspace")
+        return Object.freeze({
+          kind: metadata.kind,
+          size: metadata.kind === "file" ? metadata.size : 0,
+        })
+      },
+      writeFile: async (filePath, content, options = {}) => {
+        if (request.access !== "read-write") {
+          throw new Error("Docker Sandbox filesystem is read-only")
+        }
+
+        const signal = options.signal ?? request.signal
+        await writeGuestFile(guestPath(request.root, filePath), content, signal)
       },
     }
 
@@ -349,6 +527,14 @@ class DockerSandboxProvider
     if (result.exitCode !== 0 && !result.stderr.includes("No such container")) {
       throw new Error(`Docker Sandbox cleanup failed: ${(result.stderr || result.stdout).trim()}`)
     }
+  }
+}
+
+function assertGuestPathWithin(root: string, candidate: string): void {
+  const relative = path.posix.relative(root, candidate)
+
+  if (path.posix.isAbsolute(relative) || relative === ".." || relative.startsWith("../")) {
+    throw new TypeError("Docker Sandbox file path resolves outside its root")
   }
 }
 

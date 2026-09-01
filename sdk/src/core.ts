@@ -35,6 +35,8 @@ export type {
 } from "./core/aml-event-subscriber.js"
 export { FollowUp, type FollowUpProps } from "./components/follow-up/follow-up.js"
 export { File, type FileProps } from "./components/file/file.js"
+export { Block, type BlockProps } from "./components/block/block.js"
+export { Include, type IncludeProps } from "./components/include/include.js"
 export { type DeepReadonly, Loop, type LoopProps, type LoopRenderContext } from "./components/loop/loop.js"
 export { Parallel, ParallelError, type ParallelFailure, type ParallelProps } from "./components/parallel/parallel.js"
 export { System, type SystemProps } from "./components/system/system.js"
@@ -60,7 +62,8 @@ export {
 } from "./components/mcp/define-mcp-server.js"
 export { Mcp, type McpProps } from "./components/mcp/mcp.js"
 
-// Local and inline reusable instruction text.
+// Complete local Agent Skill packages with progressive disclosure.
+export type { AgentSkill } from "./components/skill/agent-skill.js"
 export { Skill, type SkillProps } from "./components/skill/skill.js"
 
 // Ephemeral execution scope and provider-neutral lease contracts.
@@ -68,6 +71,7 @@ export { AbstractSandboxProvider } from "./components/sandbox/abstract-sandbox-p
 export { defineSandboxProvider } from "./components/sandbox/define-sandbox-provider.js"
 export type { ProvisionedSandbox } from "./components/sandbox/provisioned-sandbox.js"
 export { SandboxCommand } from "./components/sandbox/sandbox-command.js"
+export { HostSandboxFileSystem } from "./components/sandbox/host-sandbox-filesystem.js"
 export {
   type SandboxAccess,
   type SandboxAcquireRequest,
@@ -80,6 +84,9 @@ export {
 export {
   type SandboxExecOptions,
   type SandboxExecResult,
+  type SandboxFileOptions,
+  type SandboxFileStaging,
+  type SandboxFileStat,
   type SandboxProcess,
   type SandboxProcessExit,
   type SandboxRuntime,

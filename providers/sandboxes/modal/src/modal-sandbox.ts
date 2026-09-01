@@ -18,6 +18,7 @@ import {
   SandboxCommand,
   type ProvisionedSandbox,
   type SandboxAcquireRequest,
+  type SandboxFileOptions,
   type SandboxProcess,
   type SandboxProcessExit,
   type SandboxProvider,
@@ -287,6 +288,26 @@ function createRuntime(
 ): Readonly<SandboxRuntime> {
   const runtime: SandboxRuntime = {
     access: request.access,
+    async createFileStaging(options = {}) {
+      const signal = options.signal ?? request.signal
+      signal.throwIfAborted()
+      const stagingRoot = `/tmp/aml-agent-${randomUUID()}`
+      await abortable(sandbox.filesystem.makeDirectory(stagingRoot, { createParents: true }), signal)
+      let releasePromise: Promise<void> | undefined
+
+      return Object.freeze({
+        release: () =>
+          (releasePromise ??= sandbox.filesystem.remove(stagingRoot, {
+            recursive: true,
+          })),
+        root: stagingRoot,
+        writeFile: async (filePath: string, content: Uint8Array, writeOptions: Readonly<SandboxFileOptions> = {}) => {
+          const writeSignal = writeOptions.signal ?? signal
+          writeSignal.throwIfAborted()
+          await abortable(sandbox.filesystem.writeBytes(content, path.posix.join(stagingRoot, filePath)), writeSignal)
+        },
+      })
+    },
     cwd: request.cwd,
     async exec(command, args = [], options = {}) {
       if (request.access !== "read-write") {
@@ -334,6 +355,17 @@ function createRuntime(
         throw cause
       }
     },
+    async readFile(filePath, options = {}) {
+      const signal = options.signal ?? request.signal
+      const remotePath = guestPath(request.root, filePath)
+      const metadata = await abortable(sandbox.filesystem.stat(remotePath), signal)
+
+      if (metadata.type !== "file") {
+        throw new TypeError("Modal Sandbox file path must identify a regular file")
+      }
+
+      return Uint8Array.from(await abortable(sandbox.filesystem.readBytes(remotePath), signal))
+    },
     root: request.root,
     async spawn(command, args = [], options = {}) {
       if (request.access !== "read-write") {
@@ -362,6 +394,40 @@ function createRuntime(
       } catch (error) {
         await destroy().catch(() => undefined)
         throw error
+      }
+    },
+    async stat(filePath, options = {}) {
+      const signal = options.signal ?? request.signal
+      const metadata = await abortable(sandbox.filesystem.stat(guestPath(request.root, filePath)), signal)
+
+      if (metadata.type !== "file" && metadata.type !== "directory") {
+        throw new TypeError("Modal Sandbox file path must identify a regular file or directory")
+      }
+
+      return Object.freeze({
+        kind: metadata.type,
+        size: metadata.type === "file" ? metadata.size : 0,
+      })
+    },
+    async writeFile(filePath, content, options = {}) {
+      if (request.access !== "read-write") {
+        throw new Error("Modal Sandbox filesystem is read-only")
+      }
+
+      const signal = options.signal ?? request.signal
+      signal.throwIfAborted()
+      const destination = guestPath(request.root, filePath)
+      const temporary = path.posix.join(path.posix.dirname(destination), `.aml-file-${randomUUID()}.tmp`)
+
+      try {
+        await abortable(sandbox.filesystem.writeBytes(content, temporary), signal)
+        const replacement = await runtime.exec("mv", ["--", temporary, destination], { signal })
+
+        if (replacement.exitCode !== 0) {
+          throw new Error(`Modal Sandbox file replacement failed: ${replacement.stderr.trim()}`)
+        }
+      } finally {
+        await sandbox.filesystem.remove(temporary).catch(() => undefined)
       }
     },
   }

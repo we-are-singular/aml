@@ -30,6 +30,7 @@ export async function agentProviderConformance(provider: AgentProvider): Promise
     mcpServers: Object.freeze([]),
     permissions: Object.freeze({ filesystem: "read-write", network: true, shell: true }),
     prompt: "agent-provider-conformance",
+    skills: Object.freeze([]),
     system: "Follow the provider contract.",
     tools: Object.freeze([]),
     trace,

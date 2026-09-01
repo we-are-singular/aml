@@ -1,4 +1,4 @@
-import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises"
+import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
 
@@ -221,6 +221,47 @@ describe("dockerSandbox()", () => {
     })
   })
 
+  it("reads, writes, and cleans up complete files through the Docker filesystem boundary", async () => {
+    const workspace = await createWorkspace()
+    const runner = new FilesystemFakeRunner()
+    const lease = await createDockerSandboxProvider({ image: "agent-image", workspace }, runner).acquire(request())
+
+    await expect(lease.runtime.stat("repository/fixture.txt")).resolves.toEqual({ kind: "file", size: 7 })
+    await expect(lease.runtime.readFile("repository/fixture.txt")).resolves.toEqual(new TextEncoder().encode("fixture"))
+
+    await lease.runtime.writeFile("repository/generated/result.txt", new TextEncoder().encode("generated"))
+    await expect(lease.runtime.readFile("repository/generated/result.txt")).resolves.toEqual(
+      new TextEncoder().encode("generated")
+    )
+
+    const staging = await lease.runtime.createFileStaging()
+    await staging.writeFile(".agents/skills/evidence/SKILL.md", new TextEncoder().encode("skill"))
+    expect(runner.readGuestFile(`${staging.root}/.agents/skills/evidence/SKILL.md`)).toBe("skill")
+    await staging.release()
+    await staging.release()
+    expect(runner.hasGuestPath(staging.root)).toBe(false)
+
+    await lease.release()
+  })
+
+  it("keeps Agent staging writable while rejecting Workspace writes in a read-only Docker Sandbox", async () => {
+    const workspace = await createWorkspace()
+    const runner = new FilesystemFakeRunner()
+    const lease = await createDockerSandboxProvider({ image: "agent-image", workspace }, runner).acquire(
+      request({ access: "read-only" })
+    )
+
+    await expect(
+      lease.runtime.writeFile("repository/generated.txt", new TextEncoder().encode("generated"))
+    ).rejects.toThrow("Docker Sandbox filesystem is read-only")
+
+    const staging = await lease.runtime.createFileStaging()
+    await staging.writeFile(".agents/skills/evidence/SKILL.md", new TextEncoder().encode("skill"))
+    expect(runner.readGuestFile(`${staging.root}/.agents/skills/evidence/SKILL.md`)).toBe("skill")
+    await staging.release()
+    await lease.release()
+  })
+
   it("prefers an active Workspace and confines effective cwd", async () => {
     const fallback = await createWorkspace()
     const active = await createWorkspace()
@@ -327,6 +368,117 @@ class FakeRunner {
       },
     }
   }
+}
+
+class FilesystemFakeRunner {
+  readonly #files = new Map<string, Uint8Array>([["/workspace/fixture.txt", new TextEncoder().encode("fixture")]])
+
+  hasGuestPath(candidate: string): boolean {
+    return [...this.#files].some(([filePath]) => filePath === candidate || filePath.startsWith(`${candidate}/`))
+  }
+
+  readGuestFile(filePath: string): string | undefined {
+    const content = this.#files.get(filePath)
+    return content === undefined ? undefined : new TextDecoder().decode(content)
+  }
+
+  async run(
+    _command: string,
+    args: readonly string[],
+    _options: Readonly<SandboxExecOptions & { maxOutputBytes: number }>
+  ): Promise<Readonly<SandboxExecResult>> {
+    if (args[0] === "run") {
+      return result("container-123\n")
+    }
+
+    if (args[0] === "rm" && args[1] === "--force") {
+      return result()
+    }
+
+    if (args[0] === "cp") {
+      const source = args[1]
+      const destination = args[2]
+
+      if (source === undefined || destination === undefined) {
+        return result("", "invalid copy", 1)
+      }
+
+      if (source.startsWith("container-123:")) {
+        const content = this.#files.get(source.slice("container-123:".length))
+
+        if (content === undefined) {
+          return result("", "missing guest file", 1)
+        }
+
+        await writeFile(destination, content)
+        return result()
+      }
+
+      this.#files.set(destination.slice("container-123:".length), Uint8Array.from(await readFile(source)))
+      return result()
+    }
+
+    if (args[0] !== "exec") {
+      return result()
+    }
+
+    const command = args[2]
+
+    if (command === "stat") {
+      const filePath = args.at(-1)
+      const content = filePath === undefined ? undefined : this.#files.get(filePath)
+
+      if (content !== undefined) {
+        return result(`81a4:${content.byteLength}\n`)
+      }
+
+      if (filePath !== undefined && this.#isDirectory(filePath)) {
+        return result("41ed:0\n")
+      }
+
+      return result("", "missing", 1)
+    }
+
+    if (command === "realpath") {
+      return result(`${args.at(-1)}\n`)
+    }
+
+    if (command === "mv") {
+      const source = args.at(-2)
+      const destination = args.at(-1)
+      const content = source === undefined ? undefined : this.#files.get(source)
+
+      if (source === undefined || content === undefined || destination === undefined) {
+        return result("", "missing temporary file", 1)
+      }
+
+      this.#files.delete(source)
+      this.#files.set(destination, content)
+      return result()
+    }
+
+    if (command === "rm") {
+      const target = args.at(-1)
+
+      if (target !== undefined) {
+        for (const filePath of this.#files.keys()) {
+          if (filePath === target || filePath.startsWith(`${target}/`)) {
+            this.#files.delete(filePath)
+          }
+        }
+      }
+    }
+
+    return result()
+  }
+
+  #isDirectory(candidate: string): boolean {
+    return candidate === "/workspace" || [...this.#files.keys()].some(filePath => filePath.startsWith(`${candidate}/`))
+  }
+}
+
+function result(stdout = "", stderr = "", exitCode = 0): Readonly<SandboxExecResult> {
+  return Object.freeze({ exitCode, stderr, stdout })
 }
 
 function emptyStream(): ReadableStream<Uint8Array> {

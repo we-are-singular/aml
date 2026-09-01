@@ -88,6 +88,15 @@ describe("daytonaSandbox()", () => {
       timeout: 2,
     })
 
+    await lease.runtime.writeFile("repository/context.txt", new TextEncoder().encode("context"))
+    expect(await lease.runtime.stat("repository/context.txt")).toEqual({ kind: "file", size: 7 })
+    expect(new TextDecoder().decode(await lease.runtime.readFile("repository/context.txt"))).toBe("context")
+    const staging = await lease.runtime.createFileStaging()
+    await staging.writeFile(".agents/skills/review/SKILL.md", new TextEncoder().encode("skill"))
+    expect(fake.files.get(`${staging.root}/.agents/skills/review/SKILL.md`)).toEqual(Buffer.from("skill"))
+    await staging.release()
+    expect([...fake.files.keys()]).not.toContainEqual(expect.stringContaining(staging.root))
+
     const spawned = await lease.runtime.spawn("node", ["server.mjs"], {
       cwd: "repository/src",
       env: { API_KEY: "configured" },
@@ -198,6 +207,19 @@ describe("daytonaSandbox()", () => {
     expect(fake.deleteCount).toBe(1)
   })
 
+  it("rejects special entries from portable file operations", async () => {
+    const workspace = await temporaryDirectory("aml-daytona-special-file-")
+    await mkdir(path.join(workspace, "repository"), { recursive: true })
+    const fake = await FakeDaytona.create()
+    fake.files.set("workspace/special", Buffer.from("special"))
+    fake.fileModes.set("workspace/special", "prw-------")
+    const lease = await daytonaSandbox({ client: fake.client, workspace }).acquire(request())
+
+    await expect(lease.runtime.readFile("repository/special")).rejects.toThrow("must identify a regular file")
+    await expect(lease.runtime.stat("repository/special")).rejects.toThrow("must identify a regular file or directory")
+    await lease.release()
+  })
+
   it("validates AML options without constructing a credentialed client", () => {
     expect(() => daytonaSandbox()).not.toThrow()
     expect(() =>
@@ -240,6 +262,8 @@ class FakeDaytona {
   readonly createCalls: Array<{ options: unknown; params: unknown }> = []
   deleteCount = 0
   downloadCount = 0
+  readonly fileModes = new Map<string, string>()
+  readonly files = new Map<string, Buffer>()
   readonly remoteWorkspace: string
   readonly sessionCommands: Array<{ request: Record<string, unknown>; sessionId: string }> = []
   readonly sessionInputs: string[] = []
@@ -254,10 +278,43 @@ class FakeDaytona {
     this.#downloadArchive = path.join(directory, "download.tar")
     const sandbox = {
       fs: {
-        deleteFile: async () => {},
-        downloadFile: async (_remotePath: string, localPath: string) => {
+        createFolder: async () => {},
+        deleteFile: async (remotePath: string, recursive = false) => {
+          this.files.delete(remotePath)
+
+          if (recursive) {
+            for (const filePath of this.files.keys()) {
+              if (filePath.startsWith(`${remotePath}/`)) this.files.delete(filePath)
+            }
+          }
+        },
+        downloadFile: async (remotePath: string, localPath?: string) => {
+          if (localPath === undefined) {
+            const content = this.files.get(remotePath)
+            if (content === undefined) throw new Error(`missing remote file ${remotePath}`)
+            return Buffer.from(content)
+          }
+
           this.downloadCount += 1
           await cp(this.#downloadArchive, localPath)
+        },
+        getFileDetails: async (remotePath: string) => {
+          const content = this.files.get(remotePath)
+
+          if (content !== undefined) {
+            return { isDir: false, mode: this.fileModes.get(remotePath) ?? "-rw-r--r--", size: content.byteLength }
+          }
+
+          return { isDir: true, mode: "drwxr-xr-x", size: 0 }
+        },
+        moveFiles: async (source: string, destination: string) => {
+          const content = this.files.get(source)
+          if (content === undefined) throw new Error(`missing remote file ${source}`)
+          this.files.set(destination, content)
+          this.files.delete(source)
+        },
+        uploadFile: async (content: Buffer, remotePath: string) => {
+          this.files.set(remotePath, Buffer.from(content))
         },
         uploadFileStream: async (localPath: string) => {
           await cp(localPath, this.uploadedArchive)

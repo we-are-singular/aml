@@ -18,6 +18,7 @@ import {
   SandboxCommand,
   type ProvisionedSandbox,
   type SandboxAcquireRequest,
+  type SandboxFileOptions,
   type SandboxProcess,
   type SandboxProcessExit,
   type SandboxProvider,
@@ -326,8 +327,61 @@ function createRuntime(
   destroy: () => Promise<void>,
   maxOutputBytes: number
 ): Readonly<SandboxRuntime> {
+  const prepareDirectory = async (directory: string, signal: AbortSignal): Promise<void> => {
+    signal.throwIfAborted()
+
+    try {
+      const metadata = await abortable(sandbox.fs.getFileDetails(directory), signal)
+
+      if (!metadata.isDir || isDaytonaSymlink(metadata.mode)) {
+        throw new TypeError(`Daytona Sandbox file parent "${directory}" is not a directory`)
+      }
+
+      return
+    } catch (cause) {
+      signal.throwIfAborted()
+      const parent = path.posix.dirname(directory)
+
+      if (parent === directory) {
+        throw cause
+      }
+    }
+
+    await prepareDirectory(path.posix.dirname(directory), signal)
+    await abortable(sandbox.fs.createFolder(directory, "755"), signal)
+  }
+
+  const replaceFile = async (destination: string, content: Uint8Array, signal: AbortSignal): Promise<void> => {
+    signal.throwIfAborted()
+    const parent = path.posix.dirname(destination)
+    await prepareDirectory(parent, signal)
+    const temporary = path.posix.join(parent, `.aml-file-${randomUUID()}.tmp`)
+
+    try {
+      await abortable(sandbox.fs.uploadFile(Buffer.from(content), temporary), signal)
+      await abortable(sandbox.fs.moveFiles(temporary, destination), signal)
+    } finally {
+      await sandbox.fs.deleteFile(temporary).catch(() => undefined)
+    }
+  }
+
   const runtime: SandboxRuntime = {
     access: request.access,
+    async createFileStaging(options = {}) {
+      const signal = options.signal ?? request.signal
+      signal.throwIfAborted()
+      const stagingRoot = `/tmp/aml-agent-${randomUUID()}`
+      await prepareDirectory(stagingRoot, signal)
+      let releasePromise: Promise<void> | undefined
+
+      return Object.freeze({
+        release: () => (releasePromise ??= sandbox.fs.deleteFile(stagingRoot, true)),
+        root: stagingRoot,
+        writeFile: async (filePath: string, content: Uint8Array, writeOptions: Readonly<SandboxFileOptions> = {}) => {
+          await replaceFile(path.posix.join(stagingRoot, filePath), content, writeOptions.signal ?? signal)
+        },
+      })
+    },
     cwd: request.cwd,
     async exec(command, args = [], options = {}) {
       if (request.access !== "read-write") {
@@ -380,6 +434,17 @@ function createRuntime(
         stdout: result.result,
       })
     },
+    async readFile(filePath, options = {}) {
+      const signal = options.signal ?? request.signal
+      const remotePath = guestPath(request.root, filePath)
+      const info = await abortable(sandbox.fs.getFileDetails(remotePath), signal)
+
+      if (info.isDir || !isDaytonaRegularFile(info.mode)) {
+        throw new TypeError("Daytona Sandbox file path must identify a regular file")
+      }
+
+      return Uint8Array.from(await abortable(sandbox.fs.downloadFile(remotePath), signal))
+    },
     root: request.root,
     async spawn(command, args = [], options = {}) {
       if (request.access !== "read-write") {
@@ -419,9 +484,41 @@ function createRuntime(
         throw error
       }
     },
+    async stat(filePath, options = {}) {
+      const signal = options.signal ?? request.signal
+      const info = await abortable(sandbox.fs.getFileDetails(guestPath(request.root, filePath)), signal)
+
+      if (isDaytonaSymlink(info.mode)) {
+        throw new TypeError("Daytona Sandbox file path must not identify a symbolic link")
+      }
+
+      if (!info.isDir && !isDaytonaRegularFile(info.mode)) {
+        throw new TypeError("Daytona Sandbox file path must identify a regular file or directory")
+      }
+
+      return Object.freeze({
+        kind: info.isDir ? ("directory" as const) : ("file" as const),
+        size: info.isDir ? 0 : info.size,
+      })
+    },
+    async writeFile(filePath, content, options = {}) {
+      if (request.access !== "read-write") {
+        throw new Error("Daytona Sandbox filesystem is read-only")
+      }
+
+      await replaceFile(guestPath(request.root, filePath), content, options.signal ?? request.signal)
+    },
   }
 
   return Object.freeze(runtime)
+}
+
+function isDaytonaSymlink(mode: string): boolean {
+  return mode.startsWith("L") || mode.startsWith("l")
+}
+
+function isDaytonaRegularFile(mode: string): boolean {
+  return mode.startsWith("-")
 }
 
 class DaytonaSandboxProcess implements SandboxProcess {

@@ -343,6 +343,9 @@ describe("AcpMcpBridge", () => {
 function localSandboxRuntime(): SandboxRuntime {
   return {
     access: "read-write",
+    async createFileStaging() {
+      throw new Error("file staging is not used by this ACP relay fixture")
+    },
     cwd: process.cwd(),
     async exec(command, args, options) {
       const result = await execa(command, args ?? [], {
@@ -357,6 +360,9 @@ function localSandboxRuntime(): SandboxRuntime {
         stdout: result.stdout,
       }
     },
+    async readFile() {
+      throw new Error("filesystem reads are not used by this ACP relay fixture")
+    },
     root: process.cwd(),
     async spawn(command, args, options) {
       return await spawnLocalProcess(command, args ?? [], {
@@ -365,6 +371,12 @@ function localSandboxRuntime(): SandboxRuntime {
         signal: options?.signal ?? new AbortController().signal,
         ...(options?.timeoutMs === undefined ? {} : { timeoutMs: options.timeoutMs }),
       })
+    },
+    async stat() {
+      throw new Error("filesystem metadata is not used by this ACP relay fixture")
+    },
+    async writeFile() {
+      throw new Error("filesystem writes are not used by this ACP relay fixture")
     },
   }
 }

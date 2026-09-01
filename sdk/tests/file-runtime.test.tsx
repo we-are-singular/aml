@@ -1,4 +1,4 @@
-import { mkdtemp, mkdir, readFile, rm, symlink } from "node:fs/promises"
+import { mkdtemp, mkdir, readFile, rm, symlink, writeFile } from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
 
@@ -58,7 +58,7 @@ describe("<File>", () => {
           <Child />
         </File>
       )
-    ).rejects.toThrow("<File> requires an enclosing <Workspace>")
+    ).rejects.toThrow("<File> requires an enclosing <Workspace> or <Sandbox>")
 
     const directory = await createTemporaryDirectory()
     await expect(
@@ -85,26 +85,100 @@ describe("<File>", () => {
           <File path="escape/report.md">blocked</File>
         </Workspace>
       )
-    ).rejects.toThrow('<File> parent "escape" is not a directory')
+    ).rejects.toThrow('<File> could not write "escape/report.md"')
 
     await expect(readFile(path.join(outside, "report.md"), "utf8")).rejects.toHaveProperty("code", "ENOENT")
   })
 
-  it("rejects guest-side writes until Sandboxes expose a portable file API", async () => {
-    const directory = await createTemporaryDirectory()
+  it("writes the live guest filesystem inside a read-write Sandbox", async () => {
+    const sandbox = new DeterministicSandboxProvider()
+    const agent = new DeterministicAgentProvider({
+      async respond(_request, context) {
+        const content = await context.sandbox?.lease.runtime.readFile("report.md")
+        expect(new TextDecoder().decode(content)).toBe("guest write")
+        return { text: "observed" }
+      },
+      supportsSandbox: () => true,
+    })
+
+    await expect(
+      new AmlRuntime().evaluate(
+        <Sandbox access="read-write" provider={sandbox}>
+          <File path="report.md">guest write</File>
+          <Agent provider={agent}>Inspect report.md.</Agent>
+        </Sandbox>
+      )
+    ).resolves.toBe("observed")
+
+    expect(sandbox.releases).toEqual(["deterministic-sandbox-1"])
+  })
+
+  it("copies a local UTF-8 src into the nearest filesystem", async () => {
+    const application = await createTemporaryDirectory()
+    const workspace = await createTemporaryDirectory()
+    await writeFile(path.join(application, "policy.md"), "local policy")
+
+    await expect(
+      new AmlRuntime({ cwd: application }).evaluate(
+        <Workspace provider={workspaceProvider(workspace)}>
+          <File path="context/policy.md" src="./policy.md" />
+        </Workspace>
+      )
+    ).resolves.toBe("")
+    expect(await readFile(path.join(workspace, "context/policy.md"), "utf8")).toBe("local policy")
+  })
+
+  it("rejects writes inside a read-only Sandbox", async () => {
     const sandbox = new DeterministicSandboxProvider()
 
     await expect(
       new AmlRuntime().evaluate(
-        <Workspace provider={workspaceProvider(directory)}>
-          <Sandbox provider={sandbox}>
-            <File path="report.md">guest write</File>
-          </Sandbox>
+        <Sandbox access="read-only" provider={sandbox}>
+          <File path="report.md">blocked</File>
+        </Sandbox>
+      )
+    ).rejects.toThrow("<File> cannot write inside a read-only <Sandbox>")
+    expect(sandbox.releases).toEqual(["deterministic-sandbox-1"])
+  })
+
+  it("rejects ambiguous, missing, non-file, and non-UTF-8 local sources", async () => {
+    const application = await createTemporaryDirectory()
+    const workspace = await createTemporaryDirectory()
+    await mkdir(path.join(application, "folder"))
+    await writeFile(path.join(application, "binary"), new Uint8Array([0xff]))
+    const UnsafeFile = File as unknown as (props: Record<string, unknown>) => never
+    const runtime = new AmlRuntime({ cwd: application, workspaceProvider: workspaceProvider(workspace) })
+
+    await expect(
+      runtime.evaluate(
+        <Workspace>
+          <UnsafeFile path="missing-source.txt" />
         </Workspace>
       )
-    ).rejects.toThrow("<File> inside <Sandbox> is not supported")
-
-    expect(sandbox.releases).toEqual(["deterministic-sandbox-1"])
+    ).rejects.toThrow("requires exactly one of src or children")
+    await expect(
+      runtime.evaluate(
+        <Workspace>
+          <UnsafeFile path="ambiguous.txt" src="./binary">
+            children
+          </UnsafeFile>
+        </Workspace>
+      )
+    ).rejects.toThrow("requires exactly one of src or children")
+    await expect(
+      runtime.evaluate(
+        <Workspace>
+          <File path="folder.txt" src="./folder" />
+        </Workspace>
+      )
+    ).rejects.toThrow("src must identify a regular file")
+    await expect(
+      runtime.evaluate(
+        <Workspace>
+          <File path="binary.txt" src="./binary" />
+        </Workspace>
+      )
+    ).rejects.toThrow("could not read local source")
   })
 })
 

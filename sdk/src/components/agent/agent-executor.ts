@@ -4,6 +4,7 @@ import { EvaluationError } from "../../core/evaluation-error.js"
 import type { AmlTraceIdentity } from "../../core/trace-identity.js"
 import type { SandboxSession } from "../sandbox/sandbox-provider.js"
 import type { AgentMcpServer } from "../mcp/aml-mcp-server.js"
+import type { AgentSkill } from "../skill/agent-skill.js"
 import type { AgentTool } from "../tool/agent-tool.js"
 import { agentDiagnosticIdentity } from "./agent-diagnostic-identity.js"
 import { AgentExecutionResult } from "./agent-execution-result.js"
@@ -116,6 +117,7 @@ export class AgentExecutor {
     readonly provider: Readonly<ValidatedAgentProvider> | undefined
     readonly props: Readonly<AgentProps>
     readonly sandbox: Readonly<SandboxSession> | undefined
+    readonly skills: readonly AgentSkill[]
     readonly systemFragments: readonly string[]
     readonly tools: readonly AgentTool[]
     readonly trace: AmlTraceIdentity
@@ -180,6 +182,8 @@ export class AgentExecutor {
         runtimeSystem: this.#system,
         sandbox: input.sandbox,
         signal: cancellationScope.signal,
+        skillDiscovery: provider.skillDiscovery,
+        skills: input.skills,
         systemFragments: input.systemFragments,
         tools: input.tools,
         trace: input.trace,
