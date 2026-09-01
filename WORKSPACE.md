@@ -443,7 +443,7 @@ Deferred File extensions:
 
 `<Skill>` is owned by one Agent session rather than by Workspace. It accepts a local package directory containing `SKILL.md`, validates the package metadata and tree, and copies the complete package to the canonical `.agents/skills/<name>/` suffix beneath an Agent-visible staging root. Provider profiles map that concrete package to native discovery when available. Otherwise AML contributes metadata-only prompt guidance that tells the Agent when and where to read it.
 
-`<Include src>` shares the same staging owner when `maxBytes` prevents inlining. AML copies that application-owned file to an invocation-private Agent-visible path and renders a bounded read instruction. `<Include path>` never copies: it reads the nearest active filesystem live and references that same path when oversized.
+`<Include src>` shares the same staging owner when `maxBytes` prevents inlining. AML copies that application-owned file to an invocation-private Agent-visible path and renders a bounded read instruction. An oversized `<Include path>` references the original live file relative to the effective Agent cwd inside a Sandbox; without a Sandbox, AML copies the host-Workspace file through the same Agent staging owner so the instruction never depends on a provider's unrelated host cwd.
 
 Example:
 
@@ -467,7 +467,7 @@ Portable paths are relative to the lexical owner that consumes them:
 
 - Workspace `cwd`, Sandbox `root`, and persistence patterns are relative to the Workspace materialization root.
 - File destinations and Include `path` sources are relative to the nearest active filesystem root.
-- Agent staging exposes canonical `.agents/skills/<name>/` and AML-generated Include paths inside the Agent-visible ephemeral root.
+- Agent staging exposes canonical `.agents/skills/<name>/` and AML-generated Include paths inside the Agent-visible ephemeral root, including host-Workspace Include fallbacks that cannot safely reference a live Sandbox path.
 - Git repository destinations
 
 Path validation must be lexical and physical:

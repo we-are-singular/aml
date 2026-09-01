@@ -162,7 +162,7 @@ Prompt files and Agent Skills are deliberately separate:
 </Workspace>
 ```
 
-`<Include src>` reads an application-owned file live from the runtime cwd. `<Include path>` reads the live nearest filesystem. Oversized local sources are staged automatically at an Agent-visible path. `<Skill src>` expects a local package directory containing `SKILL.md`; AML materializes the full package under the `.agents/skills/<name>/` suffix of a writable Agent staging root, uses native provider discovery when available, and otherwise emits only discovery metadata containing the concrete path. AML does not fetch or install remote Skill packages.
+`<Include src>` reads an application-owned file live from the runtime cwd. `<Include path>` reads the live nearest filesystem. Oversized application sources and host-Workspace paths are staged automatically at an Agent-visible path, while active Sandbox paths remain live and are referenced from the effective Agent cwd. `<Skill src>` expects a local package directory containing `SKILL.md`; AML materializes the full package under the `.agents/skills/<name>/` suffix of a writable Agent staging root, uses native provider discovery when available, and otherwise emits only discovery metadata containing the concrete path. AML does not fetch or install remote Skill packages.
 
 ## Core APIs
 

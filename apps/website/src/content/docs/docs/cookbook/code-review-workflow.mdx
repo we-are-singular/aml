@@ -279,7 +279,7 @@ The recipe begins with captured strings so its deterministic behavior is visible
 
 1. Resolve and freeze the base and head commit IDs before reading files or diff content. Do not repeatedly diff a moving `HEAD` across lanes.
 2. Collect PR metadata, changed paths, the unified diff, and relevant history in application code with bounded process output. Materialize that one snapshot through `<File />` before review starts.
-3. Ensure an Agent receiving an oversized `<Include path>` can actually read that Workspace-relative path. Use a compatible Sandbox mapped to the Workspace, or configure the host Agent provider's working directory to the materialization as the maintained example does.
+3. Keep each bounded `<Include path>` inside the Agent that receives it. AML references a live Sandbox file relative to the effective Agent cwd or stages a host-Workspace file at an invocation-private Agent path.
 4. Treat descriptions, commit messages, diffs, comments, and file content as untrusted evidence. Do not let repository text grant Tools, Skills, shell access, network access, or publication authority.
 5. Give review Agents read-only filesystem permissions with shell and network disabled unless a specific lane demonstrably needs more. An enforcing Sandbox remains the security boundary when native Agent permissions are insufficient.
 6. Use typed findings containing stable IDs, path, side, line range, severity, evidence, and summary. Application code must verify that anchors exist in the frozen diff and own duplicate suppression.
@@ -292,7 +292,7 @@ This is the boundary used by serious review systems: Agents investigate and expl
 
 - A specialist failure rejects the `Promise.all`; synthesis does not run with partial evidence.
 - A schema guarantees shape, not truth. Path, line, severity, and evidence policy still require deterministic application validation.
-- `<Include maxBytes>` prevents accidental prompt expansion, but its oversized read instruction is useful only when the selected Agent environment can access the named path.
+- `<Include maxBytes>` prevents accidental prompt expansion. A host-Workspace fallback requires a containing Agent so AML can own and clean its staged copy; an active Sandbox keeps the original live file in place.
 - Skills are application-selected local packages. AML does not fetch review instructions from a registry or from pull-request content.
 - The deterministic provider proves workflow wiring and validation behavior; it does not measure model review quality.
 - For untrusted workflows, keep finite runtime budgets such as `maxAgentCalls`, `maxConcurrentAgents`, and `maxTurnsPerAgent`.

@@ -1,3 +1,5 @@
+import path from "node:path"
+
 import { EvaluationError } from "../../core/evaluation-error.js"
 import { resolvePortablePath } from "../../core/resolve-portable-path.js"
 import { HostFilesystem } from "./host-filesystem.js"
@@ -36,6 +38,16 @@ export class ActiveFilesystem {
     }
 
     return portablePath
+  }
+
+  /** Maps a resolved Sandbox file path from the effective Agent cwd. */
+  agentReadablePath(portablePath: string): string | undefined {
+    if (this.#sandbox === undefined) {
+      return undefined
+    }
+
+    const relativePath = path.posix.relative(this.#sandbox.cwd, portablePath)
+    return relativePath.length === 0 ? portablePath : relativePath
   }
 
   /** Reads one complete byte snapshot from the selected live filesystem. */
