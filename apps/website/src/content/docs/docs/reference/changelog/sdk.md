@@ -10,6 +10,36 @@ This page tracks `@aml-jsx/sdk`. Entries are newest first. See [GitHub Releases]
 
 <!-- changelog:entries -->
 
+## Next release — Explicit authoring boundaries and real Agent Skills
+
+Next release.
+
+SDK 0.8.0 is a breaking authoring release that separates prompt structure, file inclusion, filesystem materialization, and Agent capabilities into distinct AML primitives. It replaces the old inline-text `<Skill />` contract with staged Agent Skills, adds bounded live file inclusion and exact prompt blocks, and carries the same filesystem behavior across Workspaces and Sandboxes.
+
+### Breaking changes
+
+- **`<Skill />` now declares a package instead of prompt text.** `src` must point to a local Agent Skill package whose root `SKILL.md` supplies its canonical name and description; AML stages the complete package for one Agent session and never inlines its body. Migrate `<Skill src="./review.md" />` to `<Include src="./review.md" />`, and replace inline Skill children with ordinary AML text or `<Block />`. [Skill reference](/docs/reference/primitives/skill/) · [Include reference](/docs/reference/primitives/include/)
+- **`<File />` now follows the nearest active filesystem.** A File inside a Sandbox writes the live guest instead of failing because it is not directly owned by a Workspace, while a File outside a Sandbox still uses the active Workspace. Its props now require exactly one of resolved children or a local `src`; code that depended on Sandbox rejection or constructed the old props shape must migrate. [File reference](/docs/reference/primitives/file/) · [Sandbox and Workspace composition](/docs/cookbook/sandboxes-and-workspaces/)
+- **Custom provider contracts add Skill and filesystem responsibilities.** `SandboxRuntime` implementations must provide bounded `readFile`, `stat`, `writeFile`, and `createFileStaging` operations, and direct `AgentRequest` fixtures must include `skills`. Agent providers may opt into staged native discovery with `skillDiscovery: "native"`; providers that do not opt in receive AML's metadata fallback. [Provider authoring](/docs/reference/provider-authoring/) · [Agent provider selection](/docs/providers/agents/)
+
+### Highlights
+
+- **Bounded live file inclusion with `<Include />`** Read an application-owned UTF-8 file with `src` or a file from the active Workspace or Sandbox with `path`. Content at or below `maxBytes` is inlined; oversized local content is staged for the Agent and rendered as a concrete read instruction instead of silently flooding the prompt. [Include reference](/docs/reference/primitives/include/)
+- **Exact prompt separation with `<Block />`** A Block contributes exactly one blank line before and after its resolved children, including an empty Block's two newline characters, without creating another capability, lifecycle, or control-flow scope. TypeScript remains the control language for conditions and mapping. [Block reference](/docs/reference/primitives/block/)
+- **Progressively discovered Agent Skills** Codex and OpenCode discover invocation-private staged packages through their native Skill mechanisms; other built-in providers receive the canonical metadata and staged `SKILL.md` path as fallback guidance. Source packages remain immutable and every staging root is released with its Agent session. [Skill reference](/docs/reference/primitives/skill/) · [Codex Agent](/docs/providers/agents/codex/) · [OpenCode Agent](/docs/providers/agents/opencode/)
+- **A documented composition and collection model** The guides now distinguish returning AML to compose naturally from awaiting component-local `evaluate(...)` to collect a nested result before later TypeScript runs. A production-shaped code-review example applies that model with materialized evidence, bounded Includes, real Skills, parallel typed reviewers, and final synthesis. [Component bodies descend; results ascend](/docs/concepts/#component-bodies-descend-results-ascend) · [Code-review workflow](/docs/cookbook/code-review-workflow/)
+
+### Commits
+
+- refactor(sdk): make filesystem path ownership explicit (fc28470)
+- docs: align authoring fallback contract (1da9b34)
+- docs: explain component evaluation and review workflows (9aa6dea)
+- feat(examples): add production-shaped review workflow (ce5b5a2)
+- fix(sandbox-modal): reject directory file destinations (476a124)
+- test(sdk): exercise authoring primitives in kitchen sink (972a758)
+- feat(sdk): add filesystem authoring primitives (9252b33)
+- docs: define authoring filesystem contract (86f1556)
+
 ## SDK v0.7.2 — A documented and verified public API
 
 Released 2026-08-31.
