@@ -33,7 +33,7 @@ class OpenCodeAcpProfile implements AcpAgentProfile<"opencode"> {
   }
 
   get reservedMcpServerNames(): readonly string[] {
-    return Object.freeze(Object.keys(configTable(this.#options.config.mcp)))
+    return Object.keys(configTable(this.#options.config.mcp))
   }
 
   createLaunch(context: Readonly<AcpAgentLaunchContext>): Readonly<AcpAgentLaunch> {

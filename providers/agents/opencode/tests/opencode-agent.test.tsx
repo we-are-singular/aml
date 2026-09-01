@@ -301,12 +301,21 @@ describe("opencodeAgent()", () => {
     ).rejects.toThrow('Agent "opencode"')
 
     expect(prompts).toHaveLength(2)
-    expect(mcpServerNames).toEqual(["tools", "tools_3"])
+    expect(mcpServerNames).toHaveLength(2)
+    expect(mcpServerNames[0]).toBe("tools")
+    expect(mcpServerNames[1]).toMatch(/^tools_[0-9a-f]{12}$/u)
+    const bridgeName = mcpServerNames[1]
     expect(prompts[0]).toMatch(
-      /^<SYSTEM>\nFollow the system\.\n<\/SYSTEM>\n\nAML JavaScript Tools use these OpenCode MCP tool names:\n- read_evidence: tools_3_read_evidence\n\nSubmit proof\.\n\nCall the OpenCode MCP tool "tools_3_aml_submit_result"/u
+      new RegExp(
+        `^<SYSTEM>\\nFollow the system\\.\\n<\\/SYSTEM>\\n\\nAML JavaScript Tools use these OpenCode MCP tool names:\\n- read_evidence: ${bridgeName}_read_evidence\\n\\nSubmit proof\\.\\n\\nCall the OpenCode MCP tool "${bridgeName}_aml_submit_result"`,
+        "u"
+      )
     )
     expect(prompts[1]).toMatch(
-      /^The previous turn ended without submitting a valid structured result\.\n\nCall the OpenCode MCP tool "tools_3_aml_submit_result"/u
+      new RegExp(
+        `^The previous turn ended without submitting a valid structured result\\.\\n\\nCall the OpenCode MCP tool "${bridgeName}_aml_submit_result"`,
+        "u"
+      )
     )
     expect(prompts[1]).toContain('"proof"')
   })

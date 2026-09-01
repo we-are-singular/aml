@@ -55,7 +55,8 @@ export class AcpMcpBridge implements AcpStructuredOutputController {
     output: AgentOutputRequest | undefined,
     context: AgentExecutionContext,
     outputServices?: Readonly<AgentStructuredOutputServices>,
-    reservedServerNames: Iterable<string> = []
+    reservedServerNames: Iterable<string> = [],
+    createNameNonce: () => string = compactNameNonce
   ) {
     if (tools.some(tool => tool.name === ACP_STRUCTURED_OUTPUT_TOOL_NAME)) {
       throw new TypeError(`AML JavaScript Tool name "${ACP_STRUCTURED_OUTPUT_TOOL_NAME}" is reserved`)
@@ -66,7 +67,7 @@ export class AcpMcpBridge implements AcpStructuredOutputController {
     }
 
     this.#context = context
-    this.#name = availableServerName(reservedServerNames)
+    this.#name = availableServerName(reservedServerNames, createNameNonce)
     this.#output = output
     this.#outputServices = outputServices
     this.#tools = new Map(tools.map(tool => [tool.name, tool]))
@@ -361,16 +362,17 @@ export class AcpMcpBridge implements AcpStructuredOutputController {
 /**
  * Keeps the model-facing bridge name readable while avoiding authored MCP names.
  */
-function availableServerName(reservedServerNames: Iterable<string>): string {
+function availableServerName(reservedServerNames: Iterable<string>, createNonce: () => string): string {
   const reserved = new Set(reservedServerNames)
-  const baseName = "tools"
 
-  if (!reserved.has(baseName)) return baseName
-
-  for (let suffix = 2; ; suffix += 1) {
-    const candidate = `${baseName}_${suffix}`
+  for (;;) {
+    const candidate = `tools_${createNonce()}`
     if (!reserved.has(candidate)) return candidate
   }
+}
+
+function compactNameNonce(): string {
+  return randomUUID().replaceAll("-", "").slice(0, 12)
 }
 
 function validationErrorMessage(error: unknown): string {
