@@ -52,6 +52,29 @@ The provider returns an `AgentResponse`. Normal evaluation contributes its `text
 
 Component-local [`evaluate()`](/docs/reference/runtime/#component-local-evaluation) remains the typed collector: pass its schema as the second argument when TypeScript needs the inferred value. Do not also set the Agent `schema` prop; one Agent has one schema owner.
 
+### Return to compose or evaluate to collect
+
+Return a child `<Agent />` when its result should naturally occupy one authored position in the surrounding AML tree. AML resolves that child first and passes its result upward; the component that returned it does not receive the text in a local variable.
+
+Use `await evaluate(<Agent />)` inside an active async component when later TypeScript must inspect or transform the result before deciding what AML to return:
+
+```tsx
+async function Review() {
+  const finding = await evaluate(<Agent>Inspect the change.</Agent>)
+
+  if (!finding.includes("concrete evidence")) return "No supported finding."
+
+  return (
+    <Agent>
+      Synthesize the accepted finding.
+      <Block>{finding}</Block>
+    </Agent>
+  )
+}
+```
+
+The component body runs when AML descends into `Review`, not when `<Review />` is initially authored. The awaited Agent and its cleanup finish before the body continues to the `if` statement and final return. See [Component bodies descend; results ascend](/docs/concepts/#component-bodies-descend-results-ascend) for the complete mental model.
+
 ## Placement and scope
 
 - `<Agent />` may be the root value, a child of another `<Agent />`, or a descendant of [`<Sandbox />`](/docs/reference/primitives/sandbox/) or [`<Workspace />`](/docs/reference/primitives/workspace/).

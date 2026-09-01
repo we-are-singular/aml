@@ -49,6 +49,46 @@ Here TypeScript owns selection, the empty case, and concurrency. AML owns each p
 
 <ExecutionDirections />
 
+## Component bodies descend; results ascend
+
+AML function components have two distinct moments during one runtime evaluation. When the runtime reaches a component descriptor, it invokes the component function and runs its ordinary TypeScript body from top to bottom. After that function returns an AML value, the runtime resolves the returned subtree and its leaf results flow back upward into their consumers.
+
+This component body does not run when the JSX descriptor is first authored. It runs when AML descends into `Review` during `runtime.evaluate(...)`:
+
+```tsx
+function Review() {
+  const policy = selectReviewPolicy()
+  return <Agent>{policy}</Agent>
+}
+```
+
+`selectReviewPolicy()` finishes before `Review` returns. The returned `<Agent />` session happens afterward as AML resolves the returned value, so that Agent cannot retroactively affect the already computed `policy`.
+
+Use these two patterns to make the dependency direction explicit:
+
+| Pattern                                                        | Meaning                                                                                                                                  | Use it when…                                                                                                                |
+| -------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| **Return to compose**: `return <Bar />`                        | The component body finishes and AML naturally resolves `<Bar />` as this component's output.                                             | The parent only needs the final rendered value to continue flowing upward.                                                  |
+| **Evaluate to collect**: `const bar = await evaluate(<Bar />)` | The component pauses, AML resolves `<Bar />` inside the current evaluation domain, and TypeScript receives its result before continuing. | Later TypeScript must inspect, validate, branch on, transform, or name the nested result before authoring the continuation. |
+
+```tsx
+async function Review() {
+  const specialist = await evaluate(<Agent>Find the highest-confidence defect.</Agent>)
+  const decision = classifyFinding(specialist)
+
+  if (decision === "ignore") return "No publishable finding."
+
+  return (
+    <Agent>
+      Synthesize the accepted evidence.
+      <Block>{specialist}</Block>
+    </Agent>
+  )
+}
+```
+
+The `await` is essential: without it, the local variable is only a Promise and the component has not collected the nested result. Do not call `Bar()` directly to force this ordering; that invokes an implementation function instead of asking AML to resolve its returned tree. Component-local `evaluate()` preserves primitive handling and inherits the active Context, Workspace, Sandbox, limits, tracing, and cancellation without starting another root runtime. Resources owned by the nested value finish cleanup before the call resolves and the component continues.
+
 ## What runs where
 
 | Authored element                    | Execution location                                                                                                       | Authority and result                                                                                                                                                                        |
@@ -113,7 +153,7 @@ These are the canonical execution-direction rules. Provider guides add vendor pr
 
 ## Authored order is dataflow
 
-AML resolves consumers after the values they consume. This is a post-order rule: a child `<Agent />` must finish before the parent session can be assembled.
+AML resolves consumers after the values they consume. This is the post-order half of **return to compose**: a child `<Agent />` must finish before the parent session can be assembled.
 
 ```tsx
 function Specialist() {
@@ -159,9 +199,7 @@ function Review() {
 its cleanup before the parent continues. `maxConcurrentAgents` limits active provider calls; it does not turn ordinary
 sequential JSX into concurrent work.
 
-Use `Promise.all([evaluate(...), evaluate(...)])` inside an active async component when JavaScript needs named or typed
-branch values before authoring the next AML node. Both forms inherit the same evaluation domain, cancellation, resource
-scopes, budgets, tracing, and Agent scheduler.
+Use `Promise.all([evaluate(...), evaluate(...)])` inside an active async component to **evaluate to collect** several named or typed branch values before authoring the next AML node. Both forms inherit the same evaluation domain, cancellation, resource scopes, budgets, tracing, and Agent scheduler.
 
 ## Lexical scope and cleanup
 

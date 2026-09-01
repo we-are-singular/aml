@@ -17,8 +17,9 @@ import { Aside, Badge, CardGrid, LinkCard } from "@astrojs/starlight/components"
 AML is easiest to learn by building a workflow with a clear job to do. This cookbook moves from a credential-free review pipeline to typed outputs, application [`<Tool />`](/docs/reference/primitives/tool/) capabilities, scoped [`<Mcp />`](/docs/reference/primitives/mcp/) access, filesystem resources, durable provider composition, and operational jobs.
 
 <Aside type="tip" title="Recommended path">
-  Start with [Build a code-review workflow](/docs/cookbook/code-review-workflow/). It demonstrates the core composition
-  pattern—Tools, specialist Agents, explicit parallelism, and synthesis—without requiring model credentials by default.
+  Start with [Build a code-review workflow](/docs/cookbook/code-review-workflow/). It demonstrates bounded filesystem
+  evidence, a real Skill, typed specialist Agents, explicit parallelism, application validation, and synthesis without
+  requiring model credentials by default.
 </Aside>
 
 ## Before you begin
@@ -55,7 +56,7 @@ source links section.
   <LinkCard
     title="Build a code-review workflow"
     href="/docs/cookbook/code-review-workflow/"
-    description="Compose two parallel specialist Agents, a typed fixture Tool, and final synthesis. Deterministic by default; OpenCode and Codex are opt-in."
+    description="Materialize bounded evidence, register a real Skill, collect typed specialist findings, validate them, and synthesize a review."
   />
   <LinkCard
     title="Return structured output"
