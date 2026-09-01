@@ -711,7 +711,7 @@ The default rendered form is:
 file content or read instruction
 ```
 
-For `path`, the default label is the authored path. For an inline `src`, it is the authored source. For an oversized `src`, it is the generated Agent-visible path. A non-empty `title` string replaces `Contents of \`path\``after the`## `marker.`title={false}` suppresses the heading and its following blank line. Include does not trim file content or add code fences.
+For `path`, the default label is the authored path. For an inline `src`, it is the authored source. For an oversized `src`, it is the generated Agent-visible path. A non-empty `title` string replaces `` Contents of `path` `` after the Markdown `##` heading marker. `title={false}` suppresses the heading and its following blank line. Include does not trim file content or add code fences.
 
 Include filesystem, decoding, size, staging, and cancellation failures are attributed to `<Include>`. Application-owned `src` access is trusted host access, not a confinement mechanism. Agent-visible staged files follow the active Sandbox and Agent permission boundaries after materialization.
 
@@ -740,11 +740,9 @@ AML copies the complete package into the canonical relative location `.agents/sk
 
 When native Skill discovery is unavailable, AML adds only this metadata to the initial prompt:
 
-```md
+```text
 ## Available skill: `name`
-
 Use when: description.
-
 Read `{agent-visible staging root}/.agents/skills/name/SKILL.md` when this skill applies.
 ```
 
