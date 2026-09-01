@@ -153,7 +153,7 @@ export { ToolOutputError } from "./components/tool/tool-output-error.js"
 // Evaluator, JSX value, and trace contracts.
 export type { AmlJsonValue } from "./core/aml-json-value.js"
 export type { AmlRenderable } from "./core/aml-node.js"
-export { markdown } from "./core/markdown.js"
+export { multiline } from "./core/multiline.js"
 export { AmlRuntime, type AmlEvaluationOptions, type AmlRuntimeOptions } from "./core/aml-runtime.js"
 export { EvaluationError } from "./core/evaluation-error.js"
 export { evaluate } from "./core/evaluate.js"

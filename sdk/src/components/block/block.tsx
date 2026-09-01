@@ -1,9 +1,13 @@
 import type { AmlRenderable } from "../../core/aml-node.js"
+import { dedentMultilineText } from "../../core/multiline.js"
 
 /** Exact blank-line separation and optional named prompt section. */
 export interface BlockProps {
   /** Content preserved between two leading and two trailing newline characters. AML-empty markers count as no children. */
   readonly children?: AmlRenderable
+
+  /** Dedent a direct multiline string child while preserving its semantic line structure. */
+  readonly multiline?: boolean
 
   /**
    * Optional model-facing XML-style section name.
@@ -24,15 +28,16 @@ export interface BlockProps {
  * Agent or resource owner. When `tag` is present, the children are additionally
  * wrapped in one kebab-cased XML-style section.
  */
-export function Block({ children, tag }: BlockProps): AmlRenderable {
+export function Block({ children, multiline = false, tag }: BlockProps): AmlRenderable {
   if (children === null || children === undefined || typeof children === "boolean") return "\n\n"
 
+  const content = multiline && typeof children === "string" ? dedentMultilineText(children) : children
   const sectionTag = tag === undefined ? undefined : normalizeBlockTag(tag)
   if (sectionTag === undefined || sectionTag.length === 0) {
-    return ["\n\n", children, "\n\n"]
+    return ["\n\n", content, "\n\n"]
   }
 
-  return ["\n\n", `<${sectionTag}>\n`, children, `\n</${sectionTag}>`, "\n\n"]
+  return ["\n\n", `<${sectionTag}>\n`, content, `\n</${sectionTag}>`, "\n\n"]
 }
 
 function normalizeBlockTag(tag: string): string {
