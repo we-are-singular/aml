@@ -7,6 +7,10 @@ import type { AgentFileStaging } from "../agent/agent-file-staging.js"
 import type { ActiveFilesystem } from "../file/active-filesystem.js"
 import type { IncludeProps } from "./include.js"
 
+// New work bypasses coalescing at this limit; pending entries are never evicted
+// while another Include still awaits them.
+const MAX_PENDING_INCLUDE_READS = 64
+
 /** Observable Include result and safe trace metadata. */
 export interface IncludeEvaluationResult {
   readonly content: string
@@ -19,6 +23,9 @@ export interface IncludeEvaluationResult {
 /** Owns Include source selection, byte limits, staging, and Markdown shape. */
 export class IncludeEvaluator {
   readonly #cwd: string
+  // Evaluation domains are weak keys so no cache state crosses evaluate() calls
+  // or extends the lifetime of a completed evaluation.
+  readonly #pendingByEvaluation = new WeakMap<object, PendingIncludeReads>()
 
   /** Captures the application base directory used by local sources. */
   constructor(cwd: string) {
@@ -34,14 +41,16 @@ export class IncludeEvaluator {
     props: Readonly<IncludeProps>,
     filesystem: ActiveFilesystem | undefined,
     staging: AgentFileStaging | undefined,
-    signal: AbortSignal
+    signal: AbortSignal,
+    evaluation: object
   ): Promise<Readonly<IncludeEvaluationResult>> {
     const captured = captureProps(props)
+    const pending = this.#pendingReads(evaluation)
 
     try {
       return captured.source === "path"
-        ? await this.#fromActivePath(captured, filesystem, staging, signal)
-        : await this.#fromLocalSource(captured, staging, signal)
+        ? await this.#fromActivePath(captured, filesystem, staging, signal, pending)
+        : await this.#fromLocalSource(captured, staging, signal, pending)
     } catch (cause) {
       signal.throwIfAborted()
 
@@ -53,18 +62,36 @@ export class IncludeEvaluator {
     }
   }
 
+  #pendingReads(evaluation: object): PendingIncludeReads {
+    const existing = this.#pendingByEvaluation.get(evaluation)
+
+    if (existing !== undefined) {
+      return existing
+    }
+
+    const created = new PendingIncludeReads(MAX_PENDING_INCLUDE_READS)
+    this.#pendingByEvaluation.set(evaluation, created)
+    return created
+  }
+
   async #fromActivePath(
     input: CapturedIncludeProps,
     filesystem: ActiveFilesystem | undefined,
     staging: AgentFileStaging | undefined,
-    signal: AbortSignal
+    signal: AbortSignal,
+    pending: PendingIncludeReads
   ): Promise<Readonly<IncludeEvaluationResult>> {
     if (filesystem === undefined) {
       throw new EvaluationError("<Include path> requires an enclosing <Workspace> or <Sandbox>")
     }
 
     const resolvedPath = filesystem.resolvePath(input.value, "<Include> path")
-    const metadata = await filesystem.stat(resolvedPath, signal)
+    const identity = filesystem.cacheIdentity()
+    const metadata = await pending.share(
+      identity,
+      `stat:${resolvedPath}`,
+      async () => await filesystem.stat(resolvedPath, signal)
+    )
 
     if (metadata.kind !== "file") {
       throw new EvaluationError("<Include> path must identify a regular file")
@@ -78,26 +105,31 @@ export class IncludeEvaluator {
         resolvedPath,
         input.maxBytes,
         metadata.size,
-        signal
+        signal,
+        pending
       )
     }
 
-    const bytes = await filesystem.readFile(resolvedPath, signal)
+    const snapshot = await pending.share(identity, contentKey(resolvedPath), async () => {
+      const bytes = await filesystem.readFile(resolvedPath, signal)
+      return new ContentSnapshot(bytes)
+    })
 
-    if (input.maxBytes !== undefined && bytes.byteLength > input.maxBytes) {
+    if (input.maxBytes !== undefined && snapshot.bytes.byteLength > input.maxBytes) {
       return await this.#oversizedActivePath(
         input,
         filesystem,
         staging,
         resolvedPath,
         input.maxBytes,
-        bytes.byteLength,
+        snapshot.bytes.byteLength,
         signal,
-        bytes
+        pending,
+        snapshot
       )
     }
 
-    return result(input, input.value, decode(bytes), true, bytes.byteLength)
+    return result(input, input.value, snapshot.text(), true, snapshot.bytes.byteLength)
   }
 
   async #oversizedActivePath(
@@ -108,7 +140,8 @@ export class IncludeEvaluator {
     maxBytes: number,
     observedSize: number,
     signal: AbortSignal,
-    content?: Uint8Array
+    pending: PendingIncludeReads,
+    content?: ContentSnapshot
   ): Promise<Readonly<IncludeEvaluationResult>> {
     const readablePath = filesystem.agentReadablePath(resolvedPath)
 
@@ -120,56 +153,111 @@ export class IncludeEvaluator {
       throw new EvaluationError("an oversized <Include path> in a host Workspace requires a containing <Agent>")
     }
 
-    const bytes = content ?? (await filesystem.readFile(resolvedPath, signal))
+    const snapshot =
+      content ??
+      (await pending.share(
+        filesystem.cacheIdentity(),
+        contentKey(resolvedPath),
+        async () => new ContentSnapshot(await filesystem.readFile(resolvedPath, signal))
+      ))
 
     // The file may change between stat and read; apply the limit to the bytes
     // that will actually be staged or inlined.
-    if (bytes.byteLength <= maxBytes) {
-      return result(input, input.value, decode(bytes), true, bytes.byteLength)
+    if (snapshot.bytes.byteLength <= maxBytes) {
+      return result(input, input.value, snapshot.text(), true, snapshot.bytes.byteLength)
     }
 
-    const stagedFile = await staging.writeFile(includeStagingPath(input.value), bytes)
+    const stagedFile = await staging.writeFile(includeStagingPath(input.value), snapshot.bytes)
     return result(
       input,
       input.value,
-      readInstruction(stagedFile.path, bytes.byteLength, maxBytes),
+      readInstruction(stagedFile.path, snapshot.bytes.byteLength, maxBytes),
       false,
-      bytes.byteLength
+      snapshot.bytes.byteLength
     )
   }
 
   async #fromLocalSource(
     input: CapturedIncludeProps,
     staging: AgentFileStaging | undefined,
-    signal: AbortSignal
+    signal: AbortSignal,
+    pending: PendingIncludeReads
   ): Promise<Readonly<IncludeEvaluationResult>> {
     const sourcePath = path.resolve(this.#cwd, input.value)
     signal.throwIfAborted()
-    const metadata = await lstat(sourcePath)
+    const metadata = await pending.share(this, `stat:${sourcePath}`, async () => await lstat(sourcePath))
 
     if (!metadata.isFile()) {
       throw new EvaluationError("<Include> src must identify a regular file")
     }
 
-    const bytes = await readFile(sourcePath, { signal })
+    const snapshot = await pending.share(
+      this,
+      contentKey(sourcePath),
+      async () => new ContentSnapshot(await readFile(sourcePath, { signal }))
+    )
     signal.throwIfAborted()
 
-    if (input.maxBytes !== undefined && bytes.byteLength > input.maxBytes) {
+    if (input.maxBytes !== undefined && snapshot.bytes.byteLength > input.maxBytes) {
       if (staging === undefined) {
         throw new EvaluationError("an oversized <Include src> requires a containing <Agent>")
       }
 
-      const stagedFile = await staging.writeFile(includeStagingPath(sourcePath), bytes)
+      const stagedFile = await staging.writeFile(includeStagingPath(sourcePath), snapshot.bytes)
       return result(
         input,
         stagedFile.path,
-        readInstruction(stagedFile.path, bytes.byteLength, input.maxBytes),
+        readInstruction(stagedFile.path, snapshot.bytes.byteLength, input.maxBytes),
         false,
-        bytes.byteLength
+        snapshot.bytes.byteLength
       )
     }
 
-    return result(input, input.value, decode(bytes), true, bytes.byteLength)
+    return result(input, input.value, snapshot.text(), true, snapshot.bytes.byteLength)
+  }
+}
+
+/** Coalesces only work that is still pending, so sequential reads stay live. */
+class PendingIncludeReads {
+  readonly #entries = new Map<object, Map<string, Promise<unknown>>>()
+  #size = 0
+
+  constructor(readonly maxEntries: number) {}
+
+  async share<Result>(owner: object, key: string, operation: () => Promise<Result>): Promise<Result> {
+    const existing = this.#entries.get(owner)?.get(key) as Promise<Result> | undefined
+
+    if (existing !== undefined) {
+      return await existing
+    }
+
+    if (this.#size >= this.maxEntries) {
+      return await operation()
+    }
+
+    let entries = this.#entries.get(owner)
+
+    if (entries === undefined) {
+      entries = new Map()
+      this.#entries.set(owner, entries)
+    }
+
+    const pending = operation()
+    entries.set(key, pending)
+    this.#size += 1
+
+    try {
+      return await pending
+    } finally {
+      if (entries.get(key) === pending) {
+        entries.delete(key)
+        this.#size -= 1
+
+        if (entries.size === 0) {
+          this.#entries.delete(owner)
+        }
+      }
+    }
   }
 }
 
@@ -249,6 +337,22 @@ function decode(content: Uint8Array): string {
     return new TextDecoder("utf-8", { fatal: true }).decode(content)
   } catch (cause) {
     throw new EvaluationError("<Include> content must be valid UTF-8", { cause })
+  }
+}
+
+function contentKey(path: string): string {
+  return `content:${path}`
+}
+
+/** Shares one byte snapshot and decodes it at most once when an inline consumer needs text. */
+class ContentSnapshot {
+  #text: string | undefined
+
+  constructor(readonly bytes: Uint8Array) {}
+
+  text(): string {
+    this.#text ??= decode(this.bytes)
+    return this.#text
   }
 }
 

@@ -7,14 +7,87 @@ import { describe, expect, it } from "vitest"
 import { Agent } from "../src/components/agent/agent.js"
 import { File } from "../src/components/file/file.js"
 import { Include } from "../src/components/include/include.js"
+import { Parallel } from "../src/components/parallel/parallel.js"
 import { Sandbox } from "../src/components/sandbox/sandbox.js"
+import type { SandboxProvider } from "../src/components/sandbox/sandbox-provider.js"
 import { Workspace } from "../src/components/workspace/workspace.js"
 import { AmlRuntime } from "../src/core/aml-runtime.js"
+import { evaluate } from "../src/core/evaluate.js"
 import { DeterministicAgentProvider } from "../src/testing/deterministic-agent-provider.js"
 import { DeterministicSandboxProvider } from "../src/testing/deterministic-sandbox-provider.js"
 import { DeterministicWorkspaceProvider } from "../src/testing/deterministic-workspace-provider.js"
 
 describe("<Include>", () => {
+  it("coalesces concurrent metadata and byte reads while preserving Include traces", async () => {
+    const reads = instrumentedSandbox({ files: { "brief.md": "shared" } })
+    const runtime = new AmlRuntime()
+    const includeStarts: string[] = []
+    runtime.on("trace", event => {
+      if (event.type === "span.start" && event.kind === "include") {
+        includeStarts.push(event.spanId)
+      }
+    })
+
+    await expect(
+      runtime.evaluate(
+        <Sandbox access="read-only" provider={reads.provider}>
+          <Parallel>
+            <Include path="brief.md" title={false} />
+            <Include maxBytes={10} path="brief.md" title={false} />
+          </Parallel>
+        </Sandbox>
+      )
+    ).resolves.toBe("sharedshared")
+    expect(reads.statCalls).toEqual(["brief.md"])
+    expect(reads.readCalls).toEqual(["brief.md"])
+    expect(includeStarts).toHaveLength(2)
+  })
+
+  it("evicts completed and rejected work so later reads observe live contents", async () => {
+    const reads = instrumentedSandbox({ failFirstRead: true, files: { "brief.md": "first" } })
+    let rejected = false
+
+    async function SequentialReads() {
+      await evaluate(<Include path="brief.md" title={false} />).catch(() => {
+        rejected = true
+      })
+      const recovered = await evaluate(<Include path="brief.md" title={false} />)
+      await evaluate(<File path="brief.md">second</File>)
+      const changed = await evaluate(<Include path="brief.md" title={false} />)
+      return `${recovered}|${changed}`
+    }
+
+    await expect(
+      new AmlRuntime().evaluate(
+        <Sandbox access="read-write" provider={reads.provider}>
+          <SequentialReads />
+        </Sandbox>
+      )
+    ).resolves.toBe("first|second")
+    expect(rejected).toBe(true)
+    expect(reads.readCalls).toEqual(["brief.md", "brief.md", "brief.md"])
+  })
+
+  it("bounds pending entries and leaves oversized readable Sandbox files unstaged", async () => {
+    const files = Object.fromEntries(Array.from({ length: 65 }, (_, index) => [`file-${index}.txt`, "oversized"]))
+    const reads = instrumentedSandbox({ delayMs: 10, files })
+
+    await expect(
+      new AmlRuntime().evaluate(
+        <Sandbox access="read-only" provider={reads.provider}>
+          <Parallel>
+            {Array.from({ length: 65 }, (_, index) => (
+              <Include maxBytes={1} path={`file-${index}.txt`} title={false} />
+            ))}
+            <Include maxBytes={1} path="file-64.txt" title={false} />
+          </Parallel>
+        </Sandbox>
+      )
+    ).resolves.toContain("Read it at `file-64.txt`")
+    expect(reads.statCalls).toHaveLength(66)
+    expect(reads.readCalls).toEqual([])
+  })
+
   it("reads local UTF-8 sources live with derived, custom, or omitted headings", async () => {
     const directory = await temporaryDirectory("aml-include-src-")
     const source = path.join(directory, "brief.md")
@@ -272,4 +345,62 @@ describe("<Include>", () => {
 
 async function temporaryDirectory(prefix: string): Promise<string> {
   return await mkdtemp(path.join(os.tmpdir(), prefix))
+}
+
+function instrumentedSandbox(options: {
+  readonly delayMs?: number
+  readonly failFirstRead?: boolean
+  readonly files: Readonly<Record<string, string>>
+}) {
+  const base = new DeterministicSandboxProvider()
+  const files = new Map(Object.entries(options.files))
+  const readCalls: string[] = []
+  const statCalls: string[] = []
+  let shouldFailRead = options.failFirstRead ?? false
+  const provider: SandboxProvider = {
+    name: "instrumented-sandbox",
+    async acquire(request) {
+      const lease = await base.acquire(request)
+      const runtime = lease.runtime
+
+      return Object.freeze({
+        ...lease,
+        runtime: Object.freeze({
+          ...runtime,
+          async readFile(filePath: string, readOptions = {}) {
+            readCalls.push(filePath)
+            await delay(options.delayMs)
+
+            if (shouldFailRead) {
+              shouldFailRead = false
+              throw new Error("temporary read failure")
+            }
+
+            const content = files.get(filePath)
+            return content === undefined
+              ? await runtime.readFile(filePath, readOptions)
+              : new TextEncoder().encode(content)
+          },
+          async stat(filePath: string, statOptions = {}) {
+            statCalls.push(filePath)
+            await delay(options.delayMs)
+            const content = files.get(filePath)
+            return content === undefined
+              ? await runtime.stat(filePath, statOptions)
+              : Object.freeze({ kind: "file" as const, size: new TextEncoder().encode(content).byteLength })
+          },
+          async writeFile(filePath: string, content: Uint8Array, writeOptions = {}) {
+            files.set(filePath, new TextDecoder().decode(content))
+            await runtime.writeFile(filePath, content, writeOptions)
+          },
+        }),
+      })
+    },
+  }
+
+  return { provider, readCalls, statCalls }
+}
+
+async function delay(milliseconds = 1): Promise<void> {
+  await new Promise(resolve => setTimeout(resolve, milliseconds))
 }
