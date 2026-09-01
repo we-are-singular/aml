@@ -118,27 +118,31 @@ These are the canonical execution-direction rules. Provider guides add vendor pr
 
 <CardGrid>
   <Card title="Agent" icon="rocket">
-    A model-facing session. Child{" "}
-    <a href="/docs/reference/primitives/agent/">
+    <p>
+      {"A model-facing session. Child "}
+      <a href="/docs/reference/primitives/agent/">
+        <code>&lt;Agent /&gt;</code>
+      </a>
+      {" results become parent input; "}
+      <a href="/docs/reference/primitives/tool/">
+        <code>&lt;Tool /&gt;</code>
+      </a>
+      {", "}
+      <a href="/docs/reference/primitives/mcp/">
+        <code>&lt;Mcp /&gt;</code>
+      </a>
+      {", "}
+      <a href="/docs/reference/primitives/skill/">
+        <code>&lt;Skill /&gt;</code>
+      </a>
+      {", and "}
+      <a href="/docs/reference/primitives/follow-up/">
+        <code>&lt;FollowUp /&gt;</code>
+      </a>
+      {" are scoped to the owning "}
       <code>&lt;Agent /&gt;</code>
-    </a>{" "}
-    results become parent input;{" "}
-    <a href="/docs/reference/primitives/tool/">
-      <code>&lt;Tool /&gt;</code>
-    </a>
-    ,{" "}
-    <a href="/docs/reference/primitives/mcp/">
-      <code>&lt;Mcp /&gt;</code>
-    </a>
-    ,{" "}
-    <a href="/docs/reference/primitives/skill/">
-      <code>&lt;Skill /&gt;</code>
-    </a>
-    , and{" "}
-    <a href="/docs/reference/primitives/follow-up/">
-      <code>&lt;FollowUp /&gt;</code>
-    </a>{" "}
-    are scoped to the owning <code>&lt;Agent /&gt;</code>.
+      {"."}
+    </p>
   </Card>
   <Card title="Sandbox" icon="setting">
     An ephemeral execution lease. Nested scopes can narrow access, but cannot widen a read-only parent or select another
