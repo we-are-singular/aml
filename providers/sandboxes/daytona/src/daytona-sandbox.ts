@@ -7,6 +7,7 @@ import { promisify } from "node:util"
 
 import {
   Daytona,
+  DaytonaNotFoundError,
   type CreateSandboxFromImageParams,
   type CreateSandboxFromSnapshotParams,
   type DaytonaConfig,
@@ -327,27 +328,39 @@ function createRuntime(
   destroy: () => Promise<void>,
   maxOutputBytes: number
 ): Readonly<SandboxRuntime> {
+  const getFileDetails = async (remotePath: string, signal: AbortSignal) => {
+    try {
+      return await abortable(sandbox.fs.getFileDetails(remotePath), signal)
+    } catch (cause) {
+      signal.throwIfAborted()
+
+      if (cause instanceof DaytonaNotFoundError) {
+        return undefined
+      }
+
+      throw cause
+    }
+  }
+
   const prepareDirectory = async (directory: string, signal: AbortSignal): Promise<void> => {
     signal.throwIfAborted()
+    const metadata = await getFileDetails(directory, signal)
 
-    try {
-      const metadata = await abortable(sandbox.fs.getFileDetails(directory), signal)
-
+    if (metadata !== undefined) {
       if (!metadata.isDir || isDaytonaSymlink(metadata.mode)) {
         throw new TypeError(`Daytona Sandbox file parent "${directory}" is not a directory`)
       }
 
       return
-    } catch (cause) {
-      signal.throwIfAborted()
-      const parent = path.posix.dirname(directory)
-
-      if (parent === directory) {
-        throw cause
-      }
     }
 
-    await prepareDirectory(path.posix.dirname(directory), signal)
+    const parent = path.posix.dirname(directory)
+
+    if (parent === directory) {
+      throw new TypeError(`Daytona Sandbox file parent "${directory}" does not exist`)
+    }
+
+    await prepareDirectory(parent, signal)
     await abortable(sandbox.fs.createFolder(directory, "755"), signal)
   }
 
@@ -355,6 +368,12 @@ function createRuntime(
     signal.throwIfAborted()
     const parent = path.posix.dirname(destination)
     await prepareDirectory(parent, signal)
+    const existing = await getFileDetails(destination, signal)
+
+    if (existing !== undefined && (existing.isDir || !isDaytonaRegularFile(existing.mode))) {
+      throw new TypeError("Daytona Sandbox file destination must be a regular file")
+    }
+
     const temporary = path.posix.join(parent, `.aml-file-${randomUUID()}.tmp`)
 
     try {
