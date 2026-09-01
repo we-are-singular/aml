@@ -5,8 +5,7 @@ description: "Compose release evidence, structured authoring, publication, and r
 
 import { Aside, Steps } from "@astrojs/starlight/components"
 
-AML maintains its own [SDK and CLI changelogs](/docs/reference/changelog/) with the workflow in
-[`scripts/changelog.aml.tsx`](https://github.com/we-are-singular/aml/blob/main/scripts/changelog.aml.tsx).
+AML maintains its own [SDK and CLI changelogs](/docs/reference/changelog/) with the workflow in [`scripts/changelog.aml.tsx`](https://github.com/we-are-singular/aml/blob/main/scripts/changelog.aml.tsx).
 
 The workflow is two AML trees joined by one typed draft:
 
@@ -36,7 +35,8 @@ const draft = await evaluate(
   <Agent provider={provider} permissions={{ filesystem: "read-write", network: false, shell: true }}>
     <System>
       You maintain AML's public changelog. Be factual, specific, and useful to readers. Never invent behavior, commits,
-      versions, or documentation routes.
+      versions, or documentation routes. Do not modify files while drafting. Treat a topmost `Next release` section as
+      the authoritative editorial seed.
     </System>
     Author the next package changelog entry. Begin by running the supplied `release-notes.ts` command exactly as
     written, then inspect commits whose subjects do not explain their user impact.
@@ -48,9 +48,7 @@ const draft = await evaluate(
 )
 ```
 
-The repository-owned script keeps commit selection deterministic. The Agent owns its invocation, investigation, and
-editorial judgment. `<FollowUp />` keeps investigation and authoring in one provider-owned session, and its final
-response is validated by `DraftSchema`.
+The repository-owned script keeps commit selection deterministic. The Agent owns its invocation, investigation, and editorial judgment. `<FollowUp />` keeps investigation and authoring in one provider-owned session, and its final response is validated by `DraftSchema`. A pre-authored `Next release` entry supplies the intended emphasis; repository evidence remains authoritative when a claim needs correction.
 
 ## Keep one useful authoring schema
 
@@ -87,7 +85,8 @@ return (
   <Agent provider={provider} permissions={{ filesystem: "read-write", network: false, shell: true }}>
     <System>
       Work only on the requested changelog. Preserve its frontmatter, introduction, existing entries, and newest-first
-      ordering. Do not change package versions, tags, or other files.
+      ordering. Finalize one topmost `Next release` draft in place when the manifest has advanced. Do not change package
+      versions, tags, or other files.
     </System>
     Publish the supplied draft for the current package version.
     <FollowUp>
@@ -98,31 +97,48 @@ return (
 )
 ```
 
-It inserts the entry for the manifest's current version after the changelog's single insertion marker, formats the file,
-reviews the result, and corrects issues before returning. Published entries remain ordinary MDX with visible version
-headings rather than hidden per-release delimiters.
+The publication Agent first checks the visible headings. An existing entry for the manifest's exact version is an idempotent stop. Otherwise, one topmost `Next release` section is finalized in place; a duplicate or misplaced draft stops without an edit; only the absence of both a current-version entry and a draft permits a new entry at the insertion marker. Published entries remain ordinary MDX with visible version headings rather than hidden per-release delimiters.
+
+## Pre-author the next release
+
+Maintainers can write the important release narrative before package versions move by placing exactly one draft at the top of the changelog:
+
+```md
+## Next release — A reader-focused title
+
+Next release.
+
+Summarize the intended release.
+
+### Breaking changes
+
+- Explain migrations explicitly.
+
+### Highlights
+
+- Describe the new behavior.
+```
+
+Commit the draft like any other documentation change. While the manifest still names the already-published version, the exact-version guard leaves this section untouched. After release-it bumps the package, the same workflow replaces the draft heading and status with the exact manifest version and release date, reconciles its contents and commit list against repository evidence, and verifies that it did not append a duplicate.
 
 <Steps>
 
 1. The Agent runs `release-notes.ts` to collect lane-specific commits from the latest matching tag.
 2. The authoring Agent investigates the package and repository.
 3. Its `<FollowUp />` returns `DraftSchema`.
-4. The publication Agent writes the draft.
-5. Its `<FollowUp />` reviews, corrects, and formats the result.
+4. The publication Agent either finalizes the topmost `Next release` entry in place, inserts a new entry, or stops under the duplicate guards.
+5. Its `<FollowUp />` preserves a stop decision or reviews, corrects, and formats the permitted edit.
 
 </Steps>
 
-## Run before release
+## Run manually or during release
 
 ```sh
 OPENCODE_API_KEY=... npm run changelog:sdk
 OPENCODE_API_KEY=... npm run changelog:cli
 ```
 
-These are the same commands used by the release hooks, so running one manually exercises the real workflow. Review or
-discard the changelog diff afterward. During a release, changelog authoring runs immediately after release-it changes
-the package version. A ten-minute deadline stops a stalled provider before release commit, tag, push, npm publication,
-or GitHub release.
+These are the same commands used by the release hooks, so running one manually exercises the real workflow. Review or discard the changelog diff afterward. If the manifest still has an existing changelog entry, the publication Agent stops without consuming a `Next release` draft. During a release, changelog authoring runs immediately after release-it changes the package version, so that draft can be finalized for the bumped version. A ten-minute deadline stops a stalled provider before release commit, tag, push, npm publication, or GitHub release.
 
 ## References
 
