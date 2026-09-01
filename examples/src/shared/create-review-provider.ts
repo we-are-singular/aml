@@ -2,18 +2,20 @@ import { type AgentProvider, codexAgent, opencodeAgent } from "@aml-jsx/sdk"
 import { DeterministicAgentProvider } from "@aml-jsx/sdk/testing"
 
 /**
- * Selects one provider without changing the review workflow that consumes it.
+ * Selects one provider with the directory containing materialized review evidence.
  */
-export function createReviewProvider(name: string): AgentProvider {
+export function createReviewProvider(name: string, directory: string): AgentProvider {
   if (name === "codex") {
     return codexAgent({
       model: process.env.AML_CODEX_MODEL ?? "gpt-5.6-luna",
       reasoningEffort: "low",
+      workingDirectory: directory,
     })
   }
 
   if (name === "opencode") {
     return opencodeAgent({
+      directory,
       model: process.env.AML_OPENCODE_MODEL ?? "opencode-go/deepseek-v4-flash",
     })
   }
@@ -23,27 +25,37 @@ export function createReviewProvider(name: string): AgentProvider {
   }
 
   return new DeterministicAgentProvider({
-    async respond(request, context) {
-      const tool = request.tools[0]
-
-      if (tool?.kind === "javascript") {
-        const source = await tool.execute(
-          {},
-          {
-            signal: context.signal,
-            trace: context.trace,
-          }
-        )
+    respond(request) {
+      if (request.output?.type === "json") {
+        if (!request.prompt.includes("src/invoice.ts") || request.skills.length !== 1) {
+          throw new Error("Review evidence or Skill registration was not resolved before the specialist Agent")
+        }
 
         if (request.system.includes("correctness")) {
           return {
-            text: `calculateInvoiceTotal returns an average instead of a total. Evidence: ${String(source)}`,
+            structured: {
+              line: 6,
+              path: "src/invoice.ts",
+              severity: "high",
+              summary: "calculateInvoiceTotal divides the sum by the line count and returns an average.",
+            },
+            text: "",
           }
         }
 
         return {
-          text: "The function name and implementation disagree; express either total or average directly.",
+          structured: {
+            line: 6,
+            path: "src/invoice.ts",
+            severity: "medium",
+            summary: "The exported function name and implementation describe different operations.",
+          },
+          text: "",
         }
+      }
+
+      if (!/Validated findings:\n{2,}\[/u.test(request.prompt) || !/\]\n{2,}Return one concise/u.test(request.prompt)) {
+        throw new Error("Review synthesis sections were not separated by Block boundaries")
       }
 
       return {

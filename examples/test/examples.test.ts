@@ -2,6 +2,8 @@ import { describe, expect, test } from "vitest"
 
 import { AmlRuntime, type AmlRenderable } from "@aml-jsx/sdk"
 
+import { createReviewExample } from "../src/integrations/review.js"
+
 interface ExampleModule {
   readonly default: () => AmlRenderable
 }
@@ -20,4 +22,10 @@ describe("examples", () => {
       expect(output).toMatchSnapshot()
     })
   }
+
+  test("review integration", async () => {
+    await expect(new AmlRuntime().evaluate(createReviewExample("deterministic"))).resolves.toBe(
+      "calculateInvoiceTotal divides the sum by the line count, so callers receive an average. Remove the division or rename the API to match. AML_REVIEW_COMPLETE"
+    )
+  })
 })
