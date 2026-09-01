@@ -27,12 +27,42 @@ describe("<Block>", () => {
         </>
       )
     ).resolves.toBe("before\n\nafter")
+
+    await expect(
+      new AmlRuntime().evaluate(
+        <>
+          before
+          <Block tag="unused" />
+          after
+        </>
+      )
+    ).resolves.toBe("before\n\nafter")
+  })
+
+  it("wraps content in a kebab-cased section tag", async () => {
+    await expect(
+      new AmlRuntime().evaluate(
+        <>
+          before<Block tag="Personal Data">middle</Block>after
+        </>
+      )
+    ).resolves.toBe("before\n\n<personal-data>\nmiddle\n</personal-data>\n\nafter")
+  })
+
+  it("neutralizes tag syntax in section names", async () => {
+    await expect(new AmlRuntime().evaluate(<Block tag="Review <Data/Raw">middle</Block>)).resolves.toBe(
+      "\n\n<review-data-raw>\nmiddle\n</review-data-raw>\n\n"
+    )
+  })
+
+  it("keeps the Block untagged when normalization removes the whole name", async () => {
+    await expect(new AmlRuntime().evaluate(<Block tag="<///">middle</Block>)).resolves.toBe("\n\nmiddle\n\n")
   })
 
   it("remains transparent to Agent ownership", async () => {
     const provider = new DeterministicAgentProvider({
       respond(request) {
-        expect(request.prompt).toBe("first\n\nsecond\n\nthird")
+        expect(request.prompt).toBe("first\n\n<review-context>\nsecond\n</review-context>\n\nthird")
         expect(request.system).toBe("Block descriptors retain their Agent owner.")
         return { text: "done" }
       },
@@ -42,7 +72,7 @@ describe("<Block>", () => {
       new AmlRuntime().evaluate(
         <Agent provider={provider}>
           first
-          <Block>
+          <Block tag="Review Context">
             <System>Block descriptors retain their Agent owner.</System>
             second
           </Block>

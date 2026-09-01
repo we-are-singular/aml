@@ -233,10 +233,10 @@ async function KitchenSinkAgent({ mcp, model, proofs, proofTool }: KitchenSinkAg
         A preceding nested-Agent composition verified the remote Workspace files and returned this private proof:{" "}
         {nestedAgent}
       </System>
-      <Block>
+      <Block tag="workspace-input">
         <Include path="input.txt" title="Workspace input" />
       </Block>
-      <Block>
+      <Block tag="staged-application-source">
         <Include src={KITCHEN_SINK_INCLUDE_SOURCE} maxBytes={1} title="Staged application source" />
       </Block>
       Inspect input.txt, command.txt, shell.txt, authored.txt, and file-source.txt with your native filesystem tools.
@@ -269,13 +269,16 @@ function NestedRemoteProof({ model, proofs }: Pick<KitchenSinkAgentProps, "model
       Command Script proof: <CommandProof proofs={proofs} />
       Shell Script proof: <ShellProof proofs={proofs} />
       <System>Trust only the Script output and the nested Agent's direct Workspace inspection.</System>
-      Nested Agent proof:
-      <Agent model={model}>
-        Read input.txt, command.txt, and shell.txt. Confirm their exact contents are respectively {proofs.input},{" "}
-        {proofs.command}, and {proofs.shell}. Do not modify any file. After verification, reply with exactly:{" "}
-        {proofs.childAgent}
-      </Agent>
-      Confirm the nested Agent returned exactly {proofs.childAgent}, then reply with exactly: {proofs.nestedAgent}
+      <Block tag="nested-agent-proof">
+        <Agent model={model}>
+          Read input.txt, command.txt, and shell.txt. Confirm their exact contents are respectively {proofs.input},{" "}
+          {proofs.command}, and {proofs.shell}. Do not modify any file.
+          <Block tag="output-contract">After verification, reply with exactly: {proofs.childAgent}</Block>
+        </Agent>
+      </Block>
+      <Block tag="output-contract">
+        Confirm the nested Agent returned exactly {proofs.childAgent}, then reply with exactly: {proofs.nestedAgent}
+      </Block>
     </Agent>
   )
 }
