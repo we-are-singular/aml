@@ -681,9 +681,9 @@ type IncludeProps =
   | { path: string; src?: never; maxBytes?: number; title?: string | false }
 ```
 
-`src` identifies an application-owned UTF-8 file. Relative sources resolve from `AmlRuntimeOptions.cwd`, which defaults to `process.cwd()`; absolute sources remain absolute. AML reads the file live when the Include resolves. It does not embed the file at build time, read it at runtime construction, cache it across evaluations, or fetch remote URLs.
+`src` identifies an application-owned local file. Relative sources resolve from `AmlRuntimeOptions.cwd`, which defaults to `process.cwd()`; absolute sources remain absolute. AML reads the file live when the Include resolves. It does not embed the file at build time, read it at runtime construction, cache it across evaluations, or fetch remote URLs.
 
-`path` identifies a UTF-8 file in the nearest active filesystem scope. Inside Sandbox it reads the live guest filesystem. Otherwise it reads the active Workspace materialization. Without either scope, evaluation rejects. Portable paths are relative, use forward slashes, and cannot address the scope root, traverse parents, or escape through symbolic links.
+`path` identifies a file in the nearest active filesystem scope. Inside Sandbox it reads the live guest filesystem. Otherwise it reads the active Workspace materialization. Without either scope, evaluation rejects. Portable paths are relative, use forward slashes, and cannot address the scope root, traverse parents, or escape through symbolic links.
 
 Authored order determines visibility:
 
@@ -701,7 +701,7 @@ Authored order determines visibility:
 
 File writes the host materialization before Sandbox acquisition, Workspace hydration makes that file visible in the guest, and Include then reads the live guest copy before the Agent session begins.
 
-`maxBytes` is an optional positive safe integer measured against the file's encoded byte length. Omission inlines the complete file. At or below the limit, Include emits the content. Above the limit, Include emits an instruction containing the actual byte count and configured limit rather than the content. An oversized `path` source references the same authored Agent-visible path. An oversized `src` source is copied into the Agent's ephemeral staging filesystem at an AML-generated execution path and references that staged path; authors do not provide a second destination prop.
+`maxBytes` is an optional positive safe integer measured against the file's byte length. Omission inlines the complete file. At or below the limit, Include decodes and emits valid UTF-8 content. Above the limit, Include emits an instruction containing the actual byte count and configured limit rather than the content. AML does not decode an oversized file: an oversized `path` source references the same authored Agent-visible path, while an oversized `src` source is copied byte-for-byte into the Agent's ephemeral staging filesystem at an AML-generated execution path and references that staged path. Authors do not provide a second destination prop.
 
 The default rendered form is:
 
@@ -734,11 +734,11 @@ interface SkillProps {
 }
 ```
 
-`src` identifies an application-owned local package directory containing `SKILL.md`. Relative sources resolve from `AmlRuntimeOptions.cwd`; absolute sources remain absolute. AML reads and validates the package during each evaluation. The `SKILL.md` frontmatter supplies the canonical `name` and `description`; authored props cannot override package metadata. The name must be safe as one `.agents/skills` path segment. Package traversal, symbolic links, unsupported entry types, malformed metadata, missing `SKILL.md`, and duplicate canonical names in one Agent reject evaluation.
+`src` identifies an application-owned local package directory containing `SKILL.md`. Relative sources resolve from `AmlRuntimeOptions.cwd`; absolute sources remain absolute. AML reads and validates the package during each evaluation. The `SKILL.md` frontmatter supplies the canonical `name` and `description`; authored props cannot override package metadata. The name must be safe as one `.agents/skills` path segment and must match the source package directory name. Package traversal, symbolic links, unsupported entry types, malformed metadata, missing `SKILL.md`, and duplicate canonical names in one Agent reject evaluation.
 
 AML copies the complete package into the canonical relative location `.agents/skills/<name>/` beneath an Agent-visible staging root, including supporting scripts, references, templates, and assets. A writable Workspace is not required: Sandbox providers supply separate invocation-owned staging even when the Agent's Workspace view is read-only. A built-in profile registers the concrete staged package through native provider discovery when available and maps or copies it into a provider-specific location when necessary. A custom provider receives the same package descriptor and must either expose it through native discovery or use AML's fallback discovery metadata.
 
-When native Skill discovery is unavailable, AML adds only this metadata to the initial prompt:
+When native Skill discovery is unavailable, AML adds only this metadata to the Agent's system text:
 
 ```text
 ## Available skill: `name`
@@ -754,7 +754,7 @@ Skill installation from skills.sh, another registry, or a remote URL is outside 
 
 ### 7.3 Shared Agent staging
 
-An Agent prepares one ephemeral Agent-visible staging filesystem before resolving prompt Includes and before opening its provider session. Skill packages and oversized local Includes copy through that boundary. Provider adapters map canonical locations to their native discovery mechanisms without changing the authored paths. AML removes invocation-owned staging after the session settles, including on failure or cancellation, while files deliberately written into a Workspace remain owned by that Workspace's save policy.
+An Agent prepares one ephemeral Agent-visible staging filesystem before resolving prompt Includes and before opening its provider session. Skill packages and oversized local Includes copy through that boundary. Each staged Skill exposes its concrete `.agents` home, package directory, and `SKILL.md` path so provider adapters can map canonical locations to native discovery without deriving filesystem ownership from package depth. AML removes invocation-owned staging after the session settles, including on failure or cancellation, while files deliberately written into a Workspace remain owned by that Workspace's save policy.
 
 ## 8. Tools
 
