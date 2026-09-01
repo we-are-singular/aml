@@ -10,9 +10,9 @@ This page tracks `@aml-jsx/sdk`. Entries are newest first. See [GitHub Releases]
 
 <!-- changelog:entries -->
 
-## Next release — Explicit authoring boundaries and real Agent Skills
+## SDK v0.8.0 — Explicit authoring boundaries and real Agent Skills
 
-Next release.
+Released 2026-09-01.
 
 SDK 0.8.0 is a breaking authoring release that separates prompt structure, file inclusion, filesystem materialization, and Agent capabilities into distinct AML primitives. It replaces the old inline-text `<Skill />` contract with staged Agent Skills, adds bounded live file inclusion and exact prompt blocks, and carries the same filesystem behavior across Workspaces and Sandboxes.
 
@@ -31,14 +31,28 @@ SDK 0.8.0 is a breaking authoring release that separates prompt structure, file 
 
 ### Commits
 
-- refactor(sdk): make filesystem path ownership explicit (fc28470)
-- docs: align authoring fallback contract (1da9b34)
-- docs: explain component evaluation and review workflows (9aa6dea)
-- feat(examples): add production-shaped review workflow (ce5b5a2)
-- fix(sandbox-modal): reject directory file destinations (476a124)
-- test(sdk): exercise authoring primitives in kitchen sink (972a758)
-- feat(sdk): add filesystem authoring primitives (9252b33)
-- docs: define authoring filesystem contract (86f1556)
+- fix(sdk): keep block separators deterministic (303c5f3)
+- fix(sdk): keep oversized includes agent-readable (9418950)
+- fix(sdk): allow skills after follow-up descriptors (e5c29ba)
+- feat(sdk): add named prompt blocks (60ce5e8)
+- fix(sandbox-daytona): reject unsafe file destinations (45cc4fc)
+- fix(agent-codex): use agent-owned skill home (951ec71)
+- fix(sdk): stage oversized includes without decoding (e05acf4)
+- refactor(sdk): simplify skill discovery capability (62c6548)
+- feat(sdk): expose agent-owned skill home (ef90c65)
+- refactor(sdk): make filesystem path ownership explicit (328fde8)
+- fix(sandbox-modal): reject directory file destinations (72ca287)
+- test(sdk): exercise authoring primitives in kitchen sink (9ee3891)
+- feat(sdk): add filesystem authoring primitives (c7e4b6f)
+- feat(sandbox): sync Docker Hub overview (02b39dc)
+- feat(sandbox): automate release changelogs (3fb9674)
+- fix(sandbox): restore browser signing flow (5619a72)
+- fix(sandbox): await signing confirmation safely (cbb51ee)
+- fix(sandbox): gate keyless image signing (41d9f8a)
+- release(sandbox): v0.4.1 (3c821a0)
+- release(sandbox): v0.4.0 (2653164)
+- feat(sandbox): add per-agent image variants (1246c8c)
+- release(sandbox): v0.3.4 (b5e046a)
 
 ## SDK v0.7.2 — A documented and verified public API
 
