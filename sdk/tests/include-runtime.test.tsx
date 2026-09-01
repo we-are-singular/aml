@@ -83,6 +83,33 @@ describe("<Include>", () => {
     }
   })
 
+  it("stages oversized local bytes without decoding them", async () => {
+    const directory = await temporaryDirectory("aml-include-binary-stage-")
+    let stagedPath = ""
+
+    try {
+      await writeFile(path.join(directory, "binary"), new Uint8Array([0xff, 0xff]))
+      const provider = new DeterministicAgentProvider({
+        async respond(request) {
+          stagedPath = /Read it at `([^`]+)`\./.exec(request.prompt)?.[1] ?? ""
+          expect(await readFile(stagedPath)).toEqual(Buffer.from([0xff, 0xff]))
+          return { text: "done" }
+        },
+      })
+
+      await expect(
+        new AmlRuntime({ cwd: directory }).evaluate(
+          <Agent provider={provider}>
+            <Include maxBytes={1} src="./binary" title={false} />
+          </Agent>
+        )
+      ).resolves.toBe("done")
+      await expect(access(stagedPath)).rejects.toMatchObject({ code: "ENOENT" })
+    } finally {
+      await rm(directory, { force: true, recursive: true })
+    }
+  })
+
   it("reads active Workspace files after earlier authored writes", async () => {
     const directory = await temporaryDirectory("aml-include-workspace-")
     const workspace = new DeterministicWorkspaceProvider({ directory })
@@ -165,10 +192,9 @@ describe("<Include>", () => {
     }
   })
 
-  it("rejects missing scope, oversized source without an Agent, invalid UTF-8, and invalid props", async () => {
+  it("rejects missing scope, oversized source without an Agent, inline invalid UTF-8, and invalid props", async () => {
     const directory = await temporaryDirectory("aml-include-invalid-")
     const runtime = new AmlRuntime({ cwd: directory })
-    const provider = new DeterministicAgentProvider()
 
     try {
       await writeFile(path.join(directory, "large.txt"), "0123456789")
@@ -182,14 +208,6 @@ describe("<Include>", () => {
         "requires a containing <Agent>"
       )
       await expect(runtime.evaluate(<Include src="./binary" />)).rejects.toThrow("must be valid UTF-8")
-      await expect(
-        runtime.evaluate(
-          <Agent provider={provider}>
-            <Include maxBytes={1} src="./binary" />
-          </Agent>
-        )
-      ).rejects.toThrow("must be valid UTF-8")
-      expect(provider.calls).toHaveLength(0)
       await expect(runtime.evaluate(<Include src="./folder" />)).rejects.toThrow("must identify a regular file")
       await expect(runtime.evaluate(<Include maxBytes={0} src="./large.txt" />)).rejects.toThrow(
         "maxBytes must be a positive safe integer"

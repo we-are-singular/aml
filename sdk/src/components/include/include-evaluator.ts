@@ -109,7 +109,6 @@ export class IncludeEvaluator {
 
     const bytes = await readFile(sourcePath, { signal })
     signal.throwIfAborted()
-    const content = decode(bytes)
 
     if (input.maxBytes !== undefined && bytes.byteLength > input.maxBytes) {
       if (staging === undefined) {
@@ -126,7 +125,7 @@ export class IncludeEvaluator {
       )
     }
 
-    return result(input, input.value, content, true, bytes.byteLength)
+    return result(input, input.value, decode(bytes), true, bytes.byteLength)
   }
 }
 
