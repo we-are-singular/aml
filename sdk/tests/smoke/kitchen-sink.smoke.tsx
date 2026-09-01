@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto"
 import { mkdtemp, readFile, rm } from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
+import { fileURLToPath } from "node:url"
 
 import { S3Client } from "@aws-sdk/client-s3"
 import { z } from "zod"
@@ -10,12 +11,14 @@ import { z } from "zod"
 import {
   Agent,
   AmlRuntime,
+  Block,
   createConsoleTracer,
   defineMcpServer,
   defineTool,
   evaluate,
   File,
   FollowUp,
+  Include,
   localWorkspace,
   Mcp,
   Parallel,
@@ -50,7 +53,16 @@ import {
 
 loadSmokeEnvironment()
 
+const KITCHEN_SINK_SKILL = fileURLToPath(new URL("./fixtures/kitchen-sink-skill", import.meta.url))
+const KITCHEN_SINK_FILE_SOURCE = fileURLToPath(new URL("./fixtures/kitchen-sink-file-source.txt", import.meta.url))
+const KITCHEN_SINK_INCLUDE_SOURCE = fileURLToPath(
+  new URL("./fixtures/kitchen-sink-include-source.txt", import.meta.url)
+)
+const KITCHEN_SINK_FILE_SOURCE_CONTENT = await readFile(KITCHEN_SINK_FILE_SOURCE, "utf8")
+const KITCHEN_SINK_INCLUDE_SOURCE_CONTENT = await readFile(KITCHEN_SINK_INCLUDE_SOURCE, "utf8")
+
 interface KitchenSinkProofs {
+  readonly authored: string
   readonly childAgent: string
   readonly command: string
   readonly input: string
@@ -98,6 +110,7 @@ async function runKitchenSink(selection: KitchenSinkSelection): Promise<void> {
   const startedAt = performance.now()
   const workspaceId = `kitchen-sink-${new Date().toISOString().replaceAll(/[:.]/g, "-")}-${randomUUID()}`
   const proofs: KitchenSinkProofs = {
+    authored: `authored-${randomUUID()}`,
     childAgent: `child-agent-${randomUUID()}`,
     command: `command-${randomUUID()}`,
     input: `input-${randomUUID()}`,
@@ -150,6 +163,8 @@ async function runKitchenSink(selection: KitchenSinkSelection): Promise<void> {
         <File path="input.txt">{proofs.input}</File>
         <File path="result.json">
           <Sandbox access="read-write" provider={sandbox}>
+            <File path="authored.txt">{proofs.authored}</File>
+            <File path="file-source.txt" src={KITCHEN_SINK_FILE_SOURCE} />
             <KitchenSinkAgent mcp={mcp} model={agentRegistration.model} proofs={proofs} proofTool={proofTool} />
           </Sandbox>
         </File>
@@ -158,6 +173,7 @@ async function runKitchenSink(selection: KitchenSinkSelection): Promise<void> {
     )
 
     await verifyPersistedWorkspace(workspace.provider, workspaceId, proofs, selection.mcp)
+    assert(traceEvents.some(isStagedInclude), "Oversized Include src was not staged for the Agent")
 
     if (selection.mcp === "context7") {
       assert(traceEvents.some(isContext7ToolCall), "Context7 was attached but no Context7 MCP Tool call was observed")
@@ -176,7 +192,7 @@ async function runKitchenSink(selection: KitchenSinkSelection): Promise<void> {
   }
 
   console.log(
-    `\n✅ Kitchen-sink smoke completed successfully. workspace=${workspaceId} persisted=input.txt,command.txt,shell.txt,result.json mcp=${selection.mcp} durationMs=${Math.round(performance.now() - startedAt)}`
+    `\n✅ Kitchen-sink smoke completed successfully. workspace=${workspaceId} persisted=input.txt,authored.txt,file-source.txt,command.txt,shell.txt,result.json mcp=${selection.mcp} durationMs=${Math.round(performance.now() - startedAt)}`
   )
 }
 
@@ -198,7 +214,10 @@ async function KitchenSinkAgent({ mcp, model, proofs, proofTool }: KitchenSinkAg
   )
   const nestedAgent = proofs.nestedAgent
   const Result = z.object({
+    authored: z.string(),
     command: z.literal(proofs.command),
+    fileSource: z.string(),
+    includeSource: z.string(),
     input: z.literal(proofs.input),
     mcp: z.literal(expectedMcp),
     nestedAgent: z.literal(proofs.nestedAgent),
@@ -214,7 +233,14 @@ async function KitchenSinkAgent({ mcp, model, proofs, proofTool }: KitchenSinkAg
         A preceding nested-Agent composition verified the remote Workspace files and returned this private proof:{" "}
         {nestedAgent}
       </System>
-      Inspect the same three Workspace files with your native filesystem tools. Call aml_kitchen_sink_proof.{" "}
+      <Block>
+        <Include path="input.txt" title="Workspace input" />
+      </Block>
+      <Block>
+        <Include src={KITCHEN_SINK_INCLUDE_SOURCE} maxBytes={1} title="Staged application source" />
+      </Block>
+      Inspect input.txt, command.txt, shell.txt, authored.txt, and file-source.txt with your native filesystem tools.
+      Read the staged application source named above. Call aml_kitchen_sink_proof.{" "}
       {mcp === undefined
         ? "The MCP check is explicitly disabled for this run."
         : "Use the Context7 MCP tools to resolve the Zod library and query its documentation for schema parsing."}
@@ -224,6 +250,14 @@ async function KitchenSinkAgent({ mcp, model, proofs, proofTool }: KitchenSinkAg
       </FollowUp>
     </Agent>,
     Result
+  )
+
+  assert.equal(result.authored, proofs.authored, "Agent did not observe the guest-authored File")
+  assert.equal(result.fileSource, KITCHEN_SINK_FILE_SOURCE_CONTENT, "Agent did not observe the guest File src copy")
+  assert.equal(
+    result.includeSource,
+    KITCHEN_SINK_INCLUDE_SOURCE_CONTENT,
+    "Agent did not read the oversized staged Include src"
   )
 
   return `${JSON.stringify(result, null, 2)}\n`
@@ -249,12 +283,11 @@ function NestedRemoteProof({ model, proofs }: Pick<KitchenSinkAgentProps, "model
 function KitchenSinkCapabilities({ mcp, proofTool }: Pick<KitchenSinkAgentProps, "mcp" | "proofTool">) {
   return (
     <>
+      <Skill src={KITCHEN_SINK_SKILL} />
       <Tool use={proofTool} />
       {mcp === undefined ? null : <Mcp use={mcp} />}
-      <Skill name="Kitchen sink evidence" description="Rules for this manual integration proof">
-        Use the granted capabilities and remote Workspace evidence. Never guess a private proof value or report a check
-        as passed before observing it.
-      </Skill>
+      Use the granted capabilities and remote Workspace evidence. Never guess a private proof value or report a check as
+      passed before observing it.
     </>
   )
 }
@@ -354,10 +387,18 @@ async function verifyPersistedWorkspace(
 
   try {
     assert.equal(await readFile(path.join(lease.directory, "input.txt"), "utf8"), proofs.input)
+    assert.equal(await readFile(path.join(lease.directory, "authored.txt"), "utf8"), proofs.authored)
+    assert.equal(
+      await readFile(path.join(lease.directory, "file-source.txt"), "utf8"),
+      KITCHEN_SINK_FILE_SOURCE_CONTENT
+    )
     assert.equal(await readFile(path.join(lease.directory, "command.txt"), "utf8"), proofs.command)
     assert.equal(await readFile(path.join(lease.directory, "shell.txt"), "utf8"), proofs.shell)
     assert.deepEqual(JSON.parse(await readFile(path.join(lease.directory, "result.json"), "utf8")), {
+      authored: proofs.authored,
       command: proofs.command,
+      fileSource: KITCHEN_SINK_FILE_SOURCE_CONTENT,
+      includeSource: KITCHEN_SINK_INCLUDE_SOURCE_CONTENT,
       input: proofs.input,
       mcp: mcp === "none" ? "skipped" : "context7",
       nestedAgent: proofs.nestedAgent,
@@ -378,6 +419,15 @@ function isContext7ToolCall(event: AmlTraceEvent): boolean {
 
   const update = event.attributes.update
   return typeof update === "string" && /context7|resolve[-_ ]library|query[-_ ]docs/i.test(update)
+}
+
+function isStagedInclude(event: AmlTraceEvent): boolean {
+  return (
+    event.type === "span.end" &&
+    event.kind === "include" &&
+    event.attributes.source === "src" &&
+    event.attributes.inline === false
+  )
 }
 
 function requireEnvironment(...names: string[]): string {
