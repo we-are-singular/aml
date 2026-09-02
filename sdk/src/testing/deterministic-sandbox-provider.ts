@@ -1,3 +1,5 @@
+import path from "node:path"
+
 import type { SandboxAcquireRequest, SandboxLease, SandboxProvider } from "../components/sandbox/sandbox-provider.js"
 import type {
   SandboxExecOptions,
@@ -215,8 +217,15 @@ export class DeterministicSandboxProvider<Handle = DeterministicSandboxHandle> i
         return Uint8Array.from(content)
       },
       root: request.root,
-      spawn: async (command: string, args: readonly string[] = [], options = {}) =>
-        await this.#spawn(command, args, request, options),
+      spawn: async (command: string, args: readonly string[] = [], options: Readonly<SandboxExecOptions> = {}) => {
+        if (command === "cat" && args.length === 1) {
+          const filePath = path.posix.normalize(path.posix.join(options.cwd ?? request.cwd, args[0]!))
+          const content = files.get(filePath)
+          if (content !== undefined) return completedProcess(`deterministic-process:${command}`, content)
+        }
+
+        return await this.#spawn(command, args, request, options)
+      },
       async stat(filePath: string) {
         const content = files.get(filePath)
 
@@ -257,7 +266,7 @@ export class DeterministicSandboxProvider<Handle = DeterministicSandboxHandle> i
   }
 }
 
-function completedProcess(id: string, stdout: string): Readonly<SandboxProcess> {
+function completedProcess(id: string, stdout: string | Uint8Array): Readonly<SandboxProcess> {
   return Object.freeze({
     id,
     async kill() {},
@@ -270,8 +279,8 @@ function completedProcess(id: string, stdout: string): Readonly<SandboxProcess> 
   })
 }
 
-function byteStream(value: string): ReadableStream<Uint8Array> {
-  const bytes = new TextEncoder().encode(value)
+function byteStream(value: string | Uint8Array): ReadableStream<Uint8Array> {
+  const bytes = typeof value === "string" ? new TextEncoder().encode(value) : value
   return new ReadableStream({
     start(controller) {
       if (bytes.byteLength > 0) {

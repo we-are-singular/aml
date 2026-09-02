@@ -9,6 +9,7 @@ import { File } from "../src/components/file/file.js"
 import { Include } from "../src/components/include/include.js"
 import { Sandbox } from "../src/components/sandbox/sandbox.js"
 import type { SandboxProvider } from "../src/components/sandbox/sandbox-provider.js"
+import type { SandboxExecOptions } from "../src/components/sandbox/sandbox-runtime.js"
 import { Workspace } from "../src/components/workspace/workspace.js"
 import { AmlRuntime } from "../src/core/aml-runtime.js"
 import { evaluate } from "../src/core/evaluate.js"
@@ -105,14 +106,56 @@ describe("<Include>", () => {
     }
 
     const output = await runtime.evaluate(
-      <Sandbox access="read-only" provider={reads.provider}>
+      <Sandbox access="read-write" provider={reads.provider}>
         <RepeatedLargeInclude />
       </Sandbox>
     )
     expect(output).toContain("File: `large.txt` (293 KiB, 150001 lines)")
     expect(output).toContain("Read it at `large.txt`")
     expect(reads.statCalls).toEqual(["large.txt", "large.txt"])
+    expect(reads.readCalls).toEqual([])
+    expect(reads.inspectCalls).toEqual(["large.txt"])
+  })
+
+  it("preserves read-only Sandbox support without invoking its process boundary", async () => {
+    const reads = instrumentedSandbox({ files: { "large.txt": "oversized" } })
+
+    async function RepeatedReadOnlyInclude() {
+      await evaluate(<Include maxBytes={1} path="large.txt" title={false} />)
+      return await evaluate(<Include maxBytes={1} path="large.txt" title={false} />)
+    }
+
+    await new AmlRuntime().evaluate(
+      <Sandbox access="read-only" provider={reads.provider}>
+        <RepeatedReadOnlyInclude />
+      </Sandbox>
+    )
+
+    expect(reads.inspectCalls).toEqual([])
     expect(reads.readCalls).toEqual(["large.txt"])
+  })
+
+  it("promotes streamed metadata when a later request needs inline content", async () => {
+    const reads = instrumentedSandbox({ files: { "brief.md": "shared context" } })
+
+    async function IncludesWithDifferentLimits() {
+      const reference = await evaluate(<Include maxBytes={5} path="brief.md" title={false} />)
+      const loaded = await evaluate(<Include maxBytes={20} path="brief.md" title={false} />)
+      const cached = await evaluate(<Include maxBytes={20} path="brief.md" title={false} />)
+      return `${reference}\n${loaded}\n${cached}`
+    }
+
+    const output = await new AmlRuntime().evaluate(
+      <Sandbox access="read-write" provider={reads.provider}>
+        <IncludesWithDifferentLimits />
+      </Sandbox>
+    )
+
+    expect(output).toContain("File: `brief.md` (14 bytes, 1 line)")
+    expect(output.endsWith("shared context\nshared context")).toBe(true)
+    expect(reads.statCalls).toEqual(["brief.md", "brief.md", "brief.md"])
+    expect(reads.inspectCalls).toEqual(["brief.md"])
+    expect(reads.readCalls).toEqual(["brief.md"])
   })
 
   it("reads local UTF-8 sources live with derived, custom, or omitted headings", async () => {
@@ -354,7 +397,7 @@ describe("<Include>", () => {
             <Include maxBytes={4} path="large.txt" />
           </Workspace>
         )
-      ).rejects.toThrow("an oversized <Include path> in a host Workspace requires a containing <Agent>")
+      ).rejects.toThrow("an oversized <Include> requires a containing <Agent>")
       await expect(runtime.evaluate(<Include src="./binary" />)).rejects.toThrow("must be valid UTF-8")
       await expect(runtime.evaluate(<Include src="./folder" />)).rejects.toThrow("must identify a regular file")
       await expect(runtime.evaluate(<Include maxBytes={0} src="./large.txt" />)).rejects.toThrow(
@@ -378,6 +421,7 @@ function instrumentedSandbox(options: {
   const base = new DeterministicSandboxProvider()
   const files = new Map(Object.entries(options.files))
   const revisions = new Map(Array.from(files.keys(), filePath => [filePath, 0]))
+  const inspectCalls: string[] = []
   const readCalls: string[] = []
   const statCalls: string[] = []
   let shouldFailRead = options.failFirstRead ?? false
@@ -405,6 +449,14 @@ function instrumentedSandbox(options: {
               ? await runtime.readFile(filePath, readOptions)
               : new TextEncoder().encode(content)
           },
+          async spawn(command: string, args = [], spawnOptions: Readonly<SandboxExecOptions> = {}) {
+            if (command !== "cat" || args.length !== 1) return await runtime.spawn(command, args, spawnOptions)
+            const filePath = path.posix.normalize(path.posix.join(spawnOptions.cwd ?? request.cwd, args[0]!))
+            const content = files.get(filePath)
+            if (content === undefined) return await runtime.spawn(command, args, spawnOptions)
+            inspectCalls.push(filePath)
+            return textProcess(content)
+          },
           async stat(filePath: string, statOptions = {}) {
             statCalls.push(filePath)
             await delay(options.delayMs)
@@ -427,9 +479,28 @@ function instrumentedSandbox(options: {
     },
   }
 
-  return { provider, readCalls, statCalls }
+  return { inspectCalls, provider, readCalls, statCalls }
 }
 
 async function delay(milliseconds = 1): Promise<void> {
   await new Promise(resolve => setTimeout(resolve, milliseconds))
+}
+
+function textProcess(content: string) {
+  const bytes = new TextEncoder().encode(content)
+  return Object.freeze({
+    id: "include-cat",
+    async kill() {},
+    stdin: new WritableStream<Uint8Array>(),
+    stderr: new ReadableStream<Uint8Array>({ start: controller => controller.close() }),
+    stdout: new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(bytes)
+        controller.close()
+      },
+    }),
+    async wait() {
+      return Object.freeze({ exitCode: 0 })
+    },
+  })
 }
