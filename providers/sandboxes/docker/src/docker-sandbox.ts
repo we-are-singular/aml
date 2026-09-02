@@ -234,12 +234,17 @@ class DockerSandboxProvider
       const size = Number.parseInt(sizeValue ?? "", 10)
       const modifiedAtMs = Date.parse(modifiedAtValue ?? "")
 
-      if (!Number.isSafeInteger(size) || size < 0 || !Number.isSafeInteger(modifiedAtMs) || modifiedAtMs < 0) {
+      if (!Number.isSafeInteger(size) || size < 0) {
         throw new TypeError("Docker Sandbox returned invalid file metadata")
       }
 
       const kind = mode === 0x8000 ? "file" : mode === 0x4000 ? "directory" : "unsupported"
-      return Object.freeze({ kind, modifiedAtMs, size })
+      // Modification time is an optional cache optimization. Older guest
+      // `stat` variants may not emit a parseable `%y`; omit it so callers still
+      // receive valid metadata and safely bypass revision caching.
+      return Number.isSafeInteger(modifiedAtMs) && modifiedAtMs >= 0
+        ? Object.freeze({ kind, modifiedAtMs, size })
+        : Object.freeze({ kind, size })
     }
 
     const assertGuestPath = async (
@@ -456,11 +461,13 @@ class DockerSandboxProvider
         }
 
         await assertGuestPath(guestFilePath, signal, true, "/workspace")
-        return Object.freeze({
+        const stat = {
           kind: metadata.kind,
-          modifiedAtMs: metadata.modifiedAtMs,
           size: metadata.kind === "file" ? metadata.size : 0,
-        })
+        }
+        return "modifiedAtMs" in metadata
+          ? Object.freeze({ ...stat, modifiedAtMs: metadata.modifiedAtMs })
+          : Object.freeze(stat)
       },
       writeFile: async (filePath, content, options = {}) => {
         if (request.access !== "read-write") {
