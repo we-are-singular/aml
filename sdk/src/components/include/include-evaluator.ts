@@ -136,10 +136,13 @@ export class IncludeEvaluator {
       // A previous request may have needed only metadata. Load the body now and
       // promote the same revision so later inline requests avoid another read.
       if (file.content === null) {
-        file = await fileAccess.inspect(true)
-        this.#cache.set(fileAccess.cacheKey, file)
+        file = await this.#promote(fileAccess)
       }
-      return result(input, input.value, requiredContent(file), true, file.size)
+      // The file can grow after stat but before the promoted complete read.
+      // Reapply the authored ceiling to the bytes that would actually be inlined.
+      if (maxBytes === undefined || file.size <= maxBytes) {
+        return result(input, input.value, requiredContent(file), true, file.size)
+      }
     }
 
     if (fileAccess.readablePath !== undefined) {
@@ -160,8 +163,7 @@ export class IncludeEvaluator {
     // Metadata-only cache hits must reload the bytes because each Agent owns a
     // separate staging area. Reinspection also handles a stat/read size race.
     if (file.bytes === undefined) {
-      file = await fileAccess.inspect(true)
-      this.#cache.set(fileAccess.cacheKey, file)
+      file = await this.#promote(fileAccess)
     }
     if (file.size <= maxBytes) {
       return result(input, input.value, requiredContent(file), true, file.size)
@@ -170,6 +172,13 @@ export class IncludeEvaluator {
     const stagedFile = await staging.writeInclude(fileAccess.stagingSourcePath, requiredBytes(file))
     const renderedPath = input.source === "src" ? stagedFile.path : input.value
     return result(input, renderedPath, readInstruction(input.value, stagedFile.path, file, maxBytes), false, file.size)
+  }
+
+  /** Replaces a metadata-only revision with one reusable complete snapshot. */
+  async #promote(fileAccess: Readonly<IncludeFileAccess>): Promise<Readonly<TextFileInspection>> {
+    const file = await fileAccess.inspect(true)
+    this.#cache.set(fileAccess.cacheKey, file)
+    return file
   }
 }
 

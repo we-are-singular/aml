@@ -1,5 +1,4 @@
 import { randomUUID } from "node:crypto"
-import { createReadStream } from "node:fs"
 import { lstat, mkdir, readFile, realpath, rename, rm, writeFile } from "node:fs/promises"
 import path from "node:path"
 
@@ -31,16 +30,6 @@ export class HostFilesystem {
     const content = await readFile(target, options.signal === undefined ? undefined : { signal: options.signal })
     options.signal?.throwIfAborted()
     return Uint8Array.from(content)
-  }
-
-  /** Opens a regular file as chunks without retaining its complete body. */
-  async readFileChunks(
-    portablePath: string,
-    options: Readonly<SandboxFileOptions> = {}
-  ): Promise<AsyncIterable<Uint8Array>> {
-    options.signal?.throwIfAborted()
-    const target = await this.#resolveExisting(portablePath, "file")
-    return createReadStream(target, { signal: options.signal })
   }
 
   /** Returns regular-file or directory metadata without following symlinks. */

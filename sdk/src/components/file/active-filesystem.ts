@@ -73,13 +73,13 @@ export class ActiveFilesystem {
       : await this.#sandbox.lease.runtime.readFile(path, { signal })
   }
 
-  /** Opens one file as chunks without retaining its complete body. */
+  /** Opens one Sandbox file as chunks without retaining its complete body. */
   async readFileChunks(path: string, signal: AbortSignal): Promise<AsyncIterable<Uint8Array>> {
     signal.throwIfAborted()
     const sandbox = this.#sandbox
 
     if (sandbox === undefined) {
-      return await this.#requiredHost().readFileChunks(path, { signal })
+      throw new Error("Chunked reads require an active Sandbox")
     }
 
     // Some providers intentionally reject every process under read-only access
