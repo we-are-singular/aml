@@ -50,6 +50,9 @@ export interface AgentRequest {
   /** Agent-local JavaScript Tool grants in authored order; empty when absent. */
   readonly tools: readonly AgentTool[]
 
+  /** Model-facing MCP server prefix used for invocation-owned JavaScript Tools. */
+  readonly toolPrefix?: string
+
   /**
    * Trace identity assigned by AML to the Agent request.
    *

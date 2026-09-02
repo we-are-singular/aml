@@ -261,8 +261,8 @@ describe("opencodeAgent()", () => {
         })
       },
     })
-    const collidingServer = defineMcpServer({
-      name: "tools",
+    const projectServer = defineMcpServer({
+      name: "project",
       transport: { type: "streamable-http", url: "https://example.test/mcp" },
     })
     const Result = z.object({ proof: z.string() })
@@ -277,7 +277,7 @@ describe("opencodeAgent()", () => {
       return JSON.stringify(
         await evaluate(
           <Agent system="Follow the system.">
-            <Mcp use={collidingServer} />
+            <Mcp use={projectServer} />
             <Tool use={readEvidence} />
             Submit proof.
           </Agent>,
@@ -288,9 +288,10 @@ describe("opencodeAgent()", () => {
 
     await expect(
       new AmlRuntime({
+        toolPrefix: "review",
         agentProvider: opencodeAgent({
           config: {
-            mcp: { tools_2: { type: "remote", url: "https://example.test/native-mcp" } },
+            mcp: { native: { type: "remote", url: "https://example.test/native-mcp" } },
           },
         }),
       }).evaluate(
@@ -302,9 +303,8 @@ describe("opencodeAgent()", () => {
 
     expect(prompts).toHaveLength(2)
     expect(mcpServerNames).toHaveLength(2)
-    expect(mcpServerNames[0]).toBe("tools")
-    expect(mcpServerNames[1]).toMatch(/^tools_[0-9a-f]{12}$/u)
-    const bridgeName = mcpServerNames[1]
+    expect(mcpServerNames).toEqual(["project", "review"])
+    const bridgeName = "review"
     expect(prompts[0]).toMatch(
       new RegExp(
         `^<SYSTEM>\\nFollow the system\\.\\n<\\/SYSTEM>\\n\\nAML JavaScript Tools use these OpenCode MCP tool names:\\n- read_evidence: ${bridgeName}_read_evidence\\n\\nSubmit proof\\.\\n\\nCall the OpenCode MCP tool "${bridgeName}_aml_submit_result"`,

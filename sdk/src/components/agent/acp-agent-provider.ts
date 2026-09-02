@@ -183,6 +183,7 @@ class AcpAgentProvider<Name extends string> extends AbstractAgentProvider<Name> 
           request.output,
           context,
           request.output === undefined ? undefined : agentStructuredOutputServices(context),
+          request.toolPrefix || "aml",
           [
             ...request.mcpServers.map(server => (server.kind === "named" ? server.name : server.definition.name)),
             ...(this.#profile.reservedMcpServerNames ?? []),
