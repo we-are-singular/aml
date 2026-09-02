@@ -7,7 +7,6 @@ import { describe, expect, it } from "vitest"
 import { Agent } from "../src/components/agent/agent.js"
 import { File } from "../src/components/file/file.js"
 import { Include } from "../src/components/include/include.js"
-import { Parallel } from "../src/components/parallel/parallel.js"
 import { Sandbox } from "../src/components/sandbox/sandbox.js"
 import type { SandboxProvider } from "../src/components/sandbox/sandbox-provider.js"
 import { Workspace } from "../src/components/workspace/workspace.js"
@@ -18,7 +17,7 @@ import { DeterministicSandboxProvider } from "../src/testing/deterministic-sandb
 import { DeterministicWorkspaceProvider } from "../src/testing/deterministic-workspace-provider.js"
 
 describe("<Include>", () => {
-  it("coalesces concurrent metadata and byte reads while preserving Include traces", async () => {
+  it("reuses cached content for an unchanged file while preserving Include traces", async () => {
     const reads = instrumentedSandbox({ files: { "brief.md": "shared" } })
     const runtime = new AmlRuntime()
     const includeStarts: string[] = []
@@ -28,22 +27,25 @@ describe("<Include>", () => {
       }
     })
 
+    async function SequentialIncludes() {
+      const first = await evaluate(<Include path="brief.md" title={false} />)
+      const second = await evaluate(<Include maxBytes={10} path="brief.md" title={false} />)
+      return `${first}${second}`
+    }
+
     await expect(
       runtime.evaluate(
         <Sandbox access="read-only" provider={reads.provider}>
-          <Parallel>
-            <Include path="brief.md" title={false} />
-            <Include maxBytes={10} path="brief.md" title={false} />
-          </Parallel>
+          <SequentialIncludes />
         </Sandbox>
       )
     ).resolves.toBe("sharedshared")
-    expect(reads.statCalls).toEqual(["brief.md"])
+    expect(reads.statCalls).toEqual(["brief.md", "brief.md"])
     expect(reads.readCalls).toEqual(["brief.md"])
     expect(includeStarts).toHaveLength(2)
   })
 
-  it("evicts completed and rejected work so later reads observe live contents", async () => {
+  it("does not cache rejected reads and invalidates changed revisions", async () => {
     const reads = instrumentedSandbox({ failFirstRead: true, files: { "brief.md": "first" } })
     let rejected = false
 
@@ -68,24 +70,49 @@ describe("<Include>", () => {
     expect(reads.readCalls).toEqual(["brief.md", "brief.md", "brief.md"])
   })
 
-  it("bounds pending entries and leaves oversized readable Sandbox files unstaged", async () => {
+  it("evicts the oldest cached file after 64 entries", async () => {
     const files = Object.fromEntries(Array.from({ length: 65 }, (_, index) => [`file-${index}.txt`, "oversized"]))
-    const reads = instrumentedSandbox({ delayMs: 10, files })
+    const reads = instrumentedSandbox({ files })
+
+    async function FillCache() {
+      for (let index = 0; index < 65; index += 1) {
+        await evaluate(<Include path={`file-${index}.txt`} title={false} />)
+      }
+
+      return await evaluate(<Include path="file-0.txt" title={false} />)
+    }
 
     await expect(
       new AmlRuntime().evaluate(
         <Sandbox access="read-only" provider={reads.provider}>
-          <Parallel>
-            {Array.from({ length: 65 }, (_, index) => (
-              <Include maxBytes={1} path={`file-${index}.txt`} title={false} />
-            ))}
-            <Include maxBytes={1} path="file-64.txt" title={false} />
-          </Parallel>
+          <FillCache />
         </Sandbox>
       )
-    ).resolves.toContain("Read it at `file-64.txt`")
+    ).resolves.toBe("oversized")
     expect(reads.statCalls).toHaveLength(66)
-    expect(reads.readCalls).toEqual([])
+    expect(reads.readCalls).toHaveLength(66)
+  })
+
+  it("retains metadata without content for files larger than the cache limit", async () => {
+    const content = `${"x\n".repeat(150_000)}x`
+    const reads = instrumentedSandbox({ files: { "large.txt": content } })
+    const runtime = new AmlRuntime()
+
+    async function RepeatedLargeInclude() {
+      const first = await evaluate(<Include maxBytes={1} path="large.txt" title={false} />)
+      const second = await evaluate(<Include maxBytes={1} path="large.txt" title={false} />)
+      return `${first}\n${second}`
+    }
+
+    const output = await runtime.evaluate(
+      <Sandbox access="read-only" provider={reads.provider}>
+        <RepeatedLargeInclude />
+      </Sandbox>
+    )
+    expect(output).toContain("File: `large.txt` (293 KiB, 150001 lines)")
+    expect(output).toContain("Read it at `large.txt`")
+    expect(reads.statCalls).toEqual(["large.txt", "large.txt"])
+    expect(reads.readCalls).toEqual(["large.txt"])
   })
 
   it("reads local UTF-8 sources live with derived, custom, or omitted headings", async () => {
@@ -134,7 +161,9 @@ describe("<Include>", () => {
             [
               `## Contents of \`${stagedPath}\``,
               "",
-              `The file is 10 bytes, exceeding the 4-byte inline limit. Read it at \`${stagedPath}\`.`,
+              "File: `./large.txt` (10 bytes, 1 line)",
+              "",
+              `The file exceeds the 4 bytes inline limit. Read it at \`${stagedPath}\`.`,
             ].join("\n")
           )
           expect(await readFile(stagedPath, "utf8")).toBe("0123456789")
@@ -156,28 +185,18 @@ describe("<Include>", () => {
     }
   })
 
-  it("stages oversized local bytes without decoding them", async () => {
+  it("rejects oversized local content that is not valid UTF-8", async () => {
     const directory = await temporaryDirectory("aml-include-binary-stage-")
-    let stagedPath = ""
 
     try {
       await writeFile(path.join(directory, "binary"), new Uint8Array([0xff, 0xff]))
-      const provider = new DeterministicAgentProvider({
-        async respond(request) {
-          stagedPath = /Read it at `([^`]+)`\./.exec(request.prompt)?.[1] ?? ""
-          expect(await readFile(stagedPath)).toEqual(Buffer.from([0xff, 0xff]))
-          return { text: "done" }
-        },
-      })
-
       await expect(
         new AmlRuntime({ cwd: directory }).evaluate(
-          <Agent provider={provider}>
+          <Agent provider={new DeterministicAgentProvider()}>
             <Include maxBytes={1} src="./binary" title={false} />
           </Agent>
         )
-      ).resolves.toBe("done")
-      await expect(access(stagedPath)).rejects.toMatchObject({ code: "ENOENT" })
+      ).rejects.toThrow("content must be valid UTF-8")
     } finally {
       await rm(directory, { force: true, recursive: true })
     }
@@ -252,7 +271,9 @@ describe("<Include>", () => {
           [
             "## Contents of `large.txt`",
             "",
-            `The file is 10 bytes, exceeding the 4-byte inline limit. Read it at \`${stagedPath}\`.`,
+            "File: `large.txt` (10 bytes, 1 line)",
+            "",
+            `The file exceeds the 4 bytes inline limit. Read it at \`${stagedPath}\`.`,
           ].join("\n")
         )
         expect(await readFile(stagedPath, "utf8")).toBe("0123456789")
@@ -287,7 +308,9 @@ describe("<Include>", () => {
           [
             "## Contents of `large.txt`",
             "",
-            "The file is 10 bytes, exceeding the 4-byte inline limit. Read it at `../large.txt`.",
+            "File: `large.txt` (10 bytes, 1 line)",
+            "",
+            "The file exceeds the 4 bytes inline limit. Read it at `../large.txt`.",
           ].join("\n")
         )
         expect(context.sandbox?.cwd).toBe("nested")
@@ -354,6 +377,7 @@ function instrumentedSandbox(options: {
 }) {
   const base = new DeterministicSandboxProvider()
   const files = new Map(Object.entries(options.files))
+  const revisions = new Map(Array.from(files.keys(), filePath => [filePath, 0]))
   const readCalls: string[] = []
   const statCalls: string[] = []
   let shouldFailRead = options.failFirstRead ?? false
@@ -387,10 +411,15 @@ function instrumentedSandbox(options: {
             const content = files.get(filePath)
             return content === undefined
               ? await runtime.stat(filePath, statOptions)
-              : Object.freeze({ kind: "file" as const, size: new TextEncoder().encode(content).byteLength })
+              : Object.freeze({
+                  kind: "file" as const,
+                  modifiedAtMs: revisions.get(filePath) ?? 0,
+                  size: new TextEncoder().encode(content).byteLength,
+                })
           },
           async writeFile(filePath: string, content: Uint8Array, writeOptions = {}) {
             files.set(filePath, new TextDecoder().decode(content))
+            revisions.set(filePath, (revisions.get(filePath) ?? 0) + 1)
             await runtime.writeFile(filePath, content, writeOptions)
           },
         }),

@@ -42,7 +42,7 @@ const fixtureRuntime: Readonly<SandboxRuntime> = Object.freeze({
     }
   },
   async stat() {
-    return Object.freeze({ kind: "file" as const, size: 0 })
+    return Object.freeze({ kind: "file" as const, modifiedAtMs: 0, size: 0 })
   },
   async writeFile() {},
 })

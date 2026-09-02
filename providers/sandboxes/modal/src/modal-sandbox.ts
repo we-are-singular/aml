@@ -406,6 +406,7 @@ function createRuntime(
 
       return Object.freeze({
         kind: metadata.type,
+        modifiedAtMs: metadata.modifiedTime * 1_000,
         size: metadata.type === "file" ? metadata.size : 0,
       })
     },

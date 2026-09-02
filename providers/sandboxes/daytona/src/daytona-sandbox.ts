@@ -517,6 +517,7 @@ function createRuntime(
 
       return Object.freeze({
         kind: info.isDir ? ("directory" as const) : ("file" as const),
+        modifiedAtMs: Date.parse(info.modifiedAt),
         size: info.isDir ? 0 : info.size,
       })
     },
