@@ -515,11 +515,14 @@ function createRuntime(
         throw new TypeError("Daytona Sandbox file path must identify a regular file or directory")
       }
 
-      return Object.freeze({
+      const modifiedAtMs = Date.parse(info.modifiedAt)
+      const stat = {
         kind: info.isDir ? ("directory" as const) : ("file" as const),
-        modifiedAtMs: Date.parse(info.modifiedAt),
         size: info.isDir ? 0 : info.size,
-      })
+      }
+      return Number.isFinite(modifiedAtMs) && modifiedAtMs >= 0
+        ? Object.freeze({ ...stat, modifiedAtMs })
+        : Object.freeze(stat)
     },
     async writeFile(filePath, content, options = {}) {
       if (request.access !== "read-write") {

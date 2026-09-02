@@ -106,7 +106,7 @@ export class IncludeEvaluator {
       input,
       {
         cacheKey: revisionKey("src", source.path, metadata.size, metadata.modifiedAtMs),
-        inspect: async retainContent => await source.inspect(retainContent, signal),
+        inspect: async () => await source.inspect(signal),
         observedSize: metadata.size,
         readablePath: undefined,
         stagingSourcePath: source.path,

@@ -15,16 +15,10 @@ export class ActiveFilesystem {
 
   private constructor(
     workspace: Readonly<WorkspaceMaterializationReference> | undefined,
-    sandbox: Readonly<SandboxSession> | undefined
+    sandbox: Readonly<SandboxSession> | undefined,
+    cacheNamespace: string
   ) {
-    if (sandbox === undefined && workspace === undefined) {
-      throw new Error("Active filesystem identity is unavailable")
-    }
-
-    this.#cacheNamespace =
-      sandbox === undefined
-        ? `workspace:${path.resolve(workspace!.directory)}`
-        : `sandbox:${sandbox.lease.id}:${sandbox.root}`
+    this.#cacheNamespace = cacheNamespace
     this.#sandbox = sandbox
     this.#host = sandbox === undefined && workspace !== undefined ? new HostFilesystem(workspace.directory) : undefined
   }
@@ -39,7 +33,13 @@ export class ActiveFilesystem {
     workspace: Readonly<WorkspaceMaterializationReference> | undefined,
     sandbox: Readonly<SandboxSession> | undefined
   ): ActiveFilesystem | undefined {
-    return sandbox === undefined && workspace === undefined ? undefined : new ActiveFilesystem(workspace, sandbox)
+    if (sandbox !== undefined) {
+      return new ActiveFilesystem(workspace, sandbox, `sandbox:${sandbox.lease.id}:${sandbox.root}`)
+    }
+    if (workspace !== undefined) {
+      return new ActiveFilesystem(workspace, undefined, `workspace:${path.resolve(workspace.directory)}`)
+    }
+    return undefined
   }
 
   /** Validates one authored path before any child AML or filesystem effect. */

@@ -16,6 +16,16 @@ describe("text file inspection", () => {
     )
   })
 
+  it("preserves errors raised while reading streamed chunks", async () => {
+    const failure = new Error("Sandbox could not read file")
+    async function* failingChunks(): AsyncIterable<Uint8Array> {
+      yield new TextEncoder().encode("partial")
+      throw failure
+    }
+
+    await expect(inspectTextStream(failingChunks())).rejects.toBe(failure)
+  })
+
   it("matches empty and trailing-newline line semantics", async () => {
     await expect(inspectTextStream(streamChunks([]))).resolves.toMatchObject({ lines: 0, size: 0 })
     await expect(inspectTextStream(streamChunks([new TextEncoder().encode("one\ntwo\n")]))).resolves.toMatchObject({

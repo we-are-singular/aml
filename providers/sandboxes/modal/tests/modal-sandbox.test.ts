@@ -83,6 +83,8 @@ describe("modalSandbox()", () => {
       modifiedAtMs: expect.any(Number),
       size: 7,
     })
+    fake.modifiedTime = Number.NaN
+    expect(await lease.runtime.stat("repository/context.txt")).toEqual({ kind: "file", size: 7 })
     expect(new TextDecoder().decode(await lease.runtime.readFile("repository/context.txt"))).toBe("context")
     const staging = await lease.runtime.createFileStaging()
     await staging.writeFile(".agents/skills/review/SKILL.md", new TextEncoder().encode("skill"))
@@ -194,6 +196,7 @@ class FakeModal {
   downloadCount = 0
   readonly files = new Map<string, Uint8Array>()
   readonly imageCalls: string[] = []
+  modifiedTime = 1
   readonly remoteWorkspace: string
   stdinCloseCount = 0
   terminateCount = 0
@@ -279,7 +282,7 @@ class FakeModal {
           const content = this.files.get(remotePath)
 
           if (content === undefined) throw new Error(`missing remote file ${remotePath}`)
-          return { modifiedTime: 1, size: content.byteLength, type: "file" }
+          return { modifiedTime: this.modifiedTime, size: content.byteLength, type: "file" }
         },
         writeBytes: async (content: Uint8Array, remotePath: string) => {
           this.files.set(remotePath, Uint8Array.from(content))
