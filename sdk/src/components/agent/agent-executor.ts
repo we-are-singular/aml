@@ -43,7 +43,7 @@ export class AgentExecutor {
       (typeof options.toolPrefix !== "string" ||
         (options.toolPrefix.length > 0 && options.toolPrefix !== options.toolPrefix.trim()))
     ) {
-      throw new TypeError("toolPrefix must be an empty or non-empty normalized string")
+      throw new TypeError("toolPrefix must be empty or a trimmed non-empty string")
     }
 
     this.#agentProvider = options.agentProvider === undefined ? undefined : validateAgentProvider(options.agentProvider)
