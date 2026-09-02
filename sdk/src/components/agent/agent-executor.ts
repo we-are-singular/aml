@@ -23,6 +23,7 @@ export class AgentExecutor {
   readonly #agentProvider: Readonly<ValidatedAgentProvider> | undefined
   readonly #maxTurnsPerAgent: number
   readonly #system: string
+  readonly #toolPrefix: string
 
   /**
    * Captures runtime-wide Agent defaults and their provider boundary.
@@ -31,14 +32,24 @@ export class AgentExecutor {
     readonly agentProvider?: AgentProvider
     readonly maxTurnsPerAgent: number
     readonly system?: string
+    readonly toolPrefix?: string
   }) {
     if (options.system !== undefined && typeof options.system !== "string") {
       throw new TypeError("system must be a string")
     }
 
+    if (
+      options.toolPrefix !== undefined &&
+      (typeof options.toolPrefix !== "string" ||
+        (options.toolPrefix.length > 0 && options.toolPrefix !== options.toolPrefix.trim()))
+    ) {
+      throw new TypeError("toolPrefix must be an empty or non-empty normalized string")
+    }
+
     this.#agentProvider = options.agentProvider === undefined ? undefined : validateAgentProvider(options.agentProvider)
     this.#maxTurnsPerAgent = options.maxTurnsPerAgent
     this.#system = options.system ?? ""
+    this.#toolPrefix = options.toolPrefix || "aml"
   }
 
   /**
@@ -186,6 +197,7 @@ export class AgentExecutor {
         skills: input.skills,
         systemFragments: input.systemFragments,
         tools: input.tools,
+        toolPrefix: this.#toolPrefix,
         trace: input.trace,
       })
     } catch (cause) {

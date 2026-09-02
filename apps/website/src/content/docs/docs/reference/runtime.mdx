@@ -33,6 +33,7 @@ Choose the provider defaults and safety budgets at construction time. The input 
 | `workspaceProvider`   |               — | The evaluation may use one top-level durable `<Workspace />`.                                                                   |
 | `cwd`                 | `process.cwd()` | Local `<Include src>`, `<File src>`, and `<Skill src>` reads plus host `<Script />` execution need a controlled base directory. |
 | `system`              |               — | Every `<Agent />` should receive a shared system instruction.                                                                   |
+| `toolPrefix`          |         `"aml"` | JavaScript Tools bridged through MCP need a stable model-facing prefix; an empty string also selects `"aml"`.                   |
 | `allowedTools`        |    unrestricted | The application must allow only named Tool capabilities.                                                                        |
 | `allowedMcpServers`   |    unrestricted | The application must allow only named MCP servers.                                                                              |
 | `trace`               |               — | The application needs immutable, metadata-only-by-default trace events.                                                         |
@@ -41,6 +42,8 @@ Choose the provider defaults and safety budgets at construction time. The input 
 | `maxConcurrentAgents` |             `4` | Parallel Agent work must be bounded.                                                                                            |
 | `maxTurnsPerAgent`    |            `16` | Follow-ups and authored `<Agent />` inputs must be bounded.                                                                     |
 | `maxDepth`            |            `16` | Recursive semantic JSX needs a depth budget.                                                                                    |
+
+`toolPrefix` becomes the invocation-owned MCP server name used to qualify JavaScript Tools. For example, `toolPrefix: "review"` exposes `review_get_pull_request` in OpenCode and `review-get_pull_request` in Copilot. AML throws when the prefix conflicts with another MCP server granted to the same Agent rather than silently changing the configured name.
 
 ## Evaluation options and cancellation
 

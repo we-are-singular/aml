@@ -325,6 +325,15 @@ export interface AmlRuntimeOptions {
   readonly system?: string
 
   /**
+   * Model-facing prefix for JavaScript Tools bridged through an MCP server.
+   *
+   * Defaults to `"aml"`. An empty string also selects the default. Non-empty
+   * values must be trimmed and must not collide with another MCP server granted
+   * to the same Agent.
+   */
+  readonly toolPrefix?: string
+
+  /**
    * Listener that receives immutable trace events from every evaluation run by
    * this runtime.
    *
@@ -427,6 +436,7 @@ export class AmlRuntime {
       ...(options.agentProvider === undefined ? {} : { agentProvider: options.agentProvider }),
       maxTurnsPerAgent,
       ...(options.system === undefined ? {} : { system: options.system }),
+      ...(options.toolPrefix === undefined ? {} : { toolPrefix: options.toolPrefix }),
     })
     this.#maxAgentCalls = maxAgentCalls
     this.#maxConcurrentAgents = maxConcurrentAgents

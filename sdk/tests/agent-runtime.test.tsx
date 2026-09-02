@@ -116,6 +116,22 @@ describe("Agent", () => {
     expect(localProvider.calls[0]?.request.model).toBe("provider/model")
   })
 
+  it("defaults and configures the model-facing Tool prefix", async () => {
+    const provider = new DeterministicAgentProvider()
+
+    await new AmlRuntime({ agentProvider: provider }).evaluate(<Agent>default</Agent>)
+    await new AmlRuntime({ agentProvider: provider, toolPrefix: "" }).evaluate(<Agent>empty</Agent>)
+    await new AmlRuntime({ agentProvider: provider, toolPrefix: "review" }).evaluate(<Agent>custom</Agent>)
+
+    expect(provider.calls.map(call => call.request.toolPrefix)).toEqual(["aml", "aml", "review"])
+  })
+
+  it("rejects a non-normalized Tool prefix", () => {
+    expect(() => new AmlRuntime({ toolPrefix: " review " })).toThrow(
+      "toolPrefix must be an empty or non-empty normalized string"
+    )
+  })
+
   it("normalizes Agent permission overrides into an immutable provider request", async () => {
     const provider = new DeterministicAgentProvider()
 

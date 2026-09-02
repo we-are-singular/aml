@@ -55,8 +55,8 @@ export class AcpMcpBridge implements AcpStructuredOutputController {
     output: AgentOutputRequest | undefined,
     context: AgentExecutionContext,
     outputServices?: Readonly<AgentStructuredOutputServices>,
-    reservedServerNames: Iterable<string> = [],
-    createNameNonce: () => string = compactNameNonce
+    name = "aml",
+    reservedServerNames: Iterable<string> = []
   ) {
     if (tools.some(tool => tool.name === ACP_STRUCTURED_OUTPUT_TOOL_NAME)) {
       throw new TypeError(`AML JavaScript Tool name "${ACP_STRUCTURED_OUTPUT_TOOL_NAME}" is reserved`)
@@ -66,8 +66,16 @@ export class AcpMcpBridge implements AcpStructuredOutputController {
       throw new TypeError("AML ACP structured output requires invocation-owned validation services")
     }
 
+    if (typeof name !== "string" || name.length === 0 || name !== name.trim()) {
+      throw new TypeError("AML Tool prefix must be a non-empty normalized string")
+    }
+
     this.#context = context
-    this.#name = availableServerName(reservedServerNames, createNameNonce)
+    if (new Set(reservedServerNames).has(name)) {
+      throw new TypeError(`AML Tool prefix "${name}" conflicts with MCP server "${name}"`)
+    }
+
+    this.#name = name
     this.#output = output
     this.#outputServices = outputServices
     this.#tools = new Map(tools.map(tool => [tool.name, tool]))
@@ -357,22 +365,6 @@ export class AcpMcpBridge implements AcpStructuredOutputController {
       content: [{ text: "Structured result accepted.", type: "text" as const }],
     }
   }
-}
-
-/**
- * Keeps the model-facing bridge name readable while avoiding authored MCP names.
- */
-function availableServerName(reservedServerNames: Iterable<string>, createNonce: () => string): string {
-  const reserved = new Set(reservedServerNames)
-
-  for (;;) {
-    const candidate = `tools_${createNonce()}`
-    if (!reserved.has(candidate)) return candidate
-  }
-}
-
-function compactNameNonce(): string {
-  return randomUUID().replaceAll("-", "").slice(0, 12)
 }
 
 function validationErrorMessage(error: unknown): string {

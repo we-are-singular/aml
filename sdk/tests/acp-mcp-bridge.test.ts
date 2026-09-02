@@ -66,7 +66,7 @@ describe("AcpMcpBridge", () => {
     const client = await connectMcp(connection)
 
     try {
-      expect(connection.name).toMatch(/^tools_[0-9a-f]{12}$/u)
+      expect(connection.name).toBe("aml")
       expect(connection.headers.Authorization).toMatch(/^Bearer [0-9a-f-]{36}$/u)
       expect(bridge.instruction).toContain("Call aml_submit_result once")
       expect(bridge.instruction).toContain("If the Tool returns an error, correct the result and retry")
@@ -96,24 +96,20 @@ describe("AcpMcpBridge", () => {
     }
   })
 
-  it("regenerates a compact nonce when an authored MCP server name collides", async () => {
+  it("rejects a Tool prefix that conflicts with an MCP server name", () => {
     const context = createAgentExecutionContext()
-    const nonces = ["deadbeefcafe", "cafebabefeed"]
-    const bridge = new AcpMcpBridge(
-      [],
-      undefined,
-      context,
-      undefined,
-      ["tools_deadbeefcafe"],
-      () => nonces.shift() ?? ""
-    )
-    const connection = await bridge.start(context.signal)
 
-    try {
-      expect(connection.name).toBe("tools_cafebabefeed")
-    } finally {
-      await bridge.close()
-    }
+    expect(() => new AcpMcpBridge([], undefined, context, undefined, "review", ["review"])).toThrow(
+      'AML Tool prefix "review" conflicts with MCP server "review"'
+    )
+  })
+
+  it("rejects an invalid Tool prefix", () => {
+    const context = createAgentExecutionContext()
+
+    expect(() => new AcpMcpBridge([], undefined, context, undefined, " review ")).toThrow(
+      "AML Tool prefix must be a non-empty normalized string"
+    )
   })
 
   it("accepts the first valid structured submission and traces later calls as ignored", async () => {

@@ -59,6 +59,7 @@ export class AgentRequestPlan {
     readonly skills: readonly AgentSkill[]
     readonly systemFragments: readonly string[]
     readonly tools: readonly AgentTool[]
+    readonly toolPrefix: string
     readonly trace: AmlTraceIdentity
   }): AgentRequestPlan {
     const systemFragments: string[] = []
@@ -121,6 +122,7 @@ export class AgentRequestPlan {
       system: systemFragments.join("\n"),
       ...(input.props.timeoutMs === undefined ? {} : { timeoutMs: input.props.timeoutMs }),
       tools,
+      toolPrefix: input.toolPrefix,
       trace: input.trace,
     })
     const context: AgentExecutionContext = Object.freeze({
