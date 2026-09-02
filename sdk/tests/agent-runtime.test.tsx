@@ -128,7 +128,7 @@ describe("Agent", () => {
 
   it("rejects a non-normalized Tool prefix", () => {
     expect(() => new AmlRuntime({ toolPrefix: " review " })).toThrow(
-      "toolPrefix must be an empty or non-empty normalized string"
+      "toolPrefix must be empty or a trimmed non-empty string"
     )
   })
 
