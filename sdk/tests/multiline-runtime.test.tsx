@@ -4,7 +4,6 @@ import ts from "@typescript/typescript6"
 import { Block } from "../src/components/block/block.js"
 import { AmlRuntime } from "../src/core/aml-runtime.js"
 import { multiline } from "../src/core/multiline.js"
-import { jsxDEV } from "../src/jsx-dev-runtime.js"
 
 describe("multiline", () => {
   it("preserves headings, paragraphs, and unordered and ordered lists", async () => {
@@ -50,7 +49,7 @@ describe("multiline", () => {
     )
   })
 
-  it("survives the development JSX transform", async () => {
+  it("leaves the tagged template intact through the development JSX transform", () => {
     const transformed = ts.transpileModule(
       `
         const result = (
@@ -75,18 +74,53 @@ describe("multiline", () => {
 
     expect(transformed).toContain('from "@aml-jsx/sdk/jsx-dev-runtime"')
     expect(transformed).toContain("children: multiline `\n              Review the change:")
+  })
 
-    const content = multiline`
-      Review the change:
+  it("preserves deeper indentation", async () => {
+    await expect(
+      new AmlRuntime().evaluate(multiline`
+        - Check behavior
+          - Check nested behavior
 
-      - Check behavior
-      - Check tests
-    `
-    const developmentBlock = jsxDEV(Block, { children: content }, undefined, false, undefined, undefined)
+            const result = true
+      `)
+    ).resolves.toBe("- Check behavior\n  - Check nested behavior\n\n    const result = true")
+  })
 
-    await expect(new AmlRuntime().evaluate(developmentBlock)).resolves.toBe(
-      "\n\nReview the change:\n\n- Check behavior\n- Check tests\n\n"
+  it.each([
+    ["empty", multiline``, ""],
+    ["whitespace-only", multiline`\n    \n`, ""],
+    ["without surrounding blank lines", multiline`first\n  second`, "first\n  second"],
+  ])("handles %s content", async (_case, content, expected) => {
+    await expect(new AmlRuntime().evaluate(content)).resolves.toBe(expected)
+  })
+
+  it("preserves adjacent, leading, and trailing interpolations", async () => {
+    const first = <Block>first</Block>
+    const second = Promise.resolve("second")
+
+    await expect(new AmlRuntime().evaluate(multiline`${first}${second} third ${"fourth"}`)).resolves.toBe(
+      "\n\nfirst\n\nsecond third fourth"
     )
+  })
+
+  it("preserves an interpolation on an otherwise empty indented line", async () => {
+    await expect(
+      new AmlRuntime().evaluate(multiline`
+        before
+        ${<Block>inside</Block>}
+        after
+      `)
+    ).resolves.toBe("before\n\n\ninside\n\n\nafter")
+  })
+
+  it("does not confuse marker-like authored text with interpolation markers", async () => {
+    await expect(
+      new AmlRuntime().evaluate(multiline`
+        \u{e000}aml-multiline-0\u{e001}
+        ${"value"}
+      `)
+    ).resolves.toBe("\u{e000}aml-multiline-0\u{e001}\nvalue")
   })
 
   it("dedents a direct string child through Block's convenience prop", async () => {
@@ -100,6 +134,22 @@ describe("multiline", () => {
         `}</Block>
       )
     ).resolves.toBe("\n\nReview the change:\n\n- Check behavior\n- Check tests\n\n")
+  })
+
+  it("uses the same dedentation for the tag and Block convenience prop", async () => {
+    const source = `
+      Review the change:
+
+        - Preserve deeper indentation
+    `
+    const strings = Object.assign([source], { raw: [source] }) as unknown as TemplateStringsArray
+
+    const [tagged, block] = await Promise.all([
+      new AmlRuntime().evaluate(<Block>{multiline(strings)}</Block>),
+      new AmlRuntime().evaluate(<Block multiline>{source}</Block>),
+    ])
+
+    expect(tagged).toBe(block)
   })
 
   it("leaves non-string Block children unchanged in multiline mode", async () => {

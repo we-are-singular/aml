@@ -9,6 +9,9 @@ import type { AmlRenderable } from "./aml-node.js"
  * through the normal evaluator rather than being stringified.
  */
 export function multiline(strings: TemplateStringsArray, ...values: readonly AmlRenderable[]): AmlRenderable[] {
+  // Dedentation must see the template as one document, including lines split by
+  // interpolations. Private-use sentinels temporarily reserve each value's
+  // position without coercing AML nodes, promises, or other renderables to text.
   const markerPrefix = uniqueTemplateMarkerPrefix(strings)
   const source = strings.reduce(
     (result, string, index) =>
@@ -31,7 +34,14 @@ export function multiline(strings: TemplateStringsArray, ...values: readonly Aml
   return result
 }
 
-/** Removes source-formatting indentation while preserving semantic line structure. */
+/**
+ * Removes indentation introduced by formatting multiline source code.
+ *
+ * At most one whitespace-only opening and closing line are removed. The
+ * smallest indentation shared by all non-blank lines is removed, while deeper
+ * indentation remains intact. Interior whitespace-only lines become empty
+ * lines so source indentation does not leak into the rendered prompt.
+ */
 export function dedentMultilineText(source: string): string {
   const lines = source.split("\n")
   if (lines[0]?.trim().length === 0) lines.shift()
@@ -43,16 +53,22 @@ export function dedentMultilineText(source: string): string {
     return smallest === undefined ? width : Math.min(smallest, width)
   }, undefined)
 
-  if (indentation === undefined || indentation === 0) return lines.join("\n")
+  if (indentation === undefined) return ""
+  if (indentation === 0) return lines.map(line => (line.trim().length === 0 ? "" : line)).join("\n")
   return lines.map(line => (line.trim().length === 0 ? "" : line.slice(indentation))).join("\n")
 }
 
 function uniqueTemplateMarkerPrefix(strings: TemplateStringsArray): string {
+  // U+E000 and U+E001 are Unicode private-use characters: valid string data
+  // with no textual meaning in AML. Extend the prefix until none of the static
+  // template segments contain it, making every generated marker unambiguous.
   let prefix = "\u{e000}aml-multiline"
   while (strings.some(string => string.includes(prefix))) prefix += "\u{e000}"
   return prefix
 }
 
 function templateValueMarker(prefix: string, index: number): string {
+  // The index gives every interpolation a distinct token; U+E001 terminates it
+  // so adjacent interpolations can be recovered without a delimiter in between.
   return `${prefix}-${index}\u{e001}`
 }
