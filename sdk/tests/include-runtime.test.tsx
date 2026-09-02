@@ -172,6 +172,26 @@ describe("<Include>", () => {
     expect(reads.readCalls).toEqual(["brief.md"])
   })
 
+  it("reapplies maxBytes when a file grows during cache promotion", async () => {
+    const reads = instrumentedSandbox({ files: { "brief.md": "shared context" } })
+
+    async function IncludeAfterGrowth() {
+      await evaluate(<Include maxBytes={5} path="brief.md" title={false} />)
+      reads.replaceOnNextRead("brief.md", "this context grew beyond the inline ceiling")
+      return await evaluate(<Include maxBytes={20} path="brief.md" title={false} />)
+    }
+
+    const output = await new AmlRuntime().evaluate(
+      <Sandbox access="read-write" provider={reads.provider}>
+        <IncludeAfterGrowth />
+      </Sandbox>
+    )
+
+    expect(output).toContain("File: `brief.md` (43 bytes, 1 line)")
+    expect(output).toContain("exceeds the 20 bytes inline limit")
+    expect(reads.readCalls).toEqual(["brief.md"])
+  })
+
   it("reads local UTF-8 sources live with derived, custom, or omitted headings", async () => {
     const directory = await temporaryDirectory("aml-include-src-")
     const source = path.join(directory, "brief.md")
@@ -439,6 +459,7 @@ function instrumentedSandbox(options: {
   const killedInspectCalls: string[] = []
   const readCalls: string[] = []
   const statCalls: string[] = []
+  let nextReadReplacement: Readonly<{ content: string | Uint8Array; filePath: string }> | undefined
   let shouldFailRead = options.failFirstRead ?? false
   const provider: SandboxProvider = {
     name: "instrumented-sandbox",
@@ -459,6 +480,10 @@ function instrumentedSandbox(options: {
               throw new Error("temporary read failure")
             }
 
+            if (nextReadReplacement?.filePath === filePath) {
+              files.set(filePath, nextReadReplacement.content)
+              nextReadReplacement = undefined
+            }
             const content = files.get(filePath)
             return content === undefined
               ? await runtime.readFile(filePath, readOptions)
@@ -497,7 +522,16 @@ function instrumentedSandbox(options: {
     },
   }
 
-  return { inspectCalls, killedInspectCalls, provider, readCalls, statCalls }
+  return {
+    inspectCalls,
+    killedInspectCalls,
+    provider,
+    readCalls,
+    replaceOnNextRead(filePath: string, content: string | Uint8Array) {
+      nextReadReplacement = { content, filePath }
+    },
+    statCalls,
+  }
 }
 
 async function delay(milliseconds = 1): Promise<void> {
