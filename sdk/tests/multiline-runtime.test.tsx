@@ -76,6 +76,30 @@ describe("multiline", () => {
     expect(transformed).toContain("children: multiline `\n              Review the change:")
   })
 
+  it("shows that the JSX transform normalizes natural multiline text before Block receives it", () => {
+    const transformed = ts.transpileModule(
+      `
+        const result = (
+          <Block multiline>
+            Review the change:
+
+            - Check behavior
+            - Check tests
+          </Block>
+        )
+      `,
+      {
+        compilerOptions: {
+          jsx: ts.JsxEmit.ReactJSXDev,
+          jsxImportSource: "@aml-jsx/sdk",
+          target: ts.ScriptTarget.ESNext,
+        },
+      }
+    ).outputText
+
+    expect(transformed).toContain('children: "Review the change: - Check behavior - Check tests"')
+  })
+
   it("preserves deeper indentation", async () => {
     await expect(
       new AmlRuntime().evaluate(multiline`

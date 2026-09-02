@@ -6,7 +6,10 @@ export interface BlockProps {
   /** Content preserved between two leading and two trailing newline characters. AML-empty markers count as no children. */
   readonly children?: AmlRenderable
 
-  /** Dedent a direct multiline string child while preserving its semantic line structure. */
+  /**
+   * Dedent a direct template-literal string child while preserving its semantic line structure.
+   * Natural JSX text is already whitespace-normalized before Block receives it and cannot be recovered.
+   */
   readonly multiline?: boolean
 
   /**
@@ -26,7 +29,8 @@ export interface BlockProps {
  * `"\n\n"` separator. A Block with children returns the transparent sequence
  * `"\n\n"`, children, `"\n\n"` so descriptors retain their existing nearest
  * Agent or resource owner. When `tag` is present, the children are additionally
- * wrapped in one kebab-cased XML-style section.
+ * wrapped in one kebab-cased XML-style section. With `multiline`, a direct
+ * template-literal string child is dedented before the separators are added.
  */
 export function Block({ children, multiline = false, tag }: BlockProps): AmlRenderable {
   if (children === null || children === undefined || typeof children === "boolean") return "\n\n"
