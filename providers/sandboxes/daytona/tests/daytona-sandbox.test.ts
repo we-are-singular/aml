@@ -94,6 +94,8 @@ describe("daytonaSandbox()", () => {
       modifiedAtMs: expect.any(Number),
       size: 7,
     })
+    fake.modifiedAt = "not-a-timestamp"
+    expect(await lease.runtime.stat("repository/context.txt")).toEqual({ kind: "file", size: 7 })
     expect(new TextDecoder().decode(await lease.runtime.readFile("repository/context.txt"))).toBe("context")
     const staging = await lease.runtime.createFileStaging()
     await staging.writeFile(".agents/skills/review/SKILL.md", new TextEncoder().encode("skill"))
@@ -287,6 +289,7 @@ class FakeDaytona {
   downloadCount = 0
   readonly fileModes = new Map<string, string>()
   readonly files = new Map<string, Buffer>()
+  modifiedAt = "1970-01-01T00:00:01.000Z"
   readonly remoteWorkspace: string
   readonly sessionCommands: Array<{ request: Record<string, unknown>; sessionId: string }> = []
   readonly sessionInputs: string[] = []
@@ -334,13 +337,13 @@ class FakeDaytona {
             return {
               isDir: false,
               mode: this.fileModes.get(remotePath) ?? "-rw-r--r--",
-              modifiedAt: "1970-01-01T00:00:01.000Z",
+              modifiedAt: this.modifiedAt,
               size: content.byteLength,
             }
           }
 
           if (this.directories.has(remotePath)) {
-            return { isDir: true, mode: "drwxr-xr-x", modifiedAt: "1970-01-01T00:00:01.000Z", size: 0 }
+            return { isDir: true, mode: "drwxr-xr-x", modifiedAt: this.modifiedAt, size: 0 }
           }
 
           throw new DaytonaFileNotFoundError(`missing remote path ${remotePath}`)

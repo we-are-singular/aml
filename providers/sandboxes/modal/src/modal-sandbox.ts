@@ -404,11 +404,14 @@ function createRuntime(
         throw new TypeError("Modal Sandbox file path must identify a regular file or directory")
       }
 
-      return Object.freeze({
+      const modifiedAtMs = metadata.modifiedTime * 1_000
+      const stat = {
         kind: metadata.type,
-        modifiedAtMs: metadata.modifiedTime * 1_000,
         size: metadata.type === "file" ? metadata.size : 0,
-      })
+      }
+      return Number.isFinite(modifiedAtMs) && modifiedAtMs >= 0
+        ? Object.freeze({ ...stat, modifiedAtMs })
+        : Object.freeze(stat)
     },
     async writeFile(filePath, content, options = {}) {
       if (request.access !== "read-write") {
