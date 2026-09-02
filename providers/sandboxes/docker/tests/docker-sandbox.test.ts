@@ -248,6 +248,15 @@ describe("dockerSandbox()", () => {
     await lease.release()
   })
 
+  it("omits an unparseable guest modification time without failing stat", async () => {
+    const workspace = await createWorkspace()
+    const runner = new FilesystemFakeRunner("not-a-date")
+    const lease = await createDockerSandboxProvider({ image: "agent-image", workspace }, runner).acquire(request())
+
+    await expect(lease.runtime.stat("repository/fixture.txt")).resolves.toEqual({ kind: "file", size: 7 })
+    await lease.release()
+  })
+
   it("keeps Agent staging writable while rejecting Workspace writes in a read-only Docker Sandbox", async () => {
     const workspace = await createWorkspace()
     const runner = new FilesystemFakeRunner()
@@ -377,6 +386,8 @@ class FakeRunner {
 class FilesystemFakeRunner {
   readonly #files = new Map<string, Uint8Array>([["/workspace/fixture.txt", new TextEncoder().encode("fixture")]])
 
+  constructor(readonly modifiedAtValue = "1970-01-01 00:00:01.000000000 +0000") {}
+
   hasGuestPath(candidate: string): boolean {
     return [...this.#files].some(([filePath]) => filePath === candidate || filePath.startsWith(`${candidate}/`))
   }
@@ -433,11 +444,11 @@ class FilesystemFakeRunner {
       const content = filePath === undefined ? undefined : this.#files.get(filePath)
 
       if (content !== undefined) {
-        return result(`81a4\t${content.byteLength}\t1970-01-01 00:00:01.000000000 +0000\n`)
+        return result(`81a4\t${content.byteLength}\t${this.modifiedAtValue}\n`)
       }
 
       if (filePath !== undefined && this.#isDirectory(filePath)) {
-        return result("41ed\t0\t1970-01-01 00:00:01.000000000 +0000\n")
+        return result(`41ed\t0\t${this.modifiedAtValue}\n`)
       }
 
       return result("", "missing", 1)

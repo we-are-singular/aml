@@ -135,6 +135,20 @@ describe("<Include>", () => {
     expect(reads.readCalls).toEqual(["large.txt"])
   })
 
+  it("kills a streamed Sandbox read when UTF-8 validation stops iteration", async () => {
+    const reads = instrumentedSandbox({ files: { binary: new Uint8Array([0xff, 0xff]) } })
+
+    await expect(
+      new AmlRuntime().evaluate(
+        <Sandbox access="read-write" provider={reads.provider}>
+          <Include maxBytes={1} path="binary" title={false} />
+        </Sandbox>
+      )
+    ).rejects.toThrow("content must be valid UTF-8")
+
+    expect(reads.killedInspectCalls).toEqual(["binary"])
+  })
+
   it("promotes streamed metadata when a later request needs inline content", async () => {
     const reads = instrumentedSandbox({ files: { "brief.md": "shared context" } })
 
@@ -416,12 +430,13 @@ async function temporaryDirectory(prefix: string): Promise<string> {
 function instrumentedSandbox(options: {
   readonly delayMs?: number
   readonly failFirstRead?: boolean
-  readonly files: Readonly<Record<string, string>>
+  readonly files: Readonly<Record<string, string | Uint8Array>>
 }) {
   const base = new DeterministicSandboxProvider()
   const files = new Map(Object.entries(options.files))
   const revisions = new Map(Array.from(files.keys(), filePath => [filePath, 0]))
   const inspectCalls: string[] = []
+  const killedInspectCalls: string[] = []
   const readCalls: string[] = []
   const statCalls: string[] = []
   let shouldFailRead = options.failFirstRead ?? false
@@ -447,7 +462,9 @@ function instrumentedSandbox(options: {
             const content = files.get(filePath)
             return content === undefined
               ? await runtime.readFile(filePath, readOptions)
-              : new TextEncoder().encode(content)
+              : content instanceof Uint8Array
+                ? Uint8Array.from(content)
+                : new TextEncoder().encode(content)
           },
           async spawn(command: string, args = [], spawnOptions: Readonly<SandboxExecOptions> = {}) {
             if (command !== "cat" || args.length !== 1) return await runtime.spawn(command, args, spawnOptions)
@@ -455,7 +472,7 @@ function instrumentedSandbox(options: {
             const content = files.get(filePath)
             if (content === undefined) return await runtime.spawn(command, args, spawnOptions)
             inspectCalls.push(filePath)
-            return textProcess(content)
+            return textProcess(content, () => killedInspectCalls.push(filePath))
           },
           async stat(filePath: string, statOptions = {}) {
             statCalls.push(filePath)
@@ -466,7 +483,8 @@ function instrumentedSandbox(options: {
               : Object.freeze({
                   kind: "file" as const,
                   modifiedAtMs: revisions.get(filePath) ?? 0,
-                  size: new TextEncoder().encode(content).byteLength,
+                  size:
+                    content instanceof Uint8Array ? content.byteLength : new TextEncoder().encode(content).byteLength,
                 })
           },
           async writeFile(filePath: string, content: Uint8Array, writeOptions = {}) {
@@ -479,18 +497,20 @@ function instrumentedSandbox(options: {
     },
   }
 
-  return { inspectCalls, provider, readCalls, statCalls }
+  return { inspectCalls, killedInspectCalls, provider, readCalls, statCalls }
 }
 
 async function delay(milliseconds = 1): Promise<void> {
   await new Promise(resolve => setTimeout(resolve, milliseconds))
 }
 
-function textProcess(content: string) {
-  const bytes = new TextEncoder().encode(content)
+function textProcess(content: string | Uint8Array, onKill: () => void = () => undefined) {
+  const bytes = content instanceof Uint8Array ? content : new TextEncoder().encode(content)
   return Object.freeze({
     id: "include-cat",
-    async kill() {},
+    async kill() {
+      onKill()
+    },
     stdin: new WritableStream<Uint8Array>(),
     stderr: new ReadableStream<Uint8Array>({ start: controller => controller.close() }),
     stdout: new ReadableStream<Uint8Array>({
