@@ -61,7 +61,7 @@ Review the change:
 - Check documentation
 ```
 
-The Block removes an opening and closing blank source line plus the indentation shared by every non-blank line. It preserves additional indentation and intentional blank lines. The convenience applies only to a direct string child; non-string children retain normal Block behavior.
+The Block removes an opening and closing blank source line plus the indentation shared by every non-blank line. It preserves additional indentation and intentional blank lines. The braces and template literal are required: TypeScript normalizes natural JSX text before AML receives it, so `<Block multiline>` cannot recover line breaks from an ordinary JSX text child. The convenience applies only to a direct template-literal string child; non-string children retain normal Block behavior.
 
 Use the `multiline` template tag when the text needs nested AML expressions. Unlike an ordinary template literal, the tag keeps interpolated values as renderables instead of stringifying them:
 
