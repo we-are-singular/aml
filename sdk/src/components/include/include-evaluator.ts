@@ -7,8 +7,10 @@ import { IncludeFileCache, type CachedIncludeFile } from "./include-file-cache.j
 import { HostTextFile, inspectTextBytes, inspectTextStream, type TextFileInspection } from "./text-file-inspection.js"
 import type { IncludeProps } from "./include.js"
 
-const MAX_CACHED_INCLUDE_FILES = 64
-const MAX_CACHED_INCLUDE_CONTENT_BYTES = 256 * 1024
+// Bound worst-case retention while keeping ordinary source trees and large
+// context documents cacheable without application-specific tuning.
+const MAX_CACHED_INCLUDE_FILES = 32
+const MAX_CACHED_INCLUDE_CONTENT_BYTES = 10 * 1024 * 1024
 
 /** Observable Include result and safe trace metadata. */
 export interface IncludeEvaluationResult {

@@ -71,12 +71,12 @@ describe("<Include>", () => {
     expect(reads.readCalls).toEqual(["brief.md", "brief.md", "brief.md"])
   })
 
-  it("evicts the oldest cached file after 64 entries", async () => {
-    const files = Object.fromEntries(Array.from({ length: 65 }, (_, index) => [`file-${index}.txt`, "oversized"]))
+  it("evicts the oldest cached file after 32 entries", async () => {
+    const files = Object.fromEntries(Array.from({ length: 33 }, (_, index) => [`file-${index}.txt`, "oversized"]))
     const reads = instrumentedSandbox({ files })
 
     async function FillCache() {
-      for (let index = 0; index < 65; index += 1) {
+      for (let index = 0; index < 33; index += 1) {
         await evaluate(<Include path={`file-${index}.txt`} title={false} />)
       }
 
@@ -90,8 +90,8 @@ describe("<Include>", () => {
         </Sandbox>
       )
     ).resolves.toBe("oversized")
-    expect(reads.statCalls).toHaveLength(66)
-    expect(reads.readCalls).toHaveLength(66)
+    expect(reads.statCalls).toHaveLength(34)
+    expect(reads.readCalls).toHaveLength(34)
   })
 
   it("retains metadata without content for files larger than the cache limit", async () => {
