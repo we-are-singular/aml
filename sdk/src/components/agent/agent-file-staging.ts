@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto"
 import { mkdtemp, rm } from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
@@ -62,6 +63,12 @@ export class AgentFileStaging {
       directory: this.#sandbox === undefined ? path.dirname(stagedPath) : path.posix.dirname(stagedPath),
       path: stagedPath,
     })
+  }
+
+  /** Writes one Include under a collision-free path with a safe, recognizable basename. */
+  async writeInclude(sourcePath: string, content: Uint8Array): Promise<Readonly<AgentStagedFile>> {
+    const name = path.basename(sourcePath).replaceAll(/[^A-Za-z0-9._-]/g, "-") || "include.txt"
+    return await this.writeFile(`.aml/includes/${randomUUID()}/${name}`, content)
   }
 
   /** Resolves one portable staging-relative path in the Agent's execution environment. */

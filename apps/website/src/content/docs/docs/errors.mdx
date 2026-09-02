@@ -46,7 +46,7 @@ The class is intentionally broad because the error message identifies the invali
 - `<Tool> is only valid inside <Agent>`, `<Mcp> is only valid inside <Agent>`, or `<Skill> is only valid inside <Agent>` — move the capability into its owning [`<Agent />`](/docs/reference/primitives/agent/) plan.
 - `<File> requires an enclosing <Workspace> or <Sandbox>` — place the write under the intended active filesystem owner and use a read-write Sandbox for guest writes.
 - `<Include path> requires an enclosing <Workspace> or <Sandbox>` — use an active workflow filesystem path or switch to application-owned `src`.
-- `an oversized <Include src> requires a containing <Agent>` or `an oversized <Include path> in a host Workspace requires a containing <Agent>` — move the Include into the Agent that will receive and read its staged file reference, or raise/remove `maxBytes`.
+- `an oversized <Include> requires a containing <Agent>` — move the Include into the Agent that will receive and read its staged file reference, or raise/remove `maxBytes`.
 - `A nested <Sandbox> cannot widen read-only access to read-write` — narrow the child [`<Sandbox />`](/docs/reference/primitives/sandbox/) policy or change the parent policy.
 - `AML evaluation exceeded maxAgentCalls ...` or `maxDepth ...` — increase a deliberate budget or reduce workflow breadth/depth.
 - `Structured evaluate() must resolve to exactly one <Agent>` — make the schema-bearing evaluation target one `<Agent />` result.

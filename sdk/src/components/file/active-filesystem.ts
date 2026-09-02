@@ -73,6 +73,27 @@ export class ActiveFilesystem {
       : await this.#sandbox.lease.runtime.readFile(path, { signal })
   }
 
+  /** Opens one file as chunks without retaining its complete body. */
+  async readFileChunks(path: string, signal: AbortSignal): Promise<AsyncIterable<Uint8Array>> {
+    signal.throwIfAborted()
+
+    if (this.#sandbox === undefined) {
+      return await this.#requiredHost().readFileChunks(path, { signal })
+    }
+
+    // Some providers intentionally reject every process under read-only access
+    // because their execution boundary cannot enforce a read-only filesystem.
+    // Preserve that security contract by using the provider's complete file
+    // read there; read-write Sandboxes can stream through the process RPC.
+    if (this.#sandbox.access === "read-only") {
+      return chunksFrom(await this.#sandbox.lease.runtime.readFile(path, { signal }))
+    }
+
+    const commandPath = this.agentReadablePath(path)
+    if (commandPath === undefined) throw new Error("Active Sandbox path is not Agent-readable")
+    return this.#readSandboxFileChunks(path, commandPath, signal)
+  }
+
   /** Reads metadata without loading the complete file body. */
   async stat(path: string, signal: AbortSignal): Promise<Readonly<SandboxFileStat>> {
     signal.throwIfAborted()
@@ -105,4 +126,52 @@ export class ActiveFilesystem {
 
     return this.#host
   }
+
+  /**
+   * Bridges SandboxRuntime's process streams into the filesystem chunk API.
+   *
+   * SandboxRuntime intentionally exposes complete `readFile()` snapshots but
+   * no file-stream primitive. `cat` receives the path as a literal argument;
+   * stdout is consumed lazily while stderr and process cleanup remain owned by
+   * this filesystem boundary.
+   */
+  async *#readSandboxFileChunks(path: string, commandPath: string, signal: AbortSignal): AsyncIterable<Uint8Array> {
+    const process = await this.#sandbox!.lease.runtime.spawn("cat", [commandPath], {
+      cwd: this.#sandbox!.cwd,
+      signal,
+    })
+    const stderr = readText(process.stderr)
+
+    try {
+      const writer = process.stdin.getWriter()
+      try {
+        await writer.close()
+      } finally {
+        writer.releaseLock()
+      }
+
+      for await (const chunk of process.stdout) yield chunk
+
+      const [errorOutput, exit] = await Promise.all([stderr, process.wait()])
+      if (exit.exitCode !== 0) {
+        throw new Error(`Sandbox could not read "${path}": ${errorOutput || `cat exited ${exit.exitCode}`}`)
+      }
+    } catch (cause) {
+      await process.kill()
+      await stderr.catch(() => undefined)
+      throw cause
+    }
+  }
+}
+
+async function readText(stream: ReadableStream<Uint8Array>): Promise<string> {
+  const decoder = new TextDecoder()
+  let output = ""
+
+  for await (const chunk of stream) output += decoder.decode(chunk, { stream: true })
+  return `${output}${decoder.decode()}`.trim()
+}
+
+async function* chunksFrom(content: Uint8Array): AsyncIterable<Uint8Array> {
+  yield content
 }

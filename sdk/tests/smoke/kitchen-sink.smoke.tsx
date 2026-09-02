@@ -175,6 +175,16 @@ async function runKitchenSink(selection: KitchenSinkSelection): Promise<void> {
     await verifyPersistedWorkspace(workspace.provider, workspaceId, proofs, selection.mcp)
     assert(traceEvents.some(isStagedInclude), "Oversized Include src was not staged for the Agent")
 
+    // Exercise the public per-request limit contract: the first Include emits a
+    // file reference, while later larger limits inline the same live revision.
+    assert.deepEqual(
+      traceEvents
+        .filter(event => event.type === "span.end" && event.kind === "include" && event.attributes.source === "path")
+        .map(event => event.attributes.inline),
+      [false, true, true],
+      "Repeated Include path requests did not preserve their independent maxBytes decisions"
+    )
+
     if (selection.mcp === "context7") {
       assert(traceEvents.some(isContext7ToolCall), "Context7 was attached but no Context7 MCP Tool call was observed")
     }
@@ -234,7 +244,9 @@ async function KitchenSinkAgent({ mcp, model, proofs, proofTool }: KitchenSinkAg
         {nestedAgent}
       </System>
       <Block tag="workspace-input">
-        <Include path="input.txt" title="Workspace input" />
+        <Include maxBytes={1} path="input.txt" title="Workspace input reference" />
+        <Include maxBytes={1_024} path="input.txt" title="Workspace input" />
+        <Include maxBytes={1_024} path="input.txt" title="Workspace input cached" />
       </Block>
       <Block tag="staged-application-source">
         <Include src={KITCHEN_SINK_INCLUDE_SOURCE} maxBytes={1} title="Staged application source" />
