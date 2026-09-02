@@ -39,7 +39,8 @@ export class HostFilesystem {
     const physicalRoot = await realpath(this.#root)
 
     if (normalized === ".") {
-      return Object.freeze({ kind: "directory" as const, size: 0 })
+      const metadata = await lstat(physicalRoot)
+      return Object.freeze({ kind: "directory" as const, modifiedAtMs: metadata.mtimeMs, size: 0 })
     }
 
     const target = await this.#resolveExistingFromRoot(physicalRoot, normalized)
@@ -51,11 +52,11 @@ export class HostFilesystem {
     }
 
     if (metadata.isFile()) {
-      return Object.freeze({ kind: "file" as const, size: metadata.size })
+      return Object.freeze({ kind: "file" as const, modifiedAtMs: metadata.mtimeMs, size: metadata.size })
     }
 
     if (metadata.isDirectory()) {
-      return Object.freeze({ kind: "directory" as const, size: 0 })
+      return Object.freeze({ kind: "directory" as const, modifiedAtMs: metadata.mtimeMs, size: 0 })
     }
 
     throw new TypeError("Host filesystem path must identify a regular file or directory")

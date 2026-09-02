@@ -226,7 +226,11 @@ describe("dockerSandbox()", () => {
     const runner = new FilesystemFakeRunner()
     const lease = await createDockerSandboxProvider({ image: "agent-image", workspace }, runner).acquire(request())
 
-    await expect(lease.runtime.stat("repository/fixture.txt")).resolves.toEqual({ kind: "file", size: 7 })
+    await expect(lease.runtime.stat("repository/fixture.txt")).resolves.toEqual({
+      kind: "file",
+      modifiedAtMs: 1_000,
+      size: 7,
+    })
     await expect(lease.runtime.readFile("repository/fixture.txt")).resolves.toEqual(new TextEncoder().encode("fixture"))
 
     await lease.runtime.writeFile("repository/generated/result.txt", new TextEncoder().encode("generated"))
@@ -429,11 +433,11 @@ class FilesystemFakeRunner {
       const content = filePath === undefined ? undefined : this.#files.get(filePath)
 
       if (content !== undefined) {
-        return result(`81a4:${content.byteLength}\n`)
+        return result(`81a4\t${content.byteLength}\t1970-01-01 00:00:01.000000000 +0000\n`)
       }
 
       if (filePath !== undefined && this.#isDirectory(filePath)) {
-        return result("41ed:0\n")
+        return result("41ed\t0\t1970-01-01 00:00:01.000000000 +0000\n")
       }
 
       return result("", "missing", 1)

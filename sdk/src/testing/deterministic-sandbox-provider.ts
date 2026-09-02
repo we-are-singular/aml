@@ -162,6 +162,8 @@ export class DeterministicSandboxProvider<Handle = DeterministicSandboxHandle> i
     const id = `${this.name}-${acquisition + 1}`
     const directories = new Set<string>([request.root])
     const files = new Map<string, Uint8Array>()
+    const modifiedAt = new Map<string, number>()
+    let revision = 0
     const addParents = (filePath: string): void => {
       let parent = filePath.includes("/") ? filePath.slice(0, filePath.lastIndexOf("/")) : "."
 
@@ -187,6 +189,7 @@ export class DeterministicSandboxProvider<Handle = DeterministicSandboxHandle> i
             for (const filePath of files.keys()) {
               if (filePath.startsWith(`${root}/`)) {
                 files.delete(filePath)
+                modifiedAt.delete(filePath)
               }
             }
           },
@@ -195,6 +198,7 @@ export class DeterministicSandboxProvider<Handle = DeterministicSandboxHandle> i
             const destination = `${root}/${filePath}`
             addParents(destination)
             files.set(destination, Uint8Array.from(content))
+            modifiedAt.set(destination, ++revision)
           },
         })
       },
@@ -217,11 +221,15 @@ export class DeterministicSandboxProvider<Handle = DeterministicSandboxHandle> i
         const content = files.get(filePath)
 
         if (content !== undefined) {
-          return Object.freeze({ kind: "file" as const, size: content.byteLength })
+          return Object.freeze({
+            kind: "file" as const,
+            modifiedAtMs: modifiedAt.get(filePath) ?? 0,
+            size: content.byteLength,
+          })
         }
 
         if (directories.has(filePath)) {
-          return Object.freeze({ kind: "directory" as const, size: 0 })
+          return Object.freeze({ kind: "directory" as const, modifiedAtMs: 0, size: 0 })
         }
 
         throw new Error(`Deterministic Sandbox file "${filePath}" does not exist`)
@@ -233,6 +241,7 @@ export class DeterministicSandboxProvider<Handle = DeterministicSandboxHandle> i
 
         addParents(filePath)
         files.set(filePath, Uint8Array.from(content))
+        modifiedAt.set(filePath, ++revision)
       },
     })
 

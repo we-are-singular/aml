@@ -55,6 +55,9 @@ export interface SandboxFileStat {
   /** Entry kind after rejecting symbolic links and unsupported file types. */
   readonly kind: "directory" | "file"
 
+  /** Last modification time as Unix epoch milliseconds when available. */
+  readonly modifiedAtMs?: number
+
   /** Encoded byte length for files; directories report `0`. */
   readonly size: number
 }

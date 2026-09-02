@@ -84,7 +84,11 @@ describe("localSandbox()", () => {
     const workspace = await createWorkspace()
     const lease = await localSandbox({ workspace }).acquire(request())
 
-    expect(await lease.runtime.stat("repository/fixture.txt")).toEqual({ kind: "file", size: 7 })
+    expect(await lease.runtime.stat("repository/fixture.txt")).toEqual({
+      kind: "file",
+      modifiedAtMs: expect.any(Number),
+      size: 7,
+    })
     expect(new TextDecoder().decode(await lease.runtime.readFile("repository/fixture.txt"))).toBe("fixture")
     await lease.runtime.writeFile("repository/generated/report.txt", new TextEncoder().encode("report"))
     expect(await readFile(path.join(workspace, "repository/generated/report.txt"), "utf8")).toBe("report")

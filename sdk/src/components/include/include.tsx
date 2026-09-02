@@ -2,7 +2,7 @@ import { AmlNode } from "../../core/aml-node.js"
 
 /** Rendering controls shared by both supported Include source modes. */
 interface IncludeSharedProps {
-  /** Optional positive byte ceiling for prompt inlining. */
+  /** Optional positive byte ceiling before size, line count, and an Agent-visible read path replace inline content. */
   readonly maxBytes?: number
 
   /** Markdown heading text, or `false` to emit only the body. */
@@ -27,7 +27,7 @@ export type IncludeProps = IncludeSharedProps &
   )
 
 /**
- * Adds live file content or a bounded Agent-visible read instruction.
+ * Adds cached UTF-8 file content or size and line metadata with a bounded Agent-visible read instruction.
  *
  * Local `src` and active-filesystem `path` are mutually exclusive. This
  * primitive is runtime-owned because size checks and staging must complete

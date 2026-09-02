@@ -163,7 +163,7 @@ describe("AbstractAgentProvider", () => {
             root: ".",
             spawn: async () => completedTestProcess(),
             async stat() {
-              return { kind: "file", size: 0 } as const
+              return { kind: "file", modifiedAtMs: 0, size: 0 } as const
             },
             async writeFile() {},
           },
@@ -223,7 +223,7 @@ class RecordingSandboxProvider extends AbstractSandboxProvider<
       root: request.root,
       spawn: async () => completedTestProcess(),
       async stat() {
-        return Object.freeze({ kind: "file" as const, size: 0 })
+        return Object.freeze({ kind: "file" as const, modifiedAtMs: 0, size: 0 })
       },
       async writeFile() {},
     })
@@ -437,7 +437,7 @@ function fixtureFileRuntime() {
       return new Uint8Array()
     },
     async stat() {
-      return Object.freeze({ kind: "file" as const, size: 0 })
+      return Object.freeze({ kind: "file" as const, modifiedAtMs: 0, size: 0 })
     },
     async writeFile() {},
   }

@@ -9,7 +9,7 @@ import type { WorkspaceMaterializationReference } from "../workspace/workspace-p
 
 /** Live filesystem selected by the nearest lexical Sandbox or Workspace. */
 export class ActiveFilesystem {
-  readonly #identity: object
+  readonly #cacheNamespace: string
   readonly #host: HostFilesystem | undefined
   readonly #sandbox: Readonly<SandboxSession> | undefined
 
@@ -17,20 +17,21 @@ export class ActiveFilesystem {
     workspace: Readonly<WorkspaceMaterializationReference> | undefined,
     sandbox: Readonly<SandboxSession> | undefined
   ) {
-    const identity = sandbox ?? workspace
-
-    if (identity === undefined) {
+    if (sandbox === undefined && workspace === undefined) {
       throw new Error("Active filesystem identity is unavailable")
     }
 
-    this.#identity = identity
+    this.#cacheNamespace =
+      sandbox === undefined
+        ? `workspace:${path.resolve(workspace!.directory)}`
+        : `sandbox:${sandbox.lease.id}:${sandbox.root}`
     this.#sandbox = sandbox
     this.#host = sandbox === undefined && workspace !== undefined ? new HostFilesystem(workspace.directory) : undefined
   }
 
-  /** Returns the stable, distinct Workspace materialization or Sandbox session identity. */
-  cacheIdentity(): object {
-    return this.#identity
+  /** Returns the stable namespace used to distinguish cached file revisions. */
+  cacheNamespace(): string {
+    return this.#cacheNamespace
   }
 
   /** Selects Sandbox guest first, then Workspace materialization. */

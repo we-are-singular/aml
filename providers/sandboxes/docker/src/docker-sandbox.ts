@@ -223,22 +223,23 @@ class DockerSandboxProvider
       })
 
     const inspectGuestPath = async (guestFilePath: string, signal: AbortSignal) => {
-      const result = await runDocker(["exec", containerId, "stat", "--format=%f:%s", "--", guestFilePath], signal)
+      const result = await runDocker(["exec", containerId, "stat", "--format=%f\t%s\t%y", "--", guestFilePath], signal)
 
       if (result.exitCode !== 0) {
         return undefined
       }
 
-      const [modeValue, sizeValue] = result.stdout.trim().split(":")
+      const [modeValue, sizeValue, modifiedAtValue] = result.stdout.trim().split("\t")
       const mode = Number.parseInt(modeValue ?? "", 16) & 0xf000
       const size = Number.parseInt(sizeValue ?? "", 10)
+      const modifiedAtMs = Date.parse(modifiedAtValue ?? "")
 
-      if (!Number.isSafeInteger(size) || size < 0) {
+      if (!Number.isSafeInteger(size) || size < 0 || !Number.isSafeInteger(modifiedAtMs) || modifiedAtMs < 0) {
         throw new TypeError("Docker Sandbox returned invalid file metadata")
       }
 
       const kind = mode === 0x8000 ? "file" : mode === 0x4000 ? "directory" : "unsupported"
-      return Object.freeze({ kind, size })
+      return Object.freeze({ kind, modifiedAtMs, size })
     }
 
     const assertGuestPath = async (
@@ -457,6 +458,7 @@ class DockerSandboxProvider
         await assertGuestPath(guestFilePath, signal, true, "/workspace")
         return Object.freeze({
           kind: metadata.kind,
+          modifiedAtMs: metadata.modifiedAtMs,
           size: metadata.kind === "file" ? metadata.size : 0,
         })
       },

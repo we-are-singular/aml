@@ -172,20 +172,31 @@ function validateSandboxFileStat(value: unknown, providerName: string): Readonly
   }
 
   let kind: unknown
+  let modifiedAtMs: unknown
   let size: unknown
 
   try {
     kind = Reflect.get(value, "kind")
+    modifiedAtMs = Reflect.get(value, "modifiedAtMs")
     size = Reflect.get(value, "size")
   } catch (cause) {
     throw new TypeError(`Sandbox provider "${providerName}" returned unreadable file metadata`, { cause })
   }
 
-  if ((kind !== "directory" && kind !== "file") || !Number.isSafeInteger(size) || (size as number) < 0) {
+  if (
+    (kind !== "directory" && kind !== "file") ||
+    (modifiedAtMs !== undefined && (!Number.isFinite(modifiedAtMs) || (modifiedAtMs as number) < 0)) ||
+    !Number.isSafeInteger(size) ||
+    (size as number) < 0
+  ) {
     throw new TypeError(`Sandbox provider "${providerName}" returned invalid file metadata`)
   }
 
-  return Object.freeze({ kind, size: size as number })
+  return Object.freeze({
+    kind,
+    ...(modifiedAtMs === undefined ? {} : { modifiedAtMs: modifiedAtMs as number }),
+    size: size as number,
+  })
 }
 
 function assertFileContent(value: unknown, providerName: string): asserts value is Uint8Array {

@@ -1343,8 +1343,7 @@ export class AmlRuntime {
                 current.props as Readonly<IncludeProps>,
                 ActiveFilesystem.capture(frame.target.workspace, frame.target.sandbox),
                 frame.target.staging,
-                context.signal,
-                domain
+                context.signal
               )
               appendText(frame.target, result.content)
               context.endTraceSpan(span, "ok", {
