@@ -48,6 +48,58 @@ export type AmlRenderable =
 export type AmlComponent<Props = Record<string, unknown>> = (props: Props) => AmlRenderable
 
 /**
+ * Concise author-facing name for any value accepted by the AML evaluator.
+ *
+ * The merged type-only namespace provides component and children helpers
+ * without adding a runtime export. {@link AmlRenderable} remains available as
+ * the descriptive equivalent.
+ */
+export type AML = AmlRenderable
+
+/** Type-only helpers for declaring application-owned AML components and props. */
+export namespace AML {
+  /**
+   * Function component evaluated once when AML reaches its authored node.
+   *
+   * Components may return synchronous or asynchronous AML values. The default
+   * props describe a leaf component: custom props and authored children must be
+   * declared explicitly.
+   */
+  export type Component<
+    Props extends object = {
+      /** Prevents the default leaf-component contract from accepting authored children. */
+      readonly children?: never
+    },
+  > = AmlComponent<Props>
+
+  /**
+   * Adds optional authored children to application-owned component props.
+   *
+   * The resulting props are readonly because AML captures an immutable props
+   * snapshot when JSX constructs the component node.
+   */
+  export type PropsWithChildren<Props extends object = Record<never, never>> = Readonly<
+    Props & {
+      /** Nested AML content, omitted when the component is self-closing. */
+      readonly children?: AML
+    }
+  >
+
+  /**
+   * Adds a required authored-children property to application-owned component props.
+   *
+   * Required means the JSX author must provide the property. The child may
+   * still be an AML-empty value such as `null` or `undefined`.
+   */
+  export type PropsWithRequiredChildren<Props extends object = Record<never, never>> = Readonly<
+    Props & {
+      /** Nested AML content that must be supplied by the JSX author. */
+      readonly children: AML
+    }
+  >
+}
+
+/**
  * Immutable component props after JSX child normalization.
  *
  * `children` is optional because self-closing components receive no child

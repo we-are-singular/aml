@@ -305,6 +305,18 @@ async function CustomerContext() {
 
 All components are asynchronous computations even when their functions do not use the `async` keyword.
 
+The SDK exports `AML` as the concise author-facing alias for the complete renderable-value union. Its merged type-only namespace defines reusable component contracts without adding runtime behavior:
+
+```ts
+type Component<Props extends object = { readonly children?: never }> = (props: Props) => AML
+type PropsWithChildren<Props extends object = Record<never, never>> = Readonly<Props & { readonly children?: AML }>
+type PropsWithRequiredChildren<Props extends object = Record<never, never>> = Readonly<
+  Props & { readonly children: AML }
+>
+```
+
+`AML.Component<Props>` accepts synchronous and asynchronous component implementations because `AML` includes promised renderable values. It never adds children implicitly: the default is a leaf with no custom props, custom `Props` accept only what they declare, and authors opt into optional or required nested content with the corresponding helper. Required children enforce property presence rather than non-empty output, so explicit AML-empty values remain valid. `AmlRenderable` remains the descriptive equivalent of `AML` for compatibility and lower-level contracts.
+
 ### 4.1 Ordinary async semantics
 
 AML invokes a component exactly once for each evaluated occurrence and awaits its result. Reusing the same JSX value in two authored positions creates two evaluated occurrences; AML does not memoize component results by element identity.

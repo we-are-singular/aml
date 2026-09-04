@@ -171,6 +171,12 @@ for (const entry of Object.values(resolvedEntries)) {
   }
 }
 
+const builtSdk = await import(pathToFileURL(resolvedEntries.index).href)
+
+if ("AML" in builtSdk) {
+  throw new Error("The type-only AML authoring namespace must not add a runtime export")
+}
+
 const {
   Agent: publicAgent,
   AmlRuntime,
@@ -195,7 +201,7 @@ const {
   Script: publicScript,
   Workspace: publicWorkspace,
   WorkspaceConflictError,
-} = (await import(pathToFileURL(resolvedEntries.index).href)) as BuiltSdk
+} = builtSdk as BuiltSdk
 const { Fragment: runtimeFragment, jsx: runtimeJsx } = (await import(
   pathToFileURL(resolvedEntries.jsxRuntime).href
 )) as BuiltJsxRuntime
@@ -461,7 +467,7 @@ try {
   writeFileSync(
     join(copyFixtureDirectory, "consumer.mts"),
     [
-      'import { AmlRuntime, type AmlRenderable } from "@aml-jsx/sdk-a"',
+      'import { AmlRuntime, type AML, type AmlRenderable } from "@aml-jsx/sdk-a"',
       'import type { McpProps, ToolProps } from "@aml-jsx/sdk-a"',
       'import { defineMcpServer, defineTool, evaluate } from "@aml-jsx/sdk-b"',
       'import { createContext, useContext } from "@aml-jsx/sdk-b"',
@@ -470,6 +476,11 @@ try {
       'const foreignNode = jsx(() => "cross-copy", {})',
       "const renderable: AmlRenderable = foreignNode",
       "await new AmlRuntime().evaluate(renderable)",
+      "type WrappedProps = AML.PropsWithRequiredChildren<{ readonly prefix: string }>",
+      "const Wrapped: AML.Component<WrappedProps> = ({ children, prefix }) => [prefix, children]",
+      'const authored: AML = jsx(Wrapped, { children: foreignNode, prefix: "typed:" })',
+      "const authoredOutput = await new AmlRuntime().evaluate(authored)",
+      'if (authoredOutput !== "typed:cross-copy") throw new Error("Packaged AML authoring types are invalid")',
       "await new AmlRuntime().evaluate(",
       '  jsx(async () => `nested:${await evaluate("data")}`, {}),',
       ")",

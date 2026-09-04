@@ -26,6 +26,24 @@ const runtime = new AmlRuntime()
 const result = await runtime.evaluate(<Agent provider={opencodeAgent({})}>Summarize this repository.</Agent>)
 ```
 
+## Typing application components
+
+Import `AML` as a type when declaring reusable workflow components. `AML.Component<Props>` accepts synchronous or asynchronous AML values and does not add an implicit `children` prop. Add optional or required children deliberately with the matching props helper:
+
+```tsx
+import type { AML } from "@aml-jsx/sdk"
+
+type SectionProps = AML.PropsWithRequiredChildren<{
+  readonly title: string
+}>
+
+const Section: AML.Component<SectionProps> = ({ children, title }) => [title, ": ", children]
+
+const workflow: AML = <Section title="Evidence">Inspect the changed files.</Section>
+```
+
+`AmlRenderable` remains available as the descriptive equivalent of `AML`.
+
 The built-in coding-agent factories are thin profiles over AML's shared Agent Client Protocol (ACP) session engine:
 
 ```tsx
