@@ -10,6 +10,33 @@ This page tracks `@aml-jsx/sdk`. Entries are newest first. See [GitHub Releases]
 
 <!-- changelog:entries -->
 
+## SDK v0.8.1 — Typed AML authoring, configurable Tool prefixes, and structural multiline Blocks
+
+Released 2026-09-04.
+
+SDK 0.8.1 rounds out the authoring surface with a type-only AML namespace for declaring application-owned components, makes the model-facing prefix for bridged JavaScript Tools a configurable runtime option, and lets `<Block />` preserve authored multiline prompt structure without leaking TypeScript indentation. The Sandbox image carries the v0.5.0 release improvements and pins patched transitive dependencies.
+
+### Highlights
+
+- **Type-only component authoring with AML** Import type `AML` from `@aml-jsx/sdk` to type application components that return sync or async AML. `AML.Component<Props>` never adds an implicit children prop, so a component with no generic stays a leaf; `AML.PropsWithChildren<Props>` opts into optional nested content and `AML.PropsWithRequiredChildren<Props>` requires it, with explicit AML-empty values (`null`, `undefined`) still valid. The merged namespace is type-only and adds no runtime export, so `AmlRenderable` remains the descriptive equivalent. [AST reference](/docs/ast)
+- **Configurable Tool prefixes** A new `toolPrefix` option on `AmlRuntime` sets the invocation-owned MCP server name that qualifies JavaScript Tools bridged to the model, defaulting to `"aml"` (an empty string also selects the default); for example `toolPrefix: "review"` exposes `review_get_pull_request` in OpenCode and `review-get_pull_request` in Copilot. Non-empty prefixes must be trimmed, and a prefix that collides with an MCP server granted to the same Agent now throws instead of silently renaming, with the OpenCode profile reserving its locally configured MCP names so collisions surface loudly. [Runtime reference](/docs/reference/runtime)
+- **Structural multiline prompt content** `<Block multiline>` dedents one direct template-literal string child while preserving headings, paragraphs, blank lines, list boundaries, and deeper indentation; the `multiline` template tag applies the same dedentation while keeping interpolated AML values as renderables instead of stringifying them. Because TypeScript collapses whitespace in natural JSX text before AML receives it, the braces and template literal are required to keep line breaks intact. [Block reference](/docs/reference/primitives/block)
+- **Hardened Sandbox dependencies** The Sandbox image pins patched transitive dependencies (`fast-uri`, `qs`) and includes the v0.5.0 release improvements for keyless signing and Docker Hub overview synchronization. [Sandbox changelog](/docs/reference/changelog/sandbox)
+
+### Commits
+
+- feat(sdk): add aml component authoring types (5a06641)
+- fix(sandbox): update vulnerable transitive dependencies (b468b46)
+- fix(sdk): clarify tool prefix validation (97cf6b2)
+- feat(sdk): configure the tool prefix (c2588f8)
+- fix(sdk): avoid ambient mcp name collisions (fa7ad26)
+- fix(sdk): use compact collision-safe tool names (b97bb89)
+- docs(sdk): #48 clarify multiline jsx boundary (c8116d6)
+- test(sdk): #48 cover multiline edge cases (4e253d0)
+- feat(sdk): #48 add multiline block authoring (14d763c)
+- feat(sdk): #48 preserve multiline prompt structure (0ae5313)
+- release(sandbox): v0.5.0 (b6ad4ab)
+
 ## SDK v0.8.0 — Explicit authoring boundaries and real Agent Skills
 
 Released 2026-09-01.
