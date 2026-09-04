@@ -1,8 +1,4 @@
-import type { AmlRenderable } from "@aml-jsx/sdk"
-
-interface SectionProps {
-  readonly children?: AmlRenderable
-}
+import type { AML } from "@aml-jsx/sdk"
 
 /**
  * Demonstrates bottom-up evaluation across ordinary async components.
@@ -13,7 +9,7 @@ export default function BasicExample() {
     return "bottom-up"
   }
 
-  function Section({ children }: SectionProps) {
+  function Section({ children }: AML.PropsWithRequiredChildren): AML {
     return ["AML resolves ", children]
   }
 

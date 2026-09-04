@@ -34,6 +34,24 @@ const workflow = <Agent model="reviewer">Inspect the change.</Agent>
 
 into a call equivalent to `jsx(Agent, { model: "reviewer", children: "Inspect the change." })`. The returned value is data. Holding it in a variable does not run `<Agent />`.
 
+## Type application components explicitly
+
+Import `AML` as a type when a reusable component benefits from an explicit authoring contract:
+
+```tsx
+import type { AML } from "@aml-jsx/sdk"
+
+type SectionProps = AML.PropsWithRequiredChildren<{
+  readonly title: string
+}>
+
+const Section: AML.Component<SectionProps> = ({ children, title }) => [title, ": ", children]
+
+const workflow: AML = <Section title="Evidence">Inspect the changed files.</Section>
+```
+
+`AML.Component<Props>` accepts synchronous and asynchronous AML results but does not add `children` implicitly. A component with no generic argument is a leaf with no custom props or children; custom props accept children only when they declare them. Use `AML.PropsWithChildren<Props>` for optional nested content or `AML.PropsWithRequiredChildren<Props>` when the JSX author must supply it. Required children may still be `null`, `undefined`, or another AML-empty value. `AmlRenderable` remains available as the descriptive equivalent of `AML`.
+
 ## What the JSX runtime constructs
 
 Internally, the JSX runtime stores a component reference and frozen props in an AML node descriptor. The descriptor class is deliberately not a root-package value export: application code should treat JSX values as `JSX.Element` or `AmlRenderable` and hand them to the runtime. The component function is invoked only while an evaluation owns an active component context.
