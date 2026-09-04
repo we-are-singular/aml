@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.5.1
+
+Dependency security fixes.
+
+- **Patch vulnerable transitive dependencies.** The sandbox image's locked dependency tree now uses patched versions of the vulnerable transitive utilities `fast-uri` and `qs`, so no direct dependency, API, or behavioral change is required. `fast-uri` advances 3.1.5 → 3.1.7 and `qs` advances 6.15.3 → 6.16.0, both address/query-string utilities pulled in through the runtime's HTTP stack, closing known security holes in the bundled transitive tree while existing workflows run unchanged.
+
+### Commits
+
+- `fix(sandbox): update vulnerable transitive dependencies` (b468b46)
+
 ## 0.5.0
 
 Sandbox release pipeline polish.
