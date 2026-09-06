@@ -13,7 +13,7 @@
     "example": {
       "dependsOn": ["^build"],
       "cache": false,
-      "passThroughEnv": ["AML_*", "OPENCODE_API_KEY"]
+      "passThroughEnv": ["AML_*", "OPENCODE_API_KEY", "OPENAI_API_KEY", "Z_AI_API_KEY"]
     },
     "package:check": {
       "dependsOn": ["build", "^build"],

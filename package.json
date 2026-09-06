@@ -15,7 +15,7 @@
     "changelog:sandbox": "npm run aml -- run ./scripts/changelog.aml.tsx --entry sandbox --trace",
     "changelog:sdk": "npm run aml -- run ./scripts/changelog.aml.tsx --entry sdk --trace",
     "dev": "npm run dev --workspace=@aml-jsx/website --",
-    "example": "turbo run example --filter=@aml-jsx/examples --",
+    "example": "node --env-file-if-exists=.env node_modules/turbo/bin/turbo run example --filter=@aml-jsx/examples --",
     "format": "oxfmt",
     "format:check": "oxfmt --check",
     "lint": "turbo lint",
