@@ -11,8 +11,8 @@ import { Aside, Card, CardGrid } from "@astrojs/starlight/components"
 
 The short rule is:
 
-- Use a **JavaScript Tool** for an application-owned function that should run in the host process with a typed input contract.
-- Use **MCP** for a separately deployed or shared capability server whose transport, credentials, and lifecycle are managed as an external integration.
+- Use a [JavaScript Tool](/docs/reference/primitives/tool/) for an application-owned function that should run in the host process with a typed input contract.
+- Use [MCP](/docs/reference/mcp-server/) for a separately deployed or shared capability server whose transport, credentials, and lifecycle are managed as an external integration.
 
 Neither choice makes model input trusted. When a model should receive either capability, grant it lexically to the nearest [`<Agent />`](/docs/reference/primitives/agent/) and constrain grants with runtime allowlists. A JavaScript Tool can instead be called directly by active application component code without any model grant; an MCP descriptor is not an application-call API.
 
@@ -166,7 +166,7 @@ The OpenCode profile launches `opencode acp --pure --cwd ...` and AML's ACP engi
 
 ## Structured output is a separate boundary
 
-Tools and MCP return capability data to `<Agent />`. Structured output validates the **final `<Agent />` result** against a schema; it does not authorize the Tool, authenticate the MCP server, or prove that returned facts are true.
+Tools and MCP return capability data to `<Agent />`. [Structured output](/docs/cookbook/structured-output/) validates the **final `<Agent />` result** against a schema; it does not authorize the Tool, authenticate the MCP server, or prove that returned facts are true.
 
 ```tsx
 import { Agent, evaluate, Tool, defineTool } from "@aml-jsx/sdk"

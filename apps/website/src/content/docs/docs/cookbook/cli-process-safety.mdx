@@ -25,14 +25,14 @@ This example is intentionally credential-free. It uses [`localSandbox()`](/docs/
 
 ## Prerequisites
 
-- Node.js `>=26`, repository dependencies, and a POSIX host with `sh` and `sleep`;
-- the built repository CLI, or `@aml-jsx/cli` installed beside `@aml-jsx/sdk`;
+- an AML project configured through [Getting started](/docs/getting-started/#1-create-a-project), or an AML repository checkout with dependencies installed;
+- the built repository CLI or an installed [AML CLI](/docs/cli/), and a POSIX host with `sh` and `sleep`;
 - a terminal where you can send <kbd>Ctrl</kbd>+<kbd>C</kbd>;
 - no model, Agent executable, credentials, or network access.
 
 ## Building block: one explicit resource owner
 
-This recipe places [`<Script />`](/docs/reference/primitives/script/) inside a Sandbox so the example covers both process cancellation and Sandbox release. The local provider needs `read-write` because a host process cannot enforce read-only filesystem access. For a trusted command that does not need a Sandbox lifecycle, Script can execute directly on the host.
+This recipe places [`<Script />`](/docs/reference/primitives/script/) inside [`<Sandbox>`](/docs/reference/primitives/sandbox/) so the example covers both [process cancellation](/docs/runtime/#process-signals) and Sandbox release. The local provider needs `read-write` because a host process cannot enforce read-only filesystem access. For a trusted command that does not need a Sandbox lifecycle, Script can execute directly on the host.
 
 ```tsx
 const LongRunningProcess = (

@@ -25,8 +25,7 @@ Sandbox   = lease an execution environment with root/cwd/access policy
 
 ## Prerequisites
 
-- Node.js `>=26`;
-- `@aml-jsx/sdk` and `@aml-jsx/sdk/testing`;
+- an AML project configured through [Getting started](/docs/getting-started/#1-create-a-project); the testing entrypoint is included in the SDK;
 - a writable OS temporary directory;
 - no credentials or network access.
 
@@ -114,7 +113,7 @@ The temporary directory contains `reports/summary.md` until the operating system
 <Steps>
 
 1. `<Workspace />` acquires one materialization. By default it loads and locks; `save={false}` means this recipe does not publish a revision.
-2. `<File />` writes into the active materialized Workspace because it appears before the Sandbox scope. If placed inside a read-write Sandbox it would instead write the live guest; this recipe's read-only Sandbox would reject that write.
+2. [`<File />`](/docs/reference/primitives/file/) writes into the active materialized Workspace because it appears before the Sandbox scope. If placed inside a read-write Sandbox it would instead write the live guest; this recipe's read-only Sandbox would reject that write.
 3. `<Sandbox access="read-only" />` reuses the Workspace and narrows the active root/cwd. Nested `<Sandbox />` components narrow one existing lease; they do not acquire another provider resource.
 4. `localSandbox()` executes trusted host processes. The deterministic `<Agent />` receives the Sandbox session and reports its narrowed cwd.
 
@@ -122,11 +121,11 @@ The temporary directory contains `reports/summary.md` until the operating system
 
 ## Provider choices
 
-- `localWorkspace()` directly materializes an existing directory; writes are immediately visible and there are no archived revisions.
-- `filesystemWorkspace()` adds local revision storage, retention, and conditional publication.
-- `s3Workspace()` stores revisions remotely and depends on conditional object writes and ETags.
-- `dockerSandbox()` bind-mounts the Workspace into a disposable container, but its security posture depends on the Docker daemon and image.
-- Daytona and Modal transfer a Workspace and reconcile changes on writable release; unsynchronized remote changes can be lost if the Sandbox fails before reconciliation.
+- [`localWorkspace()`](/docs/providers/workspaces/local/) directly materializes an existing directory; writes are immediately visible and there are no archived revisions.
+- [`filesystemWorkspace()`](/docs/providers/workspaces/filesystem/) adds local revision storage, retention, and conditional publication.
+- [`s3Workspace()`](/docs/providers/workspaces/s3/) stores revisions remotely and depends on conditional object writes and ETags.
+- [`dockerSandbox()`](/docs/providers/sandboxes/docker/) bind-mounts the Workspace into a disposable container, but its security posture depends on the Docker daemon and image.
+- [Daytona](/docs/providers/sandboxes/daytona/) and [Modal](/docs/providers/sandboxes/modal/) transfer a Workspace and reconcile changes on writable release; unsynchronized remote changes can be lost if the Sandbox fails before reconciliation.
 
 ## Failure and security notes
 

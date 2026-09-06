@@ -1,22 +1,36 @@
 ---
-title: Pi Agent
-description: Run Pi through AML's ACP profile with optional MCP and tool bridging.
+title: Pi Agent ACP integration
+description: Run the Pi coding agent through pi-acp with AML. Configure credentials, MCP tools, and structured output, then build an issue-triage workflow in TypeScript.
+sidebar:
+  label: Pi Agent
 ---
 
-import { Aside, Badge, Card, CardGrid, LinkCard, Steps } from "@astrojs/starlight/components"
+import { Aside, Card, CardGrid, LinkCard, Steps } from "@astrojs/starlight/components"
 import ProviderHero from "../../../../../components/docs/ProviderHero.astro"
 
 <ProviderHero
   name="pi"
   eyebrow="Built-in Agent provider"
-  title="Pi Agent"
+  title="Pi Agent ACP integration"
   factory="piAgent()"
-  summary="An ACP profile for Pi that isolates adapter state per evaluation, translates AML permissions into Pi's tool list, and uses the Pi MCP extension for AML Tools and MCP servers."
+  summary="Run the Pi coding agent from TypeScript through the Agent Client Protocol (ACP). AML uses the community pi-acp adapter to compose Pi sessions into workflows with typed results, application tools, and sandboxed execution."
   bestFor="Extensible Pi workflows that need AML's typed orchestration and capability model."
   caution="Pi has no ACP system-instruction field in this integration, so AML prefixes system instructions inside literal SYSTEM tags in the first turn. MCP and restricted permissions require a generated wrapper."
 />
 
-<Badge text="Built-in" variant="success" /> <Badge text="ACP" /> <Badge text="MCP extension" />
+## How Pi connects through ACP
+
+[`pi-acp`](https://github.com/svkozak/pi-acp) bridges an ACP client to the native Pi coding agent, which it starts in RPC mode. AML is the ACP client in this integration: `piAgent()` configures the adapter, and [`<Agent />`](/docs/reference/primitives/agent/) declares the work. Pi continues to own its model loop and native tools.
+
+ACP does not require a remote server. AML can launch the adapter on your host or inside a selected [Sandbox](/docs/providers/sandboxes/). Use a remote Sandbox provider when execution belongs on another machine; installing `pi-acp` alone does not create a remotely hosted service.
+
+<LinkCard
+  title="Build an issue-triage workflow with Pi"
+  href="/docs/cookbook/pi-issue-triage/"
+  description="Classify an issue, validate its category and priority, propose labels, and draft a maintainer reply with two Pi agents."
+/>
+
+For editor integration alone, follow the adapter's [ACP client setup](https://github.com/svkozak/pi-acp#install). The recipe above shows what AML adds when you want to automate a workflow from TypeScript.
 
 ## Two executables, two responsibilities
 
@@ -256,6 +270,8 @@ AML materializes wrapper files, Pi settings, and lazy MCP configuration into tha
 3. **Structured output rejects**
 
    Enable tracing and inspect the `agent.output` events. Pi must submit at least one valid JSON-compatible value under `args.result`; invalid attempts may be corrected, while submissions after the first valid result are ignored. Message text that resembles JSON is not the structured result.
+
+   If there is no assistant output or result submission, also check the model provider's credentials and quota. An upstream quota failure can surface through ACP as a missing structured result. Try a minimal prompt through native Pi with the same model and credentials to distinguish a provider failure from an MCP setup problem.
 
 4. **The system instruction appears in the answer**
 

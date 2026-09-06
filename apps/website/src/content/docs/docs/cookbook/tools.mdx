@@ -18,8 +18,7 @@ Create one application-owned callable with validated input and safe JSON output,
 
 ## Prerequisites
 
-- Node.js `>=26`;
-- `@aml-jsx/sdk` and `zod` (`@aml-jsx/sdk/testing` is included in the SDK);
+- an AML project configured through [Getting started](/docs/getting-started/#1-create-a-project), with `zod` installed;
 - no credentials or network for this deterministic workflow.
 
 ## Complete source
@@ -90,7 +89,7 @@ orders:["order-17","order-29"]
 
 1. The application passes `SessionRepository` into `OrderAgent`; AML does not expose that object to the provider.
 2. `defineTool()` returns a typed callable carrying the Tool declaration. Calling `listOrders({})` from an active component would run it as application-selected work without exposing it to a model.
-3. `<Tool use={listOrders} />` grants the Tool only to its containing `<Agent />`. A sibling `<Agent />` does not receive it.
+3. `<Tool use={listOrders} />` grants the Tool only to its containing `<Agent />`. A sibling `<Agent />` does not receive it; this follows AML's [lexical scope](/docs/concepts/#lexical-scope-and-cleanup).
 4. The deterministic provider receives AML's low-level execution port and calls `.execute(input, context)` to simulate a model-selected Tool call. Application components use the callable form instead.
 
 </Steps>

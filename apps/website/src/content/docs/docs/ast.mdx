@@ -151,7 +151,7 @@ and cleanup joining without adding a second evaluator primitive.
 
 ## Post-order consumers versus lexical scopes
 
-`<Agent />` is a post-order consumer: its child content and descriptors resolve before the session starts. `<Workspace />` and `<Sandbox />` are lexical scopes: each enters before descendants and releases after them.
+[`<Agent />`](/docs/reference/primitives/agent/) is a post-order consumer: its child content and descriptors resolve before the session starts. [`<Workspace />`](/docs/reference/primitives/workspace/) and [`<Sandbox />`](/docs/reference/primitives/sandbox/) are [lexical scopes](/docs/concepts/#lexical-scope-and-cleanup): each enters before descendants and releases after them.
 
 Function component bodies run as AML descends into their descriptors. Returning AML then lets that value resolve naturally and flow upward; this is **return to compose**. If the component body instead needs a nested result before it can decide what to return, it must `await evaluate(...)`; this is **evaluate to collect**. [The component mental model](/docs/concepts/#component-bodies-descend-results-ascend) shows both forms and why neither happens at JSX authoring time.
 

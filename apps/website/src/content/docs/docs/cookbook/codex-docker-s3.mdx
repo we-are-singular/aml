@@ -13,7 +13,7 @@ import { Aside, Badge, Card, CardGrid, LinkCard, Steps } from "@astrojs/starligh
   </div>
 </div>
 
-This is the canonical three-provider composition: Codex supplies the [`<Agent />`](/docs/reference/primitives/agent/) session, Docker supplies disposable execution, and S3 supplies durable [`<Workspace />`](/docs/reference/primitives/workspace/) revisions.
+This is the canonical three-provider composition: Codex supplies the [`<Agent />`](/docs/reference/primitives/agent/) session, Docker supplies disposable [`<Sandbox>`](/docs/reference/primitives/sandbox/) execution, and S3 supplies durable [`<Workspace />`](/docs/reference/primitives/workspace/) revisions.
 
 ```text
 application
@@ -32,7 +32,7 @@ auth:  process environment / workload identity → Codex and S3 clients
 
 ## Complete composition
 
-The example is complete at the AML boundary. It assumes that your application has already built and published an image containing `codex-acp`, Codex's runtime dependencies, a shell, Node, and the repository tools your Agent is expected to use.
+The example is complete at the AML boundary and assumes the project setup from [Getting started](/docs/getting-started/#1-create-a-project). It uses an application-owned image containing `codex-acp`, Codex's runtime dependencies, a shell, Node, and the repository tools your Agent is expected to use. AML's [Codex image variant](/docs/sandbox-images/#choose-a-variant) provides a starting point; see [extending a variant](/docs/sandbox-images/#extend-a-variant) when project tools are needed.
 
 ```tsx
 import { S3Client } from "@aws-sdk/client-s3"

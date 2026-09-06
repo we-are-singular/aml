@@ -5,7 +5,14 @@ description: Test AML trees with deterministic providers, recorded requests, lif
 
 import { Aside, CardGrid, LinkCard, Steps } from "@astrojs/starlight/components"
 
-AML workflows can be tested without model credentials or real infrastructure. Use deterministic providers to exercise tree evaluation and normalized contracts, then reserve credentialed smoke tests for the provider combinations your deployment actually runs.
+<div class="cookbook-intro">
+  <p>
+    Test workflow behavior, tool calls, and resource cleanup with deterministic providers before running live
+    integration tests.
+  </p>
+</div>
+
+The examples below assume the project setup from [Getting started](/docs/getting-started/#1-create-a-project), with `vitest` installed, and run without model credentials or real infrastructure. Reserve credentialed smoke tests for the provider combinations your deployment actually runs.
 
 ## What each test layer proves
 

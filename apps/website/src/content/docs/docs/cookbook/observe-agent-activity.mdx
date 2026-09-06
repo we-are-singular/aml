@@ -1,6 +1,8 @@
 ---
-title: Observe a live Agent session
-description: Use AML's console tracer to see Agent turns and ACP activity across an Agent and its FollowUps.
+title: Trace AI agent execution and tool calls
+description: Trace a live AI agent workflow in TypeScript with AML's console tracer. Inspect ACP activity, tool calls, and follow-up turns through OpenCode.
+sidebar:
+  label: Trace agent activity
 ---
 
 import { Aside, Badge, Steps } from "@astrojs/starlight/components"
@@ -25,14 +27,14 @@ This observes what crosses AML's ACP connection. It cannot reveal hidden vendor 
 
 ## Prerequisites
 
-- Node.js `>=26`, ESM TypeScript/TSX, `@aml-jsx/sdk`, and `zod`;
-- the OpenCode executable and model credentials available to the process;
+- an AML project configured through [Getting started](/docs/getting-started/#1-create-a-project), with `zod` installed;
+- the [OpenCode executable and model credentials](/docs/providers/agents/opencode/) available to the process;
 - `AML_OPENCODE_MODEL` when you do not want the example's `opencode-go/deepseek-v4-flash` default;
 - a local terminal approved to receive prompt, Tool, thought, and response content.
 
 ## Building block 1: application-owned evidence
 
-The Agent receives the incident packet through one typed Tool. This is an explicit application capability, not ambient filesystem or network access.
+The Agent receives the incident packet through one typed [`<Tool>`](/docs/reference/primitives/tool/). This is an explicit application capability, not ambient filesystem or network access.
 
 ```tsx
 const ReadIncidentPacket = defineTool({
@@ -79,7 +81,7 @@ This is one Agent session and three sequential ACP prompt requests. `<FollowUp /
 
 ## Building block 3: compose the built-in tracer
 
-Observability is a runtime concern, so the application composes AML's dependency-free console tracer at its runtime boundary:
+[Observability](/docs/observability/#start-tracing) is a runtime concern, so the application composes AML's dependency-free console tracer at its runtime boundary:
 
 ```tsx
 const runtime = new AmlRuntime({

@@ -25,7 +25,7 @@ The example uses deterministic Agent providers, so it needs no credentials or ne
 
 ## Prerequisites and status
 
-- Node.js `>=26`, ESM TypeScript/TSX execution, `@aml-jsx/sdk`, and `zod`;
+- an AML project configured through [Getting started](/docs/getting-started/#1-create-a-project), with `zod` installed;
 - `AML_SUPPORT_PLAYBOOKS` set to an existing application-owned directory;
 - an existing `account-access/playbook.md` file beneath that root;
 - no model credentials are required for this deterministic walkthrough.
@@ -143,7 +143,7 @@ npx vite-node recipe.tsx
 rm -r "$AML_SUPPORT_PLAYBOOKS"
 ```
 
-The handoff fixture echoes its resolved prompt, including the validated route and the exact playbook text supplied by `<Include />`. A Workspace makes files available; it does not automatically add their contents to a prompt. The fixture demonstrates dataflow rather than model reasoning.
+The handoff fixture echoes its resolved prompt, including the validated route and the exact playbook text supplied by [`<Include />`](/docs/reference/primitives/include/). A Workspace makes files available; it does not automatically add their contents to a prompt. The fixture demonstrates dataflow rather than model reasoning.
 
 ## Observable result
 
@@ -159,7 +159,7 @@ If the route points outside the canonical root, resolves to the root itself, or 
 
 <Steps>
 
-1. Component-local `evaluate(tree, Route)` collects one typed Agent result inside `RouteSupportRequest`. The root `runtime.evaluate(tree, options)` owns the run and accepts cancellation options, not a schema.
+1. [Component-local `evaluate(tree, Route)`](/docs/reference/runtime/#component-local-evaluation) collects one typed Agent result inside `RouteSupportRequest`. The root `runtime.evaluate(tree, options)` owns the run and accepts cancellation options, not a schema.
 2. `realpath()` canonicalizes the application-owned root and the selected existing directory. `relative()` then proves the candidate is a proper descendant; this is ordinary application authorization logic, not an AML primitive.
 3. `localWorkspace({ directory: candidateDirectory })` is created only after the containment check. `<Workspace />` owns its materialization and lock lifecycle for the handoff Agent.
 4. The later `<Agent />` receives the route as data and operates within the selected `<Workspace />`. It does not inherit authorization from the model's suggestion; the application chose the directory.

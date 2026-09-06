@@ -18,14 +18,14 @@ import { Aside, Badge, Steps } from "@astrojs/starlight/components"
 Build a repository diagnostic with three visible boundaries:
 
 1. [`<Agent />`](/docs/reference/primitives/agent/) proposes a small Node.js program;
-2. [`<Script />`](/docs/reference/primitives/script/) executes that resolved text inside an explicitly selected Docker Sandbox;
-3. a later [`<Agent />`](/docs/reference/primitives/agent/) receives standard output as evidence.
+2. [`<Script />`](/docs/reference/primitives/script/) executes that resolved text inside an explicitly selected [`<Sandbox>`](/docs/reference/primitives/sandbox/) backed by Docker;
+3. a later Agent receives standard output as evidence.
 
-The workflow is deterministic at the Agent layer, so the example needs no model credentials. It still needs Docker and a local `node:26` image: that image supplies the Node interpreter used by `<Script />`, not an Agent executable. A live Agent provider can be substituted later, but the selected image must then also contain the compatible ACP executable and its dependencies.
+The workflow is deterministic at the Agent layer, so the example needs no model credentials. It still needs Docker and a local `node:26` image: that image supplies the Node interpreter used by `<Script />`, not an Agent executable. For a live Agent provider, select an [AML Agent image variant](/docs/sandbox-images/#choose-a-variant) containing the required ACP executable and dependencies.
 
 ## Prerequisites and status
 
-- Node.js `>=26`, ESM TypeScript/TSX execution, and `@aml-jsx/sdk`;
+- an AML project configured through [Getting started](/docs/getting-started/#1-create-a-project);
 - Docker running locally with `node:26` available (`docker pull node:26` if needed);
 - the current directory is mounted read-only into the container by the configured Docker Sandbox;
 - no model credentials are required because both Agent responses are deterministic fixtures.
@@ -141,7 +141,7 @@ The final `<Agent />` receives that line as ordinary prompt data. Docker Sandbox
 - Replace `generator` with `opencodeAgent({})` or `codexAgent({})` only after selecting a host or image that contains the required ACP executable and configuring its credentials. A plain `node:26` image is not sufficient for that live-provider variant.
 - Replace the Docker provider with Daytona or Modal when the deployment needs remote disposable compute; read their transfer and cancellation semantics before relying on Workspace state.
 - Add a schema or ordinary TypeScript validator for the generated source and output when the diagnostic has a stricter contract. Shape validation still does not establish authorization or factual correctness.
-- Wrap the Sandbox in a Workspace when the workflow must materialize or reconcile files. A Sandbox lease alone is not durable persistence.
+- Wrap the Sandbox in a [`<Workspace>`](/docs/reference/primitives/workspace/) when the workflow must materialize or reconcile files. A Sandbox lease alone is not durable persistence.
 
 ## API and source links
 

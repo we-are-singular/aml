@@ -16,13 +16,13 @@ import { Aside, Badge } from "@astrojs/starlight/components"
 
 ## Goal
 
-Measure a custom validation phase, correlate concurrent application requests to AML `runId` values, and retrieve one
-portable summary per completed evaluation without a global latest-run value.
+Measure a custom validation phase with [application-owned spans](/docs/observability/#application-owned-spans), correlate concurrent application requests to AML `runId` values, and retrieve one [run summary](/docs/observability/#run-summaries) per completed evaluation without a global latest-run value.
+
+This recipe assumes the project setup from [Getting started](/docs/getting-started/#1-create-a-project). Its provider is deterministic; no model credentials are needed.
 
 ## Runtime and request correlation
 
-A shared runtime can execute several roots concurrently. Use application request context to associate the runtime's
-public `start` event with the request that initiated it:
+A shared runtime can execute several roots concurrently. Use application request context to associate the runtime's public [`start` event](/docs/reference/runtime/#errors-and-lifecycle-events) with the request that initiated it:
 
 ```tsx
 const requestContext = new AsyncLocalStorage<string>()
@@ -83,7 +83,7 @@ invoked, inspect `summary.acpToolCalls.byName[providerCapabilityName]` without s
 only initial call counts and exact provider-reported names; it does not retain arguments, results, updates, prompts, or
 model text. A name is a provider-contract identifier, not a portable backend or MCP-server identity.
 
-`summary.tools` measures the different declarative AML `<Tool>` execution-span boundary. A call routed to an AML Tool may
+`summary.tools` measures the different declarative AML [`<Tool>`](/docs/reference/primitives/tool/) execution-span boundary. A call routed to an AML Tool may
 appear in both aggregates and is intentionally not deduplicated. `providerUsage: []` explicitly means no provider usage
 was reported. If ACP reports usage, the entry keeps that provider-owned JSON shape without inferred tokens, model calls,
 cache data, cost, or billing meaning.

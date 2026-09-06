@@ -1,6 +1,8 @@
 ---
-title: Return structured output
-description: "Validate an <Agent /> result with a Standard Schema and use the typed value in a later AML step."
+title: Get structured JSON from AI agents with TypeScript and Zod
+description: Validate AI agent output with Zod and use typed results in later AML workflow steps. Start with a deterministic example, then try live Pi and GLM recipes.
+sidebar:
+  label: Structured output
 ---
 
 import { Aside, Badge, Steps } from "@astrojs/starlight/components"
@@ -18,8 +20,9 @@ Turn an [`<Agent />`](/docs/reference/primitives/agent/) response into a typed f
 
 ## Prerequisites
 
-- Node.js `>=26`;
-- `@aml-jsx/sdk` and `zod` installed;
+This page starts with a deterministic provider so you can inspect the dataflow without credentials. For complete workflows using real models, follow [Pi issue triage](/docs/cookbook/pi-issue-triage/) or [GLM repository analysis](/docs/cookbook/glm-repository-analysis/); both collect typed results before a second Agent runs.
+
+- an AML project configured through [Getting started](/docs/getting-started/#1-create-a-project), with `zod` installed;
 - no model credentials or network access for the deterministic example.
 
 ## Complete source
@@ -88,7 +91,7 @@ The deterministic provider returns a JSON-shaped value only when AML asks for JS
 
 ## Structured nested Agents
 
-Use the Agent `schema` prop when a nested Agent should own validation without opening an imperative collection boundary:
+Use the [Agent `schema` prop](/docs/reference/primitives/agent/#resolution-and-result) when a nested Agent should own validation without opening an imperative collection boundary:
 
 ```tsx
 import { Agent, FollowUp } from "@aml-jsx/sdk"
@@ -131,7 +134,7 @@ The specialist's transformed result enters the parent prompt as canonical JSON t
 - After AML accepts the first valid candidate, repeated submissions cannot replace it. With tracing enabled, submissions appear as `agent.output` events with `invalid`, `accepted`, or `ignored` status.
 - The repository example uses a deterministic provider; it does not prove that every Agent provider supports the same native structured-output mechanism.
 - Do not treat a valid shape as authorization to perform an external side effect. Validate business rules before writing files, merging code, or sending messages.
-- If you need structured output from a final `<FollowUp />`, remember that the final turn is the output boundary; earlier turns remain session inputs.
+- If you need structured output from a final [`<FollowUp />`](/docs/reference/primitives/follow-up/), remember that the final turn is the output boundary; earlier turns remain session inputs.
 
 ## API and source links
 

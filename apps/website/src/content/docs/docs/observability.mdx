@@ -70,10 +70,7 @@ async function Review({ findings }: { findings: readonly Finding[] }) {
 }
 ```
 
-The runtime allocates an `application` span beneath the active component or enclosing application span. It closes the
-span on success, thrown failure, or cancellation without changing the callback result. Calls outside an active
-component, including detached calls after component settlement, fail. Nested calls remain correctly parented across
-`evaluate()`, `<Parallel>`, and concurrent async work.
+The runtime allocates an `application` span beneath the active component or enclosing application span. It closes the span on success, thrown failure, or cancellation without changing the callback result. Calls outside an active component, including detached calls after component settlement, fail. Nested calls remain correctly parented across [`evaluate()`](/docs/reference/runtime/#component-local-evaluation), [`<Parallel>`](/docs/reference/primitives/parallel/), and concurrent async work.
 
 Applications supply only the span name and callback. They never supply trace identity, parent fields, metadata, or
 content.

@@ -24,7 +24,7 @@ This is useful when the sequence is fixed and the provider may own the conversat
 
 ## Prerequisites and status
 
-- Node.js `>=26`, ESM TypeScript/TSX execution, and `@aml-jsx/sdk`;
+- an AML project configured through [Getting started](/docs/getting-started/#1-create-a-project);
 - no credentials or network access for this deterministic example;
 - an application-owned source packet. The example includes deliberately untrusted notes to make the data boundary visible.
 
@@ -132,7 +132,7 @@ The important observable behavior is session shape: the provider receives one in
 - Use separate evaluations for schema-validated editorial stages: outline → host validation → critique → host policy → final writer. This exposes intermediate values at the cost of multiple Agent sessions.
 - Keep a fixed FollowUp chain for predictable editorial passes where provider-owned history is desirable and no host decision belongs between turns.
 - Add a final structured-output boundary only if the provider supports it for the final turn; earlier FollowUp responses remain session history rather than typed host values.
-- For independent reviewers whose text flows directly onward, use `<Parallel>` instead of placing concurrent work in one `<FollowUp />` chain. Use separate `evaluate()` calls when host code needs each result.
+- For independent reviewers whose text flows directly onward, use [`<Parallel>`](/docs/reference/primitives/parallel/) instead of placing concurrent work in one `<FollowUp />` chain. Use separate [`evaluate()` calls](/docs/concepts/#component-bodies-descend-results-ascend) when host code needs each result.
 
 ## API and source links
 

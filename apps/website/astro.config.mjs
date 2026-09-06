@@ -166,6 +166,8 @@ export default defineConfig({
             {
               label: "Core workflows",
               items: [
+                { slug: "docs/cookbook/pi-issue-triage" },
+                { slug: "docs/cookbook/glm-repository-analysis" },
                 { slug: "docs/cookbook/changelog-maintainer" },
                 { slug: "docs/cookbook/code-review-workflow" },
                 { slug: "docs/cookbook/structured-output" },

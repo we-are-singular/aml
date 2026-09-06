@@ -3,7 +3,7 @@ title: Operations
 description: Run AML evaluations with explicit limits, cancellation, persistence recovery, and useful traces.
 ---
 
-Production operations should treat an AML evaluation as a resource lifecycle, not just a Promise that returns text.
+Production operations should treat an AML evaluation as a [resource lifecycle](/docs/concepts/#lexical-scope-and-cleanup), not just a Promise that returns text.
 
 ```text
 acquire <Workspace /> → acquire <Sandbox /> → run <Agent /> / <Script />
@@ -28,7 +28,7 @@ const runtime = new AmlRuntime({
 })
 ```
 
-Cancellation is caller-owned per evaluation. AML checks the signal before work and passes it to provider operations that accept cancellation. Cleanup and provider-owned finalization may continue after the signal, and AML cannot undo a Tool, network call, filesystem write, or model side effect that already completed.
+[Cancellation](/docs/runtime/#cancellation) is caller-owned per evaluation. AML checks the signal before work and passes it to provider operations that accept cancellation. Cleanup and provider-owned finalization may continue after the signal, and AML cannot undo a Tool, network call, filesystem write, or model side effect that already completed.
 
 ## Cancellation and cleanup
 

@@ -24,8 +24,7 @@ Understand how AML attaches an MCP descriptor to one [`<Agent />`](/docs/referen
 
 ## Prerequisites
 
-- Node.js `>=26`;
-- `@aml-jsx/sdk` and `@aml-jsx/sdk/testing`;
+- an AML project configured through [Getting started](/docs/getting-started/#1-create-a-project); the testing entrypoint is included in the SDK;
 - no MCP server, credentials, or network access.
 
 ## Complete source
@@ -92,7 +91,7 @@ MCP attached. Sibling isolated.
 1. [`defineMcpServer()`](/docs/reference/mcp-server/) validates and freezes a named stdio or Streamable HTTP descriptor. It does not open a connection.
 2. [`<Mcp />`](/docs/reference/primitives/mcp/) attaches that exact descriptor to the nearest [`<Agent />`](/docs/reference/primitives/agent/).
 3. The provider receives MCP metadata in the normalized Agent request. A real provider decides how to negotiate and relay the server.
-4. A sibling `<Agent />` has no `<Mcp />` child, so it receives no MCP capability. Capability scope follows the authored tree.
+4. A sibling `<Agent />` has no `<Mcp />` child, so it receives no MCP capability. [Capability scope follows the authored tree](/docs/concepts/#lexical-scope-and-cleanup).
 
 </Steps>
 

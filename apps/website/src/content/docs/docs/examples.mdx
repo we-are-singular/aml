@@ -40,6 +40,8 @@ npm run example -- agent-team
 
 The first command prints the current filename-derived catalog. Treat that output and [`examples/run.ts`](https://github.com/we-are-singular/aml/blob/main/examples/run.ts) as the source of truth; this page deliberately recommends paths instead of duplicating every filename.
 
+The root `npm run example` command loads `.env` when present. Its task environment forwards `AML_*`, `OPENCODE_API_KEY`, `OPENAI_API_KEY`, and `Z_AI_API_KEY`; export or store the credentials required by the selected example without committing them. Existing shell variables take precedence over `.env`. Use absolute paths for input files and evidence directories because the runner executes inside the examples package.
+
 If you installed with `--ignore-scripts`, deterministic examples can run while a native executable is still unprepared. Before live OpenCode examples, verify the repository installation with `npm exec -- opencode --version`; run `npm rebuild opencode-ai` if it reports that its postinstall script was skipped.
 
 Each maintained example also exports an AML tree, so the experimental CLI can run one source file directly. Build the repository CLI and try the credential-free basic example:
@@ -54,6 +56,18 @@ The shared example runner remains useful for its catalog and common tracer. Use 
 ## Choose by goal
 
 <CardGrid>
+  <Card title="Triage an issue with Pi" icon="pencil">
+    Run `pi-issue-triage` with `AML_ISSUE_FILE` and Pi model credentials to classify issue text, propose labels, and draft a reply. It prints a proposal without posting to an issue tracker.
+
+    [Build the Pi issue-triage workflow](/docs/cookbook/pi-issue-triage/)
+
+  </Card>
+  <Card title="Analyze a repository with GLM" icon="open-book">
+    Run `glm-repository-analysis` with `AML_REPOSITORY_DIRECTORY`, Z.ai credentials, and Docker to analyze a README and package manifest, verify quoted evidence, and generate an onboarding report.
+
+    [Build the GLM repository-analysis workflow](/docs/cookbook/glm-repository-analysis/)
+
+  </Card>
   <Card title="Build a reusable agent team" icon="random">
     Run `agent-team` for two release specialists followed by an editor. Named Blocks make the exact data passed between agents visible; the fixture requires no credentials.
 

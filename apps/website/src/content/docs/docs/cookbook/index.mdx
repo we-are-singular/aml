@@ -1,6 +1,8 @@
 ---
-title: Cookbook
-description: Task-oriented AML recipes for building workflows, capabilities, resource boundaries, and production jobs.
+title: AI agent workflow examples in TypeScript
+description: Build AI workflows with runnable TypeScript recipes for Pi issue triage, GLM repository analysis, code review, structured output, tools, and background jobs.
+sidebar:
+  label: Recipe index
 hero:
   tagline: Build useful AML workflows one task at a time
   actions:
@@ -26,25 +28,22 @@ Type reusable components with [`AML.Component<Props>`](/docs/ast/#type-applicati
 
 ## Before you begin
 
-Start with [Getting started](/docs/getting-started/) for a complete project setup. Recipes build on that setup and assume:
-
-- Node.js `>=26`;
-- `@aml-jsx/sdk` installed, plus any dependencies listed by the recipe;
-- TypeScript/TSX support with AML's automatic JSX runtime;
-- the public application entrypoint, `@aml-jsx/sdk`.
+Start with [Getting started](/docs/getting-started/#1-create-a-project) for SDK installation, the JSX runtime configuration, and a runner. Recipes build on that setup and focus on AML component design: what belongs in the tree, what application code must validate, and who owns capabilities, resources, and results. Each recipe lists only its additional dependencies and environment requirements.
 
 `@aml-jsx/sdk/testing` is an import path included in the SDK, not a separately installable package. Install `zod` for schema examples and `vitest` as a development dependency for test examples. A code block labeled “Complete source” is intended to run with its stated prerequisites; smaller blocks illustrate changes to that source or require the surrounding application's values.
 
-The complete recipe files construct and evaluate their own `AmlRuntime`, which is the clearest shape when an application owns limits, defaults, telemetry, and shutdown. To run a workflow with the [experimental CLI](/docs/cli/) instead, export the AML tree, put required providers directly on their components, and use `npx aml run ./workflow.tsx`. Do not wrap a second `AmlRuntime` inside the exported CLI entry.
+Recipes show an application entrypoint that constructs and evaluates an `AmlRuntime`; some separate that entrypoint from a reusable workflow file. The maintained examples also support the shared repository runner. To run a workflow with the [experimental CLI](/docs/cli/) instead, export the AML tree, put required providers directly on their components, and use `npx aml run ./workflow.tsx`. Do not wrap a second `AmlRuntime` inside the exported CLI entry.
 
-The recipe status tells you what the source actually does:
+Each recipe opens with its goal and, where useful, badges that tell you what to prepare:
 
-- <Badge text="Deterministic" variant="success" /> uses `@aml-jsx/sdk/testing` and needs no model, credentials, or
-  network.
-- <Badge text="Credentialed" variant="caution" /> starts a real Agent adapter or expects provider credentials and an
-  executable.
-- <Badge text="Resource-backed" variant="note" /> exercises a local, container, or remote filesystem/execution boundary.
-  Read its mutation and isolation notes before running it.
+- <Badge text="No credentials needed" variant="success" /> runs without a model account. It may still use local files or
+  Docker, as the prerequisites explain.
+- <Badge text="Agent authentication required" variant="caution" /> needs a configured live Agent. Recipes that
+  specifically require an API key say so.
+- <Badge text="Docker required" variant="note" /> needs a running Docker daemon. Other resource badges name the required
+  service or local files.
+
+Comparison guides may have no badges. Check each recipe's prerequisites for the complete setup and its notes on file changes and isolation.
 
 Recipe steps and claims are verified against the implementation and specification links in each page's API and
 source links section.
@@ -52,6 +51,16 @@ source links section.
 ## Learn the workflow shape
 
 <CardGrid>
+  <LinkCard
+    title="Triage issues with Pi and ACP"
+    href="/docs/cookbook/pi-issue-triage/"
+    description="Classify an issue, propose labels from a fixed policy, and draft a maintainer response with real Pi sessions."
+  />
+  <LinkCard
+    title="Analyze a repository with GLM and ACP"
+    href="/docs/cookbook/glm-repository-analysis/"
+    description="Inspect bounded repository evidence in Docker, validate findings and quotes, and produce an onboarding report."
+  />
   <LinkCard
     title="Auto-author a changelog with AML"
     href="/docs/cookbook/changelog-maintainer/"
@@ -74,12 +83,14 @@ source links section.
   />
 </CardGrid>
 
-| Recipe                                                          | Status                                           | Needs                                                                               | Best for                                            |
-| --------------------------------------------------------------- | ------------------------------------------------ | ----------------------------------------------------------------------------------- | --------------------------------------------------- |
-| [Auto-authored changelog](/docs/cookbook/changelog-maintainer/) | Credentialed + repository-backed                 | Script collector, Agent provider, schemas, and a document writer                    | Composable Agents around deterministic release work |
-| [Code-review workflow](/docs/cookbook/code-review-workflow/)    | Deterministic by default; credentialed by opt-in | Node, SDK, `zod`; provider executable and credentials only for OpenCode/Codex modes | A first useful multi-Agent workflow                 |
-| [Structured output](/docs/cookbook/structured-output/)          | Deterministic                                    | Node, SDK, `zod`                                                                    | Typed findings and validation boundaries            |
-| [Tools](/docs/cookbook/tools/)                                  | Deterministic                                    | Node, SDK/testing, `zod`                                                            | Application-owned functions and capability scoping  |
+| Recipe                                                             | Status                                           | Needs                                                                               | Best for                                            |
+| ------------------------------------------------------------------ | ------------------------------------------------ | ----------------------------------------------------------------------------------- | --------------------------------------------------- |
+| [Pi issue triage](/docs/cookbook/pi-issue-triage/)                 | Credentialed; optional Docker                    | Pi, ACP and MCP adapters, model credentials, issue JSON                             | Label proposals and maintainer reply drafts         |
+| [GLM repository analysis](/docs/cookbook/glm-repository-analysis/) | Credentialed + Docker                            | GLM image, Z.ai credentials, README and package manifest                            | Evidence-backed onboarding reports                  |
+| [Auto-authored changelog](/docs/cookbook/changelog-maintainer/)    | Credentialed + repository-backed                 | Script collector, Agent provider, schemas, and a document writer                    | Composable Agents around deterministic release work |
+| [Code-review workflow](/docs/cookbook/code-review-workflow/)       | Deterministic by default; credentialed by opt-in | Node, SDK, `zod`; provider executable and credentials only for OpenCode/Codex modes | A first useful multi-Agent workflow                 |
+| [Structured output](/docs/cookbook/structured-output/)             | Deterministic                                    | Node, SDK, `zod`                                                                    | Typed findings and validation boundaries            |
+| [Tools](/docs/cookbook/tools/)                                     | Deterministic                                    | Node, SDK/testing, `zod`                                                            | Application-owned functions and capability scoping  |
 
 ## Add capabilities and resources
 
@@ -183,8 +194,8 @@ Each page follows the same reading order:
 1. **Goal** — the user task and the AML shape it produces.
 2. **Prerequisites** — credentials, executables, packages, and resource requirements.
 3. **Complete source** — imports included, with provider assumptions visible.
-4. **Run and expected output** — what is safe to execute and what success looks like.
-5. **How it works** — the runtime contract behind the example.
+4. **Run and expected output** — what is safe to execute and what success looks like, without repeating project setup.
+5. **How it works** — why the components are composed this way, with links to the relevant component references, concepts, and provider or image contracts.
 6. **Failure and security notes** — boundaries that should affect production decisions.
 7. **API and source links** — public contracts and the maintained repository example.
 

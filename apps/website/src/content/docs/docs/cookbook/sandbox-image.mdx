@@ -19,13 +19,11 @@ Run a deterministic [`<Script />`](/docs/reference/primitives/script/) inside th
 [`dockerSandbox()`](/docs/providers/sandboxes/docker/), then read the file it created after the disposable container is
 released.
 
-This recipe deliberately omits `image` first. Docker Sandbox therefore uses AML's recommended
-`wearesingular/aml-agent-sandbox:latest` image. The same default applies to Daytona and Modal when their provider factory
-receives no image or snapshot override.
+This recipe deliberately omits `image` first. Docker Sandbox therefore uses AML's recommended [`wearesingular/aml-agent-sandbox:latest` image](/docs/sandbox-images/). The same default applies to Daytona and Modal when their provider factory receives no image or snapshot override.
 
 ## Prerequisites
 
-- Node.js `>=26`, ESM TypeScript/TSX execution, and `@aml-jsx/sdk`;
+- an AML project configured through [Getting started](/docs/getting-started/#1-create-a-project);
 - Docker running locally and able to pull `wearesingular/aml-agent-sandbox:latest`;
 - no model credentials—the recipe executes a deterministic Script rather than an Agent session.
 
@@ -85,8 +83,8 @@ The first run may pull the image. A successful run prints the installed Node.js,
 <Steps>
 
 1. `dockerSandbox()` receives no `image`, so it selects `wearesingular/aml-agent-sandbox:latest`.
-2. `<Workspace />` materializes the temporary host directory and the Docker provider mounts it at `/workspace`.
-3. `<Sandbox />` acquires a disposable container and `<Script />` runs only through that active runtime.
+2. [`<Workspace />`](/docs/reference/primitives/workspace/) materializes the temporary host directory and the Docker provider mounts it at `/workspace`.
+3. [`<Sandbox />`](/docs/reference/primitives/sandbox/) acquires a disposable container and `<Script />` runs only through that active runtime.
 4. Docker removes the container after the subtree settles. The local Workspace remains application-owned.
 
 </Steps>
