@@ -3,9 +3,7 @@ title: Incident response
 description: Diagnose AML cleanup, Workspace, publication, and trace incidents without confusing evidence with inference.
 ---
 
-import { Aside, Badge, Card, CardGrid, LinkCard, Steps } from "@astrojs/starlight/components"
-
-<Badge text="Operations runbook" variant="caution" /> <Badge text="Provider-specific" />
+import { Aside, Card, CardGrid, LinkCard, Steps } from "@astrojs/starlight/components"
 
 This page is a compact response guide for failures after an AML evaluation starts. First preserve the original error, evaluation id, [`<Workspace />`](/docs/reference/primitives/workspace/) id, provider names, and timestamps. Then classify the incident before changing locks, containers, remote [`<Sandbox />`](/docs/reference/primitives/sandbox/) instances, or revisions.
 

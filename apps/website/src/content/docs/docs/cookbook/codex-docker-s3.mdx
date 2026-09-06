@@ -5,8 +5,13 @@ description: Compose a credentialed Codex Agent, application-owned Docker image,
 
 import { Aside, Badge, Card, CardGrid, LinkCard, Steps } from "@astrojs/starlight/components"
 
-<Badge text="Production skeleton" variant="caution" /> <Badge text="Credentials required" />
-<Badge text="Docker + S3" />
+<div class="cookbook-intro">
+  <p>Run Codex in a disposable Docker container and keep its working files in a durable S3 Workspace.</p>
+  <div class="cookbook-intro__badges">
+    <Badge text="Credentials required" variant="caution" />
+    <Badge text="Docker and S3 required" variant="note" />
+  </div>
+</div>
 
 This is the canonical three-provider composition: Codex supplies the [`<Agent />`](/docs/reference/primitives/agent/) session, Docker supplies disposable execution, and S3 supplies durable [`<Workspace />`](/docs/reference/primitives/workspace/) revisions.
 

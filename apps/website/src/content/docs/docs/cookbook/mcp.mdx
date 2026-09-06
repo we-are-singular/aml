@@ -5,7 +5,13 @@ description: Declare and scope MCP servers without confusing a capability fixtur
 
 import { Aside, Badge, Steps } from "@astrojs/starlight/components"
 
-<Badge text="Capability fixture" variant="note" />
+<div class="cookbook-intro">
+  <p>Attach an MCP server definition to one Agent and verify that its capabilities stay scoped to that session.</p>
+  <div class="cookbook-intro__badges">
+    <Badge text="No credentials needed" variant="success" />
+    <Badge text="No live MCP connection" variant="note" />
+  </div>
+</div>
 
 ## Goal
 

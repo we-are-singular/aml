@@ -3,7 +3,15 @@ title: Auto-author a changelog with AML
 description: "Compose release evidence, structured authoring, publication, and review as an AML workflow."
 ---
 
-import { Aside, Steps } from "@astrojs/starlight/components"
+import { Badge, Aside, Steps } from "@astrojs/starlight/components"
+
+<div class="cookbook-intro">
+  <p>Build a two-agent workflow that gathers release evidence, writes a changelog, and reviews the resulting edits.</p>
+  <div class="cookbook-intro__badges">
+    <Badge text="Agent authentication required" variant="caution" />
+    <Badge text="Writes repository files" variant="note" />
+  </div>
+</div>
 
 AML maintains its own [SDK and CLI changelogs](/docs/reference/changelog/) with the workflow in [`scripts/changelog.aml.tsx`](https://github.com/we-are-singular/aml/blob/main/scripts/changelog.aml.tsx).
 

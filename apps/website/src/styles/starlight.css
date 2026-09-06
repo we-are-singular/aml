@@ -27,6 +27,7 @@
   --aml-code-border: #dfe1dc;
   --aml-orange: #a94224;
   --aml-green: #267b5d;
+  --aml-red: #b22d3e;
   --aml-grid-line: color-mix(in srgb, var(--aml-accent) 7%, transparent);
   --aml-radius-sm: 0.55rem;
   --aml-radius-md: 0.8rem;
@@ -105,6 +106,7 @@
   --aml-code-border: #343832;
   --aml-orange: #f29a7b;
   --aml-green: #6bc8a3;
+  --aml-red: #f38b96;
   --aml-grid-line: color-mix(in srgb, var(--aml-accent) 9%, transparent);
   --aml-shadow-xs: 0 1px 2px rgb(0 0 0 / 24%);
   --aml-shadow-sm: 0 1px 2px rgb(0 0 0 / 24%), 0 10px 28px rgb(0 0 0 / 13%);
@@ -152,6 +154,90 @@ body {
 }
 
 @layer aml {
+  /* Badges are reading cues, using the same quiet surfaces and utility type as the docs. */
+  .sl-badge {
+    --aml-badge-tone: var(--aml-text-muted);
+    --sl-color-bg-badge: color-mix(in srgb, var(--aml-badge-tone) 7%, var(--aml-surface));
+    --sl-color-border-badge: color-mix(in srgb, var(--aml-badge-tone) 28%, var(--aml-surface));
+    --sl-color-text-badge: var(--aml-badge-tone);
+
+    border-radius: 0.32rem;
+    font-family: var(--aml-font-mono);
+    font-size: 0.8rem;
+    font-weight: 500;
+    letter-spacing: 0.01em;
+    line-height: 1.5;
+    max-width: 100%;
+    padding: 0.2em 0.6em;
+    vertical-align: 0.06em;
+  }
+
+  .sl-badge.note {
+    --aml-badge-tone: var(--aml-accent);
+  }
+
+  .sl-badge:is(.success, .tip) {
+    --aml-badge-tone: var(--aml-green);
+  }
+
+  .sl-badge.caution {
+    --aml-badge-tone: var(--aml-orange);
+  }
+
+  .sl-badge.danger {
+    --aml-badge-tone: var(--aml-red);
+  }
+
+  .sl-badge.small {
+    font-size: 0.75rem;
+  }
+
+  .sidebar-content .sl-badge {
+    font-size: 0.6875rem;
+  }
+
+  .sl-badge.large {
+    font-size: 0.875rem;
+  }
+
+  .sl-markdown-content .sl-badge {
+    margin-block: 0;
+  }
+
+  .sl-markdown-content > .sl-badge {
+    margin-block-end: 0.8rem;
+  }
+
+  .sl-badge + .sl-badge {
+    margin-inline-start: 0.3rem;
+  }
+
+  .sl-markdown-content .cookbook-intro {
+    margin-block: 0 2rem;
+  }
+
+  .sl-markdown-content .cookbook-intro > p {
+    color: var(--aml-text-muted);
+    font-size: 1.08rem;
+    line-height: 1.65;
+    margin: 0;
+  }
+
+  .sl-markdown-content .cookbook-intro__badges {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-block-start: 0.85rem;
+  }
+
+  .cookbook-intro__badges .sl-badge {
+    margin: 0;
+  }
+
+  .sl-markdown-content .cookbook-intro + .sl-heading-wrapper.level-h2 {
+    margin-block-start: 2rem;
+  }
+
   .header {
     backdrop-filter: blur(18px) saturate(130%);
     background: color-mix(in srgb, var(--aml-surface) 93%, transparent);

@@ -5,7 +5,13 @@ description: Let aml run translate SIGINT and SIGTERM into bounded cancellation,
 
 import { Aside, Badge, Steps } from "@astrojs/starlight/components"
 
-<Badge text="Resource-backed" variant="note" />
+<div class="cookbook-intro">
+  <p>Run a long-lived CLI workflow, interrupt it, and verify that its child processes and Sandbox are cleaned up.</p>
+  <div class="cookbook-intro__badges">
+    <Badge text="No credentials needed" variant="success" />
+    <Badge text="POSIX shell required" variant="note" />
+  </div>
+</div>
 
 ## Goal
 

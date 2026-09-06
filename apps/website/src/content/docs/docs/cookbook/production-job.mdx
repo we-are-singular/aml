@@ -5,7 +5,12 @@ description: Build a bounded, cancellable, redacted AML job around an injected A
 
 import { Aside, Badge, Steps } from "@astrojs/starlight/components"
 
-<Badge text="Deployment shape" variant="caution" />
+<div class="cookbook-intro">
+  <p>Wrap an Agent workflow in a background job with timeouts, cancellation, redacted logs, and reliable cleanup.</p>
+  <div class="cookbook-intro__badges">
+    <Badge text="Agent authentication required" variant="caution" />
+  </div>
+</div>
 
 This is an operational recipe, not a zero-credential demo. It shows the runtime boundary a Node job should own: provider construction, finite limits, redacted tracing, cancellation, and a clear result boundary. The live [`<Agent />`](/docs/reference/primitives/agent/) still needs its executable, model configuration, and credentials.
 

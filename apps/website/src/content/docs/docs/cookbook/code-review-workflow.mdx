@@ -5,9 +5,15 @@ description: "Materialize bounded pull-request evidence, run typed specialist <A
 
 import { Aside, Badge, Steps } from "@astrojs/starlight/components"
 
-<Badge text="Recommended first workflow" variant="success" />
-
-This recipe builds a small but production-shaped review pipeline that remains useful without credentials:
+<div class="cookbook-intro">
+  <p>
+    Build a code-review pipeline that runs specialists in parallel, validates their findings, and combines them into one
+    review.
+  </p>
+  <div class="cookbook-intro__badges">
+    <Badge text="No credentials needed by default" variant="success" />
+  </div>
+</div>
 
 ```text
 captured files + diff → <File /> evidence → typed specialists ┐

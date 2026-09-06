@@ -5,7 +5,13 @@ description: "Let <Agent /> propose diagnostic source, execute it in a selected 
 
 import { Aside, Badge, Steps } from "@astrojs/starlight/components"
 
-<Badge text="Deterministic Agent + Docker Sandbox" variant="success" />
+<div class="cookbook-intro">
+  <p>Execute a generated diagnostic in Docker and pass its output to a second Agent for interpretation.</p>
+  <div class="cookbook-intro__badges">
+    <Badge text="No credentials needed" variant="success" />
+    <Badge text="Docker required" variant="note" />
+  </div>
+</div>
 
 ## Goal
 

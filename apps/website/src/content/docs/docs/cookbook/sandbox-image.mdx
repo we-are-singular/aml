@@ -5,7 +5,13 @@ description: Start AML's recommended image through Docker, execute commands insi
 
 import { Aside, Badge, Steps } from "@astrojs/starlight/components"
 
-<Badge text="Resource-backed Docker workflow" variant="note" />
+<div class="cookbook-intro">
+  <p>Run a script in AML’s Docker image and read the file it creates after the container is released.</p>
+  <div class="cookbook-intro__badges">
+    <Badge text="No credentials needed" variant="success" />
+    <Badge text="Docker required" variant="note" />
+  </div>
+</div>
 
 ## Goal
 
