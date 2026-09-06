@@ -1,4 +1,4 @@
-import { defineTool } from "@aml-jsx/sdk"
+import { type AML, defineTool } from "@aml-jsx/sdk"
 import { z } from "zod"
 
 const loadOrder = defineTool({
@@ -9,7 +9,7 @@ const loadOrder = defineTool({
   output: z.object({ id: z.string(), status: z.literal("paid") }),
 })
 
-async function Workflow() {
+const Workflow: AML.Component = async () => {
   const order = await loadOrder({ id: "order-17" })
 
   return `order:${order.id}:${order.status}`
@@ -18,6 +18,6 @@ async function Workflow() {
 /**
  * Calls a validated Tool as application work without granting it to a model.
  */
-export default function ProgrammaticToolExample() {
+export default function ProgrammaticToolExample(): AML {
   return <Workflow />
 }

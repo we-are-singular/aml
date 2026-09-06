@@ -1,6 +1,15 @@
 import process from "node:process"
 
-import { Agent, AmlRuntime, createConsoleTracer, defineTool, FollowUp, opencodeAgent, Tool } from "@aml-jsx/sdk"
+import {
+  type AML,
+  Agent,
+  AmlRuntime,
+  createConsoleTracer,
+  defineTool,
+  FollowUp,
+  opencodeAgent,
+  Tool,
+} from "@aml-jsx/sdk"
 import { z } from "zod"
 
 const INCIDENT_PACKET = Object.freeze({
@@ -26,7 +35,7 @@ const provider = opencodeAgent({
 /**
  * Keeps the Agent, its capability, and its ordered turns readable as one AML tree.
  */
-function IncidentReview() {
+const IncidentReview: AML.Component = () => {
   return (
     <Agent
       provider={provider}

@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto"
-import { fileURLToPath } from "node:url"
+import { createRequire } from "node:module"
 
-import { Agent, defineTool, piAgent, Tool } from "@aml-jsx/sdk"
+import { type AML, Agent, defineTool, piAgent, Tool } from "@aml-jsx/sdk"
 import { z } from "zod"
 
 const proof = randomUUID()
@@ -19,14 +19,15 @@ const ExampleTool = defineTool({
  */
 const ExampleProvider = piAgent({
   ...(process.env.OPENCODE_API_KEY === undefined ? {} : { env: { OPENCODE_API_KEY: process.env.OPENCODE_API_KEY } }),
-  mcpAdapterPath: fileURLToPath(import.meta.resolve("pi-mcp-adapter")),
+  // vite-node provides import.meta.url but not import.meta.resolve.
+  mcpAdapterPath: createRequire(import.meta.url).resolve("pi-mcp-adapter"),
   model: process.env.AML_PI_MODEL ?? "opencode-go/deepseek-v4-flash",
 })
 
 /**
  * Demonstrates a credentialed Pi session calling a process-local Tool.
  */
-export default function PiExample() {
+export default function PiExample(): AML {
   return (
     <Agent provider={ExampleProvider}>
       <Tool use={ExampleTool} />

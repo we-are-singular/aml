@@ -1,4 +1,4 @@
-import { Agent, System } from "@aml-jsx/sdk"
+import { type AML, Agent, System } from "@aml-jsx/sdk"
 import { DeterministicAgentProvider } from "@aml-jsx/sdk/testing"
 
 /**
@@ -20,7 +20,7 @@ const ExampleProvider = new DeterministicAgentProvider({
 /**
  * Demonstrates child Agent output contributing to a parent system prompt.
  */
-export default function AgentExample() {
+export default function AgentExample(): AML {
   return (
     <Agent
       name="review-coordinator"

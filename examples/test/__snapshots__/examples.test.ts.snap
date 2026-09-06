@@ -2,7 +2,21 @@
 
 exports[`examples > agent 1`] = `"Review complete."`;
 
+exports[`examples > agent-team 1`] = `
+"<user-impact>
+Users can export their invoices as CSV.
+</user-impact>
+
+
+
+<rollout-checks>
+Check account permissions and CSV escaping.
+</rollout-checks>"
+`;
+
 exports[`examples > basic 1`] = `"AML resolves bottom-up"`;
+
+exports[`examples > component-types 1`] = `"Evidence: No findings. Inspect the changed files."`;
 
 exports[`examples > concurrency 1`] = `"synthesized:combine:review-result|audit-result"`;
 

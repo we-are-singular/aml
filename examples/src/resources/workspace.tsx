@@ -1,4 +1,4 @@
-import { Agent, Sandbox, Workspace } from "@aml-jsx/sdk"
+import { type AML, Agent, Sandbox, Workspace } from "@aml-jsx/sdk"
 
 import { createWorkspaceFixture } from "../shared/create-workspace-fixture.js"
 
@@ -10,7 +10,7 @@ const { agent: ExampleProvider, sandbox: ExampleSandbox, workspace: ExampleWorks
 /**
  * Demonstrates disposable Sandboxes sharing one durable Workspace.
  */
-export default function WorkspaceExample() {
+export default function WorkspaceExample(): AML {
   return (
     <Workspace id="review-42" provider={ExampleWorkspace}>
       <Sandbox access="read-write" provider={ExampleSandbox}>

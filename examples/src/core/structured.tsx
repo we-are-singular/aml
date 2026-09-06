@@ -1,4 +1,4 @@
-import { Agent, evaluate } from "@aml-jsx/sdk"
+import { type AML, Agent, evaluate } from "@aml-jsx/sdk"
 import { DeterministicAgentProvider } from "@aml-jsx/sdk/testing"
 import { z } from "zod"
 
@@ -29,7 +29,7 @@ const ExampleProvider = new DeterministicAgentProvider({
 /**
  * Moves typed specialist output into a later coordinator prompt.
  */
-async function Review() {
+const Review: AML.Component = async () => {
   const finding = await evaluate(
     //
     <Agent provider={ExampleProvider}>Inspect the change.</Agent>,
@@ -46,6 +46,6 @@ async function Review() {
 /**
  * Demonstrates typed Agent data moving into a later text-producing Agent.
  */
-export default function StructuredExample() {
+export default function StructuredExample(): AML {
   return <Review />
 }

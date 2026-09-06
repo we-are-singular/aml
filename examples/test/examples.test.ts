@@ -1,11 +1,11 @@
 import { describe, expect, test } from "vitest"
 
-import { AmlRuntime, type AmlRenderable } from "@aml-jsx/sdk"
+import { AmlRuntime, type AML } from "@aml-jsx/sdk"
 
 import { createReviewExample } from "../src/integrations/review.js"
 
 interface ExampleModule {
-  readonly default: () => AmlRenderable
+  readonly default: () => AML
 }
 
 const deterministicExamples = import.meta.glob<ExampleModule>("../src/{capabilities,core,resources}/*.tsx", {

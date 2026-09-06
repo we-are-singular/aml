@@ -1,4 +1,4 @@
-import { Agent, createContext, defineTool, Tool, useContext } from "@aml-jsx/sdk"
+import { type AML, Agent, createContext, defineTool, Tool, useContext } from "@aml-jsx/sdk"
 import { DeterministicAgentProvider } from "@aml-jsx/sdk/testing"
 import { z } from "zod"
 
@@ -39,7 +39,7 @@ const ExampleProvider = new DeterministicAgentProvider({
 /**
  * Captures the scoped repository without rendering it into the prompt.
  */
-function OrderAgent() {
+const OrderAgent: AML.Component = () => {
   const repository = useContext(Repository)
   const listOrders = defineTool({
     description: "List orders for the active application session.",
@@ -59,7 +59,7 @@ function OrderAgent() {
 /**
  * Demonstrates an immutable dependency scope captured by a JavaScript Tool.
  */
-export default function ContextExample() {
+export default function ContextExample(): AML {
   return (
     <Repository.Provider value={new SessionRepository()}>
       <OrderAgent />

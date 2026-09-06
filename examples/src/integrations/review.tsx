@@ -4,6 +4,7 @@ import { join } from "node:path"
 import { fileURLToPath } from "node:url"
 
 import {
+  type AML,
   Agent,
   Block,
   evaluate,
@@ -11,7 +12,6 @@ import {
   Include,
   localWorkspace,
   Skill,
-  type AmlRenderable,
   type AgentProvider,
   Workspace,
 } from "@aml-jsx/sdk"
@@ -50,7 +50,7 @@ type ReviewLane = "correctness" | "maintainability"
 /**
  * Authors one read-only specialist against the same bounded evidence files.
  */
-function ReviewSpecialist({ lane, provider }: { lane: ReviewLane; provider: AgentProvider }) {
+const ReviewSpecialist: AML.Component<{ lane: ReviewLane; provider: AgentProvider }> = ({ lane, provider }) => {
   const assignment =
     lane === "correctness"
       ? "Report the highest-confidence behavioral defect."
@@ -82,7 +82,7 @@ function ReviewSpecialist({ lane, provider }: { lane: ReviewLane; provider: Agen
 /**
  * Collects typed specialist results before authoring the synthesis continuation.
  */
-async function ReviewWorkflow({ provider }: { provider: AgentProvider }) {
+const ReviewWorkflow: AML.Component<{ provider: AgentProvider }> = async ({ provider }) => {
   const [correctness, maintainability] = await Promise.all([
     evaluate(<ReviewSpecialist lane="correctness" provider={provider} />, ReviewFinding),
     evaluate(<ReviewSpecialist lane="maintainability" provider={provider} />, ReviewFinding),
@@ -121,7 +121,7 @@ async function ReviewWorkflow({ provider }: { provider: AgentProvider }) {
 /**
  * Owns disposable evidence materialization and waits for nested cleanup before removing it.
  */
-async function ReviewRun({ providerName }: { providerName: string }) {
+const ReviewRun: AML.Component<{ providerName: string }> = async ({ providerName }) => {
   const directory = await mkdtemp(join(tmpdir(), "aml-review-example-"))
   const provider = createReviewProvider(providerName, directory)
 
@@ -141,13 +141,13 @@ async function ReviewRun({ providerName }: { providerName: string }) {
 /**
  * Builds the review example with an explicit provider selection for tests and runners.
  */
-export function createReviewExample(providerName: string): AmlRenderable {
+export function createReviewExample(providerName: string): AML {
   return <ReviewRun providerName={providerName} />
 }
 
 /**
  * Demonstrates a bounded, typed review through deterministic, OpenCode, or Codex providers.
  */
-export default function ReviewExample() {
+export default function ReviewExample(): AML {
   return createReviewExample(process.env.AML_REVIEW_PROVIDER ?? "deterministic")
 }

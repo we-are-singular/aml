@@ -1,6 +1,6 @@
 import { AsyncLocalStorage } from "node:async_hooks"
 
-import { AmlRuntime, createTraceSummaryCollector, withTraceSpan } from "@aml-jsx/sdk"
+import { type AML, AmlRuntime, createTraceSummaryCollector, withTraceSpan } from "@aml-jsx/sdk"
 
 const requestContext = new AsyncLocalStorage<string>()
 const runIdsByRequest = new Map<string, string>()
@@ -17,7 +17,7 @@ runtime.on("start", event => {
   if (requestId !== undefined) runIdsByRequest.set(requestId, event.runId)
 })
 
-async function ReviewPhase({ candidates }: { readonly candidates: number }) {
+const ReviewPhase: AML.Component<{ readonly candidates: number }> = async ({ candidates }) => {
   return await withTraceSpan("review.validate", async () => `validated ${candidates}`)
 }
 

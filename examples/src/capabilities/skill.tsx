@@ -1,6 +1,6 @@
 import { fileURLToPath } from "node:url"
 
-import { Agent, Skill } from "@aml-jsx/sdk"
+import { type AML, Agent, Skill } from "@aml-jsx/sdk"
 import { DeterministicAgentProvider } from "@aml-jsx/sdk/testing"
 
 /**
@@ -13,7 +13,7 @@ const ExampleProvider = new DeterministicAgentProvider({
 /**
  * Demonstrates a complete local Skill package registered for one Agent.
  */
-export default function SkillExample() {
+export default function SkillExample(): AML {
   return (
     <Agent provider={ExampleProvider}>
       <Skill src={fileURLToPath(new URL("./skills/evidence-review", import.meta.url))} />

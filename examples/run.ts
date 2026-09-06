@@ -1,9 +1,9 @@
 import { fileURLToPath } from "node:url"
 
-import { AmlRuntime, createConsoleTracer, type AmlRenderable } from "@aml-jsx/sdk"
+import { AmlRuntime, createConsoleTracer, type AML } from "@aml-jsx/sdk"
 
 interface ExampleModule {
-  readonly default: () => AmlRenderable
+  readonly default: () => AML
 }
 
 const exampleModules = import.meta.glob<ExampleModule>("./src/{capabilities,core,integrations,resources}/*.tsx")

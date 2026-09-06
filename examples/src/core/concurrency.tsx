@@ -1,4 +1,4 @@
-import { Agent, Parallel } from "@aml-jsx/sdk"
+import { type AML, Agent, Parallel } from "@aml-jsx/sdk"
 import { DeterministicAgentProvider } from "@aml-jsx/sdk/testing"
 
 /**
@@ -24,17 +24,17 @@ const ExampleProvider = new DeterministicAgentProvider({
 /**
  * Runs one independent specialist and contributes its labeled result.
  */
-function ReviewLane() {
+const ReviewLane: AML.Component = () => {
   return [<Agent provider={ExampleProvider}>review</Agent>, "|"]
 }
 
 /** Runs the second independent specialist. */
-function AuditLane() {
+const AuditLane: AML.Component = () => {
   return <Agent provider={ExampleProvider}>audit</Agent>
 }
 
 /** Starts both specialists explicitly, then authors one coordinator. */
-function Review() {
+const Review: AML.Component = () => {
   return (
     <Agent provider={ExampleProvider}>
       combine:
@@ -49,6 +49,6 @@ function Review() {
 /**
  * Demonstrates explicit parallel discovery followed by ordered synthesis.
  */
-export default function ConcurrencyExample() {
+export default function ConcurrencyExample(): AML {
   return <Review />
 }

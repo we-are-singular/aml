@@ -1,4 +1,4 @@
-import { Sandbox, Script } from "@aml-jsx/sdk"
+import { type AML, Sandbox, Script } from "@aml-jsx/sdk"
 import { DeterministicSandboxProvider } from "@aml-jsx/sdk/testing"
 
 /**
@@ -17,7 +17,7 @@ const ExampleSandbox = new DeterministicSandboxProvider({
 /**
  * Resolves Script cwd from the active Sandbox root.
  */
-export default function ScriptExample() {
+export default function ScriptExample(): AML {
   return (
     <Sandbox access="read-write" provider={ExampleSandbox} root="repository">
       <Script cwd="packages/api" command="npm" args={["test"]} />

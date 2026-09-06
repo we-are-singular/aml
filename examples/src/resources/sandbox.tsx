@@ -1,4 +1,4 @@
-import { Agent, Sandbox } from "@aml-jsx/sdk"
+import { type AML, Agent, Sandbox } from "@aml-jsx/sdk"
 import { DeterministicAgentProvider, DeterministicSandboxProvider } from "@aml-jsx/sdk/testing"
 
 /**
@@ -29,7 +29,7 @@ const ExampleProvider = new DeterministicAgentProvider({
 /**
  * Demonstrates nested Sandbox policy narrowing and one shared outer lease.
  */
-export default function SandboxExample() {
+export default function SandboxExample(): AML {
   return (
     <Sandbox access="read-write" provider={ExampleSandbox} root="repository">
       <Sandbox access="read-only" root="packages/api">

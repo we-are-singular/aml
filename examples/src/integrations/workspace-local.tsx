@@ -2,21 +2,21 @@ import { mkdtemp, rm } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 
-import { Agent, evaluate, Sandbox, Workspace } from "@aml-jsx/sdk"
+import { type AML, Agent, evaluate, Sandbox, Workspace } from "@aml-jsx/sdk"
 
 import { createLocalWorkspaceFixture } from "../shared/create-local-workspace-fixture.js"
 
 /**
  * Demonstrates a local Workspace persisting files across Sandbox leases.
  */
-export default function LocalWorkspaceExample() {
+export default function LocalWorkspaceExample(): AML {
   return <LocalWorkspaceRun />
 }
 
 /**
  * Owns the temporary directory inside AML's active component boundary.
  */
-async function LocalWorkspaceRun() {
+const LocalWorkspaceRun: AML.Component = async () => {
   const directory = await mkdtemp(join(tmpdir(), "aml-workspace-local-"))
   const {
     agent: ExampleProvider,

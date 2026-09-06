@@ -1,4 +1,4 @@
-import { Agent, defineMcpServer, FollowUp, Mcp } from "@aml-jsx/sdk"
+import { type AML, Agent, defineMcpServer, FollowUp, Mcp } from "@aml-jsx/sdk"
 import { DeterministicAgentProvider } from "@aml-jsx/sdk/testing"
 
 /**
@@ -26,7 +26,7 @@ const ExampleProvider = new DeterministicAgentProvider({
 /**
  * Demonstrates several authored turns in one provider-owned Agent session.
  */
-export default function FollowUpExample() {
+export default function FollowUpExample(): AML {
   return (
     <Agent provider={ExampleProvider}>
       <Mcp use={ExampleMcp} />

@@ -1,6 +1,6 @@
 import { resolve } from "node:path"
 
-import { Agent, dockerSandbox, Sandbox, supportsSandboxRuntime } from "@aml-jsx/sdk"
+import { type AML, Agent, dockerSandbox, Sandbox, supportsSandboxRuntime } from "@aml-jsx/sdk"
 import { DeterministicAgentProvider } from "@aml-jsx/sdk/testing"
 
 /**
@@ -45,7 +45,7 @@ const ExampleProvider = new DeterministicAgentProvider({
 /**
  * Demonstrates an Agent adapter executing through an image-first Docker Sandbox.
  */
-export default function DockerExample() {
+export default function DockerExample(): AML {
   return (
     <Sandbox provider={ExampleSandbox} access="read-only">
       <Agent cwd="sdk" provider={ExampleProvider}>

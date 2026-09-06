@@ -1,6 +1,6 @@
 import { resolve } from "node:path"
 
-import { Agent, modalSandbox, Sandbox, supportsSandboxRuntime } from "@aml-jsx/sdk"
+import { type AML, Agent, modalSandbox, Sandbox, supportsSandboxRuntime } from "@aml-jsx/sdk"
 import { DeterministicAgentProvider } from "@aml-jsx/sdk/testing"
 
 /**
@@ -40,7 +40,7 @@ const ExampleProvider = new DeterministicAgentProvider({
 /**
  * Demonstrates an Agent adapter executing through a Modal Sandbox.
  */
-export default function ModalExample() {
+export default function ModalExample(): AML {
   return (
     <Sandbox provider={ExampleSandbox} access="read-write">
       <Agent cwd="sdk" provider={ExampleProvider}>

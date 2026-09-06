@@ -1,4 +1,4 @@
-import { Agent, Loop, type AgentJavaScriptTool } from "@aml-jsx/sdk"
+import { type AML, Agent, Loop, type AgentJavaScriptTool } from "@aml-jsx/sdk"
 import { DeterministicAgentProvider } from "@aml-jsx/sdk/testing"
 import { z } from "zod"
 
@@ -44,7 +44,7 @@ const ExampleProvider = new DeterministicAgentProvider({
 /**
  * Demonstrates transactional state advancing between fresh Agent sessions.
  */
-export default function LoopExample() {
+export default function LoopExample(): AML {
   return (
     <Loop
       initial={{ done: false, findings: [] }}

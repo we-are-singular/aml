@@ -1,7 +1,7 @@
 import { realpath } from "node:fs/promises"
 import { isAbsolute, relative, resolve, sep } from "node:path"
 
-import { Agent, codexAgent, evaluate, localWorkspace, System, Workspace } from "@aml-jsx/sdk"
+import { type AML, Agent, codexAgent, evaluate, localWorkspace, System, Workspace } from "@aml-jsx/sdk"
 import { z } from "zod"
 
 const examplesDirectory = resolve(import.meta.dirname, "../..")
@@ -26,7 +26,7 @@ const DiscoveryProvider = createExampleProvider(examplesDirectory)
 /**
  * Uses typed Agent output to choose the resource boundary for later work.
  */
-async function WorkspaceRouting() {
+const WorkspaceRouting: AML.Component = async () => {
   const selection = await evaluate(
     <Agent provider={DiscoveryProvider}>
       <System>
@@ -64,6 +64,6 @@ async function WorkspaceRouting() {
 /**
  * Demonstrates structured discovery selecting a later Agent's Workspace.
  */
-export default function WorkspaceRoutingExample() {
+export default function WorkspaceRoutingExample(): AML {
   return <WorkspaceRouting />
 }

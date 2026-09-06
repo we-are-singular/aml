@@ -1,4 +1,4 @@
-import { Agent, defineMcpServer, Mcp } from "@aml-jsx/sdk"
+import { type AML, Agent, defineMcpServer, Mcp } from "@aml-jsx/sdk"
 import { DeterministicAgentProvider } from "@aml-jsx/sdk/testing"
 
 /**
@@ -32,7 +32,7 @@ const ExampleProvider = new DeterministicAgentProvider({
 /**
  * Demonstrates that MCP grants remain provider data scoped to one Agent.
  */
-export default function McpExample() {
+export default function McpExample(): AML {
   return (
     <>
       <Agent provider={ExampleProvider}>

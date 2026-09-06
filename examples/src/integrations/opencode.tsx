@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto"
 
-import { Agent, defineTool, opencodeAgent, Tool } from "@aml-jsx/sdk"
+import { type AML, Agent, defineTool, opencodeAgent, Tool } from "@aml-jsx/sdk"
 import { z } from "zod"
 
 // The random value proves the model called this process-local Tool rather than
@@ -25,7 +25,7 @@ const ExampleProvider = opencodeAgent({
 /**
  * Demonstrates a credentialed OpenCode model calling a process-local Tool.
  */
-export default function OpenCodeExample() {
+export default function OpenCodeExample(): AML {
   return (
     <Agent provider={ExampleProvider}>
       <Tool use={ExampleTool} />
