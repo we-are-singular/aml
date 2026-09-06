@@ -29,7 +29,7 @@ This is a runnable boundary demonstration, not a claim that arbitrary generated 
 ## Complete source
 
 ```tsx
-import { Agent, AmlRuntime, Sandbox, Script, dockerSandbox } from "@aml-jsx/sdk"
+import { type AML, Agent, AmlRuntime, Sandbox, Script, dockerSandbox } from "@aml-jsx/sdk"
 import { DeterministicAgentProvider } from "@aml-jsx/sdk/testing"
 
 const generator = new DeterministicAgentProvider({
@@ -58,7 +58,7 @@ const DiagnosticsSandbox = dockerSandbox({
   workspace: process.cwd(),
 })
 
-async function TriageRepository() {
+const TriageRepository: AML.Component = async () => {
   const source = await new AmlRuntime({ agentProvider: generator }).evaluate(
     <Agent>Return only a short Node.js diagnostic that lists files in the current working directory as JSON.</Agent>
   )
@@ -79,7 +79,7 @@ async function TriageRepository() {
   )
 }
 
-console.log(await TriageRepository())
+console.log(await new AmlRuntime().evaluate(<TriageRepository />))
 ```
 
 ## Run it

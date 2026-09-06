@@ -60,18 +60,21 @@ Pass exactly one of `client` or `config` when you need non-default credentials, 
 
 ## AWS example with injected credentials
 
-Keep credentials in the runtime environment or workload identity. Do not write them into the Workspace.
+Keep credentials in the runtime environment or workload identity. Install `@aws-sdk/client-s3` as a direct application dependency for this import. The example publishes a fixed report into an existing bucket; it requires storage credentials but no Agent provider or model access. Do not write credentials into the Workspace.
 
 ```tsx
 import { S3Client } from "@aws-sdk/client-s3"
-import { AmlRuntime, Agent, Workspace, s3Workspace } from "@aml-jsx/sdk"
+import { AmlRuntime, File, Workspace, s3Workspace } from "@aml-jsx/sdk"
+
+const bucket = process.env.AML_WORKSPACE_BUCKET
+if (!bucket) throw new Error("AML_WORKSPACE_BUCKET is required")
 
 const client = new S3Client({
   region: process.env.AWS_REGION ?? "us-east-1",
 })
 
 const workspace = s3Workspace({
-  bucket: process.env.AML_WORKSPACE_BUCKET!,
+  bucket,
   client,
   prefix: "production/reviews",
   format: "folder",
@@ -83,7 +86,7 @@ await new AmlRuntime({ workspaceProvider: workspace }).evaluate(
     load={{ revision: "current", exclude: ["node_modules/**"] }}
     save={{ on: "success", gitignore: true, retention: 5 }}
   >
-    <Agent>Update reports/summary.md with the current review findings.</Agent>
+    <File path="reports/summary.md">The review completed successfully.</File>
   </Workspace>
 )
 ```

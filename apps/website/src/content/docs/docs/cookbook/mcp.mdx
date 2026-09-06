@@ -110,7 +110,7 @@ const remoteServer = defineMcpServer({
   transport: {
     type: "streamable-http",
     url: "https://mcp.example.invalid/mcp",
-    headers: { Authorization: \`Bearer \${process.env.MCP_TOKEN ?? ""}\` },
+    headers: { Authorization: `Bearer ${process.env.MCP_TOKEN ?? ""}` },
   },
 })
 ```

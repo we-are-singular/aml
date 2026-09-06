@@ -52,7 +52,7 @@ Runtime allowlists
 This example is deterministic and credential-free. The repository owns `SessionRepository`; the model-facing capability exposes only the narrow `list_session_orders` operation.
 
 ```tsx
-import { Agent, AmlRuntime, defineTool, Tool } from "@aml-jsx/sdk"
+import { type AML, Agent, AmlRuntime, defineTool, Tool } from "@aml-jsx/sdk"
 import { DeterministicAgentProvider } from "@aml-jsx/sdk/testing"
 import { z } from "zod"
 
@@ -75,7 +75,7 @@ const provider = new DeterministicAgentProvider({
   },
 })
 
-function OrderAgent({ repository }: { repository: SessionRepository }) {
+const OrderAgent: AML.Component<{ repository: SessionRepository }> = ({ repository }) => {
   const listOrders = defineTool({
     description: "List orders for the active application session.",
     execute: async (_input, context) => await repository.listOrders(),

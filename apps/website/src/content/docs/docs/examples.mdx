@@ -21,20 +21,31 @@ returns a typed draft. A second Agent publishes that draft, then reviews and for
 
 ## Run an example
 
-From the repository root:
+Clone the repository and install its dependencies first. The examples use built package exports; `npm run example` builds its dependencies through the repository task runner.
+
+```sh title="Terminal"
+git clone https://github.com/we-are-singular/aml.git
+cd aml
+npm ci
+```
+
+From that repository root:
 
 ```sh title="Terminal"
 npm run example --
 npm run example -- review
 npm run example -- structured
+npm run example -- agent-team
 ```
 
 The first command prints the current filename-derived catalog. Treat that output and [`examples/run.ts`](https://github.com/we-are-singular/aml/blob/main/examples/run.ts) as the source of truth; this page deliberately recommends paths instead of duplicating every filename.
 
+If you installed with `--ignore-scripts`, deterministic examples can run while a native executable is still unprepared. Before live OpenCode examples, verify the repository installation with `npm exec -- opencode --version`; run `npm rebuild opencode-ai` if it reports that its postinstall script was skipped.
+
 Each maintained example also exports an AML tree, so the experimental CLI can run one source file directly. Build the repository CLI and try the credential-free basic example:
 
 ```sh title="Terminal"
-npm run build --workspace=@aml-jsx/cli
+npm run build
 node apps/cli/dist/index.js run ./examples/src/core/basic.tsx
 ```
 
@@ -43,10 +54,20 @@ The shared example runner remains useful for its catalog and common tracer. Use 
 ## Choose by goal
 
 <CardGrid>
+  <Card title="Build a reusable agent team" icon="random">
+    Run `agent-team` for two release specialists followed by an editor. Named Blocks make the exact data passed between agents visible; the fixture requires no credentials.
+
+    [`core/agent-team.tsx`](https://github.com/we-are-singular/aml/blob/main/examples/src/core/agent-team.tsx)
+
+    [Follow the agent-team tutorial](/docs/getting-started/#3-compose-an-agent-team)
+
+  </Card>
   <Card title="Learn JSX evaluation" icon="puzzle">
-    Run `basic` for deterministic bottom-up evaluation with no model, network, or filesystem effect.
+    Run `basic` for deterministic bottom-up evaluation with no model, network, or filesystem effect. Run `component-types` to see `AML.Component`, optional children, required children, and async components together.
 
     [`core/basic.tsx`](https://github.com/we-are-singular/aml/blob/main/examples/src/core/basic.tsx)
+
+    [`core/component-types.tsx`](https://github.com/we-are-singular/aml/blob/main/examples/src/core/component-types.tsx) · [Component typing guide](/docs/ast/#type-application-components-explicitly)
 
     [Read the mental model](/docs/concepts/)
 
@@ -126,6 +147,20 @@ The shared example runner remains useful for its catalog and common tracer. Use 
 </CardGrid>
 
 ## When an example needs infrastructure
+
+The filename runner covers `core`, `capabilities`, `resources`, and `integrations`. Files under `operations` use their own entrypoints and are not names accepted by `npm run example`:
+
+```sh title="Terminal"
+# Credential-free application tracing; this script owns its runtime.
+npx vite-node examples/src/operations/trace-summaries.tsx
+
+# Credential-free local process lifecycle; interrupt with Ctrl+C as the recipe explains.
+npm run aml -- run ./examples/src/operations/cli-process-safety.tsx --trace
+```
+
+The [live Agent activity recipe](/docs/cookbook/observe-agent-activity/) supplies the separate OpenCode command and credentials for `observe-agent.tsx`.
+
+Run the maintained deterministic examples as tests with `npm run test --workspace=@aml-jsx/examples` after `npm run build`. Their snapshots verify resolved output; they do not establish live model quality or external-provider compatibility.
 
 The runner also discovers credentialed Agent examples and resource-backed Sandbox or Workspace examples. List the catalog first, then inspect the selected source before running it.
 

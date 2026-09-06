@@ -1,8 +1,8 @@
 ---
 title: AML documentation
-description: Build, understand, and operate typed agent workflows with Agent Markup Language.
+description: Build AI agents and multi-agent applications with TypeScript and JSX.
 hero:
-  tagline: The practical guide to composing agents, capabilities, sandboxes, and durable workspaces with TypeScript and JSX.
+  tagline: Build an agent, give it tools, and compose it with other agents using ordinary TypeScript and reusable JSX components.
   actions:
     - text: Build your first workflow
       link: ./getting-started/
@@ -39,7 +39,21 @@ import { CardGrid, LinkCard } from "@astrojs/starlight/components"
   </CardGrid>
 </div>
 
-AML is an asynchronous TypeScript and JSX runtime for building executable agent workflows. JSX describes the dependency tree; [`AmlRuntime`](/docs/reference/runtime/) evaluates it, opens scoped resources, runs provider sessions, and cleans up in reverse order. It is not a UI framework or a second workflow language—ordinary TypeScript owns control flow, while [`<Parallel>`](/docs/reference/primitives/parallel/) explicitly marks independent AML branches.
+Agent Markup Language (AML) is a TypeScript framework for building AI agents and multi-agent applications. Use JSX to compose each agent's instructions, tools, input, and execution environment. AML runs that composition, passes results between agents, and manages session and resource cleanup.
+
+The built-in providers connect to existing coding agents: Codex, GitHub Copilot, GLM, OpenCode, and Pi. Those agents keep their native model loops and tools. Your application owns the workflow around them, including validation, routing, concurrency, and persistence.
+
+## What will you build?
+
+| Start with…                                                    | Learn how to…                                                                   |
+| -------------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| [Your first workflow](/docs/getting-started/)                  | Run an Agent, compose specialists, and connect a live provider.                 |
+| [An agent with an application Tool](/docs/cookbook/tools/)     | Grant a typed function to one agent and verify that it is called.               |
+| [A code-review workflow](/docs/cookbook/code-review-workflow/) | Gather evidence, run specialists in parallel, and validate their findings.      |
+| [A support router](/docs/cookbook/structured-routing/)         | Turn a typed result into an application-authorized decision.                    |
+| [A workflow test](/docs/cookbook/testing/)                     | Run the same composition with deterministic providers and inspect its behavior. |
+
+You can start with a single `<Agent />`. Add tools, sandboxes, and workspaces when the task needs them. JSX describes the composition; ordinary TypeScript still handles conditions, loops, and application logic. React is not required.
 
 ## Install AML
 

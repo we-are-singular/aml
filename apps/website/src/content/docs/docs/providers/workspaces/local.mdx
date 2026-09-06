@@ -94,7 +94,7 @@ Use it only where the application trusts the workflow and the directory. For unt
 | Failure                              | Recovery                                                                                                      |
 | ------------------------------------ | ------------------------------------------------------------------------------------------------------------- |
 | Directory missing or not a directory | Create/validate it before evaluation; acquisition does not create the configured Workspace.                   |
-| Active writer                        | Wait, use a different id/directory, or choose an explicit unlocked strategy.                                  |
+| Active writer                        | Wait or select a different physical directory. Changing only the Workspace id does not avoid the lock.        |
 | Lock compromised                     | Treat the materialization as suspect; stop writing, inspect the directory, and retry from a known-good state. |
 | Process cancellation                 | Preserve the cancellation reason and verify whether direct writes already reached disk.                       |
 | Release failure                      | Alert and inspect the lock directory before allowing another writer.                                          |

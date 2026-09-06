@@ -14,13 +14,13 @@ Create one application-owned callable with validated input and safe JSON output,
 ## Prerequisites
 
 - Node.js `>=26`;
-- `@aml-jsx/sdk`, `@aml-jsx/sdk/testing`, and `zod`;
+- `@aml-jsx/sdk` and `zod` (`@aml-jsx/sdk/testing` is included in the SDK);
 - no credentials or network for this deterministic workflow.
 
 ## Complete source
 
 ```tsx
-import { Agent, AmlRuntime, defineTool, Tool } from "@aml-jsx/sdk"
+import { type AML, Agent, AmlRuntime, defineTool, Tool } from "@aml-jsx/sdk"
 import { DeterministicAgentProvider } from "@aml-jsx/sdk/testing"
 import { z } from "zod"
 
@@ -44,7 +44,7 @@ const provider = new DeterministicAgentProvider({
   },
 })
 
-function OrderAgent({ repository }: { repository: SessionRepository }) {
+const OrderAgent: AML.Component<{ repository: SessionRepository }> = ({ repository }) => {
   const listOrders = defineTool({
     description: "List orders for the active application session.",
     execute: async () => await repository.listOrders(),

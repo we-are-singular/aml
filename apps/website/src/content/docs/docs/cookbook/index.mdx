@@ -16,6 +16,8 @@ import { Aside, Badge, CardGrid, LinkCard } from "@astrojs/starlight/components"
 
 AML is easiest to learn by building a workflow with a clear job to do. This cookbook moves from a credential-free review pipeline to typed outputs, application [`<Tool />`](/docs/reference/primitives/tool/) capabilities, scoped [`<Mcp />`](/docs/reference/primitives/mcp/) access, filesystem resources, durable provider composition, and operational jobs.
 
+Type reusable components with [`AML.Component<Props>`](/docs/ast/#type-application-components-explicitly). Import `AML` as a type from `@aml-jsx/sdk`; add `AML.PropsWithChildren<Props>` for optional nested content or `AML.PropsWithRequiredChildren<Props>` for required children.
+
 <Aside type="tip" title="Recommended path">
   Start with [Build a code-review workflow](/docs/cookbook/code-review-workflow/). It demonstrates bounded filesystem
   evidence, a real Skill, typed specialist Agents, explicit parallelism, application validation, and synthesis without
@@ -24,12 +26,14 @@ AML is easiest to learn by building a workflow with a clear job to do. This cook
 
 ## Before you begin
 
-Every recipe assumes:
+Start with [Getting started](/docs/getting-started/) for a complete project setup. Recipes build on that setup and assume:
 
 - Node.js `>=26`;
-- dependencies installed with `npm install`;
+- `@aml-jsx/sdk` installed, plus any dependencies listed by the recipe;
 - TypeScript/TSX support with AML's automatic JSX runtime;
 - the public application entrypoint, `@aml-jsx/sdk`.
+
+`@aml-jsx/sdk/testing` is an import path included in the SDK, not a separately installable package. Install `zod` for schema examples and `vitest` as a development dependency for test examples. A code block labeled “Complete source” is intended to run with its stated prerequisites; smaller blocks illustrate changes to that source or require the surrounding application's values.
 
 The complete recipe files construct and evaluate their own `AmlRuntime`, which is the clearest shape when an application owns limits, defaults, telemetry, and shutdown. To run a workflow with the [experimental CLI](/docs/cli/) instead, export the AML tree, put required providers directly on their components, and use `npx aml run ./workflow.tsx`. Do not wrap a second `AmlRuntime` inside the exported CLI entry.
 
@@ -166,7 +170,7 @@ source links section.
 | [Codex + Docker + S3](/docs/cookbook/codex-docker-s3/)                 | Credentialed + container + durable storage | Codex ACP image, Docker, model credentials, S3 bucket, and AWS identity                   | Understanding the complete three-provider lifecycle                  |
 | [Structured routing](/docs/cookbook/structured-routing/)               | Deterministic                              | Node, SDK/testing, `zod`, and an application-owned root directory                         | Safely turning model-shaped data into resource selection             |
 
-This recipe is intentionally provider-backed. It does not install OpenCode, provision credentials, define a deployment image, or make local execution safe for untrusted code. Treat the code as a composition-root pattern and inject the Sandbox/Workspace providers required by your deployment.
+The production-job recipe needs a configured live provider. Supply the executable, credentials, and Sandbox/Workspace providers required by your deployment before running it.
 
 ## Control a session's authored turns
 

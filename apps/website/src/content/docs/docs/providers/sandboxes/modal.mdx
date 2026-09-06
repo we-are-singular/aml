@@ -60,24 +60,25 @@ On acquisition, AML creates a local tar archive, uploads it, and runs remote `ta
 
 On writable release, AML creates a complete archive from `/workspace`, downloads it, extracts it locally, and mirrors additions, modifications, and deletions into the active materialization. Read-only release skips reconciliation. This is not continuous synchronization, and remote changes can be lost if the Sandbox terminates before release completes.
 
-## Complete safe example
+## Remote command example
 
-This example uses a temporary directory and a minimal shell command. The image reference is illustrative and must be
-readable by Modal from its registry source:
+This example runs a fixed command on a real Modal account. Configure `MODAL_TOKEN_ID` and `MODAL_TOKEN_SECRET` through Modal's normal credential discovery, and set `AML_MODAL_IMAGE` to a registry image your account can pull that contains `sh` and `tar`. It does not call a model.
 
 ```tsx
 /** @jsxImportSource @aml-jsx/sdk */
-import { mkdtemp } from "node:fs/promises"
+import { mkdtemp, readFile } from "node:fs/promises"
 import { join } from "node:path"
 import { tmpdir } from "node:os"
 import { AmlRuntime, Sandbox, Script, Workspace, localWorkspace, modalSandbox } from "@aml-jsx/sdk"
 
+const image = process.env.AML_MODAL_IMAGE
+if (!image) throw new Error("AML_MODAL_IMAGE is required")
+
 const directory = await mkdtemp(join(tmpdir(), "aml-modal-"))
 const runtime = new AmlRuntime({
   sandboxProvider: modalSandbox({
-    image: "registry.example.com/aml-agent:2026-08-09",
+    image,
     appName: "aml-docs-example",
-    config: { tokenId: process.env.MODAL_API_KEY, tokenSecret: process.env.MODAL_API_SECRET },
   }),
   workspaceProvider: localWorkspace({ directory }),
 })
@@ -89,7 +90,11 @@ await runtime.evaluate(
     </Sandbox>
   </Workspace>
 )
+
+console.log(await readFile(join(directory, "result.txt"), "utf8"))
 ```
+
+Run with `npx vite-node recipe.tsx` after the [project setup](/docs/getting-started/). Expected output is `remote`, read from the local file after reconciliation. Remove the temporary `directory` after inspecting it.
 
 Do not commit Modal credentials. Configure them through the deployment environment or inject a `ModalClient`. For a real Agent, use an image that contains the matching ACP command and dependencies; the registry image is part of the integration contract.
 

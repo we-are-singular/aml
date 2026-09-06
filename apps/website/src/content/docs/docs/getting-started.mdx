@@ -5,7 +5,7 @@ description: Install AML and resolve a credential-free workflow before connectin
 
 import { Aside, Card, CardGrid, Steps, TabItem, Tabs } from "@astrojs/starlight/components"
 
-This guide gives you a deterministic first success: no API key, ACP executable, Docker daemon, or remote account required. The main path shows an application-owned [`AmlRuntime`](/docs/reference/runtime/); an optional CLI path then runs an exported tree without application glue. You will finally swap in a real [Agent provider](/docs/providers/agents/) without changing the authored AML tree.
+A deterministic Agent provider runs AML without model credentials, an agent executable, Docker, or a remote account. Agent providers control how sessions run; the same components can use a [live provider](/docs/providers/agents/) once its executable and credentials are configured.
 
 ## Prerequisites
 
@@ -134,47 +134,76 @@ Resolved: Explain what AML evaluates.
 
 The [`DeterministicAgentProvider`](/docs/reference/testing/#deterministicagentprovider) deliberately echoes a known result and records calls. It is part of the public testing entrypoint, making it useful for tutorials, examples, and workflow tests—not just AML's own test suite.
 
-### Run the same tree with the CLI
+## 3. Compose an agent team
 
-The application above constructs `AmlRuntime` because it owns the process. For a standalone workflow file, install the experimental CLI beside the SDK:
+An AML component can combine several agents into a reusable unit. Here two specialists receive the same change description in parallel. Their results become input to a release editor, which starts after both specialists finish.
 
-```sh title="Terminal"
-npm install --save-dev @aml-jsx/cli
-```
+`AML.Component<{ change: string }>` declares the component's input and lets it return any AML value. Import `AML` as a type. When a component accepts nested content, declare it with [`AML.PropsWithChildren` or `AML.PropsWithRequiredChildren`](/docs/ast/#optional-and-required-children).
 
-Create `src/cli-workflow.tsx`. Put the provider directly on [`<Agent />`](/docs/reference/primitives/agent/), export the tree, and let the CLI create and instrument the runtime:
+Replace `src/first-workflow.tsx` with this credential-free example:
 
-```tsx title="src/cli-workflow.tsx"
-import { Agent } from "@aml-jsx/sdk"
+```tsx title="src/first-workflow.tsx"
+import { type AML, Agent, AmlRuntime, Block, Parallel } from "@aml-jsx/sdk"
 import { DeterministicAgentProvider } from "@aml-jsx/sdk/testing"
 
+const ReleaseBrief: AML.Component<{ change: string }> = ({ change }) => {
+  return (
+    <Agent name="release-editor" system="Write a release brief from the supplied findings.">
+      <Parallel>
+        <Block tag="user-impact">
+          <Agent name="impact-specialist" system="Explain the user impact.">
+            {change}
+          </Agent>
+        </Block>
+        <Block tag="rollout-checks">
+          <Agent name="rollout-specialist" system="List checks before rollout.">
+            {change}
+          </Agent>
+        </Block>
+      </Parallel>
+    </Agent>
+  )
+}
+
 const provider = new DeterministicAgentProvider({
-  name: "cli-workflow",
-  respond: request => ({ text: `Resolved: ${request.prompt}` }),
+  respond(request) {
+    if (request.system === "Explain the user impact.") {
+      return { text: "Users can export their invoices as CSV." }
+    }
+    if (request.system === "List checks before rollout.") {
+      return { text: "Check account permissions and CSV escaping." }
+    }
+    return { text: request.prompt }
+  },
 })
 
-export default <Agent provider={provider}>Explain what AML evaluates.</Agent>
+const runtime = new AmlRuntime({ agentProvider: provider })
+console.log(await runtime.evaluate(<ReleaseBrief change="Add CSV export to the invoice list." />))
+console.log(`Agent sessions: ${provider.calls.length}`)
 ```
 
-Run the exported workflow:
+Run `npm run aml`. The editor fixture echoes the resolved specialist sections, followed by `Agent sessions: 3`. The output contains:
 
-```sh title="Terminal"
-npx aml run ./src/cli-workflow.tsx
+```text
+<user-impact>
+Users can export their invoices as CSV.
+</user-impact>
+
+
+
+<rollout-checks>
+Check account permissions and CSV escaping.
+</rollout-checks>
+Agent sessions: 3
 ```
 
-Expected output on standard output:
+Each `<Block>` adds blank lines around its section, so adjacent Blocks produce four newline characters between tags. JSX children otherwise concatenate without automatic separators. The fixture supplies known answers; it demonstrates composition, not live reasoning.
 
-```text title="Output"
-Resolved: Explain what AML evaluates.
-```
+`<Parallel>` starts independent branches and preserves their authored output order. Each `<Agent>` is a separate session. Its result flows upward; its tools and system instructions do not transfer to its parent. The runtime default supplies a provider to every Agent that omits a `provider` prop.
 
-<Aside type="caution" title="Do not create a second runtime inside a CLI workflow">
-  Export the AML tree itself. Calling `new AmlRuntime().evaluate(...)` inside the exported function creates a separate
-  nested evaluation, so the CLI cannot trace, cancel, or configure the Agent work it was intended to own. The complete
-  export, environment, and output contract is in the [CLI guide](/docs/cli/).
-</Aside>
+To run this team live, keep `ReleaseBrief`, replace the fixture provider using the next section, and remove the `provider.calls` diagnostic. The same pattern is available from a repository checkout as `npm run example -- agent-team`.
 
-## 3. Connect a real Agent
+## 4. Connect a real Agent
 
 The authored node remains the same. Replace the contents of `src/first-workflow.tsx` with one complete tab below, then run the same `aml` script.
 
@@ -246,7 +275,7 @@ export OPENCODE_API_KEY="your-development-key"
 npm run aml
 ```
 
-This tab deliberately uses an environment credential so the complete path is visible. OpenCode also supports native `opencode auth login`; if you use that path, remove the explicit key guard and environment mapping and select a model configured for the logged-in account. The [OpenCode guide](/docs/providers/agents/opencode/) documents both approaches, its generated profile, permission mapping, and state isolation.
+The OpenCode configuration passes the model credential through `env`. An interactive `opencode auth login` alone is insufficient for AML's default isolated session: AML gives each invocation a private `XDG_DATA_HOME`. To use file-based login, stage the required credentials in a dedicated data directory and pass its path through [`env.XDG_DATA_HOME`](/docs/providers/agents/opencode/#install-and-verify). Select a model available to that account.
 
   </TabItem>
   <TabItem label="Pi">
@@ -291,7 +320,7 @@ This follows the repository smoke path with DeepSeek V4 Flash through OpenCode G
   Agent](/docs/providers/agents/).
 </Aside>
 
-## 4. Add files and command execution
+## 5. Add files and command execution when needed
 
 [`<File />`](/docs/reference/primitives/file/) writes through the nearest active [`<Workspace />`](/docs/reference/primitives/workspace/) or [`<Sandbox />`](/docs/reference/primitives/sandbox/) filesystem. [`<Script />`](/docs/reference/primitives/script/) can run directly on the trusted host, but this example deliberately uses a fresh Workspace directory and scopes command execution to that materialization.
 
@@ -319,10 +348,52 @@ const output = await runtime.evaluate(
 console.log(output)
 ```
 
+Run `npx vite-node src/resources.tsx`. Expected output is `workspace ready`. This example creates a temporary directory; remove `directory` with `rm(directory, { recursive: true, force: true })` from `node:fs/promises` after inspecting its contents. A real local Workspace writes directly to its directory even with `save={false}`; that flag controls revision publication, not rollback.
+
 <Aside type="danger" title="Local Sandbox is trusted host execution">
   [`localSandbox()`](/docs/providers/sandboxes/local/) starts ordinary host processes with your application's
   privileges. AML validates logical Workspace paths, but it does not isolate the process, environment, network, or host
   filesystem. Use only trusted commands and read the [Sandbox security guidance](/docs/production/security/).
+</Aside>
+
+## Optional: run a workflow with the CLI
+
+The application above constructs `AmlRuntime` because it owns the process. For a standalone workflow file, install the experimental CLI beside the SDK:
+
+```sh title="Terminal"
+npm install --save-dev @aml-jsx/cli
+```
+
+Create `src/cli-workflow.tsx`. Put the provider directly on [`<Agent />`](/docs/reference/primitives/agent/), export the tree, and let the CLI create and instrument the runtime:
+
+```tsx title="src/cli-workflow.tsx"
+import { Agent } from "@aml-jsx/sdk"
+import { DeterministicAgentProvider } from "@aml-jsx/sdk/testing"
+
+const provider = new DeterministicAgentProvider({
+  name: "cli-workflow",
+  respond: request => ({ text: `Resolved: ${request.prompt}` }),
+})
+
+export default <Agent provider={provider}>Explain what AML evaluates.</Agent>
+```
+
+Run the exported workflow:
+
+```sh title="Terminal"
+npx aml run ./src/cli-workflow.tsx
+```
+
+Expected output on standard output:
+
+```text title="Output"
+Resolved: Explain what AML evaluates.
+```
+
+<Aside type="caution" title="Do not create a second runtime inside a CLI workflow">
+  Export the AML tree itself. Calling `new AmlRuntime().evaluate(...)` inside the exported function creates a separate
+  nested evaluation, so the CLI cannot trace, cancel, or configure the Agent work it was intended to own. The complete
+  export, environment, and output contract is in the [CLI guide](/docs/cli/).
 </Aside>
 
 ## Where to go next

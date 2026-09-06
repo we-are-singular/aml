@@ -49,24 +49,24 @@ Do not put API keys in `system`, Agent prompts, `<File />` contents, `setup`, co
 
 ## Capability scope
 
-`allowedTools` and `allowedMcpServers` on [`AmlRuntime`](/docs/reference/runtime/) are exact-name allowlists. A [`<Tool />`](/docs/reference/primitives/tool/) is trusted application code, not a shell alias, and its input is validated against the generated JSON Schema before the function executes. `<Tool />` components are scoped to the `<Agent />` where they are declared; they are not inherited by child `<Agent />` components.
+`allowedTools` and `allowedMcpServers` on [`AmlRuntime`](/docs/reference/runtime/) are exact-name allowlists. A [`<Tool />`](/docs/reference/primitives/tool/) runs application code. AML validates its input with the application-owned Standard Schema before the function executes; the generated JSON Schema describes that input to the provider. `<Tool />` components are scoped to the `<Agent />` where they are declared; they are not inherited by child `<Agent />` components.
 
 ```tsx
-import { Agent, AmlRuntime, Tool, createConsoleTracer, defineTool } from "@aml-jsx/sdk"
+import { Agent, AmlRuntime, Tool, defineTool } from "@aml-jsx/sdk"
+import { DeterministicAgentProvider } from "@aml-jsx/sdk/testing"
+import { z } from "zod"
 
 const lookupTicket = defineTool({
   name: "lookup_ticket",
   description: "Read one support ticket from the approved service.",
-  input: {
-    type: "object",
-    properties: { id: { type: "string" } },
-    required: ["id"],
-    additionalProperties: false,
-  },
+  input: z.strictObject({ id: z.string().regex(/^[A-Z]+-\d+$/) }),
   execute: async ({ id }) => ({ id, status: "open" }),
 })
 
-const runtime = new AmlRuntime({ allowedTools: ["lookup_ticket"] })
+const runtime = new AmlRuntime({
+  agentProvider: new DeterministicAgentProvider(),
+  allowedTools: ["lookup_ticket"],
+})
 await runtime.evaluate(
   <Agent>
     <Tool use={lookupTicket} />
@@ -75,7 +75,7 @@ await runtime.evaluate(
 )
 ```
 
-The example’s implementation is intentionally illustrative: production code must validate the ticket identifier and authenticate the service call. The important boundary is that the Tool is registered by the application and its capability is explicit.
+Install `zod` separately. This credential-free example checks the Tool grant and allowlist; the default deterministic provider echoes the prompt and does not call the Tool. The [Tools recipe](/docs/cookbook/tools/) shows a fixture that actually invokes it. Replace the stub with a service call that checks the caller's authority to read the requested ticket.
 
 ## Filesystem and Workspace safety
 

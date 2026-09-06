@@ -119,14 +119,16 @@ Prefer workload identity or the platform’s secret injection. Keep provider con
 
 For S3 Workspace, the identity needs bucket-level listing constrained to the configured prefix and object Get/Put/Delete access for that prefix. Conditional writes and stable ETags are part of the adapter contract; an S3-compatible endpoint must be tested for those semantics before deployment. See [S3 Workspace](/docs/providers/workspaces/s3/).
 
-For Agent providers, the executable and credentials are provider-specific. See [Codex](/docs/providers/agents/codex/), [GitHub Copilot](/docs/providers/agents/copilot/), [OpenCode](/docs/providers/agents/opencode/), and [Pi](/docs/providers/agents/pi/) for executable names, environment variables, and MCP caveats.
+For Agent providers, the executable and credentials are provider-specific. See [Codex](/docs/providers/agents/codex/), [GitHub Copilot](/docs/providers/agents/copilot/), [GLM](/docs/providers/agents/glm/), [OpenCode](/docs/providers/agents/opencode/), and [Pi](/docs/providers/agents/pi/) for executable names, environment variables, and MCP caveats.
 
 ## Service lifecycle
 
 Create one configured `AmlRuntime` for the process when its defaults and trace policy are shared. Pass an `AbortSignal` for each request and enforce a deadline at the request boundary.
 
 ```ts
-export async function runWithDeadline(runtime: AmlRuntime, tree: JSX.Element, ms: number): Promise<string> {
+import type { AML, AmlRuntime } from "@aml-jsx/sdk"
+
+export async function runWithDeadline(runtime: AmlRuntime, tree: AML, ms: number): Promise<string> {
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(new Error("AML evaluation deadline exceeded")), ms)
 

@@ -2,9 +2,13 @@
 
 <img width="1343" height="682" alt="image" src="https://github.com/user-attachments/assets/602775fc-7f61-4d0a-bd0f-40c0585f015f" />
 
-Agent Markup Language (AML) is an asynchronous TypeScript and JSX runtime for composing provider-agnostic agent workflows.
+Agent Markup Language (AML) is a TypeScript framework for building AI agents and multi-agent applications with JSX.
 
-AML lets you describe agents, prompts, capabilities, execution environments, durable workspaces, and multi-step control flow as one executable tree. The runtime resolves that tree from the leaves upward, manages provider and resource lifecycles, and returns the final Agent output as text or validated structured data.
+Compose an agent's instructions and tools as reusable components, feed one agent's result into another, and run independent specialists in parallel. AML manages their sessions, limits, cancellation, and resource cleanup. Your TypeScript code owns decisions and validation; built-in providers connect to existing coding agents that keep their native model loops and tools.
+
+Build code reviewers, support agents, research workflows, or automation that works on files. Start with one Agent and add a Sandbox for execution or a Workspace for durable files when the task needs them.
+
+[Get started](https://agent-markup-language.com/docs/getting-started/) · [Examples](https://agent-markup-language.com/docs/examples/) · [API reference](https://agent-markup-language.com/docs/reference/)
 
 > AML is under active development. Public package APIs and examples may change before the first stable release.
 
@@ -14,7 +18,7 @@ Agent SDKs are good at running one provider session. Real workflows usually need
 
 Without a shared runtime, those concerns become orchestration code tied to one provider. AML keeps the workflow declarative and uses the Agent Client Protocol (ACP) as the canonical session boundary for built-in coding agents.
 
-When an `<Agent />` node resolves, the AML Runtime preloads its `<Workspace />` into the selected `<Sandbox />` and prompts the coding Agent through ACP. The Workspace keeps files durable between runs; the Sandbox owns code execution, filesystem access, and permissions.
+Each `<Agent />` runs after its child results and capabilities resolve. When the workflow includes a Workspace and Sandbox, AML materializes the files before running the sandboxed Agent. Revision-backed Workspaces publish only when saving is enabled; a local Workspace uses its existing directory directly. The selected Sandbox provider owns process execution and its actual isolation guarantees.
 
 ```text
 AML tree
@@ -29,7 +33,14 @@ Ordinary JSX children resolve in authored order. Wrap independent AML branches i
 flow directly into the surrounding tree. Component code can still use `Promise.all(evaluate(...))` when it needs named
 or typed branch values.
 
-## Example
+## Quick start
+
+Use Node.js 26 or newer and an ESM project (`"type": "module"` in `package.json`). Install the SDK and a TSX runner:
+
+```sh
+npm install @aml-jsx/sdk
+npm install --save-dev typescript vite-node
+```
 
 Configure TypeScript to use AML's automatic JSX runtime:
 
@@ -42,7 +53,21 @@ Configure TypeScript to use AML's automatic JSX runtime:
 }
 ```
 
-Then compose ordinary async components, Agents, and typed JavaScript Tools:
+Save this as `workflow.tsx`:
+
+```tsx
+import { Agent, AmlRuntime } from "@aml-jsx/sdk"
+import { DeterministicAgentProvider } from "@aml-jsx/sdk/testing"
+
+const runtime = new AmlRuntime({ agentProvider: new DeterministicAgentProvider() })
+console.log(await runtime.evaluate(<Agent>Hello from AML.</Agent>))
+```
+
+Run `npx vite-node workflow.tsx`. It prints `Hello from AML.` without credentials or a model. The [tutorial](https://agent-markup-language.com/docs/getting-started/) continues with a reusable agent team and live-provider setup.
+
+## Example: a code-review team
+
+This live example assumes a project containing `src/index.ts`, `zod` installed separately, and an authenticated [OpenCode provider](https://agent-markup-language.com/docs/providers/agents/opencode/). It composes Agents and a typed JavaScript Tool:
 
 ```tsx
 import { readFile } from "node:fs/promises"
@@ -55,7 +80,7 @@ const OpenCode = opencodeAgent({})
 const ReadSource = defineTool({
   name: "read_source",
   description: "Read one source file from the current project",
-  input: z.object({ path: z.string() }),
+  input: z.object({ path: z.literal("src/index.ts") }),
   execute: async ({ path }) => await readFile(path, "utf8"),
 })
 
@@ -150,7 +175,7 @@ Prompt files and Agent Skills are deliberately separate:
 ```tsx
 <Workspace provider={workspace}>
   <File path="brief.md">Review the authentication boundary.</File>
-  <Sandbox provider={sandbox}>
+  <Sandbox provider={sandbox} access="read-write">
     <Agent>
       <Skill src="./skills/code-review" />
       <Block tag="review-brief">
@@ -341,27 +366,28 @@ while cancellation never saves.
 
 Every example is one self-contained AML component. Run one with `npm run example -- <name>`.
 
-| Example                                                                  | Description                                                                                            |
-| ------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------ |
-| [`basic`](./examples/src/core/basic.tsx)                                 | Resolves ordinary synchronous and asynchronous JSX components from the leaves upward.                  |
-| [`agent`](./examples/src/core/agent.tsx)                                 | Uses a child Agent to generate System content for its parent.                                          |
-| [`concurrency`](./examples/src/core/concurrency.tsx)                     | Runs two specialists concurrently and preserves authored result order for synthesis.                   |
-| [`structured`](./examples/src/core/structured.tsx)                       | Passes schema-validated Agent data into a later text-producing Agent.                                  |
-| [`context`](./examples/src/core/context.tsx)                             | Injects a session repository and captures it inside a JavaScript Tool without adding it to the prompt. |
-| [`programmatic-tool`](./examples/src/core/programmatic-tool.tsx)         | Calls a validated Tool from application component code without granting it to a model.                 |
-| [`follow-up`](./examples/src/core/follow-up.tsx)                         | Authors several turns inside one Agent session.                                                        |
-| [`skill`](./examples/src/capabilities/skill.tsx)                         | Stages a complete local Agent Skill package for progressive discovery.                                 |
-| [`mcp`](./examples/src/capabilities/mcp.tsx)                             | Grants one Agent an MCP server while proving sibling capability isolation.                             |
-| [`sandbox`](./examples/src/resources/sandbox.tsx)                        | Narrows nested Sandbox access while sharing one deterministic outer lease.                             |
-| [`script`](./examples/src/resources/script.tsx)                          | Selects a Script working directory relative to the active Sandbox root.                                |
-| [`workspace`](./examples/src/resources/workspace.tsx)                    | Shares one durable materialization across disposable Sandbox leases.                                   |
-| [`opencode`](./examples/src/integrations/opencode.tsx)                   | Uses a credentialed OpenCode model to call a process-local JavaScript Tool.                            |
-| [`pi`](./examples/src/integrations/pi.tsx)                               | Embeds Pi with an OpenCode Go model and calls a process-local JavaScript Tool.                         |
-| [`review`](./examples/src/integrations/review.tsx)                       | Runs a parallel multi-agent code review through deterministic, OpenCode, or Codex providers.           |
-| [`docker`](./examples/src/integrations/docker.tsx)                       | Inspects a real Docker Sandbox's working directory and confinement settings.                           |
-| [`modal`](./examples/src/integrations/modal.tsx)                         | Inspects a real Modal Sandbox through the common bounded runtime.                                      |
-| [`workspace-local`](./examples/src/integrations/workspace-local.tsx)     | Persists a file across disposable Sandbox runs through the local Workspace provider.                   |
-| [`workspace-routing`](./examples/src/integrations/workspace-routing.tsx) | Uses typed Agent output to select a local Workspace and pass a normalized task to a second Agent.      |
+| Example                                                                  | Description                                                                                                   |
+| ------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------- |
+| [`basic`](./examples/src/core/basic.tsx)                                 | Resolves ordinary synchronous and asynchronous JSX components from the leaves upward.                         |
+| [`component-types`](./examples/src/core/component-types.tsx)             | Types leaf and async components, optional children, and required children with the type-only `AML` namespace. |
+| [`agent`](./examples/src/core/agent.tsx)                                 | Uses a child Agent to generate System content for its parent.                                                 |
+| [`concurrency`](./examples/src/core/concurrency.tsx)                     | Runs two specialists concurrently and preserves authored result order for synthesis.                          |
+| [`structured`](./examples/src/core/structured.tsx)                       | Passes schema-validated Agent data into a later text-producing Agent.                                         |
+| [`context`](./examples/src/core/context.tsx)                             | Injects a session repository and captures it inside a JavaScript Tool without adding it to the prompt.        |
+| [`programmatic-tool`](./examples/src/core/programmatic-tool.tsx)         | Calls a validated Tool from application component code without granting it to a model.                        |
+| [`follow-up`](./examples/src/core/follow-up.tsx)                         | Authors several turns inside one Agent session.                                                               |
+| [`skill`](./examples/src/capabilities/skill.tsx)                         | Stages a complete local Agent Skill package for progressive discovery.                                        |
+| [`mcp`](./examples/src/capabilities/mcp.tsx)                             | Grants one Agent an MCP server while proving sibling capability isolation.                                    |
+| [`sandbox`](./examples/src/resources/sandbox.tsx)                        | Narrows nested Sandbox access while sharing one deterministic outer lease.                                    |
+| [`script`](./examples/src/resources/script.tsx)                          | Selects a Script working directory relative to the active Sandbox root.                                       |
+| [`workspace`](./examples/src/resources/workspace.tsx)                    | Shares one durable materialization across disposable Sandbox leases.                                          |
+| [`opencode`](./examples/src/integrations/opencode.tsx)                   | Uses a credentialed OpenCode model to call a process-local JavaScript Tool.                                   |
+| [`pi`](./examples/src/integrations/pi.tsx)                               | Embeds Pi with an OpenCode Go model and calls a process-local JavaScript Tool.                                |
+| [`review`](./examples/src/integrations/review.tsx)                       | Runs a parallel multi-agent code review through deterministic, OpenCode, or Codex providers.                  |
+| [`docker`](./examples/src/integrations/docker.tsx)                       | Inspects a real Docker Sandbox's working directory and confinement settings.                                  |
+| [`modal`](./examples/src/integrations/modal.tsx)                         | Inspects a real Modal Sandbox through the common bounded runtime.                                             |
+| [`workspace-local`](./examples/src/integrations/workspace-local.tsx)     | Persists a file across disposable Sandbox runs through the local Workspace provider.                          |
+| [`workspace-routing`](./examples/src/integrations/workspace-routing.tsx) | Uses typed Agent output to select a local Workspace and pass a normalized task to a second Agent.             |
 
 The deterministic examples are snapshot-tested. Live model, Docker, and filesystem integrations are opt-in.
 

@@ -1,7 +1,7 @@
 {
   "name": "@aml-jsx/sdk",
   "version": "0.8.1",
-  "description": "An asynchronous TypeScript and JSX runtime for composing provider-agnostic agent workflows.",
+  "description": "A TypeScript framework for building AI agents and multi-agent applications with JSX.",
   "keywords": [
     "agents",
     "ai",

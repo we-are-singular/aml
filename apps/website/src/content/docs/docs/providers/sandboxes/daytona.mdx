@@ -57,9 +57,7 @@ Before running a production Agent image, identify its outbound endpoints and tes
 For Tier 1/2, compare those endpoints with the managed essential-services list. For Tier 3/4, review any custom firewall
 configuration and allow only the domains required by the workload.
 
-See Daytona's published [network limits and essential services](https://www.daytona.io/docs/en/network-limits/) for the
-tier contract. The currently proposed additions are visible in the [updated whitelist
-file](https://github.com/radisicc/sandbox-network-whitelist/blob/add-github-copilot-domains/whitelist.yaml).
+See Daytona's published [network limits and essential services](https://www.daytona.io/docs/en/network-limits/) for the current policy. On Tier 3/4, an explicit allowlist or block-all setting also restricts essential services; include required package registries and model endpoints in your policy.
 
 ## Remote image and environment requirements
 
@@ -81,23 +79,27 @@ The provider uploads an archive and extracts it into the guest directory `worksp
 
 This is full-tree synchronization, not continuous sync. If the remote Sandbox dies before reconciliation, unsynchronized edits are not recoverable through AML. Use a durable Workspace provider or an explicit checkpoint strategy when that loss is unacceptable.
 
-## Complete safe example
+## Remote command example
 
-This deterministic example uses a temporary Workspace and a Daytona image that only needs shell utilities. A real Agent image must additionally contain its ACP executable and credentials:
+This example runs a fixed command on a real Daytona account. Set `DAYTONA_API_KEY` and `AML_DAYTONA_IMAGE` to an image your account can create that contains `sh` and `tar`. It does not call a model. A real Agent image must additionally contain its ACP executable and dependencies.
 
 ```tsx
 /** @jsxImportSource @aml-jsx/sdk */
-import { mkdtemp } from "node:fs/promises"
+import { mkdtemp, readFile } from "node:fs/promises"
 import { join } from "node:path"
 import { tmpdir } from "node:os"
 import { AmlRuntime, Sandbox, Script, Workspace, daytonaSandbox, localWorkspace } from "@aml-jsx/sdk"
 
+const apiKey = process.env.DAYTONA_API_KEY
+const image = process.env.AML_DAYTONA_IMAGE
+if (!apiKey || !image) throw new Error("DAYTONA_API_KEY and AML_DAYTONA_IMAGE are required")
+
 const directory = await mkdtemp(join(tmpdir(), "aml-daytona-"))
 const runtime = new AmlRuntime({
   sandboxProvider: daytonaSandbox({
-    image: "daytona/image-with-shell-and-tar",
+    image,
     // Or use snapshot: "my-agent-snapshot"; never set both.
-    config: { apiKey: process.env.DAYTONA_API_KEY },
+    config: { apiKey },
   }),
   workspaceProvider: localWorkspace({ directory }),
 })
@@ -109,10 +111,11 @@ await runtime.evaluate(
     </Sandbox>
   </Workspace>
 )
+
+console.log(await readFile(join(directory, "result.txt"), "utf8"))
 ```
 
-The image name above is illustrative: select an image that Daytona can resolve or a snapshot from your Daytona account.
-Never commit `DAYTONA_API_KEY`; configure it through the deployment environment or an injected Daytona client.
+Run with `npx vite-node recipe.tsx` after the [project setup](/docs/getting-started/). Expected output is `remote`, read from the local file after remote reconciliation. Remove the temporary `directory` after inspecting it. Never commit `DAYTONA_API_KEY`.
 
 ## Lifecycle
 

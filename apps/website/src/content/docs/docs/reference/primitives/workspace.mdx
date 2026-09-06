@@ -43,7 +43,7 @@ Save option defaults are `on: "success"`, `retention: 1`, `gitignore: true`, and
 
 - One AML evaluation may contain at most one `<Workspace />`, and it must be the top-level resource boundary.
 - `<Workspace />` may contain multiple sibling [`<Sandbox />`](/docs/reference/primitives/sandbox/) components, `<Agent />` components, and [`<File />`](/docs/reference/primitives/file/) components.
-- Writing a materialized file is not a durable publication by itself; enable `save` when a revision must persist.
+- For revision-backed Filesystem and S3 providers, writing a materialized file does not publish a revision; enable `save` to persist one. `localWorkspace()` uses the existing directory directly, so writes remain there even with `save={false}` or a failed evaluation.
 - `lock` protects durable identity across acquisitions. `writeConcurrency` coordinates writable `<Sandbox />` components inside the same evaluation; the controls solve different races.
 - `save={{ on: "always" }}` may publish after a failed descendant, but cancellation prevents saving.
 

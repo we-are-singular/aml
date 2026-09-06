@@ -9,16 +9,20 @@ AML rejects invalid placement, invalid data, policy violations, provider failure
 
 ## Public AML error classes
 
-| Class                    | Stable identity                     | Typical cause                                                                                   | Retry guidance                                                               |
-| ------------------------ | ----------------------------------- | ----------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
-| `EvaluationError`        | `name === "EvaluationError"`        | Invalid AML value/placement, missing scope, cycle, policy, limit, or structured-output contract | Fix the workflow or configuration; do not blindly retry                      |
-| `ToolInputError`         | `name === "ToolInputError"`         | A callable Tool receives input that fails JSON or input-schema validation                       | Correct application input or ask the Agent to correct a model-selected call  |
-| `ToolOutputError`        | `name === "ToolOutputError"`        | A callable Tool returns data that fails output validation or the stable JSON boundary           | Fix the Tool output/schema; retry only when the underlying operation is safe |
-| `WorkspaceConflictError` | `code === "AML_WORKSPACE_CONFLICT"` | Another writer owns the same [`<Workspace />`](/docs/reference/primitives/workspace/) identity  | Serialize, choose another identity, or retry acquisition with backoff        |
+| Class                    | Stable identity                     | Typical cause                                                                                   | Retry guidance                                                                               |
+| ------------------------ | ----------------------------------- | ----------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| `EvaluationError`        | `name === "EvaluationError"`        | Invalid AML value/placement, missing scope, cycle, policy, limit, or structured-output contract | Fix the workflow or configuration; do not blindly retry                                      |
+| `ToolInputError`         | `name === "ToolInputError"`         | A callable Tool receives input that fails JSON or input-schema validation                       | Correct application input or ask the Agent to correct a model-selected call                  |
+| `ToolOutputError`        | `name === "ToolOutputError"`        | A callable Tool returns data that fails output validation or the stable JSON boundary           | Fix the Tool output/schema; retry only when the underlying operation is safe                 |
+| `AgentTimeoutError`      | `AgentTimeoutError.is(value)`       | An Agent's `timeoutMs` expires after scheduler admission; the error carries `timeoutMs`         | Inspect the cancellation cause, workload and deadline before retrying                        |
+| `ParallelError`          | `name === "ParallelError"`          | One or more parallel branches fail; `failures` contains each `branchIndex` and original `cause` | Inspect every failed branch and account for effects already completed by successful branches |
+| `WorkspaceConflictError` | `code === "AML_WORKSPACE_CONFLICT"` | Another writer owns the same [`<Workspace />`](/docs/reference/primitives/workspace/) identity  | Serialize, choose another identity, or retry acquisition with backoff                        |
 
-Only `WorkspaceConflictError` defines an AML-specific `code`. Do not invent a code for `EvaluationError`, `ToolInputError`, or `ToolOutputError`; preserve the class/name and `cause` instead.
+Only `WorkspaceConflictError` defines an AML-specific `code`. Preserve error identity and causes rather than inventing codes. An Agent failure may be wrapped in `EvaluationError`, cancellation and cleanup failures may be combined in `AggregateError`, and `ParallelError` keeps its branch causes in `failures`. Inspect those boundaries when classifying a nested timeout or provider failure.
 
-```ts
+The following is an application integration fragment: `runtime`, `Workflow`, `queueForLater`, and `logger` belong to the surrounding service. Place it inside that service's async job handler.
+
+```tsx
 import { WorkspaceConflictError } from "@aml-jsx/sdk"
 
 try {
@@ -42,7 +46,7 @@ The static `WorkspaceConflictError.is()` check is useful across duplicated physi
 The class is intentionally broad because the error message identifies the invalid contract. Common messages include:
 
 - `evaluate() is only available while an AML component is active` — move the call into an async AML component.
-- `Tools can only be called while an AML component is active` — call the function returned by `defineTool()` during active component evaluation, or use its explicit low-level `execute(input, context)` API only in provider/test infrastructure.
+- `Tools can only be called while an AML component is active` — call the function returned by `defineTool()` during active component evaluation. Its low-level `.execute(input, context)` method is for provider/test infrastructure, which owns the explicit execution context; it is not the normal application invocation path.
 - `<Tool> is only valid inside <Agent>`, `<Mcp> is only valid inside <Agent>`, or `<Skill> is only valid inside <Agent>` — move the capability into its owning [`<Agent />`](/docs/reference/primitives/agent/) plan.
 - `<File> requires an enclosing <Workspace> or <Sandbox>` — place the write under the intended active filesystem owner and use a read-write Sandbox for guest writes.
 - `<Include path> requires an enclosing <Workspace> or <Sandbox>` — use an active workflow filesystem path or switch to application-owned `src`.

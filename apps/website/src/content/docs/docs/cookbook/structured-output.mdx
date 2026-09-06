@@ -20,7 +20,7 @@ Turn an [`<Agent />`](/docs/reference/primitives/agent/) response into a typed f
 ## Complete source
 
 ```tsx
-import { Agent, AmlRuntime, evaluate } from "@aml-jsx/sdk"
+import { type AML, Agent, AmlRuntime, evaluate } from "@aml-jsx/sdk"
 import { DeterministicAgentProvider } from "@aml-jsx/sdk/testing"
 import { z } from "zod"
 
@@ -45,7 +45,7 @@ const provider = new DeterministicAgentProvider({
   },
 })
 
-async function Review() {
+const Review: AML.Component = async () => {
   const finding = await evaluate(<Agent provider={provider}>Inspect the change.</Agent>, Finding)
 
   return (

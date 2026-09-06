@@ -49,33 +49,48 @@ The options are validated without creating storage entries. `directory` and `tem
 
 ## A safe complete example
 
-This example starts empty, writes only a report subtree, and retains the three latest successful revisions.
+This credential-free example starts empty, publishes a report, then reads it in a second evaluation. It uses temporary storage and removes the demonstration revisions afterward; use an application-owned durable directory to keep real revisions.
 
 ```tsx
-import { AmlRuntime, Agent, Workspace, filesystemWorkspace } from "@aml-jsx/sdk"
+import { mkdtemp, rm } from "node:fs/promises"
+import { tmpdir } from "node:os"
+import { join } from "node:path"
+import { AmlRuntime, File, Include, Workspace, filesystemWorkspace } from "@aml-jsx/sdk"
 
-const workspace = filesystemWorkspace({
-  directory: ".aml/workspaces",
-  format: "folder",
-  temporaryDirectory: ".aml/tmp",
-})
+const directory = await mkdtemp(join(tmpdir(), "aml-revisions-"))
+const workspace = filesystemWorkspace({ directory, format: "folder" })
+const runtime = new AmlRuntime({ workspaceProvider: workspace })
 
-await new AmlRuntime({ workspaceProvider: workspace }).evaluate(
-  <Workspace
-    id="review-42"
-    load={false}
-    save={{
-      on: "success",
-      include: ["reports/**"],
-      exclude: ["reports/**/*.tmp"],
-      gitignore: true,
-      retention: 3,
-    }}
-  >
-    <Agent>Read the available review inputs and write the final answer to reports/summary.md.</Agent>
-  </Workspace>
-)
+try {
+  await runtime.evaluate(
+    <Workspace
+      id="review-42"
+      load={false}
+      save={{
+        on: "success",
+        include: ["reports/**"],
+        exclude: ["reports/**/*.tmp"],
+        gitignore: true,
+        retention: 3,
+      }}
+    >
+      <File path="reports/summary.md">The review completed successfully.</File>
+    </Workspace>
+  )
+
+  console.log(
+    await runtime.evaluate(
+      <Workspace id="review-42">
+        <Include path="reports/summary.md" title={false} />
+      </Workspace>
+    )
+  )
+} finally {
+  await rm(directory, { recursive: true, force: true })
+}
 ```
+
+Save as `recipe.tsx` in the [tutorial project](/docs/getting-started/) and run `npx vite-node recipe.tsx`. It prints `The review completed successfully.` after restoring the saved file into a fresh materialization. No Agent provider is needed for deterministic file work.
 
 For a second run, omit `load` or use `load={{ revision: "current" }}` to restore the last published revision. To start from a named historical revision, pass its id. `include` and `exclude` apply to the restored snapshot as well as the save snapshot.
 

@@ -2400,6 +2400,8 @@ These are product and runtime decisions, not missing tags to add by default.
 
 ## 18. Complete example
 
+This illustrates a complete composition, not a standalone program. It assumes the AML and Zod imports, application-owned `ReviewSession` and `reviewSession` values, `./prompts/evidence.md`, and configured Agent, Workspace, and Sandbox providers. The selected Agent/Sandbox combination must support read-only process execution; Local, Daytona, and Modal do not. For a runnable workflow with fixtures and prerequisites, use the [code-review recipe](https://agent-markup-language.com/docs/cookbook/code-review-workflow/).
+
 ```tsx
 const Finding = z.object({
   file: z.string(),

@@ -95,7 +95,7 @@ For container execution, the [OpenCode image variant](/docs/sandbox-images/#choo
 
 ## Complete example
 
-The example below chooses the explicit environment path for the `opencode-go` model provider; it does not depend on `opencode auth login` state. If you use native login instead, omit the key guard and `env` mapping and select a model attached to that account.
+The `opencode-go` model credential is passed through `env`. For file-based login, replace the key guard and mapping with `env: { XDG_DATA_HOME: stagedDataDirectory }`, where your application has staged the required OpenCode credential data, and select a model attached to that account. Removing `env` does not expose the operator's interactive login because AML uses a private data directory by default.
 
 ```tsx
 import { Agent, AmlRuntime, Sandbox, Workspace, localSandbox, localWorkspace, opencodeAgent } from "@aml-jsx/sdk"

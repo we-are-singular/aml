@@ -23,9 +23,9 @@ Keep provider selection at the runtime boundary when you want to run the same AM
 This workflow contains no test-specific branches and no component-level providers:
 
 ```tsx title="src/review-workflow.tsx"
-import { Agent, Sandbox, Workspace } from "@aml-jsx/sdk"
+import { type AML, Agent, Sandbox, Workspace } from "@aml-jsx/sdk"
 
-export function ReviewWorkflow() {
+export const ReviewWorkflow: AML.Component = () => {
   return (
     <Workspace id="release-review" save>
       <Sandbox access="read-only">

@@ -37,7 +37,9 @@ This mapping remains explicit under overlap. It does not depend on trace arrival
 ## Time application work
 
 ```tsx
-async function ReviewPhase({ candidates }: { readonly candidates: number }) {
+import { withTraceSpan, type AML } from "@aml-jsx/sdk"
+
+const ReviewPhase: AML.Component<{ readonly candidates: number }> = async ({ candidates }) => {
   return await withTraceSpan("review.validate", async () => `validated ${candidates}`)
 }
 ```

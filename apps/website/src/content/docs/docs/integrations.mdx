@@ -50,7 +50,7 @@ const runtime = new AmlRuntime({
   sandboxProvider: localSandbox(),
   workspaceProvider: s3Workspace({
     bucket: "aml-workspaces",
-    prefix: "reviews/",
+    prefix: "reviews",
     config: { region: "us-east-1" },
   }),
 })

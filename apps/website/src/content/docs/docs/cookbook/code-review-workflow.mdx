@@ -66,7 +66,18 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { fileURLToPath } from "node:url"
 
-import { Agent, AmlRuntime, Block, evaluate, File, Include, localWorkspace, Skill, Workspace } from "@aml-jsx/sdk"
+import {
+  type AML,
+  Agent,
+  AmlRuntime,
+  Block,
+  evaluate,
+  File,
+  Include,
+  localWorkspace,
+  Skill,
+  Workspace,
+} from "@aml-jsx/sdk"
 import { DeterministicAgentProvider } from "@aml-jsx/sdk/testing"
 import { z } from "zod"
 
@@ -134,7 +145,7 @@ const provider = new DeterministicAgentProvider({
   },
 })
 
-function ReviewSpecialist({ lane }: { lane: ReviewLane }) {
+const ReviewSpecialist: AML.Component<{ lane: ReviewLane }> = ({ lane }) => {
   const assignment =
     lane === "correctness"
       ? "Report the highest-confidence behavioral defect."
@@ -163,7 +174,7 @@ function ReviewSpecialist({ lane }: { lane: ReviewLane }) {
   )
 }
 
-async function ReviewWorkflow() {
+const ReviewWorkflow: AML.Component = async () => {
   const [correctness, maintainability] = await Promise.all([
     evaluate(<ReviewSpecialist lane="correctness" />, ReviewFinding),
     evaluate(<ReviewSpecialist lane="maintainability" />, ReviewFinding),

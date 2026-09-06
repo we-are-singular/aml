@@ -28,7 +28,7 @@ For a live version, replace the deterministic provider with [`opencodeAgent({})`
 ## Complete source
 
 ```tsx
-import { Agent, AmlRuntime, FollowUp } from "@aml-jsx/sdk"
+import { type AML, Agent, AmlRuntime, FollowUp } from "@aml-jsx/sdk"
 import { DeterministicAgentProvider } from "@aml-jsx/sdk/testing"
 
 const provider = new DeterministicAgentProvider({
@@ -39,7 +39,7 @@ const provider = new DeterministicAgentProvider({
   },
 })
 
-function DraftInternalFaq({ sourceNotes }: { sourceNotes: string }) {
+const DraftInternalFaq: AML.Component<{ sourceNotes: string }> = ({ sourceNotes }) => {
   const encodedNotes = JSON.stringify(sourceNotes)
 
   return (

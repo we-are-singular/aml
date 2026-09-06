@@ -47,7 +47,9 @@ The maintained source defines a small frozen packet containing the deploy time, 
 The workflow reads like the session it authors: capability first, initial instruction next, then two ordered later turns.
 
 ```tsx
-function IncidentReview() {
+import { Agent, FollowUp, Tool, type AML } from "@aml-jsx/sdk"
+
+const IncidentReview: AML.Component = () => {
   return (
     <Agent
       provider={provider}
@@ -158,4 +160,4 @@ Exact ACP variants, serialized content, timings, chunk sizes, and prose depend o
 - [Maintained Agent activity example](https://github.com/we-are-singular/aml/blob/main/examples/src/operations/observe-agent.tsx)
 - [Observability and ACP boundary](/docs/observability/)
 - [FollowUp editorial passes](/docs/cookbook/follow-up-editorial-passes/)
-- [`AmlRuntime` event API](/docs/reference/runtime/#events)
+- [`AmlRuntime` event API](/docs/reference/runtime/#errors-and-lifecycle-events)

@@ -71,7 +71,7 @@ Do not construct `AmlRuntime` in this file. `aml run` must own the runtime for i
 From the repository root:
 
 ```sh title="Terminal"
-npm run build --workspace=@aml-jsx/cli
+npm run build
 AML_PROCESS_SAFETY_PID_FILE=/tmp/aml-process-safety.pid \
   node apps/cli/dist/index.js run ./examples/src/operations/cli-process-safety.tsx --trace
 ```
@@ -110,7 +110,7 @@ Expected: `exit=130 ...`, and `kill -0` fails because the child no longer exists
 - `localSandbox()` executes trusted host commands. Replace it with an appropriately configured container or remote Sandbox for hostile code.
 - The ten-second deadline bounds shutdown; it does not prove a remote provider reached a terminal state before forced exit.
 - A second signal is an operator override. Use it only when stopping immediately is more important than completing cleanup.
-- Application code using `AmlRuntime` directly can use [`ProcessSignalCancellation`](/docs/runtime/#process-signal-cancellation). Do not add a second signal owner around `aml run`.
+- Application code using `AmlRuntime` directly can use [`ProcessSignalCancellation`](/docs/runtime/#process-signals). Do not add a second signal owner around `aml run`.
 - Remove the optional PID file after the walkthrough; it is verification state, not an AML resource.
 
 ## Source and API links

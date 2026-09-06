@@ -1,6 +1,6 @@
 # Agent Markup Language (AML)
 
-> AML is an asynchronous TypeScript and JSX runtime for composing provider-agnostic agent workflows.
+> AML is a TypeScript framework for building AI agents and multi-agent applications with JSX. Compose existing coding-agent sessions, application tools, validated results, sandboxes, and persistent files as reusable components.
 
 Website: https://agent-markup-language.com/
 Documentation: https://agent-markup-language.com/docs/
@@ -125,7 +125,7 @@ The workflow file is positional; `--entry` selects an export inside it. Results 
 
 ## Agent and ACP observability
 
-AML traces actual `agent.session`, ordered `agent.turn`, and `agent.cleanup` spans. Each shared-ACP turn is one ACP `session/prompt` request, not necessarily one underlying model API call. Every ACP notification is exposed as one `acp.session.update` with ACP-supplied `sessionId` and `sessionUpdate`; an initial Tool call also includes `toolName` when ACP supplies its optional programmatic name. AML does not otherwise translate Tool, message, thought, plan, usage, or future update variants into a parallel event schema. The console tracer omits repetitive `agent_message_chunk` and `tool_call_update` lines while custom trace sinks continue to receive those events.
+AML traces actual `agent.session`, ordered `agent.turn`, and `agent.cleanup` spans. A shared-ACP turn normally issues one `session/prompt` request; a final structured-output turn can issue one additional repair prompt when no valid result was submitted. A turn is not an underlying model API call. Every ACP notification is exposed as one `acp.session.update` with ACP-supplied `sessionId` and `sessionUpdate`; an initial Tool call also includes `toolName` when ACP supplies its optional programmatic name. The console tracer omits repetitive `agent_message_chunk`, `agent_thought_chunk`, and `tool_call_update` lines while custom trace sinks continue to receive those events.
 
 Metadata-only tracing is the default. The AML SDK's `captureContent` sink option and the CLI's `--capture-content` flag can additionally expose prompts, Agent messages and thoughts emitted through ACP, unchanged serialized ACP updates, raw Tool data, plans, structured results, commands, and failure messages. The option belongs to AML, not ACP, and must be treated as a sensitive data-handling decision.
 
@@ -136,7 +136,8 @@ Process telemetry uses an opaque `execution.id` for local and remote providers. 
 - `<Agent>` runs one provider-owned session after its prompt, system content, capabilities, and child Agent results resolve.
 - `<System>` contributes ordered system instructions to the nearest Agent.
 - `<Block>` adds exact blank-line separation and optional kebab-cased XML-style section tags without creating a runtime scope or instruction priority.
-- `<Tool>` grants a provider-native Tool or a typed JavaScript Tool created with `defineTool()`.
+- `<Tool>` grants a typed JavaScript Tool created with `defineTool()` to one Agent. Native harness tools are configured through the Agent provider and permissions.
+- `<Parallel>` runs independent branches concurrently, waits for their cleanup, and concatenates successful text in authored order. Use Blocks for separators or component-local `Promise.all(evaluate(...))` for individual typed values.
 - `<Mcp>` grants a named or explicitly configured MCP server.
 - `<Skill>` stages a complete local Agent Skills package for native discovery or metadata-only fallback without inlining its body.
 - `<FollowUp>` adds an ordered later turn to the same Agent session.

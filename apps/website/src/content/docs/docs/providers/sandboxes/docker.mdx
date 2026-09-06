@@ -73,9 +73,9 @@ const runtime = new AmlRuntime({
 await runtime.evaluate(
   <Workspace id="docker-demo" load={false} save={false}>
     <Sandbox access="read-write">
-      <Script shell="sh">printf mounted > output.txt</Script>
+      <Script shell="sh">{"printf mounted > output.txt"}</Script>
     </Sandbox>
-  </Workspace>,
+  </Workspace>
 )
 
 console.log(await readFile(join(directory, "output.txt"), "utf8"))

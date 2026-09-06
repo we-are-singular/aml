@@ -1,6 +1,8 @@
 # `@aml-jsx/sdk`
 
-Agent Markup Language (AML) is an asynchronous TypeScript and JSX runtime for composing provider-agnostic agent workflows.
+Agent Markup Language (AML) is a TypeScript framework for building AI agents and multi-agent applications with JSX. Compose agent sessions, prompts, tools, and validated results as reusable components. Add sandboxes and persistent files when the task needs them.
+
+Requires Node.js 26 or newer and an ESM project (`"type": "module"`). The SDK includes built-in providers and the `@aml-jsx/sdk/testing` entrypoint; testing is a subpath of the same package, not another dependency.
 
 ```sh
 npm install @aml-jsx/sdk
@@ -17,14 +19,17 @@ Configure TypeScript to use AML's JSX runtime:
 }
 ```
 
-Then evaluate an AML tree:
+Install a TSX runner with `npm install --save-dev typescript vite-node`, save the following as `workflow.tsx`, and run `npx vite-node workflow.tsx`:
 
 ```tsx
-import { Agent, AmlRuntime, opencodeAgent } from "@aml-jsx/sdk"
+import { Agent, AmlRuntime } from "@aml-jsx/sdk"
+import { DeterministicAgentProvider } from "@aml-jsx/sdk/testing"
 
-const runtime = new AmlRuntime()
-const result = await runtime.evaluate(<Agent provider={opencodeAgent({})}>Summarize this repository.</Agent>)
+const runtime = new AmlRuntime({ agentProvider: new DeterministicAgentProvider() })
+console.log(await runtime.evaluate(<Agent>Hello from AML.</Agent>))
 ```
+
+This fixture prints `Hello from AML.` without a model, credentials, or an agent executable. Follow [Getting started](https://agent-markup-language.com/docs/getting-started/) to compose several agents and connect a real provider. React is not required.
 
 ## Typing application components
 
@@ -42,7 +47,29 @@ const Section: AML.Component<SectionProps> = ({ children, title }) => [title, ":
 const workflow: AML = <Section title="Evidence">Inspect the changed files.</Section>
 ```
 
-`AmlRenderable` remains available as the descriptive equivalent of `AML`.
+For a component that works with or without nested content, use `AML.PropsWithChildren`:
+
+```tsx
+import type { AML } from "@aml-jsx/sdk"
+
+type NoteProps = AML.PropsWithChildren<{ fallback: string }>
+const Note: AML.Component<NoteProps> = ({ children, fallback }) => children ?? fallback
+
+const workflow: AML = [
+  <Note fallback="No findings." />,
+  <Note fallback="No findings.">Inspect the changed files.</Note>,
+]
+```
+
+Both children helpers make props readonly. Required children means the property must be supplied, so an explicit `{null}` is still valid. With no type argument, `AML.Component` describes a leaf component with no custom props or children. Async components use the same type:
+
+```tsx
+import type { AML } from "@aml-jsx/sdk"
+
+const Evidence: AML.Component<{ readonly load: () => Promise<string> }> = async ({ load }) => await load()
+```
+
+`AML` is type-only; `AmlRenderable` remains its descriptive equivalent. See [component typing and evaluation](https://agent-markup-language.com/docs/ast/#type-application-components-explicitly) for complete runnable examples and the distinction between authored children and resolved text.
 
 The built-in coding-agent factories are thin profiles over AML's shared Agent Client Protocol (ACP) session engine:
 

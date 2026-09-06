@@ -11,6 +11,9 @@ cleanup, then contributes successful text in authored order.
 
 ```tsx
 import { Agent, AmlRuntime, Block, Parallel } from "@aml-jsx/sdk"
+import { DeterministicAgentProvider } from "@aml-jsx/sdk/testing"
+
+const agentProvider = new DeterministicAgentProvider()
 
 function CorrectnessLane() {
   return <Agent>Review correctness.</Agent>
@@ -36,6 +39,8 @@ const result = await new AmlRuntime({ agentProvider }).evaluate(
 
 The two lanes may finish in either order. The parent Agent starts only after both settle and receives their text in the
 authored `CorrectnessLane`, `SecurityLane` order.
+
+This fixture echoes the resolved prompt. Replace `agentProvider` with a configured live provider to generate reviews. See the [agent-team tutorial](/docs/getting-started/#3-compose-an-agent-team) for a complete run command and expected output.
 
 ## Props
 

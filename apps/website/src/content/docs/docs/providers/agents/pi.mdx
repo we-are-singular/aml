@@ -66,7 +66,7 @@ pi --version
 command -v pi-acp
 ```
 
-For AML JavaScript Tools, authored MCP servers, or structured output, install the MCP adapter in the application so `import.meta.resolve()` can produce a stable path:
+For AML JavaScript Tools, authored MCP servers, or structured output, install the MCP adapter in the application and resolve its entrypoint to an absolute path:
 
 ```sh title="Terminal"
 npm install pi-mcp-adapter
@@ -76,9 +76,11 @@ npx pi-mcp-adapter --help
 Then pass that path explicitly:
 
 ```ts
-import { fileURLToPath } from "node:url"
+import { createRequire } from "node:module"
+import { piAgent } from "@aml-jsx/sdk"
 
-const mcpAdapterPath = fileURLToPath(import.meta.resolve("pi-mcp-adapter"))
+// createRequire also works in vite-node, which does not expose import.meta.resolve.
+const mcpAdapterPath = createRequire(import.meta.url).resolve("pi-mcp-adapter")
 const provider = piAgent({ mcpAdapterPath })
 ```
 
@@ -125,7 +127,7 @@ Unlike the other built-in ACP profiles, Pi needs its MCP extension and generated
 authored MCP servers, and structured output. The explicit adapter path is the most reproducible setup:
 
 ```tsx
-import { fileURLToPath } from "node:url"
+import { createRequire } from "node:module"
 import { Agent, AmlRuntime, Tool, defineTool, piAgent } from "@aml-jsx/sdk"
 import { z } from "zod"
 
@@ -140,7 +142,7 @@ const releaseName = defineTool({
 })
 
 const provider = piAgent({
-  mcpAdapterPath: fileURLToPath(import.meta.resolve("pi-mcp-adapter")),
+  mcpAdapterPath: createRequire(import.meta.url).resolve("pi-mcp-adapter"),
   model: "opencode-go/deepseek-v4-flash",
 })
 

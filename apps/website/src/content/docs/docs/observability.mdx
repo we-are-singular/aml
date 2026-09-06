@@ -168,17 +168,17 @@ The console tracer omits `agent_message_chunk`, `agent_thought_chunk`, and `tool
 
 Every ACP session notification becomes one `acp.session.update` point event. AML deliberately does not translate each ACP update variant into a second AML schema.
 
-Metadata-only tracing includes:
+The relevant fields of a metadata-only update look like this (the full event also carries runtime identity and timing):
 
-```ts
+```json
 {
-  name: "acp.session.update",
-  attributes: {
-    sessionId: "session-1",
-    sessionUpdate: "tool_call",
-    toolName: "shell",
+  "name": "acp.session.update",
+  "attributes": {
+    "sessionId": "session-1",
+    "sessionUpdate": "tool_call",
+    "toolName": "shell"
   },
-  type: "event",
+  "type": "event"
 }
 ```
 
