@@ -2,65 +2,61 @@
 import { withBase } from "../../config/site"
 ---
 
-<section id="acp" class="acp-section scroll-mt-20 border-b border-line">
-  <div class="acp-section-content mx-auto max-w-6xl px-5 py-24 sm:py-32">
-    <p class="reveal font-mono text-[12px] uppercase tracking-[0.2em] text-resolve">under the hood</p>
-    <div class="mt-3">
-      <h2 class="reveal text-3xl font-bold tracking-tight [--reveal-delay:60ms] sm:text-5xl">
+<section id="acp" class="marketing-dark acp-section scroll-mt-20 border-b border-line">
+  <div class="mx-auto max-w-6xl px-5 py-24 sm:py-32">
+    <div class="max-w-3xl">
+      <h2 class="reveal text-balance text-3xl font-bold tracking-tight sm:text-5xl">
         Simple by design. Flexible by default.
       </h2>
-      <p class="reveal mt-5 text-[15px] leading-relaxed text-ink-soft [--reveal-delay:120ms]">
-        When a tree composes
-        <code class="rounded-md border border-line bg-paper px-1.5 py-0.5 font-mono text-[13px] text-ink"
-          ><span class="text-agent">&lt;Agent/&gt;</span></code
-        >
-        with a
-        <code class="rounded-md border border-line bg-paper px-1.5 py-0.5 font-mono text-[13px] text-ink"
-          ><span class="text-ok">&lt;Workspace/&gt;</span></code
-        >
-        and
-        <code class="rounded-md border border-line bg-paper px-1.5 py-0.5 font-mono text-[13px] text-ink"
-          ><span class="text-signal">&lt;Sandbox/&gt;</span></code
-        >
-        , the <span class="text-resolve">AML Runtime</span> materializes durable files, acquires the selected execution
-        environment, and prompts the <span class="text-agent">Agent provider</span> through
-        <a
-          href="https://agentclientprotocol.com"
-          target="_blank"
-          rel="noreferrer"
-          class="font-medium text-ink underline decoration-resolve decoration-2 underline-offset-4 transition-colors hover:text-resolve"
-          ><span class="text-resolve">Agent Client Protocol</span></a
-        >. A compatible Agent can read files, edit code, and run commands through that Sandbox. AML then collects the
-        result, applies the Workspace save policy, and releases resources in reverse order. Text-only Agents can run
-        without either resource boundary.
+      <p class="reveal mt-5 max-w-2xl text-[17px] leading-relaxed text-ink-soft [--reveal-delay:60ms]">
+        Start with an agent. Add a Sandbox when it needs an execution environment, and a Workspace when its files
+        need to survive the run. Configure each through its own provider.
       </p>
-      <div class="reveal mt-6 flex flex-wrap gap-x-6 gap-y-3 [--reveal-delay:150ms]">
-        <a
-          href={withBase("docs/concepts/")}
-          class="font-mono text-[12px] font-semibold text-resolve underline-offset-4 hover:underline"
-        >
-          Understand the three boundaries →
-        </a>
-        <a
-          href={withBase("docs/compatibility/")}
-          class="font-mono text-[12px] font-semibold text-ink-soft underline-offset-4 hover:text-ink hover:underline"
-        >
-          Check provider compatibility →
-        </a>
-      </div>
     </div>
 
-    <div
-      class="acp-map-shell reveal mt-14 overflow-hidden rounded-2xl border border-line p-3 [--reveal-delay:180ms] sm:p-6"
-    >
+    <dl class="reveal mt-10 grid gap-7 border-t border-line pt-7 [--reveal-delay:120ms] md:grid-cols-3 md:gap-10">
+      <div>
+        <dt class="font-mono text-[15px] font-medium text-agent">&lt;Agent /&gt;</dt>
+        <dd class="mt-3 text-[16px] leading-relaxed text-ink-soft">
+          Runs a coding agent with the prompt and tools you provide. Nest agents to pass results between them.
+        </dd>
+      </div>
+      <div>
+        <dt class="font-mono text-[15px] font-medium text-signal">&lt;Sandbox /&gt;</dt>
+        <dd class="mt-3 text-[16px] leading-relaxed text-ink-soft">
+          Provides a place to run commands, from a local process to a container or remote environment.
+        </dd>
+      </div>
+      <div>
+        <dt class="font-mono text-[15px] font-medium text-ok">&lt;Workspace /&gt;</dt>
+        <dd class="mt-3 text-[16px] leading-relaxed text-ink-soft">
+          Keeps files between runs. Choose a storage provider and when changes should be saved.
+        </dd>
+      </div>
+    </dl>
+
+    <figure class="acp-map-shell reveal mt-10 overflow-hidden rounded-xl border border-line p-3 [--reveal-delay:180ms] sm:p-6">
+      <figcaption class="px-2 pt-2 text-[15px] leading-relaxed text-ink-soft sm:px-3">
+        AML runs the workflow and manages resource cleanup. Built-in coding agents connect through{" "}
+        <a href="https://agentclientprotocol.com" target="_blank" rel="noreferrer" class="text-ink underline decoration-line-strong underline-offset-4 hover:decoration-ink">Agent Client Protocol</a>.
+      </figcaption>
       <svg id="acp-runtime-map" class="block w-full" aria-hidden="true" preserveAspectRatio="xMidYMid meet"></svg>
       <ol class="sr-only">
         <li>Your app sends the authored JSX tree to the AML Runtime.</li>
-        <li>The AML Runtime selects an Agent provider and acquires a Workspace provider.</li>
-        <li>The Agent provider maps its executable into the shared ACP engine.</li>
-        <li>The ACP engine starts the Agent process through the Sandbox adapter.</li>
-        <li>The Workspace provider attaches files to the Sandbox and reconciles them afterward.</li>
+        <li>The runtime evaluates Agents using their selected providers.</li>
+        <li>Built-in coding-agent providers use the shared ACP engine to run agent sessions.</li>
+        <li>When a Sandbox is configured, the agent process runs in that execution environment.</li>
+        <li>When a Workspace is configured, its files are loaded and saved according to its save policy.</li>
       </ol>
+    </figure>
+
+    <div class="reveal mt-6 flex flex-wrap gap-x-6 gap-y-3 text-[14px] [--reveal-delay:180ms]">
+      <a href={withBase("docs/concepts/")} class="text-ink underline decoration-line-strong underline-offset-4 hover:decoration-ink">
+        How these components fit together
+      </a>
+      <a href={withBase("docs/compatibility/")} class="text-ink-soft underline decoration-line-strong underline-offset-4 hover:decoration-ink">
+        Provider compatibility
+      </a>
     </div>
   </div>
 </section>

@@ -9,43 +9,23 @@ import { withBase } from "../../config/site.js"
 
   <div class="relative mx-auto max-w-6xl px-5 pb-28 pt-14 sm:pb-40 sm:pt-20">
     <div class="grid items-center gap-8 lg:grid-cols-[1.05fr_0.95fr]">
-      <div>
-        <p
-          class="reveal mb-5 inline-flex items-center gap-2 rounded-full border border-line bg-surface px-3 py-1 font-mono text-[11.5px] text-muted"
-        >
-          <span class="size-1.5 rounded-full bg-ok animate-pulse-dot"></span>
-          agent markup language
-          <span class="text-line-strong">|</span>
-          <span class="text-resolve">async JSX runtime</span>
-        </p>
-
+      <div class="lg:py-6">
         <h1
-          class="reveal text-balance text-5xl font-bold leading-[1.02] tracking-tight [--reveal-delay:80ms] sm:text-6xl lg:text-7xl"
+          class="reveal text-5xl font-semibold leading-[1.08] tracking-tight [--reveal-delay:80ms] sm:text-6xl lg:text-[64px]"
         >
-          Agent workflows<br />
-          authored as
-          <span class="relative inline-block text-resolve">
-            &lt;markup /&gt;
-            <svg class="absolute -bottom-2 left-0 w-full" viewBox="0 0 220 12" fill="none" aria-hidden="true">
-              <path
-                d="M3 9C60 3 160 3 217 8"
-                stroke="var(--color-signal)"
-                stroke-width="4"
-                stroke-linecap="round"
-              />
-            </svg>
-          </span>
+          Build AI agents<br />
+          with{" "}
+          <span class="inline-block text-resolve">&lt;JSX /&gt;</span>
         </h1>
 
         <p
-          class="reveal mt-7 max-w-xl text-pretty text-lg leading-relaxed text-ink-soft [--reveal-delay:160ms]"
+          class="reveal mt-8 text-lg leading-relaxed text-ink-soft [--reveal-delay:160ms]"
         >
-          Write the workflow you mean. AML brings agents, tools, sandboxes, persistent files, and multi-step logic
-          into <strong class="font-semibold text-ink">one async JSX tree</strong> — without tying that workflow to
-          one provider.
+          AML is a TypeScript framework for building AI agents. Write reusable JSX components to connect agents,
+          give them tools, and pass their results to the next step.
         </p>
 
-        <div class="reveal mt-9 flex flex-wrap items-center gap-3 [--reveal-delay:240ms]">
+        <div class="reveal mt-7 flex flex-wrap items-center gap-3 [--reveal-delay:240ms]">
           <a
             href="#how"
             class="group flex items-center gap-2 rounded-full bg-resolve px-6 py-3 text-[15px] font-semibold text-white shadow-lg shadow-resolve/25 transition-all hover:shadow-xl hover:shadow-resolve/35"
@@ -60,11 +40,10 @@ import { withBase } from "../../config/site.js"
             See how it works
           </a>
           <a
-            href={withBase("docs/")}
-            target="_blank"
+            href={withBase("docs/getting-started/")}
             class="rounded-full border border-line-strong bg-surface px-6 py-3 text-[15px] font-semibold transition-colors hover:border-ink"
           >
-            Read the docs ↗
+            Build your first agent
           </a>
         </div>
       </div>
@@ -80,7 +59,7 @@ import { withBase } from "../../config/site.js"
               <span class="size-2.5 rounded-full bg-line-strong"></span>
               <span class="size-2.5 rounded-full bg-ok"></span>
             </div>
-            <p class="font-mono text-[11px] text-muted">AmlRuntime · example leaves-first resolution tree</p>
+            <p class="font-mono text-[11px] text-muted">WeeklyStandup.tsx</p>
           </div>
           <canvas id="hero-canvas" class="block h-[310px] w-full sm:h-[390px]"></canvas>
           <div class="flex items-center justify-between border-t border-line px-4 py-2 font-mono text-[11px]">
@@ -110,33 +89,26 @@ import { withBase } from "../../config/site.js"
           class="relative z-10 ml-auto mt-3 w-full max-w-sm rounded-xl border border-line bg-surface/95 px-4 py-3 font-mono text-[11.5px] leading-[1.75] shadow-lg backdrop-blur-sm sm:absolute sm:-bottom-4 sm:-right-10 sm:mt-0 sm:w-56"
           data-float="3"
         >
-          <p>
-            <span class="text-muted">&lt;</span><span class="text-agent">Agent</span>
+          <p class="font-mono">
+            <span class="text-muted">&lt;</span><span class="text-agent">Agent</span>{" "}
             <span class="text-resolve">provider</span><span class="text-muted">=</span>&#123;codex&#125;<span
               class="text-muted"
               >&gt;</span
             >
           </p>
-          <p class="pl-4">
-            <span class="text-muted">&lt;</span><span class="text-ok">Mcp</span>
-            <span class="text-resolve">use</span><span class="text-muted">=</span>&#123;slack&#125;
+          <p class="pl-4 font-mono">
+            <span class="text-muted">&lt;</span><span class="text-ok">Mcp</span>{" "}
+            <span class="text-resolve">use</span><span class="text-muted">=</span>&#123;slack&#125;{" "}
             <span class="text-muted">/&gt;</span>
           </p>
-          <p class="pl-4 text-ink">post our weekly standup:</p>
-          <p class="pl-4 text-ink"><span class="text-signal">&#123;synthesis&#125;</span></p>
-          <p>
+          <p class="pl-4 font-mono text-ink">post our weekly standup:</p>
+          <p class="pl-4 font-mono text-ink"><span class="text-signal">&#123;synthesis&#125;</span></p>
+          <p class="font-mono">
             <span class="text-muted">&lt;/</span><span class="text-agent">Agent</span
             ><span class="text-muted">&gt;</span>
           </p>
         </div>
       </div>
     </div>
-  </div>
-</section>
-
-<!-- ============================== product thesis ============================== -->
-<section class="border-y border-ink bg-ink text-paper">
-  <div class="mx-auto max-w-6xl px-5 py-5">
-    <p class="text-lg font-semibold">A framework for building complex, provider-agnostic agent workflows.</p>
   </div>
 </section>

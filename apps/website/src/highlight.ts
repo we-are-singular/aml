@@ -12,6 +12,7 @@ const createHighlighter = createBundledHighlighter({
   },
   themes: {
     "dark-plus": () => import("@shikijs/themes/dark-plus"),
+    "github-light": () => import("@shikijs/themes/github-light"),
   },
   engine: () => createJavaScriptRegexEngine(),
 })
@@ -28,9 +29,10 @@ function codeContents(html: string): string {
 }
 
 /** Highlights a TSX sample for insertion inside an existing code block. */
-export async function highlightTsx(source: string): Promise<string> {
+export async function highlightTsx(source: string, theme: "dark-plus" | "github-light" = "dark-plus"): Promise<string> {
   const instance = await highlighter
-  return codeContents(instance.codeToHtml(source, { lang: "tsx", theme: "dark-plus" }))
+  if (!instance.getLoadedThemes().includes(theme)) await instance.loadTheme(theme)
+  return codeContents(instance.codeToHtml(source, { lang: "tsx", theme }))
 }
 
 /** Renders highlighted TSX into individually addressable lines for the playground. */

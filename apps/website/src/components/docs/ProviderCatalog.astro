@@ -2,41 +2,12 @@
 import { withBase } from "../../config/site"
 import ProviderMark from "./ProviderMark.astro"
 
-const groups = [
-  {
-    label: "Agent providers",
-    description: "Own model sessions, native capabilities, and the Agent Client Protocol lifecycle.",
-    providers: [
-      { name: "codex", title: "Codex", href: "/docs/providers/agents/codex/", meta: "ACP · codex-acp", bestFor: "Codex coding workflows" },
-      { name: "opencode", title: "OpenCode", href: "/docs/providers/agents/opencode/", meta: "ACP · opencode", bestFor: "Open source model access" },
-      { name: "pi", title: "Pi", href: "/docs/providers/agents/pi/", meta: "ACP · pi-acp + pi", bestFor: "Extensible agent harnesses" },
-    ],
-  },
-  {
-    label: "Sandbox providers",
-    description: "Own process execution, filesystem isolation, and ephemeral environment cleanup.",
-    providers: [
-      { name: "local-sandbox", title: "Local", href: "/docs/providers/sandboxes/local/", meta: "Host process · no isolation", bestFor: "Trusted development" },
-      { name: "docker", title: "Docker", href: "/docs/providers/sandboxes/docker/", meta: "Docker CLI + daemon", bestFor: "Disposable container work" },
-      { name: "daytona", title: "Daytona", href: "/docs/providers/sandboxes/daytona/", meta: "Daytona credentials", bestFor: "Remote dev environments" },
-      { name: "modal", title: "Modal", href: "/docs/providers/sandboxes/modal/", meta: "Modal credentials", bestFor: "Serverless remote work" },
-    ],
-  },
-  {
-    label: "Workspace providers",
-    description: "Own durable files, revision storage, locking, and materialization into a runtime.",
-    providers: [
-      { name: "local-workspace", title: "Local", href: "/docs/providers/workspaces/local/", meta: "Existing directory · direct writes", bestFor: "Trusted local state" },
-      { name: "filesystem", title: "Filesystem", href: "/docs/providers/workspaces/filesystem/", meta: "Archive or folder revisions", bestFor: "Local durable history" },
-      { name: "s3", title: "S3", href: "/docs/providers/workspaces/s3/", meta: "S3-compatible object storage", bestFor: "Shared durable history" },
-    ],
-  },
-] as const
+import { docsProviderGroups } from "../../data/docs-provider-catalog"
 ---
 
 <div class="provider-catalog">
   {
-    groups.map(group => (
+    docsProviderGroups.map(group => (
       <section class="provider-group">
         <div class="provider-group__intro">
           <p>{group.label}</p>
@@ -48,7 +19,7 @@ const groups = [
               <ProviderMark name={provider.name} size="md" />
               <span>
                 <strong>{provider.title}</strong>
-                <small>{provider.meta}</small>
+                <small><code>{provider.factory}</code> · {provider.meta}</small>
                 <b>{provider.bestFor}</b>
               </span>
               <i aria-hidden="true">↗</i>

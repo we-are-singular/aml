@@ -31,9 +31,7 @@ const { sdkVersion } = Astro.props
 
     <div class="flex items-center gap-3">
       <a
-        href="https://github.com/we-are-singular/aml/releases"
-        target="_blank"
-        rel="noreferrer"
+        href={withBase("docs/reference/changelog/sdk/")}
         class="rounded-full border border-line bg-surface px-2.5 py-1 font-mono text-[11px] text-muted transition-colors hover:border-resolve hover:text-resolve"
       >
         v{sdkVersion}

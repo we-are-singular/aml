@@ -1,10 +1,11 @@
 export const siteMetadata = {
   name: "AML — Agent Markup Language",
   shortName: "AML",
-  title: "AML — Framework for Agent Workflows",
+  title: "AML — Build AI Agents with TypeScript and JSX",
   description:
-    "AML is a TypeScript and JSX framework for building complex, provider-agnostic AI agent workflows as composable, executable trees.",
-  socialDescription: "Build complex, provider-agnostic AI agent workflows as composable, executable JSX trees.",
+    "AML is a TypeScript framework for building AI agents. Connect agents, give them tools, and pass their results between reusable JSX components.",
+  socialDescription:
+    "Build AI agents with TypeScript and JSX. Compose coding agents, tools, and prompts as reusable components.",
   locale: "en_US",
   repository: "https://github.com/we-are-singular/aml",
   npm: "https://www.npmjs.com/package/@aml-jsx/sdk",

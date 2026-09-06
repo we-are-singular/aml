@@ -23,30 +23,29 @@ export interface Benefit {
 
 export const benefits: readonly Benefit[] = [
   {
-    title: "Write the workflow as reusable components",
+    title: "Reusable components",
     description:
-      "Package agents, prompts, capabilities, and control flow as ordinary async JSX components. Compose them into larger workflows without hiding how data moves.",
+      "Define an agent once, pass it props, and use it in different workflows. Components can return text, JSX, or async results.",
     icon: "markup",
     iconClass: "bg-resolve-soft font-mono text-[15px] font-semibold text-resolve",
   },
   {
-    title: "Change providers without starting over",
-    description:
-      "Move between OpenCode, Codex, GitHub Copilot, and Pi — or use a deterministic test provider — without rebuilding the workflow around a new SDK.",
+    title: "Your choice of agent",
+    description: "Use OpenCode, Codex, GitHub Copilot, GLM, or Pi. Choose a provider for each agent in the tree.",
     icon: "switch",
     iconClass: "bg-agent-soft text-agent",
   },
   {
-    title: "Give agents a real place to work",
+    title: "Execution and storage",
     description:
-      "Attach sandboxes and persistent workspaces exactly where they’re needed. AML manages their scope, lifecycle, and cleanup.",
+      "Run commands in a Sandbox and keep files between runs with a Workspace. AML acquires and releases both.",
     icon: "sandbox",
     iconClass: "bg-signal-soft font-mono text-lg text-signal",
   },
   {
     title: "See what happened",
     description:
-      "Every run emits structured lifecycle and trace events, so you can inspect a workflow today and build better tooling around it tomorrow.",
+      "Inspect agent turns, tool calls, timings, and failures through structured traces. Set limits and cancel runs from your application.",
     icon: "observe",
     iconClass: "bg-ok-soft text-ok",
   },

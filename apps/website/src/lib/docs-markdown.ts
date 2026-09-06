@@ -2,6 +2,7 @@ import { createProcessor } from "@mdx-js/mdx"
 import type { CollectionEntry } from "astro:content"
 import sandboxChangelog from "../../../../images/sandbox/CHANGELOG.md?raw"
 import { withBase } from "../config/site"
+import { docsProviderGroups } from "../data/docs-provider-catalog"
 
 interface SourceNode {
   readonly attributes?: readonly SourceAttribute[]
@@ -277,27 +278,12 @@ Application → AML runtime → selected Sandbox and ACP process ⇄ Agent sessi
 ACP standardizes the session. It does not install the executable, create the Sandbox, provide credentials, or enforce isolation.
 `
 
-const providerCatalogMarkdown = `
-**Agent providers**
-
-- [Codex](/docs/providers/agents/codex/) — Codex coding workflows through \`codex-acp\`.
-- [GitHub Copilot](/docs/providers/agents/copilot/) — Copilot CLI model access through native \`copilot --acp\`.
-- [OpenCode](/docs/providers/agents/opencode/) — open-source model access through OpenCode ACP.
-- [Pi](/docs/providers/agents/pi/) — extensible Pi harnesses through \`pi-acp\`.
-
-**Sandbox providers**
-
-- [Local](/docs/providers/sandboxes/local/) — trusted host development; no isolation boundary.
-- [Docker](/docs/providers/sandboxes/docker/) — disposable container work.
-- [Daytona](/docs/providers/sandboxes/daytona/) — remote development environments.
-- [Modal](/docs/providers/sandboxes/modal/) — serverless remote execution.
-
-**Workspace providers**
-
-- [Local](/docs/providers/workspaces/local/) — one existing durable directory.
-- [Filesystem](/docs/providers/workspaces/filesystem/) — local archive or folder revisions.
-- [S3](/docs/providers/workspaces/s3/) — S3-compatible shared durable history.
-`
+const providerCatalogMarkdown = docsProviderGroups
+  .map(
+    group =>
+      `**${group.label}**\n\n${group.providers.map(provider => `- [${provider.title}](${provider.href}) — \`${provider.factory}\`. ${provider.meta}; ${provider.bestFor}.`).join("\n")}`
+  )
+  .join("\n\n")
 
 /** Builds the standalone representation served by each documentation .md route. */
 export function renderDocMarkdown(entry: CollectionEntry<"docs">, site: URL): string {

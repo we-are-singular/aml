@@ -1,32 +1,47 @@
-<section id="contributing" class="scroll-mt-20 border-t border-white/10 bg-ink text-paper">
-  <div class="mx-auto max-w-6xl px-5 py-24 sm:py-32">
+---
+// Jittered rows keep the starfield sparse without leaving large empty patches.
+const stars = Array.from({ length: 60 }, (_, index) => ({
+  x: (index % 12) * (1000 / 12) + 12 + Math.random() * 58,
+  y: Math.floor(index / 12) * 80 + 12 + Math.random() * 54,
+  radius: index % 7 === 0 ? 1.5 : 0.8,
+}))
+---
+
+<section id="contributing" class="marketing-dark relative isolate overflow-hidden scroll-mt-20 border-t border-line">
+  <svg class="contributing-stars" viewBox="0 0 1000 400" preserveAspectRatio="none" aria-hidden="true">
+    <path class="contributing-connections" fill="none" vector-effect="non-scaling-stroke" />
+    {stars.map(star => <circle cx={star.x} cy={star.y} r={star.radius} />)}
+  </svg>
+  <div class="relative mx-auto max-w-6xl px-5 py-24 sm:py-32">
     <div class="contributing-card reveal relative isolate overflow-hidden rounded-3xl border border-white/12">
-      <div class="contributing-stars" aria-hidden="true"></div>
+      <div class="contributing-rotating-stars" aria-hidden="true"></div>
       <div class="contributing-orbit" aria-hidden="true"></div>
+      <svg class="contribution-constellation" viewBox="0 0 300 230" fill="none" aria-hidden="true">
+        <path d="M35 185 98 129 197 145 259 54" stroke="currentColor" stroke-opacity=".3" />
+        <path d="m259 39 4.4 8.9 9.8 1.4-7.1 6.9 1.7 9.8-8.8-4.6-8.8 4.6 1.7-9.8-7.1-6.9 9.8-1.4Z" stroke="currentColor" />
+        <g fill="currentColor"><circle cx="35" cy="185" r="2" /><circle cx="98" cy="129" r="3" /><circle cx="197" cy="145" r="2" /></g>
+      </svg>
       <div class="relative z-10 p-7 sm:p-10 lg:p-12">
         <p class="font-mono text-[12px] uppercase tracking-[0.2em] text-[#8aa2ff]">contributing</p>
         <h2 class="mt-3 text-3xl font-bold tracking-tight sm:text-5xl">
           AML is early. Help shape what it becomes.
         </h2>
         <p class="mt-5 text-[15px] leading-relaxed text-white/65">
-          Want to build a provider, sharpen the runtime semantics, improve the developer experience, or argue for
-          a better API? This is the useful stage to show up: the important decisions are still being made.
+          Try AML on a project. Star the repo if it’s useful, and tell us what you’d change.
         </p>
         <div
-          class="mt-10 flex flex-col gap-6 border-t border-white/10 pt-6 sm:flex-row sm:items-center sm:justify-between"
+          class="mt-10 flex flex-wrap items-center gap-6 border-t border-white/10 pt-6"
         >
-          <p class="font-mono text-[11.5px] leading-relaxed text-white/60">
-            help create provider adapters · shape the runtime · improve examples, docs, and tooling
-          </p>
           <a
             href="https://github.com/we-are-singular/aml"
             target="_blank"
             rel="noreferrer"
-            class="inline-flex w-fit items-center gap-2 rounded-full bg-paper px-6 py-3 text-[15px] font-semibold text-ink transition-colors hover:bg-[#8aa2ff]"
+            class="inline-flex w-fit items-center gap-2 rounded-full bg-ink px-6 py-3 text-[15px] font-semibold text-paper transition-colors hover:bg-resolve"
           >
-            Help build AML
-            <span aria-hidden="true">↗</span>
+            <svg viewBox="0 0 24 24" class="size-[18px]" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="m12 3 2.8 5.7 6.3.9-4.6 4.4 1.1 6.3-5.6-3-5.6 3 1.1-6.3L3 9.6l6.2-.9Z" /></svg>
+            Star AML on GitHub
           </a>
+          <a href="https://github.com/we-are-singular/aml/issues" class="text-[15px] text-ink underline underline-offset-4">Contribute</a>
         </div>
       </div>
     </div>

@@ -1,73 +1,77 @@
 ---
+import { CONCEPTS } from "../../concepts"
 import { withBase } from "../../config/site"
+import { highlightTsx } from "../../highlight"
+
+const groups = ["Concepts", "Components", "Runtime APIs"] as const
+const initial = CONCEPTS[0]!
+const highlighted = await highlightTsx(initial.code)
 ---
 
-<section id="reference" class="scroll-mt-20 border-y border-line bg-surface">
-  <div class="mx-auto max-w-6xl px-5 py-24 sm:py-32">
-    <p class="reveal font-mono text-[12px] uppercase tracking-[0.2em] text-resolve">reference</p>
-    <h2 class="reveal mt-3 text-3xl font-bold tracking-tight [--reveal-delay:60ms] sm:text-5xl">
-      Small enough to learn in one sitting
-    </h2>
-    <p class="reveal mt-5 text-[15px] leading-relaxed text-ink-soft [--reveal-delay:120ms]">
-      Twelve primitives and a focused set of runtime APIs. Everything else is ordinary JavaScript — control flow and
-      data transformation included.
-    </p>
-    <a
-      href={withBase("docs/reference/primitives/")}
-      class="reveal mt-5 inline-flex font-mono text-[12px] font-semibold text-resolve underline-offset-4 [--reveal-delay:150ms] hover:underline"
-    >
-      Browse all primitive guides →
-    </a>
+<section id="reference" class="marketing-dark scroll-mt-20 border-y border-line">
+  <div class="reference-content mx-auto max-w-6xl px-5">
+    <div class="flex flex-wrap items-end justify-between gap-4">
+      <div>
+        <p class="font-mono text-[12px] uppercase tracking-[0.2em] text-resolve">reference</p>
+        <h2 class="mt-3 text-2xl font-bold tracking-tight sm:text-4xl">The components and APIs</h2>
+        <p class="mt-3 text-[15px] leading-relaxed text-ink-soft sm:text-[17px]">
+          Compose agents, tools, and resources in JSX. Keep application logic in TypeScript.
+        </p>
+      </div>
+      <a href={withBase("docs/reference/")} class="text-[14px] text-resolve underline-offset-4 hover:underline">
+        Full reference →
+      </a>
+    </div>
 
-    <div class="mt-14 grid gap-8 lg:grid-cols-[minmax(220px,0.8fr)_2.2fr]">
-      <!-- Bounded index: it stays useful without making the whole page as tall as the API list. -->
-      <div class="reveal lg:sticky lg:top-20 lg:self-start">
-        <div id="ref-list" class="ref-list-scroll space-y-6 lg:pr-3" role="tree" aria-label="AML reference"></div>
+    <div class="reference-layout mt-7">
+      <div class="reference-mobile-picker">
+        <label for="ref-select" class="sr-only">Explore AML</label>
+        <select id="ref-select" class="w-full rounded-lg border border-line bg-surface px-3 py-2 text-ink">
+          {groups.map(group => (
+            <optgroup label={group}>
+              {CONCEPTS.filter(concept => concept.group === group).map(concept => (
+                <option value={concept.id} selected={concept.id === initial.id}>{concept.name}</option>
+              ))}
+            </optgroup>
+          ))}
+        </select>
       </div>
 
-      <!-- The selected concept remains alongside the independently scrolling index. -->
-      <div class="reveal min-w-0 [--reveal-delay:120ms] lg:sticky lg:top-20 lg:self-start">
-        <div class="overflow-hidden rounded-2xl border border-line bg-paper">
-          <div
-            class="flex flex-wrap items-center justify-between gap-3 border-b border-line bg-surface px-6 py-4"
-          >
-            <div>
-              <h3 id="ref-name" class="font-mono text-xl font-semibold"></h3>
-              <p id="ref-kind" class="mt-0.5 font-mono text-[11px] uppercase tracking-wider text-muted"></p>
+      <nav id="ref-list" class="ref-list-scroll" aria-label="AML preview">
+        {groups.map(group => (
+          <div class="ref-group">
+            <p class="mb-2 font-mono text-[11px] uppercase tracking-wider text-muted">{group}</p>
+            <div class="space-y-1">
+              {CONCEPTS.filter(concept => concept.group === group).map(concept => (
+                <button type="button" data-ref-id={concept.id} aria-pressed={concept.id === initial.id ? "true" : "false"} class:list={["ref-item", { "is-active": concept.id === initial.id }]}>
+                  {concept.name}
+                </button>
+              ))}
             </div>
-            <code
-              id="ref-signature"
-              class="rounded-lg border border-line bg-paper px-3 py-1.5 font-mono text-[11.5px] text-ink-soft"
-            ></code>
           </div>
-          <div class="px-6 py-5">
-            <p id="ref-description" class="max-w-prose text-[15px] leading-relaxed text-ink-soft"></p>
-            <p
-              id="ref-note"
-              class="mt-3 hidden max-w-prose rounded-lg border border-resolve/25 bg-resolve-soft px-3.5 py-2.5 text-[13px] leading-relaxed text-ink-soft"
-            ></p>
-            <a
-              id="ref-docs"
-              class="mt-5 inline-flex font-mono text-[12px] font-semibold text-resolve underline-offset-4 hover:underline"
-            ></a>
-          </div>
-          <div class="border-t border-line">
-            <div class="flex items-center justify-between bg-[#12110d] px-4 py-2">
-              <span id="ref-example-file" class="font-mono text-[11px] text-white/60"></span>
-              <button
-                id="ref-copy"
-                class="rounded-md border border-white/15 px-2.5 py-1 font-mono text-[11px] text-white/70 transition-colors hover:border-white/40 hover:text-white"
-              >
-                copy
-              </button>
-            </div>
-            <pre
-              id="ref-example"
-              class="code-block max-h-[480px] overflow-auto px-4 py-3.5 text-[12.5px] leading-[1.7]"
-            ></pre>
-          </div>
+        ))}
+      </nav>
+
+      <article class="ref-preview min-w-0 overflow-hidden rounded-xl border border-line bg-paper" aria-labelledby="ref-name">
+        <div class="flex items-center justify-between gap-3 border-b border-line bg-surface px-5 py-3">
+          <h3 id="ref-name" class="font-mono text-[18px] font-semibold" aria-live="polite">{initial.name}</h3>
+          <span id="ref-kind" class="font-mono text-[11px] text-muted">concept</span>
         </div>
-      </div>
+        <div class="px-5 py-4">
+          <p id="ref-description" class="text-[15px] leading-normal text-ink-soft sm:text-[16px] sm:leading-relaxed">{initial.description}</p>
+          <p id="ref-warning" class="ref-warning mt-3 border-l-2 border-signal pl-3 text-[14px] leading-relaxed text-ink-soft" hidden></p>
+          <a id="ref-docs" href={withBase(initial.docsPath)} class="mt-3 inline-flex text-[14px] text-resolve underline-offset-4 hover:underline">
+            Read the full guide →
+          </a>
+        </div>
+        <div class="border-t border-line">
+          <div class="flex items-center justify-between bg-surface px-5 py-2">
+            <span id="ref-example-file" class="font-mono text-[11px] text-muted">{initial.file}</span>
+            <button id="ref-copy" type="button" class="rounded-md border border-line-strong px-2 py-0.5 font-mono text-[11px] text-ink-soft hover:border-ink-soft">copy</button>
+          </div>
+          <pre id="ref-example" class="code-block overflow-x-auto px-5 py-3 text-[12.5px] leading-[1.6]"><code set:html={highlighted} /></pre>
+        </div>
+      </article>
     </div>
   </div>
 </section>

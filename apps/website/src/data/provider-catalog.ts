@@ -376,7 +376,7 @@ const runtime = new AmlRuntime()
 
 await runtime.evaluate(
   <Workspace ${workspace.props} provider={workspace}>
-    <Sandbox provider={sandbox}>
+    <Sandbox provider={sandbox} access="read-write">
       <Agent provider={provider}>Summarize this repository.</Agent>
     </Sandbox>
   </Workspace>,

@@ -35,19 +35,19 @@ interface DiagramLayout {
 const SVG_NS = "http://www.w3.org/2000/svg"
 
 const NODES: readonly DiagramNode[] = [
-  { detail: "main.tsx", id: "app", title: "YOUR APP", tone: "ink" },
-  { detail: "plans, runs, and observes", id: "runtime", title: "AML RUNTIME", tone: "resolve" },
-  { detail: "Wraps any Agent SDK", id: "profile", title: "AGENT PROVIDER", tone: "agent" },
-  { detail: "shared ACP session", id: "engine", title: "ACP ENGINE", tone: "resolve" },
-  { detail: "durable object storage", id: "workspace", title: "WORKSPACE PROVIDER", tone: "ok" },
+  { detail: "main.tsx", id: "app", title: "Your app", tone: "ink" },
+  { detail: "evaluates the workflow", id: "runtime", title: "AML Runtime", tone: "resolve" },
+  { detail: "runs your coding agent", id: "profile", title: "Agent provider", tone: "agent" },
+  { detail: "Agent Client Protocol", id: "engine", title: "ACP engine", tone: "resolve" },
+  { detail: "persists files", id: "workspace", title: "Workspace provider", tone: "ok" },
   {
-    detail: "isolated remote execution",
+    detail: "executes commands",
     id: "sandbox",
     pills: [
-      { label: "AGENT PROCESS", tone: "agent" },
-      { label: "WORKSPACE FILES", tone: "ok" },
+      { label: "Agent process", tone: "agent" },
+      { label: "Workspace files", tone: "ok" },
     ],
-    title: "SANDBOX ADAPTER",
+    title: "Sandbox provider",
     tone: "signal",
   },
 ]
@@ -77,9 +77,9 @@ const MOBILE_LAYOUT: DiagramLayout = {
   frames: {
     app: { x: 100, y: 20, width: 160, height: 58 },
     runtime: { x: 95, y: 110, width: 170, height: 66 },
-    profile: { x: 15, y: 260, width: 150, height: 70 },
-    engine: { x: 15, y: 380, width: 150, height: 70 },
-    workspace: { x: 195, y: 260, width: 150, height: 70 },
+    profile: { x: 10, y: 260, width: 160, height: 70 },
+    engine: { x: 10, y: 380, width: 160, height: 70 },
+    workspace: { x: 190, y: 260, width: 160, height: 70 },
     sandbox: { x: 85, y: 540, width: 190, height: 150 },
   },
   edges: [

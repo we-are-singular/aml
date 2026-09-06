@@ -44,12 +44,10 @@ const highlightedSource = await highlightTsx(source)
           Results flow up. Scope flows down.
         </h2>
         <p class="reveal mt-5 text-[15px] leading-relaxed text-ink-soft [--reveal-delay:120ms]">
-          AML resolves every value before the boundary that consumes it. JSX describes the dependency structure;
-          ordinary TypeScript owns branching and data flow, while <code>&lt;Parallel&gt;</code> marks independent work.
+          AML resolves nested components before the agent that consumes their results. JSX defines dependencies; TypeScript handles branching and data transformation. <code>&lt;Parallel /&gt;</code> runs independent branches concurrently.
         </p>
         <p class="reveal mt-4 text-[15px] leading-relaxed text-ink-soft [--reveal-delay:140ms]">
-          A <code>defineTool()</code> value is a typed callable for active application components. Passing that same
-          value to <code>&lt;Tool use=&#123;tool&#125; /&gt;</code> is the separate, explicit step that grants it to a model.
+          Tools are granted to individual agents. Sandboxes and workspaces apply to the components nested inside them, and AML handles their setup and cleanup.
         </p>
         <div class="reveal mt-7 flex flex-wrap gap-x-6 gap-y-3 [--reveal-delay:160ms]">
           <a
@@ -62,7 +60,7 @@ const highlightedSource = await highlightTsx(source)
             href={withBase("docs/cookbook/code-review-workflow/")}
             class="font-mono text-[12px] font-semibold text-ink-soft underline-offset-4 hover:text-ink hover:underline"
           >
-            Build this workflow →
+            Code review cookbook →
           </a>
         </div>
       </div>
