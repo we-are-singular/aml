@@ -1,0 +1,239 @@
+<!doctype html>
+<!-- Serve the repository root over HTTP, open this file at 1200×630, wait for document.fonts.ready, and capture public/og-build-agents.png. -->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>AML social card</title>
+    <style>
+      @font-face {
+        font-family: "Space Grotesk";
+        src: url("../../../node_modules/@fontsource-variable/space-grotesk/files/space-grotesk-latin-wght-normal.woff2");
+        font-weight: 300 700;
+      }
+      @font-face {
+        font-family: "IBM Plex Mono";
+        src: url("../../../node_modules/@fontsource/ibm-plex-mono/files/ibm-plex-mono-latin-400-normal.woff2");
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        width: 1200px;
+        height: 630px;
+        overflow: hidden;
+        background: #fafaf7;
+        color: #1a1914;
+        font-family: "Space Grotesk", sans-serif;
+      }
+      main {
+        height: 100%;
+        padding: 50px 58px;
+        position: relative;
+      }
+      header {
+        display: flex;
+        align-items: center;
+        gap: 20px;
+      }
+      .logo {
+        font:
+          500 27px "IBM Plex Mono",
+          monospace;
+        letter-spacing: -2px;
+      }
+      .blue {
+        color: #2e4bff;
+      }
+      .name {
+        font-size: 18px;
+        color: #4a463c;
+        border-left: 1px solid #d4d0c2;
+        padding-left: 20px;
+      }
+      h1 {
+        position: absolute;
+        left: 58px;
+        top: 171px;
+        margin: 0;
+        font-size: 72px;
+        font-weight: 600;
+        line-height: 1.06;
+        letter-spacing: -3px;
+      }
+      .summary {
+        position: absolute;
+        left: 60px;
+        top: 350px;
+        width: 490px;
+        margin: 0;
+        font-size: 24px;
+        line-height: 1.5;
+        color: #4a463c;
+      }
+      footer {
+        position: absolute;
+        bottom: 47px;
+        left: 60px;
+        right: 60px;
+        padding-top: 20px;
+        border-top: 1px solid #e6e3d8;
+        font:
+          16px "IBM Plex Mono",
+          monospace;
+        color: #4a463c;
+      }
+      .preview {
+        position: absolute;
+        top: 112px;
+        right: 60px;
+        width: 500px;
+        border: 1px solid #e6e3d8;
+        border-radius: 16px;
+        background: #fffefa;
+        box-shadow: 0 20px 45px #1a191410;
+        overflow: hidden;
+      }
+      .window-bar,
+      .status {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 13px 18px;
+        font:
+          12px "IBM Plex Mono",
+          monospace;
+        color: #817b6b;
+      }
+      .window-bar {
+        border-bottom: 1px solid #e6e3d8;
+      }
+      .lights {
+        display: flex;
+        gap: 7px;
+      }
+      .lights i {
+        width: 9px;
+        height: 9px;
+        border-radius: 50%;
+        background: #d4d0c2;
+      }
+      .lights i:last-child {
+        background: #0f9d6c;
+      }
+      .diagram {
+        display: block;
+        width: 100%;
+        height: 250px;
+      }
+      .diagram text {
+        font:
+          13px "IBM Plex Mono",
+          monospace;
+        text-anchor: middle;
+        dominant-baseline: middle;
+      }
+      .status {
+        border-top: 1px solid #e6e3d8;
+        font-size: 10px;
+        gap: 16px;
+        justify-content: flex-start;
+      }
+      .status span::before {
+        content: "";
+        display: inline-block;
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: currentColor;
+        margin-right: 5px;
+      }
+      .code,
+      .evaluate {
+        position: absolute;
+        background: #fffefa;
+        border: 1px solid #e6e3d8;
+        box-shadow: 0 8px 24px #1a191410;
+        font-family: "IBM Plex Mono", monospace;
+      }
+      .code {
+        right: 36px;
+        top: 393px;
+        margin: 0;
+        padding: 14px 18px;
+        border-radius: 12px;
+        font-size: 13px;
+        line-height: 1.7;
+      }
+      .evaluate {
+        left: 613px;
+        top: 459px;
+        padding: 10px 12px;
+        border-radius: 8px;
+        font-size: 10px;
+      }
+      .purple {
+        color: #7c3aed;
+      }
+      .green {
+        color: #0f9d6c;
+      }
+      .orange {
+        color: #ff5a1f;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header>
+        <span class="logo">&lt;aml<span class="blue"> /</span>&gt;</span><span class="name">Agent Markup Language</span>
+      </header>
+      <h1>Build AI agents<br />with <span class="blue">&lt;JSX /&gt;</span></h1>
+      <p class="summary">Compose agents, tools, and prompts<br />as reusable TypeScript components.</p>
+      <div class="preview">
+        <div class="window-bar">
+          <span class="lights"><i></i><i></i><i></i></span><span>WeeklyStandup.tsx</span>
+        </div>
+        <svg
+          class="diagram"
+          viewBox="0 0 500 270"
+          role="img"
+          aria-label="Weekly standup agent tree: Linear and Slack agents feed a synthesis agent."
+        >
+          <defs>
+            <pattern id="dots" width="22" height="22" patternUnits="userSpaceOnUse">
+              <circle cx="1" cy="1" r="0.7" fill="#e6e3d8" />
+            </pattern>
+          </defs>
+          <rect width="500" height="270" fill="url(#dots)" />
+          <g fill="none" stroke="#d4d0c2" stroke-width="1.5">
+            <path d="M140 45V99M140 99L250 174M360 99L250 174M250 174V238" />
+          </g>
+          <g fill="#ddf5ea" stroke="#0f9d6c" stroke-width="1.3">
+            <rect x="72" y="29" width="136" height="32" rx="8" />
+            <rect x="62" y="83" width="156" height="32" rx="8" />
+            <rect x="286" y="83" width="148" height="32" rx="8" />
+          </g>
+          <rect x="149" y="150" width="202" height="48" rx="13" fill="none" stroke="#ff5a1f" stroke-opacity="0.22" />
+          <rect x="157" y="158" width="186" height="32" rx="8" fill="#ffe9df" stroke="#ff5a1f" stroke-width="1.3" />
+          <rect x="171" y="222" width="158" height="32" rx="8" fill="#fffefa" stroke="#d4d0c2" stroke-dasharray="4 3" />
+          <text x="140" y="45">&lt;Mcp /&gt; linear</text>
+          <text x="140" y="99">&lt;Agent /&gt; linear</text>
+          <text x="360" y="99">&lt;Agent /&gt; slack</text>
+          <text x="250" y="174">&lt;Agent /&gt; synthesize</text>
+          <text x="250" y="238" fill="#817b6b">&lt;WeeklyStandup /&gt;</text>
+        </svg>
+        <div class="status">
+          <span class="blue">resolving</span><span class="orange">running</span><span class="green">resolved</span>
+        </div>
+      </div>
+      <div class="evaluate">evaluate(<span class="blue">&lt;WeeklyStandup /&gt;</span>)</div>
+      <pre class="code">&lt;<span class="purple">Agent</span> <span class="blue">provider</span>={codex}&gt;
+  &lt;<span class="green">Mcp</span> <span class="blue">use</span>={slack} /&gt;
+  post our weekly standup:
+  <span class="orange">{synthesis}</span>
+&lt;/<span class="purple">Agent</span>&gt;</pre>
+      <footer>agent-markup-language.com</footer>
+    </main>
+  </body>
+</html>

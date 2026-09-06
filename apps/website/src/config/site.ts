@@ -3,18 +3,16 @@ export const siteMetadata = {
   shortName: "AML",
   title: "AML — Build AI Agents with TypeScript and JSX",
   description:
-    "AML is a TypeScript framework for building AI agents. Connect agents, give them tools, and pass their results between reusable JSX components.",
-  socialDescription:
-    "Build AI agents with TypeScript and JSX. Compose coding agents, tools, and prompts as reusable components.",
+    "AML is a TypeScript framework for building AI agents. Write reusable JSX components to connect agents, give them tools, and pass their results to the next step.",
   locale: "en_US",
   repository: "https://github.com/we-are-singular/aml",
   npm: "https://www.npmjs.com/package/@aml-jsx/sdk",
   image: {
-    path: "og.jpg",
-    type: "image/jpeg",
-    width: 1343,
-    height: 682,
-    alt: "AML agent workflows authored as markup, alongside a visual agent workflow tree.",
+    path: "og-build-agents.png",
+    type: "image/png",
+    width: 1200,
+    height: 630,
+    alt: "Build AI agents with JSX. A weekly standup agent tree alongside an Agent component using a Slack MCP tool.",
   },
 } as const
 

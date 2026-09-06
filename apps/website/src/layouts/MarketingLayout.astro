@@ -38,7 +38,7 @@ const llmsUrl = new URL(withBase("llms.txt"), site)
     <link rel="describedby" href={llmsUrl} type="text/plain" />
 
     <meta property="og:title" content={title} />
-    <meta property="og:description" content={siteMetadata.socialDescription} />
+    <meta property="og:description" content={description} />
     <meta property="og:type" content="website" />
     <meta property="og:url" content={canonicalUrl} />
     <meta property="og:site_name" content={siteMetadata.name} />
@@ -52,7 +52,7 @@ const llmsUrl = new URL(withBase("llms.txt"), site)
 
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content={title} />
-    <meta name="twitter:description" content={siteMetadata.socialDescription} />
+    <meta name="twitter:description" content={description} />
     <meta name="twitter:image" content={imageUrl} />
     <meta name="twitter:image:alt" content={siteMetadata.image.alt} />
 
