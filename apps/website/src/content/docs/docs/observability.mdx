@@ -107,14 +107,13 @@ may correctly appear in both aggregates; AML does not deduplicate these differen
 `count`, summed `totalDurationMs`, and `slowestMs` when at least one span was observed. The collector does not rewrite
 evaluation status. Trace-consumer failures remain separate on the runtime's existing `onTraceError` channel.
 
-`providerUsage` is empty when the provider reports no usage. When ACP supplies usage, AML retains the serialized JSON
-string rather than promising token fields that may not exist. A turn is one provider/ACP prompt request, not one model
-call. Summaries do not infer provider retries, cache behavior, costs, or billing data. See [Correlate application spans and run
-summaries](/docs/cookbook/application-observability/) for a concurrent production pattern.
+`providerUsage` preserves each completed ACP prompt's serialized provider-owned usage exactly once, including structured-output repair prompts. Completed samples remain available if a later repair fails or is cancelled. When a turn has no prompt completion usage, the collector falls back to its span-end usage attribute for compatibility with other providers. Missing usage adds no entry; an empty array means no usage was reported. Summaries do not infer token fields, provider retries, cache behavior, costs, or billing data. See [Correlate application spans and run summaries](/docs/cookbook/application-observability/) for a concurrent production pattern.
+
+`agents.turns.count` counts authored initial and FollowUp turns. One authored turn can include an initial ACP prompt and a structured-output repair prompt, and one ACP prompt can involve multiple underlying model requests. These counts are distinct: `providerUsage.length` is neither an authored-turn count nor a model-request count. AML cannot recover usage that the provider did not send.
 
 ## What an Agent trace represents
 
-AML traces the lifecycle it owns and the events that cross its ACP connection. One ACP `session/prompt` request is one **Agent turn**. It is not necessarily one model API call.
+AML traces the lifecycle it owns and the events that cross its ACP connection. An **Agent turn** is one authored initial or FollowUp turn. It can issue multiple ACP `session/prompt` requests when structured output needs repair, and each ACP prompt can involve multiple model API calls.
 
 ```text
 agent Agent
