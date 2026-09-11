@@ -4,6 +4,7 @@ import type { TraceSink } from "./trace-sink.js"
 interface ActiveTraceSummary {
   acpToolCallCount: number
   readonly acpToolCallsByName: Map<string, number>
+  readonly acpPromptUsageBySpan: Map<string, string[]>
   readonly spans: AmlTraceSpanEndEvent[]
 }
 
@@ -49,7 +50,7 @@ export interface TraceSummary {
     /** Complete provider session boundaries, including setup and cleanup. */
     readonly sessions: TraceSpanAggregate
 
-    /** Initial prompt and FollowUp provider request boundaries. */
+    /** Authored initial and FollowUp turns, each of which may include ACP repair prompts. */
     readonly turns: TraceSpanAggregate
   }
 
@@ -63,10 +64,13 @@ export interface TraceSummary {
   readonly durationMs: number
 
   /**
-   * Serialized provider-owned usage objects from successful Agent turns.
+   * Serialized provider-owned usage objects from completed ACP prompts, with
+   * turn attributes as a fallback for providers without prompt usage events.
    *
+   * Includes completed prompts even when a later repair fails or is cancelled.
+   * Entry count is neither authored-turn count nor underlying model-call count.
    * An empty array means no usage was reported; entries promise no portable
-   * token, model-call, cost, cache, or billing fields.
+   * token, cost, cache, or billing fields.
    */
   readonly providerUsage: readonly string[]
 
@@ -130,6 +134,19 @@ export function createTraceSummaryCollector(): TraceSummaryCollector {
   const completed = new Map<string, TraceSummary>()
 
   const trace: TraceSink = event => {
+    if (
+      event.type === "event" &&
+      event.name === "acp.session.prompt.completed" &&
+      typeof event.attributes.usage === "string"
+    ) {
+      const summary = active.get(event.runId) ?? createActiveTraceSummary()
+      const usage = summary.acpPromptUsageBySpan.get(event.spanId) ?? []
+      usage.push(event.attributes.usage)
+      summary.acpPromptUsageBySpan.set(event.spanId, usage)
+      active.set(event.runId, summary)
+      return
+    }
+
     if (isAcpToolCall(event)) {
       const summary = active.get(event.runId) ?? createActiveTraceSummary()
       summary.acpToolCallCount += 1
@@ -170,7 +187,7 @@ export function createTraceSummaryCollector(): TraceSummaryCollector {
 }
 
 function createActiveTraceSummary(): ActiveTraceSummary {
-  return { acpToolCallCount: 0, acpToolCallsByName: new Map(), spans: [] }
+  return { acpToolCallCount: 0, acpToolCallsByName: new Map(), acpPromptUsageBySpan: new Map(), spans: [] }
 }
 
 function isAcpToolCall(event: AmlTraceEvent): boolean {
@@ -207,7 +224,13 @@ function summarize(root: AmlTraceSpanEndEvent, summary: ActiveTraceSummary): Tra
     ),
     durationMs: root.durationMs,
     providerUsage: Object.freeze(
-      turns.flatMap(span => (typeof span.attributes.usage === "string" ? [span.attributes.usage] : []))
+      // Completion events preserve every repair sample. The turn's usage is
+      // only a fallback: ACP repeats a prompt sample there, even after repairs.
+      turns.flatMap(
+        span =>
+          summary.acpPromptUsageBySpan.get(span.spanId) ??
+          (typeof span.attributes.usage === "string" ? [span.attributes.usage] : [])
+      )
     ),
     resources: Object.freeze({
       sandboxes: aggregate(spans.filter(span => span.kind === "sandbox")),

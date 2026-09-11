@@ -138,9 +138,19 @@ describe("application observability", () => {
     })
   })
 
-  it("keeps provider usage raw and cleanup separate from evaluation status", () => {
+  it.each([false, true])("keeps span-only usage raw with a usage-free completion event: %s", completionEvent => {
     const summaries = createTraceSummaryCollector()
     const base = { attributes: {}, runId: "run", timestamp: 1 }
+
+    if (completionEvent) {
+      summaries.trace({
+        ...base,
+        name: "acp.session.prompt.completed",
+        sequence: 0,
+        spanId: "turn",
+        type: "event",
+      })
+    }
 
     summaries.trace({
       ...base,
