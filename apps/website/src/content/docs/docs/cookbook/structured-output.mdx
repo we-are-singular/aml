@@ -117,7 +117,7 @@ The specialist's transformed result enters the parent prompt as canonical JSON t
 1. `evaluate(value, Finding)` requests structured output from the nearest Agent provider.
 2. AML converts the application-owned schema to JSON Schema for the provider request. Zod is one implementation of the Standard Schema contract.
 3. On the shared ACP path, the Agent submits candidates through AML's `aml_submit_result` MCP tool. AML immediately validates each candidate and returns validation errors to the Agent so it can correct the result in the same turn.
-4. The first valid candidate is accepted. Later submissions are ignored. If the final authored turn omits a valid candidate, AML sends one repair prompt with the Tool instruction and complete JSON Schema; a second omission rejects the evaluation.
+4. The first valid candidate is accepted. Later submissions are ignored. If the final authored turn completes normally (`end_turn`) without a valid candidate, AML sends one repair prompt with the Tool instruction and complete JSON Schema; a second omission rejects the evaluation.
 5. AML validates the accepted value at the application boundary before returning the schema's output type.
 6. The second `<Agent />` remains text-producing. In this example, structured output applies to the specialist, not to the final response.
 
@@ -130,7 +130,7 @@ The specialist's transformed result enters the parent prompt as canonical JSON t
 
 ## Failure and security notes
 
-- On the shared ACP path, invalid candidates are recoverable Tool errors. A final authored turn without an accepted candidate receives one schema-bearing repair prompt; missing output after that repair rejects the evaluation.
+- On the shared ACP path, invalid candidates are recoverable Tool errors. A final authored turn that completes normally (`end_turn`) without an accepted candidate receives one schema-bearing repair prompt; missing output after that repair rejects the evaluation. Provider request errors, cancellation, refusal, and exhausted limits do not trigger repair.
 - After AML accepts the first valid candidate, repeated submissions cannot replace it. With tracing enabled, submissions appear as `agent.output` events with `invalid`, `accepted`, or `ignored` status.
 - The repository example uses a deterministic provider; it does not prove that every Agent provider supports the same native structured-output mechanism.
 - Do not treat a valid shape as authorization to perform an external side effect. Validate business rules before writing files, merging code, or sending messages.
