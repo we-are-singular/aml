@@ -1,7 +1,8 @@
-import { agent, methods, ndJsonStream } from "@agentclientprotocol/sdk"
+import { agent, methods, ndJsonStream, RequestError, type StopReason } from "@agentclientprotocol/sdk"
 import { describe, expect, it } from "vitest"
 
 import { openAcpSession, type AcpStructuredOutputController } from "../src/components/agent/acp-agent-session.js"
+import { AcpAgentError } from "../src/components/agent/acp-agent-error.js"
 import { agentObservabilityServices } from "../src/components/agent/agent-observability-services.js"
 import type { SandboxProcess } from "../src/components/sandbox/sandbox-runtime.js"
 import { createAgentExecutionContext } from "../src/testing/create-agent-execution-context.js"
@@ -94,6 +95,151 @@ describe("openAcpSession() structured output", () => {
 
     await session.close()
   })
+
+  it.each(["cancelled", "refusal", "max_tokens", "max_turn_requests"] as const)(
+    "does not repair missing output after %s",
+    async stopReason => {
+      const prompts: string[] = []
+      const context = createAgentExecutionContext()
+      const session = await openAcpSession({
+        cwd: "/workspace",
+        observability: agentObservabilityServices(context),
+        process: acpProcess(prompt => prompts.push(prompt), [{ text: "Incomplete answer", stopReason }]),
+        signal: context.signal,
+        structuredOutput: new StructuredOutputFixture(),
+      })
+      try {
+        await expect(
+          session.runTurn(
+            {
+              index: 0,
+              isFinal: true,
+              output: { jsonSchema: { type: "string" }, type: "json" },
+              prompt: "Return a string.",
+            },
+            context
+          )
+        ).rejects.toMatchObject({
+          name: "AcpAgentError",
+          sessionId: "session-test",
+          attempts: [{ text: "Incomplete answer", stopReason }],
+        })
+        expect(prompts).toHaveLength(1)
+      } finally {
+        await session.close()
+      }
+    }
+  )
+
+  it.each([false, true])("retains both responses when the repair fails (protocol error: %s)", async protocolError => {
+    const context = createAgentExecutionContext()
+    const session = await openAcpSession({
+      cwd: "/workspace",
+      observability: agentObservabilityServices(context),
+      process: acpProcess(() => {}, [
+        { text: "Completed original work" },
+        {
+          text: "Repair output",
+          ...(protocolError ? { error: RequestError.internalError({ detail: "provider failure" }) } : {}),
+        },
+      ]),
+      signal: context.signal,
+      structuredOutput: new StructuredOutputFixture(),
+    })
+    try {
+      const error = await session
+        .runTurn(
+          {
+            index: 0,
+            isFinal: true,
+            output: { jsonSchema: { type: "string" }, type: "json" },
+            prompt: "Return a string.",
+          },
+          context
+        )
+        .catch(error => error)
+      expect(error).toBeInstanceOf(AcpAgentError)
+      expect(error.sessionId).toBe("session-test")
+      expect(error.attempts).toEqual([
+        { text: "Completed original work", stopReason: "end_turn" },
+        { text: "Repair output", ...(protocolError ? {} : { stopReason: "end_turn" }) },
+      ])
+      expect(Object.isFrozen(error.attempts)).toBe(true)
+      expect(Object.isFrozen(error.attempts[0])).toBe(true)
+      if (protocolError) expect(error.cause).toMatchObject({ code: -32603, data: { detail: "provider failure" } })
+      else expect(error.cause.message).toContain("did not submit")
+    } finally {
+      await session.close()
+    }
+  })
+
+  it.each([1, 2])("preserves caller cancellation during prompt %s", async cancelAt => {
+    const controller = new AbortController()
+    const cancellation = new Error("Caller cancelled the evaluation")
+    const prompts: string[] = []
+    const context = createAgentExecutionContext({ signal: controller.signal })
+    const session = await openAcpSession({
+      cwd: "/workspace",
+      observability: agentObservabilityServices(context),
+      process: acpProcess(prompt => {
+        prompts.push(prompt)
+        if (prompts.length === cancelAt) controller.abort(cancellation)
+      }),
+      signal: context.signal,
+      structuredOutput: new StructuredOutputFixture(),
+    })
+    try {
+      await expect(
+        session.runTurn(
+          {
+            index: 0,
+            isFinal: true,
+            output: { jsonSchema: { type: "string" }, type: "json" },
+            prompt: "Return a string.",
+          },
+          context
+        )
+      ).rejects.toBe(cancellation)
+      expect(prompts).toHaveLength(cancelAt)
+    } finally {
+      await session.close()
+    }
+  })
+
+  it("does not issue a repair after a protocol error on the authored prompt", async () => {
+    const prompts: string[] = []
+    const context = createAgentExecutionContext()
+    const session = await openAcpSession({
+      cwd: "/workspace",
+      observability: agentObservabilityServices(context),
+      process: acpProcess(
+        prompt => prompts.push(prompt),
+        [{ text: "Partial answer", error: RequestError.internalError({ detail: "provider failure" }) }]
+      ),
+      signal: context.signal,
+      structuredOutput: new StructuredOutputFixture(),
+    })
+    try {
+      await expect(
+        session.runTurn(
+          {
+            index: 0,
+            isFinal: true,
+            output: { jsonSchema: { type: "string" }, type: "json" },
+            prompt: "Return a string.",
+          },
+          context
+        )
+      ).rejects.toMatchObject({
+        name: "AcpAgentError",
+        attempts: [{ text: "Partial answer" }],
+        cause: { code: -32603 },
+      })
+      expect(prompts).toHaveLength(1)
+    } finally {
+      await session.close()
+    }
+  })
 })
 
 class StructuredOutputFixture implements AcpStructuredOutputController {
@@ -118,21 +264,32 @@ class StructuredOutputFixture implements AcpStructuredOutputController {
   }
 }
 
-function acpProcess(onPrompt: (prompt: string) => void): Readonly<SandboxProcess> {
+function acpProcess(
+  onPrompt: (prompt: string) => void,
+  replies: readonly { text?: string; stopReason?: StopReason; error?: RequestError }[] = []
+): Readonly<SandboxProcess> {
   const clientToAgent = new TransformStream<Uint8Array, Uint8Array>()
   const agentToClient = new TransformStream<Uint8Array, Uint8Array>()
   let resolveExited: () => void = () => undefined
   const exited = new Promise<void>(resolve => {
     resolveExited = resolve
   })
+  let index = 0
   const app = agent({ name: "session-test" })
     .onRequest(methods.agent.initialize, ({ params }) => ({
       protocolVersion: params.protocolVersion,
     }))
     .onRequest(methods.agent.session.new, () => ({ sessionId: "session-test" }))
-    .onRequest(methods.agent.session.prompt, ({ params }) => {
+    .onRequest(methods.agent.session.prompt, async ({ params }) => {
       onPrompt(params.prompt.flatMap(block => (block.type === "text" ? [block.text] : [])).join(""))
-      return { stopReason: "end_turn" }
+      const reply = replies[index++]
+      if (reply?.text !== undefined)
+        await connection.client.notify(methods.client.session.update, {
+          sessionId: "session-test",
+          update: { sessionUpdate: "agent_message_chunk", content: { type: "text", text: reply.text } },
+        })
+      if (reply?.error !== undefined) throw reply.error
+      return { stopReason: reply?.stopReason ?? "end_turn" }
     })
   const connection = app.connect(ndJsonStream(agentToClient.writable, clientToAgent.readable))
 

@@ -9,8 +9,10 @@ import {
   type PermissionOptionKind,
   type RequestPermissionResponse,
   type SessionConfigOption,
+  type StopReason,
 } from "@agentclientprotocol/sdk"
 
+import { AcpAgentError, type AcpAgentAttempt } from "./acp-agent-error.js"
 import type { AgentExecutionContext } from "./agent-execution-context.js"
 import { agentObservabilityServices, type AgentObservabilityServices } from "./agent-observability-services.js"
 import type { AgentProviderSession, AgentProviderTurn } from "./agent-provider-session.js"
@@ -215,39 +217,58 @@ class AcpProviderSession implements AgentProviderSession {
       prompt = `${prompt}\n\n${structuredOutputInstruction}`
     }
 
-    let response = await this.#runPrompt(prompt, context)
+    const attempts: AcpAgentAttempt[] = []
+    try {
+      let response = await this.#runPrompt(prompt, context)
+      attempts.push(response)
+      context.signal.throwIfAborted()
 
-    if (turn.output !== undefined && structuredOutput !== undefined && !structuredOutput.hasStructuredResult()) {
-      // Some Agents finish their reasoning turn as text even though the result
-      // Tool is available. Give the retained session one explicit repair turn
-      // with both its provider-specific Tool identity and the output contract.
-      response = await this.#runPrompt(
-        structuredOutputReminder(structuredOutputInstruction ?? structuredOutput.instruction, turn.output.jsonSchema),
-        context
-      )
+      if (
+        turn.output !== undefined &&
+        structuredOutput !== undefined &&
+        !structuredOutput.hasStructuredResult() &&
+        response.stopReason === "end_turn"
+      ) {
+        // Some Agents finish their reasoning turn as text even though the result
+        // Tool is available. Repair only normal completion: cancellation,
+        // refusal, and exhausted provider limits must not trigger another prompt.
+        response = await this.#runPrompt(
+          structuredOutputReminder(structuredOutputInstruction ?? structuredOutput.instruction, turn.output.jsonSchema),
+          context
+        )
+        attempts.push(response)
+      }
+
+      context.signal.throwIfAborted()
+      const text = this.#transformText?.(response.text, this.#session) ?? response.text
+      const preservesMessageText = text === response.text
+      return Object.freeze({
+        ...(preservesMessageText && response.messages !== undefined ? { messages: response.messages } : {}),
+        ...(structuredOutput === undefined ? {} : { structured: structuredOutput.structuredResult() }),
+        text,
+      })
+    } catch (cause) {
+      // Cancellation keeps the caller's original reason. Other failures retain
+      // completed work even when the repair itself fails at the protocol boundary.
+      context.signal.throwIfAborted()
+      throw new AcpAgentError(cause instanceof Error ? cause.message : "ACP Agent turn failed", {
+        attempts: [...attempts, ...(cause instanceof AcpAgentError ? cause.attempts : [])],
+        cause: cause instanceof AcpAgentError ? cause.cause : cause,
+        sessionId: this.#session.sessionId,
+      })
     }
-
-    context.signal.throwIfAborted()
-    const text = this.#transformText?.(response.text, this.#session) ?? response.text
-    const preservesMessageText = text === response.text
-    return Object.freeze({
-      ...(preservesMessageText && response.messages !== undefined ? { messages: response.messages } : {}),
-      ...(structuredOutput === undefined ? {} : { structured: structuredOutput.structuredResult() }),
-      text,
-    })
   }
 
   async #runPrompt(prompt: string, context: AgentExecutionContext): Promise<AcpPromptResponse> {
-    const turnAttempt = runAcpPromptResponse(this.#session, prompt, context)
-
     // A silent Agent process exit would otherwise leave nextUpdate() waiting
-    // forever. Preserve stderr only for the failure surfaced to the caller.
+    // forever. Interrupt the consumer so it can preserve already received text.
+    // Preserve stderr only for the failure surfaced to the caller.
     const exited = this.#process.wait().then(async result => {
       const stderr = await this.#stderr.catch(() => "")
       const detail = stderr.trim().length === 0 ? "" : `: ${stderr.trim()}`
       throw new Error(`ACP Agent process exited with code ${result.exitCode} during a turn${detail}`)
     })
-    return await Promise.race([turnAttempt, exited])
+    return await runAcpPromptResponse(this.#session, prompt, context, exited)
   }
 
   async abort(): Promise<void> {
@@ -318,11 +339,14 @@ export async function runAcpPrompt(
  * `text` always contains every streamed text chunk in protocol order. Message
  * fields are omitted if any text chunk lacks `messageId`, because that stream
  * does not provide enough information to separate assistant messages safely.
+ * An optional process-exit rejection interrupts a silent stream while retaining
+ * the text consumed before termination.
  */
 export async function runAcpPromptResponse(
   session: Pick<ActiveSession, "nextUpdate" | "prompt" | "sessionId">,
   prompt: string,
-  context: AgentExecutionContext
+  context: AgentExecutionContext,
+  processExit?: Promise<never>
 ): Promise<AcpPromptResponse> {
   const observability = agentObservabilityServices(context)
   const trace = observability.currentTrace()
@@ -336,61 +360,82 @@ export async function runAcpPromptResponse(
   const boundedMessages = new Map<string, string>()
   let hasUnboundedText = false
 
-  let message = await session.nextUpdate()
+  async function consumeResponse(): Promise<AcpPromptResponse> {
+    let message = await session.nextUpdate()
 
-  while (message.kind !== "stop") {
-    observability.event(
-      trace,
-      "acp.session.update",
-      {
-        sessionId: message.notification.sessionId,
-        sessionUpdate: message.update.sessionUpdate,
-        ...(message.update.sessionUpdate === "tool_call" && typeof message.update.name === "string"
-          ? { toolName: message.update.name }
-          : {}),
-      },
-      observability.sensitiveAttribute("update", message.update)
-    )
+    while (message.kind !== "stop") {
+      observability.event(
+        trace,
+        "acp.session.update",
+        {
+          sessionId: message.notification.sessionId,
+          sessionUpdate: message.update.sessionUpdate,
+          ...(message.update.sessionUpdate === "tool_call" && typeof message.update.name === "string"
+            ? { toolName: message.update.name }
+            : {}),
+        },
+        observability.sensitiveAttribute("update", message.update)
+      )
 
-    if (message.update.sessionUpdate === "agent_message_chunk" && message.update.content.type === "text") {
-      text += message.update.content.text
+      if (message.update.sessionUpdate === "agent_message_chunk" && message.update.content.type === "text") {
+        text += message.update.content.text
 
-      if (typeof message.update.messageId === "string") {
-        boundedMessages.set(
-          message.update.messageId,
-          `${boundedMessages.get(message.update.messageId) ?? ""}${message.update.content.text}`
-        )
-      } else {
-        hasUnboundedText = true
+        if (typeof message.update.messageId === "string") {
+          boundedMessages.set(
+            message.update.messageId,
+            `${boundedMessages.get(message.update.messageId) ?? ""}${message.update.content.text}`
+          )
+        } else {
+          hasUnboundedText = true
+        }
       }
+
+      message = await session.nextUpdate()
     }
 
-    message = await session.nextUpdate()
+    // The SDK queues the same prompt completion as the terminal stop message.
+    // Await the request promise so transport rejection keeps its original error.
+    const outcome = await completion
+    if ("error" in outcome) throw outcome.error
+    const response = outcome.response
+
+    const attributes = {
+      ...(response.usage === undefined || response.usage === null ? {} : { usage: JSON.stringify(response.usage) }),
+      sessionId: session.sessionId,
+      stopReason: response.stopReason,
+    }
+    observability.event(trace, "acp.session.prompt.completed", attributes)
+    observability.addSpanEndAttributes(trace, attributes)
+
+    if (hasUnboundedText) return Object.freeze({ stopReason: response.stopReason, text })
+
+    const messages = Object.freeze([...boundedMessages.values()])
+    if (messages.length === 0) return Object.freeze({ stopReason: response.stopReason, text })
+
+    return Object.freeze({ messages, stopReason: response.stopReason, text })
   }
 
-  // The SDK queues the same prompt completion as the terminal stop message.
-  // Await the request promise so transport rejection keeps its original error.
-  const outcome = await completion
-  if ("error" in outcome) throw outcome.error
-  const response = outcome.response
-
-  const attributes = {
-    ...(response.usage === undefined || response.usage === null ? {} : { usage: JSON.stringify(response.usage) }),
-    sessionId: session.sessionId,
-    stopReason: response.stopReason,
+  try {
+    // Race once per prompt rather than adding a process-exit listener for every
+    // streamed update. The session owner disposes the consumer during cleanup.
+    const response = consumeResponse()
+    return await (processExit === undefined ? response : Promise.race([response, processExit]))
+  } catch (cause) {
+    context.signal.throwIfAborted()
+    throw new AcpAgentError(cause instanceof Error ? cause.message : "ACP Agent prompt failed", {
+      attempts: [
+        {
+          ...(!hasUnboundedText && boundedMessages.size > 0 ? { messages: [...boundedMessages.values()] } : {}),
+          text,
+        },
+      ],
+      cause,
+      sessionId: session.sessionId,
+    })
   }
-  observability.event(trace, "acp.session.prompt.completed", attributes)
-  observability.addSpanEndAttributes(trace, attributes)
-
-  if (hasUnboundedText) return Object.freeze({ text })
-
-  const messages = Object.freeze([...boundedMessages.values()])
-  if (messages.length === 0) return Object.freeze({ text })
-
-  return Object.freeze({ messages, text })
 }
 
-export type AcpPromptResponse = Readonly<Pick<AgentResponse, "messages" | "text">>
+export type AcpPromptResponse = Readonly<AcpAgentAttempt & { stopReason: StopReason }>
 
 async function configureSession(
   connection: ClientConnection,

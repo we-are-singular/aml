@@ -31,6 +31,35 @@ import { createAgentExecutionContext } from "../src/testing/create-agent-executi
 import { DeterministicSandboxProvider } from "../src/testing/deterministic-sandbox-provider.js"
 
 describe("ACP Agent response messages", () => {
+  it("retains partial messages when the process exits before the prompt completes", async () => {
+    const processError = new Error("ACP Agent process exited with code 1 during a turn")
+    let rejectExit: (error: Error) => void = () => {}
+    const exited = new Promise<never>((_resolve, reject) => {
+      rejectExit = reject
+    })
+    let updates = 0
+    const session: Pick<ActiveSession, "nextUpdate" | "prompt" | "sessionId"> = {
+      sessionId: "exited-session",
+      prompt: () => new Promise(() => {}),
+      async nextUpdate() {
+        if (updates++ === 0)
+          return update({
+            content: { text: "Completed work before exit", type: "text" },
+            messageId: "partial",
+            sessionUpdate: "agent_message_chunk",
+          })
+        rejectExit(processError)
+        return await new Promise(() => {})
+      },
+    }
+    await expect(runAcpPromptResponse(session, "prompt", createAgentExecutionContext(), exited)).rejects.toMatchObject({
+      name: "AcpAgentError",
+      sessionId: "exited-session",
+      attempts: [{ text: "Completed work before exit", messages: ["Completed work before exit"] }],
+      cause: processError,
+    })
+  })
+
   it("groups chunks into assistant messages with the final message last", async () => {
     const selected = script(
       [
@@ -57,6 +86,7 @@ describe("ACP Agent response messages", () => {
       runAcpPromptResponse(activeSession(selected), "prompt", createAgentExecutionContext())
     ).resolves.toEqual({
       messages: ["Working on it.", "Final answer."],
+      stopReason: "end_turn",
       text: "Working on it.Final answer.",
     })
   })
@@ -79,7 +109,7 @@ describe("ACP Agent response messages", () => {
 
     await expect(
       runAcpPromptResponse(activeSession(selected), "prompt", createAgentExecutionContext())
-    ).resolves.toEqual({ text: "bounded legacy" })
+    ).resolves.toEqual({ stopReason: "end_turn", text: "bounded legacy" })
   })
 })
 
@@ -427,7 +457,7 @@ describe("ACP Agent observability", () => {
           <Agent>Prompt</Agent>
         </Sandbox>
       )
-    ).rejects.toMatchObject({ cause: processError })
+    ).rejects.toMatchObject({ cause: { name: "AcpAgentError", cause: processError } })
 
     expect(
       events.filter(event => event.type === "event" && event.name === "sandbox.process").map(event => event.attributes)

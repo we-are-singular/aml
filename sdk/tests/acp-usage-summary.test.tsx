@@ -108,7 +108,7 @@ describe("ACP prompt usage summaries", () => {
     const rejected = expect(pending).rejects.toMatchObject({
       cause:
         outcome === "failed"
-          ? { data: { details: "repair failed" } }
+          ? { name: "AcpAgentError", cause: { data: { details: "repair failed" } } }
           : {
               message: expect.stringContaining(
                 outcome === "missing output" ? "did not submit a valid structured result" : "repair cancelled"
