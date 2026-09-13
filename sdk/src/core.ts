@@ -7,6 +7,7 @@ export {
 } from "./components/agent/agent.js"
 export type { AgentExecutionContext } from "./components/agent/agent-execution-context.js"
 export { AbstractAgentProvider } from "./components/agent/abstract-agent-provider.js"
+export { AcpAgentError, type AcpAgentAttempt, type AcpAgentErrorOptions } from "./components/agent/acp-agent-error.js"
 export {
   defineAcpAgentProvider,
   type AcpAgentLaunch,
