@@ -180,14 +180,22 @@ class PiAcpProfile implements AcpAgentProfile<"pi"> {
               ...(usesMcp
                 ? [
                     "AML JavaScript Tools and MCP capabilities use Pi's mcp proxy. Call mcp with the exact tool name and an args object.",
+                    ...(context.amlMcpServerName === undefined
+                      ? []
+                      : [
+                          `For AML JavaScript Tools, set server to ${JSON.stringify(context.amlMcpServerName)} in every mcp call.`,
+                        ]),
                   ]
                 : []),
             ].join("\n\n"),
           }),
       permissionPolicy: "allow_always",
+      // An explicit server allows cold-cache proxy lookup even when toolPrefix
+      // differs from "aml". Invalid submissions remain recoverable Tool calls.
       structuredOutputInstruction:
-        'Call the mcp tool exactly once with tool "aml_submit_result". ' +
-        'Pass the final value as args.result, for example {"tool":"aml_submit_result","args":{"result":...}}. ' +
+        `Call the mcp tool with server ${JSON.stringify(context.amlMcpServerName ?? "aml")} and tool "aml_submit_result". ` +
+        `Pass the final value as args.result, for example {"server":${JSON.stringify(context.amlMcpServerName ?? "aml")},"tool":"aml_submit_result","args":{"result":...}}. ` +
+        "If the Tool returns an error, correct the result and retry. After a result is accepted, do not submit again. " +
         "Do not return substitute JSON only as message text.",
       transformText: stripPiAcpStartupInfo,
     })
