@@ -54,6 +54,7 @@ describe("ACP Agent response messages", () => {
     }
     await expect(runAcpPromptResponse(session, "prompt", createAgentExecutionContext(), exited)).rejects.toMatchObject({
       name: "AcpAgentError",
+      message: processError.message,
       sessionId: "exited-session",
       attempts: [{ text: "Completed work before exit", messages: ["Completed work before exit"] }],
       cause: processError,
@@ -443,7 +444,7 @@ describe("ACP Agent observability", () => {
     const processError = new Error("remote wait failed")
     const sandboxProvider = new DeterministicSandboxProvider({
       exec: command => ({ exitCode: 0, stderr: "", stdout: command === "pwd" ? "/workspace\n" : "" }),
-      spawn: () => processWithFailedWait(processError),
+      spawn: () => processInterruptedDuringPrompt(processError),
     })
     const provider = defineAcpAgentProvider({
       createLaunch: () => ({ command: "fixture-acp", permissionPolicy: "reject_once" }),
@@ -457,7 +458,7 @@ describe("ACP Agent observability", () => {
           <Agent>Prompt</Agent>
         </Sandbox>
       )
-    ).rejects.toMatchObject({ cause: { name: "AcpAgentError", cause: processError } })
+    ).rejects.toMatchObject({ cause: { name: "AcpAgentError", message: processError.message, cause: processError } })
 
     expect(
       events.filter(event => event.type === "event" && event.name === "sandbox.process").map(event => event.attributes)
@@ -468,6 +469,27 @@ describe("ACP Agent observability", () => {
       { "execution.id": "remote-process", state: "kill_requested" },
       { "execution.id": "remote-process", state: "kill_completed" },
     ])
+  })
+
+  it("keeps process-exit details readable through EvaluationError.cause.message", async () => {
+    const message = "ACP Agent process exited with code 7 during a turn: native process failed"
+    const sandboxProvider = new DeterministicSandboxProvider({
+      exec: command => ({ exitCode: 0, stderr: "", stdout: command === "pwd" ? "/workspace\n" : "" }),
+      spawn: () => processInterruptedDuringPrompt({ exitCode: 7, stderr: "native process failed\n" }),
+    })
+    const provider = defineAcpAgentProvider({
+      createLaunch: () => ({ command: "fixture-acp", permissionPolicy: "reject_once" }),
+      name: "fixture-acp",
+      workingDirectory: undefined,
+    })
+
+    await expect(
+      new AmlRuntime({ agentProvider: provider }).evaluate(
+        <Sandbox access="read-write" provider={sandboxProvider}>
+          <Agent>Prompt</Agent>
+        </Sandbox>
+      )
+    ).rejects.toMatchObject({ cause: { name: "AcpAgentError", message, cause: { message } } })
   })
 
   it("renders qualified Agent lifecycle names without repeating the span kind", async () => {
@@ -677,12 +699,17 @@ async function captureStructuredOutput(enabled: boolean): Promise<AmlTraceEvent[
   return events
 }
 
-function processWithFailedWait(error: Error): Readonly<SandboxProcess> {
+function processInterruptedDuringPrompt(
+  outcome: Error | { exitCode: number; stderr: string }
+): Readonly<SandboxProcess> {
   const clientToAgent = new TransformStream<Uint8Array, Uint8Array>()
   const agentToClient = new TransformStream<Uint8Array, Uint8Array>()
-  let rejectWait: (reason: Error) => void = () => undefined
-  const wait = new Promise<never>((_resolve, reject) => {
-    rejectWait = reject
+  let interruptWait: () => void = () => undefined
+  const wait = new Promise<{ exitCode: number }>((resolve, reject) => {
+    interruptWait = () => {
+      if (outcome instanceof Error) reject(outcome)
+      else resolve({ exitCode: outcome.exitCode })
+    }
   })
   const app = agent({ name: "fixture-acp" })
     .onRequest(methods.agent.initialize, ({ params }) => ({
@@ -690,7 +717,7 @@ function processWithFailedWait(error: Error): Readonly<SandboxProcess> {
     }))
     .onRequest(methods.agent.session.new, () => ({ sessionId: "fixture-session" }))
     .onRequest(methods.agent.session.prompt, async () => {
-      rejectWait(error)
+      interruptWait()
       return await new Promise<never>(() => undefined)
     })
   const connection = app.connect(ndJsonStream(agentToClient.writable, clientToAgent.readable))
@@ -701,7 +728,15 @@ function processWithFailedWait(error: Error): Readonly<SandboxProcess> {
       connection.close()
     },
     stdin: clientToAgent.writable,
-    stderr: emptyStream(),
+    stderr:
+      outcome instanceof Error
+        ? emptyStream()
+        : new ReadableStream<Uint8Array>({
+            start(controller) {
+              controller.enqueue(new TextEncoder().encode(outcome.stderr))
+              controller.close()
+            },
+          }),
     stdout: agentToClient.readable,
     wait: async () => await wait,
   })
