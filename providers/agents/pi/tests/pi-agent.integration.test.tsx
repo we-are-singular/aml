@@ -58,6 +58,42 @@ liveTest(
 )
 
 liveTest(
+  "isolates six concurrent structured Pi Agents using a custom MCP server name",
+  async () => {
+    const proof = randomUUID()
+    const reveal = defineTool({
+      name: "read_lane_proof",
+      description: "Return the private proof for a lane",
+      input: z.object({ lane: z.number().int().min(0).max(5) }),
+      execute: ({ lane }) => `${proof}:${lane}`,
+    })
+    const provider = piAgent({
+      mcpAdapterPath: fileURLToPath(import.meta.resolve("pi-mcp-adapter")),
+      model: process.env.AML_PI_MODEL ?? "opencode-go/deepseek-v4-flash",
+      workingDirectory: process.cwd(),
+    })
+    async function Lanes() {
+      const results = await Promise.all(
+        Array.from({ length: 6 }, (_, lane) =>
+          evaluate(
+            <Agent name={`lane-${lane}`} timeoutMs={120_000}>
+              <Tool use={reveal} />
+              Call read_lane_proof with lane {lane}, then submit its exact returned string as proof and {lane} as lane.
+            </Agent>,
+            z.object({ lane: z.literal(lane), proof: z.literal(`${proof}:${lane}`) })
+          )
+        )
+      )
+      return results.map(result => result.proof).join("\n")
+    }
+    await expect(
+      new AmlRuntime({ agentProvider: provider, maxConcurrentAgents: 6, toolPrefix: "review" }).evaluate(<Lanes />)
+    ).resolves.toBe(Array.from({ length: 6 }, (_, lane) => `${proof}:${lane}`).join("\n"))
+  },
+  180_000
+)
+
+liveTest(
   "runs a real Pi Agent with an AML JavaScript Tool through the MCP extension",
   async () => {
     const secret = randomUUID()
