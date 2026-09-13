@@ -24,6 +24,17 @@ import ProviderHero from "../../../../../components/docs/ProviderHero.astro"
 
 ACP does not require a remote server. AML can launch the adapter on your host or inside a selected [Sandbox](/docs/providers/sandboxes/). Use a remote Sandbox provider when execution belongs on another machine; installing `pi-acp` alone does not create a remotely hosted service.
 
+<Aside type="caution" title="Known upstream limitations">
+
+With the tested `pi-acp` `0.0.33` adapter, token tracking and error reporting have known gaps:
+
+- **Token usage:** Native token usage is not included in ACP prompt responses, so AML's Pi usage totals are unavailable, not zero. Upstream [PR #97](https://github.com/svkozak/pi-acp/pull/97) and [PR #119](https://github.com/svkozak/pi-acp/pull/119) address context-usage reporting; context occupancy does not establish complete per-prompt token or billing totals.
+- **Provider errors:** Failed model requests and exhausted retries can appear as a successful `end_turn` with no useful output. AML may then report a missing structured result instead of the underlying provider failure. [Issues #92](https://github.com/svkozak/pi-acp/issues/92) and [#98](https://github.com/svkozak/pi-acp/issues/98) track this, and [PR #104](https://github.com/svkozak/pi-acp/pull/104) forwards error details. Its current proposal still returns `end_turn`; protocol-level failure signalling remains under discussion.
+
+These PRs were open and unmerged when checked on September 14, 2026. AML can preserve diagnostics received through ACP, but cannot recover errors or usage that the adapter omits.
+
+</Aside>
+
 <LinkCard
   title="Build an issue-triage workflow with Pi"
   href="/docs/cookbook/pi-issue-triage/"
@@ -218,7 +229,9 @@ Pi ACP does not expose a native system-instruction field in this profile. AML th
 
 When MCP is enabled, AML also explains that Tools and MCP use Pi's `mcp` proxy. This is intentionally different from providers with native system fields; treat the first-turn prefix as part of the authored prompt budget.
 
-For `evaluate(value, schema)`, Pi receives an explicit instruction to call the MCP tool `aml_submit_result` with the final value in `args.result`. Returning substitute JSON only as message text is not sufficient. AML immediately validates each candidate against the Standard Schema and returns invalid candidates as tool errors so Pi can correct them. The first valid candidate is accepted and later submissions are ignored.
+For `evaluate(value, schema)`, Pi receives an explicit instruction to call `mcp` with the AML server name, tool `aml_submit_result`, and the final value in `args.result`. The server is `aml` by default or the configured `toolPrefix`. For example, with `toolPrefix: "review"`, the call is `mcp({ server: "review", tool: "aml_submit_result", args: { result: ... } })`. Specifying the server supports lazy connection even when its tool cache is empty. AML JavaScript Tool instructions use the same server identity.
+
+Returning substitute JSON only as message text is not sufficient. AML immediately validates each candidate against the Standard Schema and tells Pi to correct and retry invalid candidates. The first valid candidate is accepted and later submissions are ignored. A normal `end_turn` without a valid submission gets one repair prompt. Request errors and other terminal stop reasons do not trigger that retry.
 
 ```tsx
 import { Agent, evaluate, piAgent } from "@aml-jsx/sdk"
@@ -271,7 +284,9 @@ AML materializes wrapper files, Pi settings, and lazy MCP configuration into tha
 
    Enable tracing and inspect the `agent.output` events. Pi must submit at least one valid JSON-compatible value under `args.result`; invalid attempts may be corrected, while submissions after the first valid result are ignored. Message text that resembles JSON is not the structured result.
 
-   If there is no assistant output or result submission, also check the model provider's credentials and quota. An upstream quota failure can surface through ACP as a missing structured result. Try a minimal prompt through native Pi with the same model and credentials to distinguish a provider failure from an MCP setup problem.
+   Inspect the enclosing `EvaluationError.cause`: `AcpAgentError` retains the ACP `sessionId`, response `attempts`, and underlying `cause`. Attempts preserve original and repair text plus reported stop reasons after cleanup. They are diagnostic content, not a fallback structured result, and are excluded from metadata-only traces.
+
+   If there is no assistant output or result submission, also check the model provider's credentials, model availability, and quota. With `pi-acp` `0.0.33`, native prompt errors, failed assistant messages, and exhausted retries can become a normal ACP `end_turn` without their error detail. AML cannot recover those dropped fields. Try a minimal prompt through native Pi with the same model and credentials to distinguish a provider failure from an MCP setup problem.
 
 4. **The system instruction appears in the answer**
 
