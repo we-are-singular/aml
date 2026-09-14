@@ -28,7 +28,7 @@
     "@github/copilot": "1.0.80",
     "@openai/codex": "0.147.0",
     "glm-acp-agent": "1.5.0",
-    "opencode-ai": "1.18.18",
+    "opencode-ai": "1.18.30",
     "pi-acp": "0.0.33",
     "pi-mcp-adapter": "2.26.0"
   },
@@ -36,6 +36,6 @@
     "release-it": "^21.0.0"
   },
   "allowScripts": {
-    "opencode-ai@1.18.18": true
+    "opencode-ai@1.18.30": true
   }
 }

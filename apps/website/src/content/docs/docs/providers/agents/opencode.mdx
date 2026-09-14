@@ -69,7 +69,7 @@ Authored [`<Skill />`](/docs/reference/primitives/skill/) packages use OpenCode'
 Install OpenCode through its published CLI package, verify the executable, and configure at least one model provider:
 
 ```sh title="Terminal"
-npm install --global opencode-ai@1.18.18
+npm install --global opencode-ai@1.18.30
 opencode --version
 opencode auth login
 opencode auth list
@@ -81,7 +81,7 @@ For an isolated invocation, pass the provider credential through `env` or stage 
 dedicated directory and set `env.XDG_DATA_HOME` to it. `OPENCODE_DB` remains invocation-private even when the data
 directory is explicitly staged, so the Agent does not import or persist interactive session history.
 
-The AML repository currently pins `opencode-ai@1.18.18` for its integration toolchain and `@opencode-ai/sdk@1.18.5` for the typed provider configuration. These versions are the repository's verification baseline, not a claim that every newer OpenCode release is compatible. Re-run the provider integration path when changing either side.
+The AML repository currently pins `opencode-ai@1.18.30` for its integration toolchain and `@opencode-ai/sdk@1.18.5` for the typed provider configuration. These versions are the repository's verification baseline, not a claim that every newer OpenCode release is compatible. Re-run the provider integration path when changing either side.
 
 For container execution, the [OpenCode image variant](/docs/sandbox-images/#choose-a-variant) includes this baseline. The default full image includes it too. The [alternative image guide](/docs/providers/sandboxes/images/#opencode-cloudflare-sandbox) also documents Cloudflare's OpenCode-specific image.
 
