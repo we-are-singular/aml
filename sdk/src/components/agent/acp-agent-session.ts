@@ -493,7 +493,11 @@ function validateSessionConfigurationValue(option: SessionConfigOption, value: b
 
   const values = option.options.flatMap(candidate => ("options" in candidate ? candidate.options : [candidate]))
   if (!values.some(candidate => candidate.value === value)) {
-    throw new Error(`ACP session configuration "${option.id}" does not advertise value "${value}"`)
+    const advertised = values.map(candidate => JSON.stringify(candidate.value)).join(", ")
+    throw new Error(
+      `ACP session configuration "${option.id}" does not advertise value "${value}"; ` +
+        `advertised values: ${advertised || "none"}`
+    )
   }
 }
 
