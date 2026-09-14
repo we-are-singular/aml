@@ -197,13 +197,14 @@ describe("opencodeAgent()", () => {
 
   it("rejects a configured model that the ACP Agent does not advertise", async () => {
     const prompts: string[] = []
-    const model = "opencode/deepseek-v4-flash"
+    const model = "opencode-go/deepseek-flash"
+    const advertisedModels = ["opencode-go/deepseek-v4-flash", "opencode-go/glm-5.3-flash"]
     const sandboxProvider = new DeterministicSandboxProvider({
       exec: command => ({ exitCode: 0, stderr: "", stdout: command === "pwd" ? "/sandbox/repository\n" : "" }),
       spawn() {
         return acpFixtureProcess(prompt => prompts.push(prompt), {
-          advertisedModels: ["opencode/big-pickle"],
-          currentModel: "opencode/big-pickle",
+          advertisedModels,
+          currentModel: "opencode-go/deepseek-v4-flash",
         })
       },
     })
@@ -215,7 +216,11 @@ describe("opencodeAgent()", () => {
         </Sandbox>
       )
     ).rejects.toMatchObject({
-      cause: { message: `ACP session configuration "model" does not advertise value "${model}"` },
+      cause: {
+        message:
+          `ACP session configuration "model" does not advertise value "${model}"; ` +
+          `advertised values: "${advertisedModels.join('", "')}"`,
+      },
     })
     expect(prompts).toEqual([])
   })
