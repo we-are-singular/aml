@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.5.2
+
+OpenCode runtime bump and patched transitive locks.
+
+The Sandbox image upgrades its embedded OpenCode runtime from 1.18.18 to 1.18.30 and advances a patched transitive hono dependency in its locked dependency tree. The bump carries the OpenCode fix line forward across the full and opencode variants as well as the repository's pinned integration baseline and related docs, while the lock change needs no direct dependency or behavioral adjustment.
+
+- **OpenCode 1.18.18 → 1.18.30.** The full and opencode image variants now embed `opencode-ai` 1.18.30. The repository's pinned OpenCode integration baseline is bumped to match, and the getting-started guide, the OpenCode provider page, and the image variant table are updated so the documented executable version matches what ships in the image.
+- **Patched transitive hono lock.** The sandbox image's lockfile advances the transitive hono HTTP library 4.13.2 → 4.13.7 to pull in upstream patches, with no direct dependency or behavioral change required.
+
+### Commits
+
+- `build(sandbox): upgrade opencode to 1.18.30` (9c3b28e)
+- `build(sandbox): update patched hono lock` (facfe37)
+
 ## 0.5.1
 
 Dependency security fixes.
