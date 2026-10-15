@@ -41,10 +41,20 @@ describe("opencodeAgent()", () => {
         return completedProcess()
       },
     })
+    const providerConfig = {
+      custom: {
+        models: {
+          disabled: { interleaved: false },
+          named: { interleaved: "reasoning_text" },
+          custom: { interleaved: { field: "custom_reasoning" } },
+        },
+        options: { chunkTimeout: false },
+      },
+    } satisfies NonNullable<OpenCodeConfig["provider"]>
     const provider = opencodeAgent({
       args: ["--print-logs"],
       command: "custom-opencode",
-      config: { share: "disabled" },
+      config: { provider: providerConfig, share: "disabled" },
       env: { PROVIDER_TOKEN: "configured", XDG_DATA_HOME: "/staged/opencode-data" },
       model: "opencode-go/minimax-m3",
     })
@@ -83,6 +93,7 @@ describe("opencodeAgent()", () => {
       },
       default_agent: "aml",
       model: "anthropic/claude-sonnet-4-6",
+      provider: providerConfig,
       share: "disabled",
     })
     expect(config.agent.aml).not.toHaveProperty("prompt")

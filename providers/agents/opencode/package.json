@@ -22,6 +22,6 @@
   },
   "dependencies": {
     "@aml-jsx/sdk": "*",
-    "@opencode-ai/sdk": "1.18.5"
+    "@opencode-ai/sdk": "1.19.0"
   }
 }

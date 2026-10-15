@@ -294,8 +294,8 @@ interface OpenCodeProviderOptionsConfig {
   /** Response-header timeout in milliseconds, or `false` to disable it. */
   headerTimeout?: number | false
 
-  /** Maximum delay in milliseconds between streamed response chunks. */
-  chunkTimeout?: number
+  /** Maximum delay in milliseconds between streamed chunks, or `false` to disable it. */
+  chunkTimeout?: number | false
 
   /** Supplies another provider-native option. */
   [name: string]: unknown
@@ -304,7 +304,7 @@ interface OpenCodeProviderOptionsConfig {
 /** Field used by providers that return reasoning in an interleaved response. */
 interface OpenCodeModelInterleavingConfig {
   /** Response field containing the interleaved reasoning payload. */
-  field: "reasoning" | "reasoning_content" | "reasoning_details"
+  field: string
 }
 
 /** Provider-reported pricing for one model usage tier. */
@@ -415,7 +415,7 @@ interface OpenCodeProviderModelConfig {
   tool_call?: boolean
 
   /** Whether and where reasoning is interleaved with normal output. */
-  interleaved?: true | OpenCodeModelInterleavingConfig
+  interleaved?: boolean | string | OpenCodeModelInterleavingConfig
 
   /** Provider-reported usage pricing. */
   cost?: OpenCodeModelCostConfig
