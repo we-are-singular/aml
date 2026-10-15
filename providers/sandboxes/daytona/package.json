@@ -20,6 +20,6 @@
   },
   "dependencies": {
     "@aml-jsx/sdk": "*",
-    "@daytona/sdk": "0.201.0"
+    "@daytona/sdk": "0.224.1"
   }
 }
