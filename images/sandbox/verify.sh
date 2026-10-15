@@ -21,6 +21,10 @@ case " ${AML_AGENT_SANDBOX_COMMANDS:-claude-agent-acp codex-acp codex copilot gl
   *" opencode "*) opencode --version >/dev/null ;;
 esac
 
+case " ${AML_AGENT_SANDBOX_COMMANDS:-claude-agent-acp codex-acp codex copilot glm-acp-agent opencode pi-acp pi pi-mcp-adapter} " in
+  *" claude-agent-acp "*) test -s /usr/share/doc/aml-agent-sandbox/licenses/Anthropic-Claude-Agent-SDK-LICENSE.md ;;
+esac
+
 workflow_directory="/workspace/aml-image-smoke"
 mkdir -p "$workflow_directory"
 cp /fixture/import-sdk.mjs /fixture/workflow.tsx "$workflow_directory/"

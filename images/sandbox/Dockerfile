@@ -21,8 +21,9 @@ RUN rm -rf \
     node_modules/@earendil-works/pi-coding-agent/examples
 
 # Only variants containing Claude or Copilot ship their additional redistribution terms.
+# A Claude variant fails to build if the SDK stops shipping its LICENSE.md notice.
 RUN install -d image-licenses \
-    && if [ -f node_modules/@anthropic-ai/claude-agent-sdk/LICENSE.md ]; then \
+    && if [ -d node_modules/@anthropic-ai/claude-agent-sdk ]; then \
         cp node_modules/@anthropic-ai/claude-agent-sdk/LICENSE.md image-licenses/Anthropic-Claude-Agent-SDK-LICENSE.md; \
     fi \
     && if [ -f node_modules/@github/copilot/LICENSE.md ]; then \
