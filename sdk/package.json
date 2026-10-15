@@ -75,7 +75,7 @@
     "@aws-sdk/client-s3": "3.1152.0",
     "@daytona/sdk": "0.224.1",
     "@modelcontextprotocol/sdk": "^1.32.1",
-    "@opencode-ai/sdk": "1.18.5",
+    "@opencode-ai/sdk": "1.19.0",
     "@standard-schema/spec": "^1.1.0",
     "execa": "^10.1.1",
     "globby": "^16.2.4",
