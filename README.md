@@ -442,6 +442,8 @@ Common commands:
 | `npm run test:integration --workspace=@aml-jsx/sandbox-modal` | Run Modal's credentialed Workspace round-trip proof.            |
 | `npm run smoke -- --list`                                     | List the complete or filtered matrix without executing it.      |
 
+The local MinIO fixture builds pinned upstream source because the community container images are no longer published. Its first startup compiles the server; later runs reuse the built image.
+
 Package-specific integration suites are available through their workspace scripts:
 
 ```sh
