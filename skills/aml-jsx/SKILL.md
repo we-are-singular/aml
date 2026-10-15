@@ -106,8 +106,9 @@ Fetch the focused public guide when the task depends on a specific boundary: [To
 The public package currently exports built-in factories from one entry point:
 
 ```tsx
-import { codexAgent, copilotAgent, glmAgent, modalSandbox, opencodeAgent, piAgent } from "@aml-jsx/sdk"
+import { claudeAgent, codexAgent, copilotAgent, glmAgent, modalSandbox, opencodeAgent, piAgent } from "@aml-jsx/sdk"
 
+const Claude = claudeAgent({ model: "sonnet" })
 const Codex = codexAgent({})
 const Copilot = copilotAgent({ model: "gpt-5-mini" })
 const Glm = glmAgent({ model: "glm-5.3" })
@@ -118,7 +119,7 @@ const Modal = modalSandbox({ image: "node:26" })
 
 Keep provider selection outside reusable workflow components when practical. Use `Agent` props such as `model` and `cwd` only for invocation-level overrides; keep provider-owned credentials and defaults in the provider factory.
 
-Codex, GitHub Copilot, GLM, OpenCode, and Pi are thin profiles over AML's shared ACP session engine. GLM launches the community glm-acp-agent adapter with a Z.AI Coding Plan API key; it is not the ZCode harness. Keep provider configuration on the selected factory and preserve vendor-native concepts where the profile exposes them. Copilot uses invocation-private state and does not import the interactive user's Copilot configuration. The selected local or Sandbox environment must contain the compatible ACP Agent executable; AML does not install one implicitly.
+Claude, Codex, GitHub Copilot, GLM, OpenCode, and Pi are thin profiles over AML's shared ACP session engine. Claude launches the maintained claude-agent-acp adapter with an explicit Anthropic API key or `claude setup-token` OAuth token and invocation-private Claude state; it never reads `~/.claude`. GLM launches the community glm-acp-agent adapter with a Z.AI Coding Plan API key; it is not the ZCode harness. Keep provider configuration on the selected factory and preserve vendor-native concepts where the profile exposes them. Copilot uses invocation-private state and does not import the interactive user's Copilot configuration. The selected local or Sandbox environment must contain the compatible ACP Agent executable; AML does not install one implicitly.
 
 Read [providers-and-testing.md](references/providers-and-testing.md) for runtime defaults, tracing, deterministic tests, and provider conformance.
 

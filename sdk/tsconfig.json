@@ -5,6 +5,7 @@
     "jsxImportSource": "#aml",
     "noEmit": true,
     "paths": {
+      "@aml-jsx/agent-claude": ["../providers/agents/claude/src/index.ts"],
       "@aml-jsx/agent-codex": ["../providers/agents/codex/src/index.ts"],
       "@aml-jsx/agent-copilot": ["../providers/agents/copilot/src/index.ts"],
       "@aml-jsx/agent-glm": ["../providers/agents/glm/src/index.ts"],

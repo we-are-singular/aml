@@ -6,6 +6,7 @@ import { URL } from "node:url"
 import {
   agentVariants,
   getVariant,
+  imageLicenses,
   immutableTags,
   movingTags,
   selectVariantDependencies,
@@ -30,11 +31,19 @@ test("an Agent variant retains common and selected dependencies only", () => {
 })
 
 test("variants expose stable and moving tags", () => {
-  assert.deepEqual(variantNames, ["full", "codex", "copilot", "glm", "opencode", "pi"])
+  assert.deepEqual(variantNames, ["full", "claude", "codex", "copilot", "glm", "opencode", "pi"])
   assert.deepEqual(immutableTags("0.4.0", "full"), ["0.4.0", "0.4.0-full"])
   assert.deepEqual(movingTags("full"), ["latest", "full"])
   assert.deepEqual(immutableTags("0.4.0", "opencode"), ["0.4.0-opencode"])
   assert.deepEqual(movingTags("opencode"), ["opencode"])
+})
+
+test("variants declare the redistributed license terms they contain", () => {
+  assert.equal(imageLicenses("full"), "MIT AND LicenseRef-Anthropic-Claude-Agent-SDK AND LicenseRef-GitHub-Copilot-CLI")
+  assert.equal(imageLicenses("claude"), "MIT AND LicenseRef-Anthropic-Claude-Agent-SDK")
+  assert.equal(imageLicenses("copilot"), "MIT AND LicenseRef-GitHub-Copilot-CLI")
+  assert.equal(imageLicenses("opencode"), "MIT")
+  assert.deepEqual(getVariant("claude").commands, ["claude-agent-acp"])
 })
 
 test("unknown variants fail clearly", () => {

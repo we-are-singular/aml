@@ -1,0 +1,342 @@
+---
+title: Claude Agent ACP integration
+description: Run Claude Code from TypeScript through the maintained claude-agent-acp adapter. Configure Anthropic credentials, map AML permissions to Claude tools, and keep Claude state private to each invocation.
+sidebar:
+  label: Claude
+---
+
+import { Aside, Card, CardGrid, LinkCard, Steps } from "@astrojs/starlight/components"
+import ProviderHero from "../../../../../components/docs/ProviderHero.astro"
+
+<ProviderHero
+  name="claude"
+  eyebrow="Built-in Agent provider"
+  title="Claude Agent ACP integration"
+  factory="claudeAgent()"
+  summary="Run Claude Code workflows from TypeScript through the Agent Client Protocol (ACP). AML launches the maintained claude-agent-acp adapter, which drives Claude Code through the official Claude Agent SDK, while AML owns evaluation, capability grants, structured results, cancellation, and cleanup."
+  bestFor="Claude Code workflows that need Anthropic models, Claude's native tools, and project CLAUDE.md conventions inside provider-neutral AML trees."
+  caution="AML does not install the adapter and never reads your interactive ~/.claude login. Supply an Anthropic API key or a claude setup-token OAuth token explicitly. The Claude Agent SDK is not open source; its use is subject to Anthropic's legal agreements."
+/>
+
+## What this provider launches
+
+`claudeAgent()` launches the command configured by `command`, defaulting to `claude-agent-acp`. That executable is the maintained [Claude Agent ACP adapter](https://github.com/agentclientprotocol/claude-agent-acp) (`@agentclientprotocol/claude-agent-acp`, Apache-2.0). The adapter is built on Anthropic's official [Claude Agent SDK](https://docs.claude.com/en/api/agent-sdk/overview), which ships a platform-specific Claude Code executable and runs Claude Code's model loop and tools.
+
+```text
+<Agent>
+  AML normalizes model, system instructions, permissions, Tools, MCP, and output
+        ↓
+  claude-agent-acp (or your configured command)
+        ↓
+  Claude Agent SDK → bundled Claude Code executable
+        ↓
+  Anthropic API, or the model provider selected through Claude Code's environment
+```
+
+Claude Code's own CLI (`claude -p`) is not an ACP server, so AML launches the adapter instead of a one-shot CLI command. The session then follows the same shared ACP lifecycle as every other built-in Agent.
+
+Every acquisition receives an invocation-private Claude configuration directory and home directory. AML never reads or copies the operator's `~/.claude`, and it removes the private directory when the session ends.
+
+## Prerequisites
+
+<CardGrid>
+  <Card title="Install the adapter" icon="download">
+    Install `claude-agent-acp` globally or provide an equivalent launcher through `command`. AML does not download it at
+    runtime.
+  </Card>
+  <Card title="Provide credentials" icon="seti:lock">
+    Supply an Anthropic API key through `apiKey`, or a Claude Code OAuth token created with `claude setup-token` through
+    `oauthToken`. An interactive `claude /login` is not used.
+  </Card>
+  <Card title="Choose a runtime" icon="laptop">
+    Run on a trusted host or inside a Sandbox whose image contains Node.js 22+, the adapter with its platform-specific
+    Claude Code executable, and network access to the model provider.
+  </Card>
+</CardGrid>
+
+## Install and verify
+
+Install the repository baseline and verify the command from the environment where AML will launch it:
+
+```sh title="Terminal"
+npm install --global @agentclientprotocol/claude-agent-acp@0.90.0
+claude-agent-acp --version
+```
+
+The repository baseline is adapter `0.90.0` with Claude Agent SDK `0.3.296`. This is a repeatable repository baseline, not a guarantee that every newer adapter is compatible. Re-run the live provider path when it changes.
+
+The adapter requires Node.js 22 or newer; AML itself requires Node.js 26 on the application host. The adapter has no `--help` flag. Besides `--version`, it accepts `--hide-claude-auth`, which makes it refuse sessions and turns that a claude.ai subscription would pay for, and `--cli`, which passes through to the bundled `claude` executable. Add `--hide-claude-auth` through `args` when a deployment must bill only an API account.
+
+<Aside type="caution" title="Keep optional dependencies">
+  The Claude Agent SDK installs its Claude Code executable as a platform-specific optional npm dependency, with separate
+  glibc and musl variants. Installing with `--omit=optional` leaves the adapter without that executable. Install the
+  adapter inside the environment that runs it rather than copying `node_modules` across platforms.
+</Aside>
+
+For container execution, the [Claude image variant](/docs/sandbox-images/#choose-a-variant) includes this adapter baseline. The default full image includes it too. Local Sandbox still requires `claude-agent-acp` on the host.
+
+## Complete example
+
+This example uses the public SDK entrypoint and makes the Workspace/Sandbox boundary explicit. A real `claude-agent-acp` executable must be available in the selected environment. Local Sandbox requires `read-write` access to start any host process, including the adapter, so the Agent-level `permissions` only narrow Claude's tool set. Use an enforcing Sandbox such as Docker when read-only access is a security requirement.
+
+```tsx
+import { Agent, AmlRuntime, Sandbox, Workspace, claudeAgent, localSandbox, localWorkspace } from "@aml-jsx/sdk"
+
+const apiKey = process.env.ANTHROPIC_API_KEY
+if (!apiKey) throw new Error("ANTHROPIC_API_KEY is required")
+
+const provider = claudeAgent({
+  apiKey,
+  model: "sonnet",
+})
+
+const result = await new AmlRuntime({
+  agentProvider: provider,
+}).evaluate(
+  <Workspace
+    id="claude-review"
+    provider={localWorkspace({ directory: "/absolute/path/to/repository" })}
+    load={false}
+    save={false}
+  >
+    <Sandbox provider={localSandbox()} access="read-write">
+      <Agent
+        system="Return concise, evidence-based answers."
+        permissions={{ filesystem: "read-only", shell: false, network: false }}
+      >
+        Summarize the repository structure and identify the highest-risk module.
+      </Agent>
+    </Sandbox>
+  </Workspace>
+)
+
+console.log(result)
+```
+
+With those permissions, Claude Code starts without its `Edit`, `Write`, `NotebookEdit`, `Bash`, `WebFetch`, and `WebSearch` tools. Do not put credentials in a Workspace, prompt, or repository file.
+
+## Options and precedence
+
+| Option             | Type                     | Default              | Semantics                                                                                                 |
+| ------------------ | ------------------------ | -------------------- | --------------------------------------------------------------------------------------------------------- |
+| `apiKey`           | `string`                 | —                    | Writes `ANTHROPIC_API_KEY`, overriding `env.ANTHROPIC_API_KEY`. Cannot be combined with `oauthToken`.     |
+| `oauthToken`       | `string`                 | —                    | Writes `CLAUDE_CODE_OAUTH_TOKEN`; create one with `claude setup-token`. Cannot be combined with `apiKey`. |
+| `command`          | `string`                 | `"claude-agent-acp"` | ACP adapter executable or application-owned launcher.                                                     |
+| `args`             | `readonly string[]`      | `[]`                 | Appended to the launch command exactly as supplied. Arguments cannot contain null bytes.                  |
+| `env`              | `Record<string, string>` | `{}`                 | Additional launch environment. AML-owned variables are written after it.                                  |
+| `model`            | `string`                 | —                    | Provider-level model fallback written as `ANTHROPIC_MODEL`.                                               |
+| `reasoningEffort`  | `string`                 | —                    | Provider-native Claude Agent SDK `effort` value.                                                          |
+| `workingDirectory` | `string`                 | —                    | Fallback working directory when no Sandbox supplies the effective directory.                              |
+
+`command`, `apiKey`, `oauthToken`, `model`, `reasoningEffort`, and `workingDirectory` must be non-empty, trimmed strings without null bytes; `args` entries may be empty but cannot contain null bytes. AML validates and snapshots the options when `claudeAgent()` is called, so later mutations to the original arrays or objects do not change the provider.
+
+The effective values are resolved as follows:
+
+1. `<Agent model="..." />` overrides the factory `model`. AML writes the effective value as `ANTHROPIC_MODEL`; with neither set, Claude Code selects its default.
+2. Non-empty AML System content is appended to Claude Code's own preset system prompt through ACP `session/new` `_meta.systemPrompt = { append }`. It is a real system prompt, not a first-turn prelude. When AML JavaScript Tools are present, the appended text also lists their Claude Code names.
+3. `reasoningEffort` becomes the Claude Agent SDK `effort` option, sent as `_meta.claudeCode.options.effort` on `session/new`. Narrowed permissions add `disallowedTools` to the same options object.
+4. AML spreads the provider's `env`, then writes its session-owned `ANTHROPIC_MODEL`, `ANTHROPIC_API_KEY` or `CLAUDE_CODE_OAUTH_TOKEN` when configured, `CLAUDE_CONFIG_DIR`, and `HOME`. Do not rely on overriding those variables through `env`.
+5. An active Sandbox supplies the effective working directory. `workingDirectory` is used when the Agent is not running inside one.
+
+<Aside type="note" title="Models and effort">
+  The adapter and Claude Code resolve model aliases such as `"sonnet"`, `"opus"`, and `"haiku"`, including fuzzy alias
+  matching, as well as full model ids. AML does not validate the value against a list. The Claude Agent SDK accepts
+  `effort` values such as `low`, `medium`, `high`, `xhigh`, and `max`; AML forwards `reasoningEffort` without an
+  allowlist.
+</Aside>
+
+## Authentication
+
+The adapter's ACP `authenticate` method only supports gateway logins, so AML never calls it. Credentials travel in the launch environment instead:
+
+```text
+apiKey      → ANTHROPIC_API_KEY
+oauthToken  → CLAUDE_CODE_OAUTH_TOKEN   (create with claude setup-token)
+```
+
+You can also place either variable in `env`; an explicit `apiKey` or `oauthToken` wins over the matching `env` entry. Because Claude Code receives a private configuration directory and home directory, an interactive `claude /login`, including a macOS Keychain login, is not available to AML sessions.
+
+A launch without a Sandbox inherits the host `process.env`, so an ambient `ANTHROPIC_API_KEY` works for local development. A Sandbox receives only explicit configuration: pass the credential through `apiKey`, `oauthToken`, or `env`, or configure it through the Sandbox platform's own secret mechanism.
+
+Claude Code's other model-provider variables, such as `CLAUDE_CODE_USE_BEDROCK`, `CLAUDE_CODE_USE_VERTEX`, `ANTHROPIC_BASE_URL`, and `ANTHROPIC_AUTH_TOKEN`, pass through `env` to Claude Code unchanged. AML does not test those paths; follow [Claude Code's settings documentation](https://docs.claude.com/en/docs/claude-code/settings) when you use them.
+
+Without any credential, the session still starts and the first prompt fails with ACP error `-32000` "Authentication required". The evaluation rejects with an error naming `Agent "claude"` whose `cause` is an `AcpAgentError`.
+
+## Permissions and capabilities
+
+| AML request                | Claude launch mapping                                                        | Boundary that still matters                                                    |
+| -------------------------- | ---------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| `filesystem: "read-write"` | Claude Code's standard tools; ACP permission requests answered `allow_once`. | The host or Sandbox still controls actual process and filesystem authority.    |
+| `filesystem: "read-only"`  | Disallows `Edit`, `Write`, and `NotebookEdit`.                               | `Bash` can still modify files unless `shell: false`; use an enforcing Sandbox. |
+| `shell: false`             | Disallows `Bash`.                                                            | Sandbox process policy remains authoritative.                                  |
+| `network: false`           | Disallows `WebFetch` and `WebSearch`.                                        | Sandbox or deployment egress policy must still contain other network paths.    |
+
+AML sends the disallowed tools as `_meta.claudeCode.options.disallowedTools` on ACP `session/new`, and Claude Code removes them from the model's tool set. The enclosing Sandbox remains the process-level boundary.
+
+AML answers every ACP permission request with `allow_once`. It never selects "allow always", because the adapter would persist that rule into the project's `.claude/settings.local.json`. AML does not use Claude Code's bypass permission mode. The adapter disables Claude Code's `AskUserQuestion` tool because AML does not offer ACP form elicitation.
+
+<Aside type="caution" title="Read-only is not shell-proof">
+  With `filesystem: "read-only"` and shell access still allowed, `Bash` can modify files. Combine it with `shell: false`
+  or run the Agent in a Sandbox that mounts the Workspace read-only.
+</Aside>
+
+## State isolation and project instruction files
+
+For every acquired Claude session, AML creates a fresh temporary directory and launches the adapter with:
+
+```text
+CLAUDE_CONFIG_DIR   <invocation state directory>, or the staged .agents root when <Skill> packages are present
+HOME                <invocation state directory>
+```
+
+Claude Code keeps settings, credentials, skills, and transcripts in its configuration directory. The adapter and Claude Code also resolve some paths through the home directory, so both are invocation-private. AML never reads or copies `~/.claude`, and it removes the directory when the session ends. Reusing one `claudeAgent()` factory does not reuse Claude state between evaluations.
+
+The adapter's default Claude setting sources are user, project, and local. The user source resolves to AML's private configuration directory, so the operator's personal settings, `CLAUDE.md`, and skills are not loaded. Project sources still apply:
+
+- project `CLAUDE.md` files;
+- `<cwd>/.claude/settings.json` and `<cwd>/.claude/settings.local.json`;
+- project skills under `.claude/skills`;
+- project hooks and permission rules;
+- managed policy files, such as `/etc/claude-code/managed-settings.json` on Linux.
+
+<Aside type="caution" title="Project configuration is Claude-native">
+  AML does not filter a Workspace's `.claude` directory or `CLAUDE.md`. Review or remove project hooks, permission
+  rules, and settings when an evaluation requires a closed capability inventory, and rely on the Sandbox for
+  containment.
+</Aside>
+
+## Tools, MCP, Skills, and structured output
+
+- **MCP:** authored MCP servers use the shared ACP session path with stdio, HTTP, and SSE transports. Claude Code names MCP tools `mcp__<server>__<tool>`.
+- **JavaScript Tools:** AML Tools use the shared ACP MCP bridge. The appended system prompt maps each Tool to its Claude name, such as `- tool: mcp__aml__tool` with the default `aml` server name.
+- **Structured output:** the shared `aml_submit_result` bridge Tool is addressed as `mcp__aml__aml_submit_result` in the per-turn instruction. AML validates candidates and applies its single repair prompt exactly as for other ACP profiles.
+- **Skills:** Claude uses native discovery. When `<Skill>` packages are staged, `CLAUDE_CONFIG_DIR` points at the staged `.agents` root so Claude Code discovers each `skills/<name>/SKILL.md` itself.
+
+## Who owns what
+
+| Layer                            | Owns                                                                                                                                                   |
+| -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| AML                              | Launch profile, permission-to-`disallowedTools` mapping, state isolation, MCP bridge, structured output, FollowUps, cancellation, traces, and cleanup. |
+| `claude-agent-acp` adapter       | The ACP server, session and configuration options, permission-request presentation, and model alias resolution.                                        |
+| Claude Agent SDK and Claude Code | The model loop, tools, loading of settings, `CLAUDE.md`, and skills, plus authentication and telemetry.                                                |
+
+## Telemetry
+
+AML does not change Claude Code's telemetry. The adapter runs `claude auth status --json` when it initializes. Claude Code's own telemetry and nonessential-traffic variables, such as `DISABLE_TELEMETRY=1` or `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1`, can be passed through `env`. AML's own traces follow the shared [Agent and ACP observability](/docs/observability/#the-acp-boundary) contract.
+
+## Licensing
+
+The adapter is Apache-2.0 licensed. The Claude Agent SDK, including the Claude Code executable it ships, is not open-source software: its use is subject to Anthropic's legal agreements, including the [Commercial Terms of Service](https://www.anthropic.com/legal/commercial-terms). `@aml-jsx/sdk` does not bundle either package. The AML Agent Sandbox `full` and `claude` image variants include both unmodified and ship the SDK's license statement at `/usr/share/doc/aml-agent-sandbox/licenses/Anthropic-Claude-Agent-SDK-LICENSE.md`.
+
+## Repository verification
+
+Deterministic tests run a fake adapter process over stdio and exercise the MCP bridge, structured output, permission answers, cancellation, authentication errors, and a missing command without a paid request:
+
+```sh title="Terminal"
+npm run test --workspace=@aml-jsx/agent-claude
+```
+
+The opt-in live test launches `npx -y @agentclientprotocol/claude-agent-acp@0.90.0` and requires `ANTHROPIC_API_KEY` or `CLAUDE_CODE_OAUTH_TOKEN`:
+
+```sh title="Terminal"
+AML_CLAUDE_ACP_LIVE=1 npm run test:integration --workspace=@aml-jsx/agent-claude
+```
+
+The credentialed smoke matrix runs Claude against each Sandbox with `npm run smoke -- --agent claude --sandbox <local|docker|modal|daytona>`. It reads `AML_CLAUDE_API_KEY` or `ANTHROPIC_API_KEY`, otherwise `CLAUDE_CODE_OAUTH_TOKEN`, and defaults to the `haiku` model; `AML_CLAUDE_MODEL` overrides it. These runs stay opt-in, and CI holds no Claude credentials.
+
+## Failure modes and troubleshooting
+
+<Steps>
+
+1. **`command not found` or ACP startup failure**
+
+   Confirm that `claude-agent-acp` exists in the same host or Sandbox where AML calls `spawn()`, and that `claude-agent-acp --version` succeeds there. If the adapter was installed with `--omit=optional`, reinstall it without that flag so the platform-specific Claude Code executable is present. If you use a custom `command`, run that exact command with its `args` outside AML first.
+
+2. **Authentication required**
+
+   The first prompt fails with ACP error `-32000` when Claude Code has no credential. Pass `apiKey` or `oauthToken`, or set `ANTHROPIC_API_KEY` or `CLAUDE_CODE_OAUTH_TOKEN` in `env`. An interactive `claude /login` is not imported, and a Sandbox does not inherit host variables.
+
+3. **Configuration is rejected before launch**
+
+   Set only one of `apiKey` and `oauthToken`. Remove leading/trailing whitespace and null bytes from strings.
+
+4. **Model unavailable**
+
+   Use an alias such as `"haiku"` or `"sonnet"`, or a full model id enabled for the account. AML forwards the value without validating it.
+
+5. **The Agent follows unexpected instructions or settings**
+
+   Inspect project `CLAUDE.md` files, `.claude/settings.json`, `.claude/settings.local.json`, project hooks and skills, and managed policy files. Put evaluation instructions in `<Agent system>` or authored AML content.
+
+6. **The Agent can do more than expected**
+
+   Check the effective `permissions`: read-only filesystem access does not remove `Bash`. ACP permission mapping is policy; the Sandbox is the security boundary.
+
+</Steps>
+
+## Provider references
+
+<CardGrid>
+  <LinkCard
+    title="claude-agent-acp"
+    href="https://github.com/agentclientprotocol/claude-agent-acp"
+    description="The maintained ACP adapter this profile launches."
+  />
+  <LinkCard
+    title="npm package"
+    href="https://www.npmjs.com/package/@agentclientprotocol/claude-agent-acp"
+    description="Published adapter releases and the claude-agent-acp executable."
+  />
+  <LinkCard
+    title="Claude Agent SDK"
+    href="https://docs.claude.com/en/api/agent-sdk/overview"
+    description="Anthropic's documentation for the SDK that runs Claude Code under the adapter."
+  />
+  <LinkCard
+    title="Claude Agent SDK for TypeScript"
+    href="https://github.com/anthropics/claude-agent-sdk-typescript"
+    description="Source repository, releases, and license statement for the SDK."
+  />
+  <LinkCard
+    title="Agent Client Protocol"
+    href="https://agentclientprotocol.com/"
+    description="The protocol boundary used by AML's shared Agent session engine."
+  />
+  <LinkCard
+    title="AML Claude profile source"
+    href="https://github.com/we-are-singular/aml/tree/main/providers/agents/claude/src"
+    description="Launch mapping, environment, session metadata, and option validation."
+  />
+  <LinkCard
+    title="AML Claude tests"
+    href="https://github.com/we-are-singular/aml/tree/main/providers/agents/claude/tests"
+    description="Fixture-adapter coverage and the opt-in live integration test."
+  />
+</CardGrid>
+
+## Related AML documentation
+
+These capabilities use AML's shared Agent lifecycle and do not require Claude-specific setup:
+
+<CardGrid>
+  <LinkCard
+    title="JavaScript Tools"
+    href="/docs/cookbook/tools/"
+    description="Define, scope, validate, and operate an application-owned Tool."
+  />
+  <LinkCard
+    title="Model Context Protocol"
+    href="/docs/cookbook/mcp/"
+    description="Declare MCP servers, transports, allowlists, and runtime requirements."
+  />
+  <LinkCard
+    title="Runtime configuration"
+    href="/docs/runtime/"
+    description="Configure limits, cancellation, lifecycle events, tracing, and cleanup."
+  />
+  <LinkCard
+    title="Agent component reference"
+    href="/docs/reference/primitives/agent/"
+    description="Review Agent props, resolution, capability scope, and result behavior."
+  />
+</CardGrid>

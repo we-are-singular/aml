@@ -155,6 +155,7 @@ Process telemetry uses an opaque `execution.id` for local and remote providers. 
 
 Agent providers:
 
+- `claudeAgent()` for Claude Code through the maintained `claude-agent-acp` adapter.
 - `codexAgent()` for Codex through `codex-acp`.
 - `copilotAgent()` for GitHub Copilot CLI's native `copilot --acp` server.
 - `glmAgent()` for Z.ai Coding Plan models through `glm-acp-agent`.

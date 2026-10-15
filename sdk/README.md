@@ -84,7 +84,7 @@ const Pi = piAgent({
 const result = await new AmlRuntime().evaluate(<Agent provider={Pi}>Say hello.</Agent>)
 ```
 
-Codex, GitHub Copilot, GLM, OpenCode, and Pi use the same ACP lifecycle on the trusted local host and inside supported Sandboxes. GLM launches the community-maintained `glm-acp-agent` adapter rather than Z.ai's ZCode harness. Agents optimistically receive their native filesystem, shell, and network capabilities unless `<Agent permissions>` narrows them; the enclosing Sandbox remains authoritative. `<Tool>` is reserved for JavaScript functions created with `defineTool()`. The selected environment must contain the compatible ACP Agent executable; AML does not install it implicitly. Provider-specific options remain on each factory.
+Claude, Codex, GitHub Copilot, GLM, OpenCode, and Pi use the same ACP lifecycle on the trusted local host and inside supported Sandboxes. Claude launches the maintained `claude-agent-acp` adapter built on Anthropic's Claude Agent SDK. GLM launches the community-maintained `glm-acp-agent` adapter rather than Z.ai's ZCode harness. Agents optimistically receive their native filesystem, shell, and network capabilities unless `<Agent permissions>` narrows them; the enclosing Sandbox remains authoritative. `<Tool>` is reserved for JavaScript functions created with `defineTool()`. The selected environment must contain the compatible ACP Agent executable; AML does not install it implicitly. Provider-specific options remain on each factory.
 
 `<Agent name="reviewer">` adds optional diagnostic metadata for relating traces and failures to the authored workflow. It must be a non-empty normalized string when supplied. Names are not unique: structural identities such as trace span IDs continue to distinguish Agents with the same name. AML includes the name in observability and diagnostics only; it never adds it to the prompt or system instructions sent to the provider.
 
@@ -112,7 +112,7 @@ branches settle. It does not retry, cancel siblings after a failure, or roll bac
 
 An unsandboxed `<Script />` runs as a trusted host process from `AmlRuntimeOptions.cwd`, defaulting to `process.cwd()`. Inside an active `<Sandbox />`, it runs only through that Sandbox runtime and never falls back to the host. Its optional portable `cwd` resolves from the runtime cwd on the host or from the active Sandbox root.
 
-The public factory names are `codexAgent()`, `copilotAgent()`, `glmAgent()`, `opencodeAgent()`, and `piAgent()`.
+The public factory names are `claudeAgent()`, `codexAgent()`, `copilotAgent()`, `glmAgent()`, `opencodeAgent()`, and `piAgent()`.
 
 ## Application observability
 

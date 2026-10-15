@@ -1,16 +1,29 @@
-import { execFile } from "node:child_process"
 import { createHash } from "node:crypto"
-import { mkdir, readFile, writeFile } from "node:fs/promises"
+import { mkdir, readdir, readFile, writeFile } from "node:fs/promises"
 import { fileURLToPath, URL } from "node:url"
-import { promisify } from "node:util"
 
-const execute = promisify(execFile)
+import { create } from "tar"
+
 const skillDirectory = new URL("../../../../skills/aml-jsx/", import.meta.url)
+const archivedEntries = ["SKILL.md", "agents", "references"]
 
 function readFrontmatterField(source, field) {
   const value = source.match(new RegExp(`^${field}:\\s*(.+)$`, "m"))?.[1]?.trim()
   if (!value) throw new Error(`AML skill is missing its ${field} frontmatter field`)
   return value
+}
+
+/** Lists archive entries depth-first with names sorted, matching GNU tar's --sort=name order. */
+async function sortedEntries(relativePath) {
+  const entries = await readdir(new URL(relativePath, skillDirectory), { withFileTypes: true }).catch(error => {
+    if (error.code === "ENOTDIR") return undefined
+    throw error
+  })
+  if (entries === undefined) return [relativePath]
+
+  const children = entries.map(entry => entry.name).sort()
+  const nested = await Promise.all(children.map(name => sortedEntries(`${relativePath}/${name}`)))
+  return [`${relativePath}/`, ...nested.flat()]
 }
 
 /** Publishes the repository's AML skill through the agent-skills discovery well-known URI. */
@@ -23,22 +36,20 @@ export function agentSkillsPlugin() {
         const archive = new URL("aml-jsx.tar.gz", outputDirectory)
         await mkdir(outputDirectory, { recursive: true })
 
-        await execute("tar", [
-          "--create",
-          "--gzip",
-          "--file",
-          fileURLToPath(archive),
-          "--directory",
-          fileURLToPath(skillDirectory),
-          "--sort=name",
-          "--mtime=@0",
-          "--owner=0",
-          "--group=0",
-          "--numeric-owner",
-          "SKILL.md",
-          "agents",
-          "references",
-        ])
+        // Build the archive in-process so its bytes do not depend on the host's
+        // tar implementation: BSD tar lacks GNU's --sort and --mtime flags.
+        const entries = (await Promise.all(archivedEntries.map(sortedEntries))).flat()
+        await create(
+          {
+            cwd: fileURLToPath(skillDirectory),
+            file: fileURLToPath(archive),
+            gzip: true,
+            mtime: new Date(0),
+            noDirRecurse: true,
+            portable: true,
+          },
+          entries
+        )
 
         const [archiveBytes, skillSource] = await Promise.all([
           readFile(archive),

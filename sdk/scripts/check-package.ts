@@ -51,6 +51,7 @@ interface BuiltSdk {
   readonly Script: unknown
   readonly Tool: unknown
   readonly Workspace: unknown
+  readonly claudeAgent: unknown
   readonly codexAgent: unknown
   readonly daytonaSandbox: unknown
   readonly dockerSandbox: unknown
@@ -180,6 +181,7 @@ if ("AML" in builtSdk) {
 const {
   Agent: publicAgent,
   AmlRuntime,
+  claudeAgent,
   codexAgent,
   daytonaSandbox,
   defineMcpServer,
@@ -213,6 +215,7 @@ const {
 } = (await import(pathToFileURL(resolvedEntries.testing).href)) as BuiltTesting
 
 if (
+  typeof claudeAgent !== "function" ||
   typeof codexAgent !== "function" ||
   typeof glmAgent !== "function" ||
   typeof opencodeAgent !== "function" ||

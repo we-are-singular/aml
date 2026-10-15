@@ -99,9 +99,11 @@ const sandboxProvider = modalSandbox({
 
 Modal documents support for [loading existing public registry images](https://modal.com/docs/guide/existing-images). The image must be `linux/amd64` and have a compatible entrypoint. AML additionally requires `sh`, `tar`, `mkdir`, and `rm` for Workspace hydration and reconciliation.
 
-<Aside type="note" title="Claude Code is upstream guidance, not current AML support">
-  AML does not currently ship a Claude Agent provider. Modal's official Claude Code recipe is useful input for future
-  image work, but an image alone does not create an AML provider or prove ACP compatibility.
+<Aside type="note" title="Modal's Claude Code recipe is not an AML Claude image">
+  AML's [`claudeAgent()`](/docs/providers/agents/claude/) launches the `claude-agent-acp` adapter, not the `claude` CLI
+  that Modal's recipe installs. Prefer the [`claude` image variant](/docs/sandbox-images/#choose-a-variant). A custom
+  image built from Modal's recipe must also contain Node.js 22+ and `claude-agent-acp`, whose Claude Agent SDK
+  dependency ships its own Claude Code executable.
 </Aside>
 
 ## Verify an image before recommending it

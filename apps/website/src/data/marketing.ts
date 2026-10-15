@@ -31,7 +31,8 @@ export const benefits: readonly Benefit[] = [
   },
   {
     title: "Your choice of agent",
-    description: "Use OpenCode, Codex, GitHub Copilot, GLM, or Pi. Choose a provider for each agent in the tree.",
+    description:
+      "Use OpenCode, Claude, Codex, GitHub Copilot, GLM, or Pi. Choose a provider for each agent in the tree.",
     icon: "switch",
     iconClass: "bg-agent-soft text-agent",
   },

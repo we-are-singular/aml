@@ -6,6 +6,10 @@ import { pathToFileURL } from "node:url"
 const commonDependencies = ["@aml-jsx/cli", "@aml-jsx/sdk"]
 
 export const agentVariants = Object.freeze({
+  claude: {
+    commands: ["claude-agent-acp"],
+    dependencies: ["@agentclientprotocol/claude-agent-acp"],
+  },
   codex: {
     commands: ["codex-acp", "codex"],
     dependencies: ["@agentclientprotocol/codex-acp", "@openai/codex"],
@@ -65,6 +69,16 @@ export function selectVariantDependencies(manifest, name) {
     })
   )
   return { ...manifest, dependencies }
+}
+
+/** Returns the SPDX expression for the license terms shipped by one image variant. */
+export function imageLicenses(name) {
+  const { agents } = getVariant(name)
+  return [
+    "MIT",
+    ...(agents.includes("claude") ? ["LicenseRef-Anthropic-Claude-Agent-SDK"] : []),
+    ...(agents.includes("copilot") ? ["LicenseRef-GitHub-Copilot-CLI"] : []),
+  ].join(" AND ")
 }
 
 export function immutableTags(version, name) {

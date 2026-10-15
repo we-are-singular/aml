@@ -124,6 +124,7 @@ export default defineConfig({
               label: "Agent providers",
               items: [
                 { label: "Choose an Agent", slug: "docs/providers/agents" },
+                { label: "Claude", slug: "docs/providers/agents/claude" },
                 { label: "Codex", slug: "docs/providers/agents/codex" },
                 { label: "GitHub Copilot", slug: "docs/providers/agents/copilot" },
                 { label: "GLM", slug: "docs/providers/agents/glm" },

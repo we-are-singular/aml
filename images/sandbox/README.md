@@ -1,6 +1,6 @@
 # AML Agent Sandbox
 
-AML Agent Sandbox is a ready-to-use Debian image for running AI agents and AML workflows. Every variant includes the `aml` CLI, AML SDK, Node.js and npm, Python and pip, Git, jq, and common command-line tools. The default `full` variant also includes Codex, GitHub Copilot, GLM, OpenCode, and Pi.
+AML Agent Sandbox is a ready-to-use Debian image for running AI agents and AML workflows. Every variant includes the `aml` CLI, AML SDK, Node.js and npm, Python and pip, Git, jq, and common command-line tools. The default `full` variant also includes Claude, Codex, GitHub Copilot, GLM, OpenCode, and Pi.
 
 Pull stable releases from Docker Hub:
 
@@ -18,14 +18,15 @@ The latest relevant `main` revision is published separately as the mutable, non-
 
 The unqualified version and `latest` tags remain aliases for `full`. Pin a versioned variant or digest for reproducible deployments.
 
-| Variant  | Immutable tag         | Moving tag       | Included Agent versions                             |
-| -------- | --------------------- | ---------------- | --------------------------------------------------- |
-| Full     | `X.Y.Z`, `X.Y.Z-full` | `latest`, `full` | Every Agent listed below                            |
-| Codex    | `X.Y.Z-codex`         | `codex`          | Codex `0.147.0`, Codex ACP `1.4.0`                  |
-| Copilot  | `X.Y.Z-copilot`       | `copilot`        | GitHub Copilot CLI `1.0.80`                         |
-| GLM      | `X.Y.Z-glm`           | `glm`            | GLM ACP Agent `1.5.0`                               |
-| OpenCode | `X.Y.Z-opencode`      | `opencode`       | OpenCode `1.18.30`                                  |
-| Pi       | `X.Y.Z-pi`            | `pi`             | Pi `1.2.0`, Pi ACP `0.0.33`, Pi MCP Adapter `5.3.0` |
+| Variant  | Immutable tag         | Moving tag       | Included Agent versions                               |
+| -------- | --------------------- | ---------------- | ----------------------------------------------------- |
+| Full     | `X.Y.Z`, `X.Y.Z-full` | `latest`, `full` | Every Agent listed below                              |
+| Claude   | `X.Y.Z-claude`        | `claude`         | Claude Agent ACP `0.90.0`, Claude Agent SDK `0.3.296` |
+| Codex    | `X.Y.Z-codex`         | `codex`          | Codex `0.147.0`, Codex ACP `1.4.0`                    |
+| Copilot  | `X.Y.Z-copilot`       | `copilot`        | GitHub Copilot CLI `1.0.80`                           |
+| GLM      | `X.Y.Z-glm`           | `glm`            | GLM ACP Agent `1.5.0`                                 |
+| OpenCode | `X.Y.Z-opencode`      | `opencode`       | OpenCode `1.18.30`                                    |
+| Pi       | `X.Y.Z-pi`            | `pi`             | Pi `1.2.0`, Pi ACP `0.0.33`, Pi MCP Adapter `5.3.0`   |
 
 Every variant is built from the same Dockerfile. All variants contain AML, Node.js and npm, Python and pip, Git, jq, and the same runtime layout; a single-Agent variant installs only that Agent's ACP adapter and native runtime. These are clean builds, not deletions layered on top of `full`, and no Agent is installed when a Sandbox starts.
 
@@ -212,7 +213,7 @@ Pin an immutable Docker Hub version or digest in production. Do not use GHCR `de
 
 The image runs as non-root, but container isolation, network policy, Linux capabilities, seccomp/AppArmor, resource limits, secret injection, and the Docker daemon remain deployment responsibilities.
 
-AML image source is MIT licensed. Bundled software retains its own license. The `full` and `copilot` variants redistribute GitHub Copilot CLI unmodified under the GitHub Copilot CLI License. See [`THIRD_PARTY_NOTICES.md`](./THIRD_PARTY_NOTICES.md) and the license files shipped under `/usr/share/doc/aml-agent-sandbox`.
+AML image source is MIT licensed. Bundled software retains its own license. The `full` and `claude` variants redistribute the Claude Agent SDK and its Claude Code executable unmodified; their use is subject to Anthropic's legal agreements. The `full` and `copilot` variants redistribute GitHub Copilot CLI unmodified under the GitHub Copilot CLI License. See [`THIRD_PARTY_NOTICES.md`](./THIRD_PARTY_NOTICES.md) and the license files shipped under `/usr/share/doc/aml-agent-sandbox`.
 
 [Source](https://github.com/we-are-singular/aml/tree/main/images/sandbox),
 [changelog](https://agent-markup-language.com/docs/reference/changelog/sandbox/), and issues live in the AML repository.

@@ -20,8 +20,12 @@ RUN rm -rf \
     node_modules/@earendil-works/pi-coding-agent/docs \
     node_modules/@earendil-works/pi-coding-agent/examples
 
-# Only variants containing Copilot ship its additional redistribution license.
+# Only variants containing Claude or Copilot ship their additional redistribution terms.
+# A Claude variant fails to build if the SDK stops shipping its LICENSE.md notice.
 RUN install -d image-licenses \
+    && if [ -d node_modules/@anthropic-ai/claude-agent-sdk ]; then \
+        cp node_modules/@anthropic-ai/claude-agent-sdk/LICENSE.md image-licenses/Anthropic-Claude-Agent-SDK-LICENSE.md; \
+    fi \
     && if [ -f node_modules/@github/copilot/LICENSE.md ]; then \
         cp node_modules/@github/copilot/LICENSE.md image-licenses/GitHub-Copilot-CLI-LICENSE.md; \
     fi
@@ -30,7 +34,7 @@ FROM debian:bookworm-slim@sha256:abd67ffcfa541b485a3dff59865ab629aa048a6c613e639
 
 ARG IMAGE_VERSION=dev
 ARG IMAGE_VARIANT=full
-ARG IMAGE_LICENSES="MIT AND LicenseRef-GitHub-Copilot-CLI"
+ARG IMAGE_LICENSES="MIT AND LicenseRef-Anthropic-Claude-Agent-SDK AND LicenseRef-GitHub-Copilot-CLI"
 ARG VCS_REF=unknown
 
 LABEL org.opencontainers.image.title="AML Agent Sandbox" \
@@ -83,7 +87,7 @@ RUN ln -s ../lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm \
     && ln -s ../lib/node_modules/npm/bin/npx-cli.js /usr/local/bin/npx \
     && ln -s /opt/aml-agent-sandbox/node_modules /node_modules \
     && ln -s /usr/bin/pip3 /usr/local/bin/pip \
-    && for command_name in aml codex-acp codex copilot glm-acp-agent opencode pi-acp pi pi-mcp-adapter; do \
+    && for command_name in aml claude-agent-acp codex-acp codex copilot glm-acp-agent opencode pi-acp pi pi-mcp-adapter; do \
         if [ -e "/opt/aml-agent-sandbox/node_modules/.bin/$command_name" ]; then \
             ln -s "/opt/aml-agent-sandbox/node_modules/.bin/$command_name" "/usr/local/bin/$command_name"; \
         fi; \

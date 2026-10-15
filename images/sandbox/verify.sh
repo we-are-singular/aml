@@ -6,7 +6,7 @@ test -w "$HOME"
 test -w /tmp
 test -w /workspace
 
-for command_name in sh tar mkdir rm git node npm python aml ${AML_AGENT_SANDBOX_COMMANDS:-codex-acp codex copilot glm-acp-agent opencode pi-acp pi pi-mcp-adapter}; do
+for command_name in sh tar mkdir rm git node npm python aml ${AML_AGENT_SANDBOX_COMMANDS:-claude-agent-acp codex-acp codex copilot glm-acp-agent opencode pi-acp pi pi-mcp-adapter}; do
   command -v "$command_name" >/dev/null
 done
 
@@ -17,8 +17,12 @@ for command_name in ${AML_AGENT_SANDBOX_EXCLUDED_COMMANDS:-}; do
   fi
 done
 
-case " ${AML_AGENT_SANDBOX_COMMANDS:-codex-acp codex copilot glm-acp-agent opencode pi-acp pi pi-mcp-adapter} " in
+case " ${AML_AGENT_SANDBOX_COMMANDS:-claude-agent-acp codex-acp codex copilot glm-acp-agent opencode pi-acp pi pi-mcp-adapter} " in
   *" opencode "*) opencode --version >/dev/null ;;
+esac
+
+case " ${AML_AGENT_SANDBOX_COMMANDS:-claude-agent-acp codex-acp codex copilot glm-acp-agent opencode pi-acp pi pi-mcp-adapter} " in
+  *" claude-agent-acp "*) test -s /usr/share/doc/aml-agent-sandbox/licenses/Anthropic-Claude-Agent-SDK-LICENSE.md ;;
 esac
 
 workflow_directory="/workspace/aml-image-smoke"

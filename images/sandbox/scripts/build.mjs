@@ -3,7 +3,7 @@ import process from "node:process"
 import { spawnSync } from "node:child_process"
 import { fileURLToPath, pathToFileURL } from "node:url"
 
-import { getVariant, variantNames } from "./variants.mjs"
+import { getVariant, imageLicenses, variantNames } from "./variants.mjs"
 
 const imageDirectory = resolve(dirname(fileURLToPath(import.meta.url)), "..")
 
@@ -22,7 +22,7 @@ function main() {
       "--build-arg",
       `IMAGE_VARIANT=${name}`,
       "--build-arg",
-      `IMAGE_LICENSES=${variant.agents.includes("copilot") ? "MIT AND LicenseRef-GitHub-Copilot-CLI" : "MIT"}`,
+      `IMAGE_LICENSES=${imageLicenses(name)}`,
       ...tags.flatMap(tag => ["--tag", tag]),
       ".",
     ]

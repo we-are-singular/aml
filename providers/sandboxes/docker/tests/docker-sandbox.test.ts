@@ -1,4 +1,4 @@
-import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises"
+import { mkdtemp, mkdir, readFile, realpath, rm, writeFile } from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
 
@@ -501,7 +501,8 @@ function emptyStream(): ReadableStream<Uint8Array> {
 }
 
 async function createWorkspace(): Promise<string> {
-  const workspace = await mkdtemp(path.join(os.tmpdir(), "aml-docker-sandbox-"))
+  // Sandboxes report physical paths; macOS resolves its temporary directory through /private.
+  const workspace = await realpath(await mkdtemp(path.join(os.tmpdir(), "aml-docker-sandbox-")))
   temporaryDirectories.push(workspace)
   await mkdir(path.join(workspace, "repository", "src"), { recursive: true })
   await writeFile(path.join(workspace, "repository", "fixture.txt"), "fixture")

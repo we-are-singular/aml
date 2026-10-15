@@ -8,10 +8,10 @@ import AcpBoundary from "../../../../../components/docs/AcpBoundary.astro"
 import ProviderHero from "../../../../../components/docs/ProviderHero.astro"
 
 <ProviderHero
-  names={["codex", "copilot", "glm", "opencode", "pi"]}
+  names={["claude", "codex", "copilot", "glm", "opencode", "pi"]}
   eyebrow="Built-in Agent providers"
   title="Choose your Agent"
-  factory="codexAgent() · copilotAgent() · glmAgent() · opencodeAgent() · piAgent()"
+  factory="claudeAgent() · codexAgent() · copilotAgent() · glmAgent() · opencodeAgent() · piAgent()"
   summary="AML's built-in Agents are thin profiles over a shared Agent Client Protocol session engine. Pick the coding harness that matches your model and workflow, then keep the rest of your AML tree portable."
   bestFor="Portable orchestration across coding-agent runtimes, Tools, MCP, Sandboxes, Workspaces, and typed results."
   caution="A provider profile does not install executables, provision credentials, or prove that a particular Sandbox image is deployable. Validate the complete Agent × Sandbox × Workspace combination."
@@ -32,7 +32,7 @@ AML JSX tree
   → release session and resources
 ```
 
-The five built-in profiles all use the shared ACP engine. They do not create a second orchestration model, own their own scheduler, or bypass AML cleanup. Their differences are the executable launch, native configuration format, permission translation, and provider-specific capability adapters.
+The six built-in profiles all use the shared ACP engine. They do not create a second orchestration model, own their own scheduler, or bypass AML cleanup. Their differences are the executable launch, native configuration format, permission translation, and provider-specific capability adapters.
 
 [AML Agent Sandbox](/docs/sandbox-images/) supplies the tested full and single-Agent executable baselines when
 Docker, Daytona, or Modal uses its default image. Local Sandbox requires the Agent commands on the host. Credentials and
@@ -43,6 +43,11 @@ project-specific dependencies remain application-owned in every environment.
 ## Choose a profile
 
 <CardGrid>
+  <LinkCard
+    title="Claude"
+    href="/docs/providers/agents/claude/"
+    description="Claude Code through the maintained claude-agent-acp adapter, with private Claude state and permission-mapped tools."
+  />
   <LinkCard
     title="Codex"
     href="/docs/providers/agents/codex/"
@@ -70,20 +75,22 @@ project-specific dependencies remain application-owned in every environment.
   />
 </CardGrid>
 
-| If you need…                                          | Start with                                                                          | Why                                                                                                |
-| ----------------------------------------------------- | ----------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
-| Codex-native configuration and OpenAI model workflows | [`codexAgent()`](/docs/providers/agents/codex/)                                     | Writes Codex ACP configuration and maps AML filesystem mode into Codex's agent mode.               |
-| GitHub Copilot plans and model access                 | [`copilotAgent()`](/docs/providers/agents/copilot/)                                 | Starts `copilot --acp` with private state and maps AML permissions to Copilot deny rules.          |
-| GLM Coding Plan models without a full harness         | [`glmAgent()`](/docs/providers/agents/glm/)                                         | Launches the registry-listed `glm-acp-agent` adapter with an isolated session directory.           |
-| OpenCode's model catalog and native tool policy       | [`opencodeAgent()`](/docs/providers/agents/opencode/)                               | Starts `opencode acp --pure` and translates filesystem, shell, and network permissions.            |
-| Pi's extensible tool ecosystem or Pi MCP adapter      | [`piAgent()`](/docs/providers/agents/pi/)                                           | Uses Pi's generated wrapper and `pi-mcp-adapter` for AML Tools and MCP.                            |
-| No credentials while designing a workflow             | [`DeterministicAgentProvider`](/docs/reference/testing/#deterministicagentprovider) | Use the testing entrypoint for a local fixture; it is not one of these live coding-agent profiles. |
+| If you need…                                             | Start with                                                                          | Why                                                                                                 |
+| -------------------------------------------------------- | ----------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| Claude Code's tools, models, and `CLAUDE.md` conventions | [`claudeAgent()`](/docs/providers/agents/claude/)                                   | Launches `claude-agent-acp` with private Claude state and maps AML permissions to disallowed tools. |
+| Codex-native configuration and OpenAI model workflows    | [`codexAgent()`](/docs/providers/agents/codex/)                                     | Writes Codex ACP configuration and maps AML filesystem mode into Codex's agent mode.                |
+| GitHub Copilot plans and model access                    | [`copilotAgent()`](/docs/providers/agents/copilot/)                                 | Starts `copilot --acp` with private state and maps AML permissions to Copilot deny rules.           |
+| GLM Coding Plan models without a full harness            | [`glmAgent()`](/docs/providers/agents/glm/)                                         | Launches the registry-listed `glm-acp-agent` adapter with an isolated session directory.            |
+| OpenCode's model catalog and native tool policy          | [`opencodeAgent()`](/docs/providers/agents/opencode/)                               | Starts `opencode acp --pure` and translates filesystem, shell, and network permissions.             |
+| Pi's extensible tool ecosystem or Pi MCP adapter         | [`piAgent()`](/docs/providers/agents/pi/)                                           | Uses Pi's generated wrapper and `pi-mcp-adapter` for AML Tools and MCP.                             |
+| No credentials while designing a workflow                | [`DeterministicAgentProvider`](/docs/reference/testing/#deterministicagentprovider) | Use the testing entrypoint for a local fixture; it is not one of these live coding-agent profiles.  |
 
 <Aside type="tip" title="Start with the harness you already operate">
   There is no universal live default. Codex is the shortest tutorial path when you already have an OpenAI API key;
-  GitHub Copilot fits runtimes with an explicit Copilot token; OpenCode fits its model catalog and native tool policy;
-  Pi is the better fit when its extensible Tool and MCP path is the reason you chose the harness. Validate one live
-  provider before adding a remote Sandbox or durable Workspace.
+  Claude fits Anthropic accounts and Claude Code project conventions; GitHub Copilot fits runtimes with an explicit
+  Copilot token; OpenCode fits its model catalog and native tool policy; Pi is the better fit when its extensible Tool
+  and MCP path is the reason you chose the harness. Validate one live provider before adding a remote Sandbox or durable
+  Workspace.
 </Aside>
 
 ## Shared prerequisites
@@ -155,22 +162,22 @@ needs named or typed results. AML's scheduler and budgets remain in charge in bo
 
 ## Cross-provider capability matrix
 
-| Capability                 | Codex                          | GitHub Copilot                       | GLM                                   | OpenCode                                             | Pi                                                |
-| -------------------------- | ------------------------------ | ------------------------------------ | ------------------------------------- | ---------------------------------------------------- | ------------------------------------------------- |
-| ACP command                | `codex-acp`                    | `copilot --acp`                      | `glm-acp-agent`                       | `opencode acp --pure`                                | `pi-acp`                                          |
-| Native command option      | `codexPathOverride`            | `command` selects Copilot launcher   | None; the adapter is self-contained   | `command` selects OpenCode launcher                  | `piCommand` selects native Pi command             |
-| Provider model fallback    | `model`                        | `model`, defaulting to `auto`        | `model` as `ACP_GLM_MODEL`            | `model`, then `config.model`                         | `model`                                           |
-| Agent-level model override | Yes                            | Yes                                  | Yes                                   | Yes                                                  | Yes                                               |
-| System instruction mapping | Codex `developer_instructions` | First-turn text prefix               | First-turn literal `<SYSTEM>` prelude | First-turn literal `<SYSTEM>` prelude                | First-turn text prefix                            |
-| Project instruction files  | Loads `AGENTS.md` hierarchy    | Disabled by the AML launch profile   | Loads `AGENTS.md` itself              | Loads project `AGENTS.md` or `CLAUDE.md`             | Loads project `AGENTS.md` or `CLAUDE.md`          |
-| Filesystem mapping         | Codex `INITIAL_AGENT_MODE`     | Write deny rule and tool exclusion   | Enclosing Sandbox                     | `edit`/`write` tool and permission rules             | Generated wrapper `--tools` list                  |
-| Shell mapping              | Enclosing Sandbox              | Shell deny rule and tool exclusion   | Enclosing Sandbox                     | OpenCode `bash` tool and permission                  | Generated wrapper `bash` tool                     |
-| Network mapping            | Enclosing Sandbox              | URL deny rule and web tool exclusion | Enclosing Sandbox                     | OpenCode `webfetch`/`websearch` tools and permission | Enclosing Sandbox/network policy                  |
-| AML JavaScript Tools       | Shared ACP MCP bridge          | Shared ACP MCP bridge                | Shared ACP MCP bridge                 | Shared ACP MCP bridge                                | Pi MCP extension and generated wrapper            |
-| Authored MCP               | Shared ACP session             | Shared ACP session                   | Shared ACP session                    | Shared ACP session                                   | `agent/mcp-adapter.json` through `pi-mcp-adapter` |
-| Agent Skills discovery     | Native staged `CODEX_HOME`     | Metadata-only system fallback        | Metadata-only system fallback         | Native configured `skills.paths`                     | Metadata-only system fallback                     |
-| Structured output          | Shared ACP path                | Shared ACP path                      | Shared ACP path                       | Shared ACP path                                      | `aml_submit_result` MCP call                      |
-| Per-session state          | Codex home/config/sqlite/logs  | Private `COPILOT_HOME`               | Adapter `ACP_GLM_SESSION_DIR`         | OpenCode DB and XDG directories                      | Pi HOME, agent, and session directories           |
+| Capability                 | Claude                                           | Codex                          | GitHub Copilot                       | GLM                                   | OpenCode                                             | Pi                                                |
+| -------------------------- | ------------------------------------------------ | ------------------------------ | ------------------------------------ | ------------------------------------- | ---------------------------------------------------- | ------------------------------------------------- |
+| ACP command                | `claude-agent-acp`                               | `codex-acp`                    | `copilot --acp`                      | `glm-acp-agent`                       | `opencode acp --pure`                                | `pi-acp`                                          |
+| Native command option      | `command` selects adapter launcher               | `codexPathOverride`            | `command` selects Copilot launcher   | None; the adapter is self-contained   | `command` selects OpenCode launcher                  | `piCommand` selects native Pi command             |
+| Provider model fallback    | `model` as `ANTHROPIC_MODEL`                     | `model`                        | `model`, defaulting to `auto`        | `model` as `ACP_GLM_MODEL`            | `model`, then `config.model`                         | `model`                                           |
+| Agent-level model override | Yes                                              | Yes                            | Yes                                  | Yes                                   | Yes                                                  | Yes                                               |
+| System instruction mapping | Appended to Claude Code's system prompt          | Codex `developer_instructions` | First-turn text prefix               | First-turn literal `<SYSTEM>` prelude | First-turn literal `<SYSTEM>` prelude                | First-turn text prefix                            |
+| Project instruction files  | Loads project `CLAUDE.md` and `.claude` settings | Loads `AGENTS.md` hierarchy    | Disabled by the AML launch profile   | Loads `AGENTS.md` itself              | Loads project `AGENTS.md` or `CLAUDE.md`             | Loads project `AGENTS.md` or `CLAUDE.md`          |
+| Filesystem mapping         | Disallows `Edit`, `Write`, `NotebookEdit`        | Codex `INITIAL_AGENT_MODE`     | Write deny rule and tool exclusion   | Enclosing Sandbox                     | `edit`/`write` tool and permission rules             | Generated wrapper `--tools` list                  |
+| Shell mapping              | Disallows `Bash`                                 | Enclosing Sandbox              | Shell deny rule and tool exclusion   | Enclosing Sandbox                     | OpenCode `bash` tool and permission                  | Generated wrapper `bash` tool                     |
+| Network mapping            | Disallows `WebFetch`, `WebSearch`                | Enclosing Sandbox              | URL deny rule and web tool exclusion | Enclosing Sandbox                     | OpenCode `webfetch`/`websearch` tools and permission | Enclosing Sandbox/network policy                  |
+| AML JavaScript Tools       | Shared ACP MCP bridge                            | Shared ACP MCP bridge          | Shared ACP MCP bridge                | Shared ACP MCP bridge                 | Shared ACP MCP bridge                                | Pi MCP extension and generated wrapper            |
+| Authored MCP               | Shared ACP session                               | Shared ACP session             | Shared ACP session                   | Shared ACP session                    | Shared ACP session                                   | `agent/mcp-adapter.json` through `pi-mcp-adapter` |
+| Agent Skills discovery     | Native staged `CLAUDE_CONFIG_DIR`                | Native staged `CODEX_HOME`     | Metadata-only system fallback        | Metadata-only system fallback         | Native configured `skills.paths`                     | Metadata-only system fallback                     |
+| Structured output          | Shared ACP path                                  | Shared ACP path                | Shared ACP path                      | Shared ACP path                       | Shared ACP path                                      | `aml_submit_result` MCP call                      |
+| Per-session state          | Private `CLAUDE_CONFIG_DIR` and `HOME`           | Codex home/config/sqlite/logs  | Private `COPILOT_HOME`               | Adapter `ACP_GLM_SESSION_DIR`         | OpenCode DB and XDG directories                      | Pi HOME, agent, and session directories           |
 
 The matrix describes the profile translation, not a guarantee that every provider can run in every Sandbox. Consult the Sandbox provider page for `exec`/`spawn` behavior and the individual Agent page for launch prerequisites.
 
@@ -189,11 +196,11 @@ MCP server identity, allowlists, transport configuration, and lifecycle belong t
 
 ### Skills
 
-[`<Skill />`](/docs/reference/primitives/skill/) stages a complete local Agent Skills package and passes concrete paths in the normalized Agent request. Codex maps the shared staging root to `CODEX_HOME`; OpenCode appends each package directory to configured `skills.paths`. Copilot, GLM, and Pi receive metadata-only system guidance naming each Skill, its activation description, and the concrete `SKILL.md` path. No provider receives the Skill body as automatic prompt text, and AML never fetches or installs remote packages.
+[`<Skill />`](/docs/reference/primitives/skill/) stages a complete local Agent Skills package and passes concrete paths in the normalized Agent request. Claude points `CLAUDE_CONFIG_DIR` at the shared staging root so Claude Code discovers each `skills/<name>/SKILL.md` natively; Codex maps the same root to `CODEX_HOME`; OpenCode appends each package directory to configured `skills.paths`. Copilot, GLM, and Pi receive metadata-only system guidance naming each Skill, its activation description, and the concrete `SKILL.md` path. No provider receives the Skill body as automatic prompt text, and AML never fetches or installs remote packages.
 
 ### Structured output
 
-`evaluate(value, schema)` asks for one typed structured `<Agent />` result; `<Agent schema={schema}>` validates a nested Agent and contributes canonical JSON text to ordinary composition. Built-in ACP profiles submit candidates through the invocation-owned `aml_submit_result` MCP tool. AML validates each candidate immediately with the supplied Standard Schema: an invalid candidate is returned to the Agent as a tool error, the first valid candidate is accepted, and later submissions are ignored. If the final authored turn completes normally (`end_turn`) without an accepted candidate, AML sends one repair prompt that repeats the provider-specific Tool instruction and complete JSON Schema. A second omission rejects the evaluation. Provider request errors, cancellation, refusal, and exhausted limits do not trigger repair.
+`evaluate(value, schema)` asks for one typed structured `<Agent />` result; `<Agent schema={schema}>` validates a nested Agent and contributes canonical JSON text to ordinary composition. Built-in ACP profiles submit candidates through the invocation-owned `aml_submit_result` MCP tool; each profile's instruction uses the harness's own name for it, such as `mcp__aml__aml_submit_result` in Claude Code. AML validates each candidate immediately with the supplied Standard Schema: an invalid candidate is returned to the Agent as a tool error, the first valid candidate is accepted, and later submissions are ignored. If the final authored turn completes normally (`end_turn`) without an accepted candidate, AML sends one repair prompt that repeats the provider-specific Tool instruction and complete JSON Schema. A second omission rejects the evaluation. Provider request errors, cancellation, refusal, and exhausted limits do not trigger repair.
 
 With tracing enabled, AML emits `agent.output` for every submission with its call number and `invalid`, `accepted`, or `ignored` status. Payloads are excluded from metadata-only traces and included only for a sink that explicitly enables content capture. See the [structured-output cookbook](/docs/cookbook/structured-output/) for the complete pattern.
 
@@ -244,6 +251,11 @@ The shared engine exposes each real turn as an `agent.turn` span and forwards ev
     title="Agent Client Protocol"
     href="https://agentclientprotocol.com/"
     description="Protocol concepts, transports, and provider expectations."
+  />
+  <LinkCard
+    title="Claude profile"
+    href="/docs/providers/agents/claude/"
+    description="Claude credentials, disallowed-tool permissions, private state, and project settings."
   />
   <LinkCard
     title="Codex profile"

@@ -7,6 +7,14 @@ export const docsProviderGroups = [
     description: "Own model sessions, native capabilities, and the Agent Client Protocol lifecycle.",
     providers: [
       {
+        name: "claude",
+        title: "Claude",
+        factory: "claudeAgent()",
+        href: "/docs/providers/agents/claude/",
+        meta: "ACP · claude-agent-acp",
+        bestFor: "Claude Code workflows",
+      },
+      {
         name: "codex",
         title: "Codex",
         factory: "codexAgent()",

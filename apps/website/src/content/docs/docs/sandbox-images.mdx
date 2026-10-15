@@ -41,18 +41,21 @@ The images deliberately exclude credentials, Agent login state, project dependen
 
 Single-Agent variants are clean builds. They select their Agent dependencies before `npm install`; they do not inherit `full` and delete other Agents in a later layer. This makes the published image smaller both on disk and over the network.
 
-| Variant      | Use it when                                                                                                | Agent packages and commands                                    | Stable tags                             | Docker Hub                                                                                   |
-| ------------ | ---------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------- | --------------------------------------- | -------------------------------------------------------------------------------------------- |
-| **Full**     | The application may choose different Agents at runtime, or you want the most convenient development image. | Every Agent listed below.                                      | `X.Y.Z`, `X.Y.Z-full`, `latest`, `full` | [Full tags](https://hub.docker.com/r/wearesingular/aml-agent-sandbox/tags?name=full)         |
-| **Codex**    | Every workflow uses [`codexAgent()`](/docs/providers/agents/codex/).                                       | `codex-acp` `1.4.0` and `codex` `0.147.0`.                     | `X.Y.Z-codex`, `codex`                  | [Codex tags](https://hub.docker.com/r/wearesingular/aml-agent-sandbox/tags?name=codex)       |
-| **Copilot**  | Every workflow uses [`copilotAgent()`](/docs/providers/agents/copilot/).                                   | `copilot` `1.0.80`.                                            | `X.Y.Z-copilot`, `copilot`              | [Copilot tags](https://hub.docker.com/r/wearesingular/aml-agent-sandbox/tags?name=copilot)   |
-| **GLM**      | Every workflow uses [`glmAgent()`](/docs/providers/agents/glm/).                                           | `glm-acp-agent` `1.5.0`.                                       | `X.Y.Z-glm`, `glm`                      | [GLM tags](https://hub.docker.com/r/wearesingular/aml-agent-sandbox/tags?name=glm)           |
-| **OpenCode** | Every workflow uses [`opencodeAgent()`](/docs/providers/agents/opencode/).                                 | `opencode` `1.18.30`.                                          | `X.Y.Z-opencode`, `opencode`            | [OpenCode tags](https://hub.docker.com/r/wearesingular/aml-agent-sandbox/tags?name=opencode) |
-| **Pi**       | Every workflow uses [`piAgent()`](/docs/providers/agents/pi/).                                             | `pi` `1.2.0`, `pi-acp` `0.0.33`, and `pi-mcp-adapter` `5.3.0`. | `X.Y.Z-pi`, `pi`                        | [Pi tags](https://hub.docker.com/r/wearesingular/aml-agent-sandbox/tags?name=pi)             |
+| Variant      | Use it when                                                                                                | Agent packages and commands                                                                 | Stable tags                             | Docker Hub                                                                                   |
+| ------------ | ---------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- | --------------------------------------- | -------------------------------------------------------------------------------------------- |
+| **Full**     | The application may choose different Agents at runtime, or you want the most convenient development image. | Every Agent listed below.                                                                   | `X.Y.Z`, `X.Y.Z-full`, `latest`, `full` | [Full tags](https://hub.docker.com/r/wearesingular/aml-agent-sandbox/tags?name=full)         |
+| **Claude**   | Every workflow uses [`claudeAgent()`](/docs/providers/agents/claude/).                                     | `claude-agent-acp` `0.90.0` and Claude Agent SDK `0.3.296` with its Claude Code executable. | `X.Y.Z-claude`, `claude`                | [Claude tags](https://hub.docker.com/r/wearesingular/aml-agent-sandbox/tags?name=claude)     |
+| **Codex**    | Every workflow uses [`codexAgent()`](/docs/providers/agents/codex/).                                       | `codex-acp` `1.4.0` and `codex` `0.147.0`.                                                  | `X.Y.Z-codex`, `codex`                  | [Codex tags](https://hub.docker.com/r/wearesingular/aml-agent-sandbox/tags?name=codex)       |
+| **Copilot**  | Every workflow uses [`copilotAgent()`](/docs/providers/agents/copilot/).                                   | `copilot` `1.0.80`.                                                                         | `X.Y.Z-copilot`, `copilot`              | [Copilot tags](https://hub.docker.com/r/wearesingular/aml-agent-sandbox/tags?name=copilot)   |
+| **GLM**      | Every workflow uses [`glmAgent()`](/docs/providers/agents/glm/).                                           | `glm-acp-agent` `1.5.0`.                                                                    | `X.Y.Z-glm`, `glm`                      | [GLM tags](https://hub.docker.com/r/wearesingular/aml-agent-sandbox/tags?name=glm)           |
+| **OpenCode** | Every workflow uses [`opencodeAgent()`](/docs/providers/agents/opencode/).                                 | `opencode` `1.18.30`.                                                                       | `X.Y.Z-opencode`, `opencode`            | [OpenCode tags](https://hub.docker.com/r/wearesingular/aml-agent-sandbox/tags?name=opencode) |
+| **Pi**       | Every workflow uses [`piAgent()`](/docs/providers/agents/pi/).                                             | `pi` `1.2.0`, `pi-acp` `0.0.33`, and `pi-mcp-adapter` `5.3.0`.                              | `X.Y.Z-pi`, `pi`                        | [Pi tags](https://hub.docker.com/r/wearesingular/aml-agent-sandbox/tags?name=pi)             |
 
 The versions above describe the current repository build. The [image package manifest](https://github.com/we-are-singular/aml/blob/main/images/sandbox/package.json) is the source of truth when a dependency changes.
 
 Choose `full` when the Agent is selected dynamically. Choose a single-Agent variant when the application always uses one Agent and image size matters.
+
+The `full` and `claude` variants redistribute the Claude Agent SDK and its Claude Code executable unmodified; their use is subject to Anthropic's legal agreements. Those variants ship the SDK's license statement at `/usr/share/doc/aml-agent-sandbox/licenses/Anthropic-Claude-Agent-SDK-LICENSE.md` and include no Anthropic credentials or Claude login state.
 
 <Aside type="caution" title="The image does not select the Agent">
   `opencodeAgent()` selects OpenCode; the image only supplies its executable and runtime. Pairing `codexAgent()` with an
@@ -66,7 +69,7 @@ Choose `full` when the Agent is selected dynamically. Choose a single-Agent vari
 - `X.Y.Z` and `X.Y.Z-full` identify the same full release.
 - `X.Y.Z-<agent>` identifies the matching single-Agent release.
 - `latest` and `full` move to the newest validated full release.
-- `codex`, `copilot`, `glm`, `opencode`, and `pi` move to the newest validated release in that Agent lane.
+- `claude`, `codex`, `copilot`, `glm`, `opencode`, and `pi` move to the newest validated release in that Agent lane.
 
 AML's release process treats versioned tags as immutable. It builds and publishes every versioned variant first, runs the matching real Agent smoke against each pushed digest, signs the digests, and only then advances the moving tags. Stable releases also include SBOM and provenance attestations.
 
@@ -88,7 +91,7 @@ const sandbox = dockerSandbox({
 docker pull ghcr.io/we-are-singular/aml-agent-sandbox:dev
 ```
 
-The `dev` image intentionally remains full and non-versioned. It is not reduced to a single-Agent dependency set: Codex, Copilot, GLM, OpenCode, and Pi are all present. Normal image cleanup still applies, but there are no `dev-codex`, `dev-opencode`, or other GHCR variant lanes.
+The `dev` image intentionally remains full and non-versioned. It is not reduced to a single-Agent dependency set: Claude, Codex, Copilot, GLM, OpenCode, and Pi are all present. Normal image cleanup still applies, but there are no `dev-codex`, `dev-opencode`, or other GHCR variant lanes.
 
 The [development image workflow](https://github.com/we-are-singular/aml/blob/main/.github/workflows/agent-sandbox-dev.yml) explicitly builds `IMAGE_VARIANT=full`, runs its deterministic image check and dependency audit, and replaces the mutable `dev` tag. AML's repository smoke matrix uses this channel so changes can be exercised before a stable Docker Hub release.
 
