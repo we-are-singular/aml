@@ -152,8 +152,11 @@ class PiAcpProfile implements AcpAgentProfile<"pi"> {
         ...(usesMcp
           ? [
               {
+                // pi-mcp-adapter imports Pi's own mcp.json in Pi's schema,
+                // which drops adapter settings such as toolPrefix and
+                // lifecycle. Its native file keeps the exact AML server shape.
                 content: createPiMcpConfiguration(context.mcpServers),
-                path: "agent/mcp.json",
+                path: "agent/mcp-adapter.json",
               },
               {
                 // An existing empty cache keeps lazy servers lazy on the first
