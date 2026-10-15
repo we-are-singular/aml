@@ -22,7 +22,7 @@
   },
   "dependencies": {
     "@agentclientprotocol/claude-agent-acp": "0.91.0",
-    "@agentclientprotocol/codex-acp": "1.4.0",
+    "@agentclientprotocol/codex-acp": "2.2.2",
     "@aml-jsx/cli": "0.3.3",
     "@aml-jsx/sdk": "0.8.1",
     "@earendil-works/pi-coding-agent": "1.2.0",
