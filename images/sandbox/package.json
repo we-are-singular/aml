@@ -36,6 +36,9 @@
   "devDependencies": {
     "release-it": "^21.1.1"
   },
+  "overrides": {
+    "basic-ftp": "6.2.3"
+  },
   "allowScripts": {
     "opencode-ai@1.19.0": true
   }
