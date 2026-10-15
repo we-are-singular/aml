@@ -13,14 +13,12 @@ RUN node scripts/variants.mjs prepare "$IMAGE_VARIANT" package.json \
     && rm -rf /root/.npm scripts
 
 # OpenCode copies its selected executable into opencode-ai/bin during install.
-# Pi's optional clipboard binaries and interactive documentation are not used by ACP.
+# Pi's interactive documentation and examples are not used by ACP.
 RUN rm -rf \
     node_modules/opencode-linux-x64 \
     node_modules/opencode-linux-x64-baseline \
     node_modules/@earendil-works/pi-coding-agent/docs \
-    node_modules/@earendil-works/pi-coding-agent/examples \
-    node_modules/@earendil-works/pi-coding-agent/node_modules/@mariozechner/clipboard \
-    node_modules/@earendil-works/pi-coding-agent/node_modules/@mariozechner/clipboard-*
+    node_modules/@earendil-works/pi-coding-agent/examples
 
 # Only variants containing Copilot ship its additional redistribution license.
 RUN install -d image-licenses \

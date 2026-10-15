@@ -18,14 +18,14 @@ The latest relevant `main` revision is published separately as the mutable, non-
 
 The unqualified version and `latest` tags remain aliases for `full`. Pin a versioned variant or digest for reproducible deployments.
 
-| Variant  | Immutable tag         | Moving tag       | Included Agent versions                               |
-| -------- | --------------------- | ---------------- | ----------------------------------------------------- |
-| Full     | `X.Y.Z`, `X.Y.Z-full` | `latest`, `full` | Every Agent listed below                              |
-| Codex    | `X.Y.Z-codex`         | `codex`          | Codex `0.147.0`, Codex ACP `1.4.0`                    |
-| Copilot  | `X.Y.Z-copilot`       | `copilot`        | GitHub Copilot CLI `1.0.80`                           |
-| GLM      | `X.Y.Z-glm`           | `glm`            | GLM ACP Agent `1.5.0`                                 |
-| OpenCode | `X.Y.Z-opencode`      | `opencode`       | OpenCode `1.18.30`                                    |
-| Pi       | `X.Y.Z-pi`            | `pi`             | Pi `0.84.2`, Pi ACP `0.0.33`, Pi MCP Adapter `2.26.0` |
+| Variant  | Immutable tag         | Moving tag       | Included Agent versions                             |
+| -------- | --------------------- | ---------------- | --------------------------------------------------- |
+| Full     | `X.Y.Z`, `X.Y.Z-full` | `latest`, `full` | Every Agent listed below                            |
+| Codex    | `X.Y.Z-codex`         | `codex`          | Codex `0.147.0`, Codex ACP `1.4.0`                  |
+| Copilot  | `X.Y.Z-copilot`       | `copilot`        | GitHub Copilot CLI `1.0.80`                         |
+| GLM      | `X.Y.Z-glm`           | `glm`            | GLM ACP Agent `1.5.0`                               |
+| OpenCode | `X.Y.Z-opencode`      | `opencode`       | OpenCode `1.18.30`                                  |
+| Pi       | `X.Y.Z-pi`            | `pi`             | Pi `1.2.0`, Pi ACP `0.0.33`, Pi MCP Adapter `5.3.0` |
 
 Every variant is built from the same Dockerfile. All variants contain AML, Node.js and npm, Python and pip, Git, jq, and the same runtime layout; a single-Agent variant installs only that Agent's ACP adapter and native runtime. These are clean builds, not deletions layered on top of `full`, and no Agent is installed when a Sandbox starts.
 

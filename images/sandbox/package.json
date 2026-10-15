@@ -24,13 +24,13 @@
     "@agentclientprotocol/codex-acp": "1.4.0",
     "@aml-jsx/cli": "0.3.3",
     "@aml-jsx/sdk": "0.8.1",
-    "@earendil-works/pi-coding-agent": "0.84.2",
+    "@earendil-works/pi-coding-agent": "1.2.0",
     "@github/copilot": "1.0.80",
     "@openai/codex": "0.147.0",
     "glm-acp-agent": "1.5.0",
     "opencode-ai": "1.18.30",
     "pi-acp": "0.0.33",
-    "pi-mcp-adapter": "2.26.0"
+    "pi-mcp-adapter": "5.3.0"
   },
   "devDependencies": {
     "release-it": "^21.0.0"
