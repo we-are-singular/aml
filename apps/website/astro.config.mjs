@@ -1,3 +1,5 @@
+import { createRequire } from "node:module"
+
 import { defineConfig } from "astro/config"
 import { unified } from "@astrojs/markdown-remark"
 import starlight from "@astrojs/starlight"
@@ -27,6 +29,13 @@ export default defineConfig({
   },
   vite: {
     plugins: [tailwindcss()],
+    resolve: {
+      alias: {
+        // Prerendering must use Astro's cookie 2 dependency, even when npm hoists
+        // Express's incompatible cookie 0.x above the website workspace.
+        cookie: createRequire(import.meta.resolve("astro")).resolve("cookie"),
+      },
+    },
   },
   integrations: [
     starlight({
