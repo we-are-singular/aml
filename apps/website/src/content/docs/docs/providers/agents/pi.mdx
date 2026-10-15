@@ -26,7 +26,7 @@ ACP does not require a remote server. AML can launch the adapter on your host or
 
 <Aside type="caution" title="Known upstream limitations">
 
-With the tested `pi-acp` `0.0.33` adapter, token tracking and error reporting have known gaps:
+With the tested `pi-acp` `0.0.34` adapter, token tracking and error reporting have known gaps:
 
 - **Token usage:** Native token usage is not included in ACP prompt responses, so AML's Pi usage totals are unavailable, not zero. Upstream [PR #97](https://github.com/svkozak/pi-acp/pull/97) and [PR #119](https://github.com/svkozak/pi-acp/pull/119) address context-usage reporting; context occupancy does not establish complete per-prompt token or billing totals.
 - **Provider errors:** Failed model requests and exhausted retries can appear as a successful `end_turn` with no useful output. AML may then report a missing structured result instead of the underlying provider failure. [Issues #92](https://github.com/svkozak/pi-acp/issues/92) and [#98](https://github.com/svkozak/pi-acp/issues/98) track this, and [PR #104](https://github.com/svkozak/pi-acp/pull/104) forwards error details. Its current proposal still returns `end_turn`; protocol-level failure signalling remains under discussion.
@@ -84,7 +84,7 @@ Install the ACP bridge and native Pi executable in the environment where AML wil
 
 ```sh title="Terminal"
 npm install --global \
-  pi-acp@0.0.33 \
+  pi-acp@0.0.34 \
   @earendil-works/pi-coding-agent@1.2.0
 
 pi --version
@@ -109,7 +109,7 @@ const mcpAdapterPath = createRequire(import.meta.url).resolve("pi-mcp-adapter")
 const provider = piAgent({ mcpAdapterPath })
 ```
 
-The AML repository currently exercises `pi-acp@0.0.33`, `@earendil-works/pi-coding-agent@1.2.0`, and `pi-mcp-adapter@5.3.0`. Treat that set as a reproducible verification baseline, not an open-ended compatibility promise.
+The AML repository currently exercises `pi-acp@0.0.34`, `@earendil-works/pi-coding-agent@1.2.0`, and `pi-mcp-adapter@5.3.0`. Treat that set as a reproducible verification baseline, not an open-ended compatibility promise.
 
 For container execution, the [Pi image variant](/docs/sandbox-images/#choose-a-variant) includes this Pi, `pi-acp`, and `pi-mcp-adapter` baseline. The default full image includes the complete chain too. Local Sandbox still requires it on the host.
 
@@ -286,7 +286,7 @@ AML materializes wrapper files, Pi settings, and lazy MCP configuration into tha
 
    Inspect the enclosing `EvaluationError.cause`: `AcpAgentError` retains the ACP `sessionId`, response `attempts`, and underlying `cause`. Attempts preserve original and repair text plus reported stop reasons after cleanup. They are diagnostic content, not a fallback structured result, and are excluded from metadata-only traces.
 
-   If there is no assistant output or result submission, also check the model provider's credentials, model availability, and quota. With `pi-acp` `0.0.33`, native prompt errors, failed assistant messages, and exhausted retries can become a normal ACP `end_turn` without their error detail. AML cannot recover those dropped fields. Try a minimal prompt through native Pi with the same model and credentials to distinguish a provider failure from an MCP setup problem.
+   If there is no assistant output or result submission, also check the model provider's credentials, model availability, and quota. With `pi-acp` `0.0.34`, native prompt errors, failed assistant messages, and exhausted retries can become a normal ACP `end_turn` without their error detail. AML cannot recover those dropped fields. Try a minimal prompt through native Pi with the same model and credentials to distinguish a provider failure from an MCP setup problem.
 
 4. **The system instruction appears in the answer**
 

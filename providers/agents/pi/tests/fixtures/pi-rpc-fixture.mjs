@@ -16,6 +16,8 @@ for await (const line of createInterface({ input: process.stdin })) {
     send({ ...response, data: { model, thinkingLevel: "off", sessionId: `fixture-${process.pid}` } })
   } else if (request.type === "get_available_models") {
     send({ ...response, data: { models: [model] } })
+  } else if (request.type === "get_available_thinking_levels") {
+    send({ ...response, data: { levels: ["off"] } })
   } else if (request.type === "get_commands") {
     send({ ...response, data: { commands: [] } })
   } else if (request.type === "prompt") {

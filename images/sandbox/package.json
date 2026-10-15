@@ -30,7 +30,7 @@
     "@openai/codex": "0.162.1",
     "glm-acp-agent": "1.15.0",
     "opencode-ai": "1.19.0",
-    "pi-acp": "0.0.33",
+    "pi-acp": "0.0.34",
     "pi-mcp-adapter": "5.3.0"
   },
   "devDependencies": {
