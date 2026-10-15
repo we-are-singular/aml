@@ -8,7 +8,16 @@ import process from "node:process"
 import { URL } from "node:url"
 
 const allowlist = JSON.parse(readFileSync(new URL("npm-audit-allowlist.json", import.meta.url), "utf8"))
-const accepted = new Map(allowlist.advisories.map(advisory => [advisory.id, advisory]))
+const accepted = new Map(
+  allowlist.advisories.map(entry => {
+    for (const field of ["id", "package", "reason", "reviewed"]) {
+      if (typeof entry[field] !== "string" || entry[field].trim() === "") {
+        throw new TypeError(`npm audit allowlist entry ${JSON.stringify(entry.id)} needs a non-empty "${field}"`)
+      }
+    }
+    return [entry.id, entry]
+  })
+)
 
 const report = JSON.parse(runAudit(process.argv.slice(2)))
 if (report.error !== undefined) {
@@ -27,10 +36,15 @@ for (const vulnerability of Object.values(report.vulnerabilities ?? {})) {
   }
 }
 
-const unexpected = [...found].filter(([id]) => !accepted.has(id))
+// An entry accepts its advisory only for the package it names, so a mistyped
+// package or the same advisory reaching another package still fails.
+const isAccepted = (id, advisory) => advisory.packages.has(accepted.get(id)?.package)
+const unexpected = [...found].filter(([id, advisory]) => !isAccepted(id, advisory))
 for (const [id, advisory] of found) {
-  const status = accepted.has(id) ? "accepted" : "FAILED"
-  console.log(`${status} ${id} ${advisory.severity} ${[...advisory.packages].join(", ")}: ${advisory.title}`)
+  const entry = accepted.get(id)
+  const status = isAccepted(id, advisory) ? "accepted" : "FAILED"
+  const mismatch = entry !== undefined && status === "FAILED" ? ` (allowlisted for ${entry.package})` : ""
+  console.log(`${status} ${id} ${advisory.severity} ${[...advisory.packages].join(", ")}: ${advisory.title}${mismatch}`)
 }
 
 if (unexpected.length > 0) {
