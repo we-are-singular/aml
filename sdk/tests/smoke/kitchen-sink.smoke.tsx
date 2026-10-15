@@ -219,7 +219,7 @@ async function KitchenSinkAgent({ mcp, model, proofs, proofTool }: KitchenSinkAg
   )
   assert.equal(
     parallelProof.trim(),
-    `${proofs.nestedAgent}input-ok`,
+    `${JSON.stringify({ proof: proofs.nestedAgent })}input-ok`,
     "Parallel composition returned proofs outside authored order"
   )
   const nestedAgent = proofs.nestedAgent
@@ -252,7 +252,8 @@ async function KitchenSinkAgent({ mcp, model, proofs, proofTool }: KitchenSinkAg
         <Include src={KITCHEN_SINK_INCLUDE_SOURCE} maxBytes={1} title="Staged application source" />
       </Block>
       Inspect input.txt, command.txt, shell.txt, authored.txt, and file-source.txt with your native filesystem tools.
-      Read the staged application source named above. Call aml_kitchen_sink_proof.{" "}
+      Read the staged application source named above. For fileSource and includeSource, return the complete file
+      contents, including any trailing newline; do not trim whitespace. Call aml_kitchen_sink_proof.{" "}
       {mcp === undefined
         ? "The MCP check is explicitly disabled for this run."
         : "Use the Context7 MCP tools to resolve the Zod library and query its documentation for schema parsing."}
@@ -277,19 +278,24 @@ async function KitchenSinkAgent({ mcp, model, proofs, proofTool }: KitchenSinkAg
 
 function NestedRemoteProof({ model, proofs }: Pick<KitchenSinkAgentProps, "model" | "proofs">) {
   return (
-    <Agent model={model} system="Coordinate one remote filesystem proof.">
+    <Agent
+      model={model}
+      schema={z.object({ proof: z.literal(proofs.nestedAgent) })}
+      system="Coordinate one remote filesystem proof. The nested Agent's validated result appears in the prompt."
+    >
       Command Script proof: <CommandProof proofs={proofs} />
       Shell Script proof: <ShellProof proofs={proofs} />
       <System>Trust only the Script output and the nested Agent's direct Workspace inspection.</System>
       <Block tag="nested-agent-proof">
-        <Agent model={model}>
+        <Agent model={model} schema={z.object({ proof: z.literal(proofs.childAgent) })}>
           Read input.txt, command.txt, and shell.txt. Confirm their exact contents are respectively {proofs.input},{" "}
           {proofs.command}, and {proofs.shell}. Do not modify any file.
-          <Block tag="output-contract">After verification, reply with exactly: {proofs.childAgent}</Block>
+          <Block tag="output-contract">After verification, submit proof {proofs.childAgent}.</Block>
         </Agent>
       </Block>
       <Block tag="output-contract">
-        Confirm the nested Agent returned exactly {proofs.childAgent}, then reply with exactly: {proofs.nestedAgent}
+        Confirm the nested Agent's result above contains proof {proofs.childAgent}, then submit proof{" "}
+        {proofs.nestedAgent}. These markers are Agent results, not Workspace file contents.
       </Block>
     </Agent>
   )
