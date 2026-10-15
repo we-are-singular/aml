@@ -31,7 +31,7 @@ for await (const line of createInterface({ input: process.stdin })) {
     } else if (["submit", "invalid-then-valid"].includes(process.env.AML_PI_FIXTURE_MODE)) {
       // Call the actual AML bridge while keeping model/proxy behavior outside
       // this fixture. The live tests cover the installed Pi MCP extension.
-      const config = JSON.parse(readFileSync(`${process.env.PI_CODING_AGENT_DIR}/mcp.json`, "utf8"))
+      const config = JSON.parse(readFileSync(`${process.env.PI_CODING_AGENT_DIR}/mcp-adapter.json`, "utf8"))
       const server = config.mcpServers.review
       const client = new Client({ name: "pi-fixture", version: "1.0.0" })
       try {

@@ -80,10 +80,11 @@ jobs:
       - name: Install dependencies
         run: npm ci --prefer-offline --include=optional
 
+      # Fails on every advisory except reviewed entries in scripts/npm-audit-allowlist.json.
       - name: Check for npm audit advisories
         run: |
-          npm audit
-          npm audit --omit=dev
+          node scripts/check-npm-audit.mjs
+          node scripts/check-npm-audit.mjs --omit=dev
 
       - name: Check formatting
         run: npm run format:check

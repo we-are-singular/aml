@@ -784,7 +784,12 @@ interface ToolProps {
 }
 
 type AmlJsonValue =
-  null | boolean | number | string | readonly AmlJsonValue[] | { readonly [key: string]: AmlJsonValue }
+  | null
+  | boolean
+  | number
+  | string
+  | readonly AmlJsonValue[]
+  | { readonly [key: string]: AmlJsonValue }
 
 interface AgentJavaScriptTool {
   description: string
@@ -1919,7 +1924,8 @@ Its public props accept exactly one content source:
 
 ```ts
 type FileProps =
-  { path: string; src: string; children?: never } | { path: string; src?: never; children: AmlRenderable }
+  | { path: string; src: string; children?: never }
+  | { path: string; src?: never; children: AmlRenderable }
 ```
 
 `path` is required, relative to the active filesystem root, and uses portable forward-slash syntax. Inside Sandbox the active filesystem is the live guest. Otherwise it is the active Workspace materialization. Without either scope, evaluation rejects. Absolute paths, parent traversal, the root itself, symbolic-link destinations, and symbolic-link or non-directory parents reject. Missing parent directories are created. A read-only Sandbox rejects File before writing. The completed write atomically replaces a regular destination where the filesystem supports rename semantics.
@@ -2218,7 +2224,16 @@ AML publishes one immutable, provider-neutral event stream:
 type AmlTraceAttribute = boolean | number | string | readonly string[]
 
 type AmlTraceSpanKind =
-  "application" | "evaluation" | "component" | "agent" | "system" | "skill" | "tool" | "loop" | "sandbox" | "workspace"
+  | "application"
+  | "evaluation"
+  | "component"
+  | "agent"
+  | "system"
+  | "skill"
+  | "tool"
+  | "loop"
+  | "sandbox"
+  | "workspace"
 
 type AmlTraceEvent =
   | {

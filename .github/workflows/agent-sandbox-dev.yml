@@ -53,7 +53,7 @@ jobs:
 
       - name: Audit image dependencies
         working-directory: images/sandbox
-        run: npm audit --omit=dev
+        run: node ../../scripts/check-npm-audit.mjs --omit=dev
 
       # Registry credentials are introduced only after the build and smoke check.
       - name: Log in to GHCR

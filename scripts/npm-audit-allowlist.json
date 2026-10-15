@@ -1,0 +1,10 @@
+{
+  "advisories": [
+    {
+      "id": "GHSA-vfj7-8cjw-p6xm",
+      "package": "braces",
+      "reason": "No patched release exists: braces 3.0.3 is the latest version and is affected. The advisory is a stack-exhaustion denial of service from deeply nested brace patterns. braces is reached through micromatch and fast-glob from globby, which matches application-configured Workspace include and exclude patterns, and from @daytona/sdk. Remove this entry once braces publishes a fix.",
+      "reviewed": "2026-10-15"
+    }
+  ]
+}
