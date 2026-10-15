@@ -10,6 +10,54 @@ This page tracks `@aml-jsx/sdk`. Entries are newest first. See [GitHub Releases]
 
 <!-- changelog:entries -->
 
+## SDK v0.9.0 — Claude Agent provider, durable ACP diagnostics, and per-prompt usage
+
+Released 2026-10-16.
+
+SDK 0.9.0 adds Claude as a built-in Agent provider, lets custom ACP profiles forward vendor session metadata, and makes ACP failures and provider usage observable end to end: failed invocations now carry ordered prompt snapshots through the exported `AcpAgentError`, and run summaries preserve usage from every completed prompt. Adapter baselines advance and the Sandbox image carries its dependency hardening forward.
+
+### Highlights
+
+- **Claude joins as a built-in Agent provider** `claudeAgent()` launches the maintained `claude-agent-acp` adapter through the shared ACP lifecycle, alongside Codex, Copilot, GLM, OpenCode, and Pi. It resolves `apiKey`/`oauthToken` into `ANTHROPIC_API_KEY`/`CLAUDE_CODE_OAUTH_TOKEN`, writes the effective model as `ANTHROPIC_MODEL`, and keeps `CLAUDE_CONFIG_DIR` and `HOME` invocation-private so AML never reads the operator's `~/.claude` login. System content is appended to Claude Code's preset prompt and narrowed permissions become `disallowedTools`, both sent as `session/new` metadata; ACP permission requests are answered `allow_once` so the adapter never persists an allow-always rule into project settings. The adapter is not open source and ships under Anthropic's legal agreements, so AML does not install it implicitly. The same change adds `AcpAgentLaunch.sessionMeta`, letting any custom ACP profile forward vendor-defined `_meta` unchanged with `session/new`. [Claude Agent reference](/docs/providers/agents/claude/) · [Provider authoring](/docs/reference/provider-authoring/) · [Compatibility](/docs/compatibility/)
+- **ACP failures preserve received output and name the fix** A new exported `AcpAgentError`, nested under the Agent's identity-bearing `EvaluationError.cause`, keeps the `sessionId` and immutable `attempts` in execution order, including a failed partial response, with received `text`, `messages` when the adapter supplied boundaries, and `stopReason` once a prompt completed. The original protocol or submission error stays as `AcpAgentError.cause`, caller cancellation keeps its original reason, and attempt text stays out of metadata-only traces. The structured-output repair now runs only after an ACP `end_turn`, so refusal, cancellation, and exhausted limits never trigger another prompt. Mismatched session configuration values now also list the advertised values in the error instead of a bare rejection. [Observability](/docs/observability) · [Error handling](/docs/errors) · [Runtime reference](/docs/reference/runtime)
+- **Usage from every completed ACP prompt** `createTraceSummaryCollector()` preserves each completed ACP prompt's serialized provider usage exactly once, including a structured-output repair prompt, and keeps completed samples even when a later repair fails or is cancelled, falling back to the turn span's usage attribute when no prompt-completion usage exists. Missing usage adds no entry, and `providerUsage.length` is neither the authored-turn count nor the underlying model-request count. [Observability](/docs/observability)
+- **Refreshed provider baselines and hardened Sandbox image** Adapter baselines advance to `@agentclientprotocol/claude-agent-acp` 0.91.0, `@agentclientprotocol/codex-acp` 2.2.2 with `@openai/codex` 0.162.1, `@github/copilot` 1.0.98, `glm-acp-agent` 1.15.0, `opencode-ai`/`@opencode-ai/sdk` 1.19.0, and `pi-acp` 0.0.34 with `pi-mcp-adapter` 5.3.1, with ACP SDK 1.8.0, MCP SDK 1.32.1, and routine SDK library bumps. The Sandbox image carries the v0.5.1 fixes (patched `fast-uri` and `qs`) and v0.5.2 (embedded OpenCode 1.18.30 and patched transitive `hono`), plus a refreshed Debian Bookworm base image and a `basic-ftp` override to patched 6.2.3. [Sandbox changelog](/docs/reference/changelog/sandbox) · [Sandbox images](/docs/sandbox-images/)
+
+### Commits
+
+- fix(sandbox): override basic-ftp to patched 6.2.3 (0595c98)
+- build(sandbox): refresh debian bookworm base image (e63f4b5)
+- build(sdk): update vite-plugin-dts to 5.1.2 (0d7c83b)
+- build(agent-pi): update pi-mcp-adapter to 5.3.1 (c56a6a7)
+- build(agent-pi): update pi-acp to 0.0.34 (61e6e5b)
+- build(agent-opencode): update opencode-ai to 1.19.0 (92e70a4)
+- build(agent-glm): update glm-acp-agent to 1.15.0 (12147bc)
+- build(agent-copilot): update @github/copilot to 1.0.98 (c9a2b02)
+- build(agent-codex): update @agentclientprotocol/codex-acp to 2.2.2 (15855cd)
+- build(agent-codex): update @openai/codex to 0.162.1 (6dcc8db)
+- build(agent-claude): update @agentclientprotocol/claude-agent-acp to 0.91.0 (79ad05d)
+- build(agent-opencode): update sdk to 1.19.0 and align config (94d11c7)
+- build(sdk): update yaml to 2.9.1 (bb539ac)
+- build(sdk): update typebox to 1.3.37 (ffdde07)
+- build(sdk): update p-limit to 7.3.3 (18e8cfe)
+- build(sdk): update hookable to 6.1.2 (1acfd30)
+- build(sdk): update globby to 16.2.4 (dbf12ad)
+- build(sdk): update execa to 10.1.1 (0146ebc)
+- build(sdk): update @modelcontextprotocol/sdk to 1.32.1 (9cc866f)
+- build(sandbox-modal): update modal to 0.11.0 (bf86b75)
+- build(sandbox-daytona): update @daytona/sdk to 0.224.1 (cdc55a5)
+- build(sdk): update @aws-sdk/client-s3 to 3.1152.0 (897b4bb)
+- build(sdk): update agent client protocol sdk to 1.8.0 (cc5daa1)
+- feat(agent-claude): add claude agent acp provider (#60) (d1bd44c)
+- release(sandbox): v0.5.2 (ba91730)
+- build(sandbox): update patched hono lock (facfe37)
+- build(sandbox): upgrade opencode to 1.18.30 (9c3b28e)
+- fix(sdk): surface advertised acp configuration values (00c0dc9)
+- test(sdk): verify process failure messages survive wrapping (4cd1ff9)
+- fix(sdk): preserve acp prompt diagnostics on failure (4a3227d)
+- fix(sdk): #55 preserve usage from every completed acp prompt (8d697cc)
+- release(sandbox): v0.5.1 (938b111)
+
 ## SDK v0.8.1 — Typed AML authoring, configurable Tool prefixes, and structural multiline Blocks
 
 Released 2026-09-04.
