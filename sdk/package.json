@@ -79,7 +79,7 @@
     "@standard-schema/spec": "^1.1.0",
     "execa": "^10.1.1",
     "globby": "^16.2.4",
-    "hookable": "^6.1.1",
+    "hookable": "^6.1.2",
     "modal": "0.11.0",
     "p-limit": "^7.3.1",
     "proper-lockfile": "^4.1.2",
