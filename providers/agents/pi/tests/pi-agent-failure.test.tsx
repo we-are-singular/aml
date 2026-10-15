@@ -9,7 +9,7 @@ import { z } from "zod"
 
 import { piAgent } from "../src/index.js"
 
-// Native errors and usage remain an upstream pi-acp 0.0.33 limitation. AML
+// Native errors and usage remain an upstream pi-acp 0.0.34 limitation. AML
 // preserves everything the adapter sends without claiming to recover those fields.
 it.each(["prompt-error", "assistant-error", "retry-exhausted", "text-only"])(
   "reproduces Pi %s diagnostics loss and verifies cleanup",
@@ -61,7 +61,7 @@ it.each(["prompt-error", "assistant-error", "retry-exhausted", "text-only"])(
       expect(outcomes[0].reason.cause.sessionId).toMatch(/^fixture-/)
       expect(outcomes[0].reason.cause.attempts).toHaveLength(2)
 
-      // pi-acp 0.0.33 reports the original native rejection and the repair as
+      // pi-acp 0.0.34 reports the original native rejection and the repair as
       // successful end_turn completions, discarding the native error marker.
       const completions = events.filter(event => event.name === "acp.session.prompt.completed")
       expect(completions).toHaveLength(3)
