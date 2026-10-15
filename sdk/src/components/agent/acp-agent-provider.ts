@@ -112,6 +112,14 @@ export interface AcpAgentLaunch {
    */
   readonly sessionMcpServers?: readonly McpServer[]
 
+  /**
+   * Vendor-defined ACP `_meta` sent with `session/new`.
+   *
+   * Omitted by default. Use it only for documented adapter extensions; AML
+   * forwards the object unchanged and never merges it with other settings.
+   */
+  readonly sessionMeta?: Readonly<Record<string, unknown>>
+
   /** Profile-specific instruction used for AML's structured-result Tool turn. */
   readonly structuredOutputInstruction?: string
 
@@ -220,6 +228,7 @@ class AcpAgentProvider<Name extends string> extends AbstractAgentProvider<Name> 
         observability,
         permissionPolicy: execution.launch.permissionPolicy,
         process: execution.process,
+        ...(execution.launch.sessionMeta === undefined ? {} : { sessionMeta: execution.launch.sessionMeta }),
         signal: context.signal,
         ...(bridge === undefined ? {} : { structuredOutput: bridge }),
         ...(execution.launch.structuredOutputInstruction === undefined

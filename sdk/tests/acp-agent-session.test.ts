@@ -7,6 +7,32 @@ import { agentObservabilityServices } from "../src/components/agent/agent-observ
 import type { SandboxProcess } from "../src/components/sandbox/sandbox-runtime.js"
 import { createAgentExecutionContext } from "../src/testing/create-agent-execution-context.js"
 
+describe("openAcpSession() session creation", () => {
+  it("forwards profile-owned session metadata as ACP _meta", async () => {
+    const created: Array<Readonly<Record<string, unknown>> | null | undefined> = []
+    const sessionMeta = { vendor: { options: { disallowedTools: ["Bash"] } } }
+    const context = createAgentExecutionContext()
+    const session = await openAcpSession({
+      cwd: "/workspace",
+      observability: agentObservabilityServices(context),
+      process: sessionCreationProcess(meta => created.push(meta)),
+      sessionMeta,
+      signal: context.signal,
+    })
+    await session.close()
+
+    const withoutMeta = await openAcpSession({
+      cwd: "/workspace",
+      observability: agentObservabilityServices(context),
+      process: sessionCreationProcess(meta => created.push(meta)),
+      signal: context.signal,
+    })
+    await withoutMeta.close()
+
+    expect(created).toEqual([sessionMeta, undefined])
+  })
+})
+
 describe("openAcpSession() structured output", () => {
   it("repairs missing output only after the final authored FollowUp", async () => {
     const prompts: string[] = []
@@ -311,4 +337,34 @@ function acpProcess(
 
 function emptyStream(): ReadableStream<Uint8Array> {
   return new ReadableStream({ start: controller => controller.close() })
+}
+
+function sessionCreationProcess(
+  onNewSession: (meta: Readonly<Record<string, unknown>> | null | undefined) => void
+): Readonly<SandboxProcess> {
+  const clientToAgent = new TransformStream<Uint8Array, Uint8Array>()
+  const agentToClient = new TransformStream<Uint8Array, Uint8Array>()
+  const app = agent({ name: "session-meta-test" })
+    .onRequest(methods.agent.initialize, ({ params }) => ({
+      protocolVersion: params.protocolVersion,
+    }))
+    .onRequest(methods.agent.session.new, ({ params }) => {
+      onNewSession(params._meta)
+      return { sessionId: "session-meta-test" }
+    })
+  const connection = app.connect(ndJsonStream(agentToClient.writable, clientToAgent.readable))
+
+  return Object.freeze({
+    id: "session-meta-test",
+    async kill() {
+      connection.close()
+    },
+    stdin: clientToAgent.writable,
+    stderr: emptyStream(),
+    stdout: agentToClient.readable,
+    async wait() {
+      await connection.closed
+      return { exitCode: 0 }
+    },
+  })
 }

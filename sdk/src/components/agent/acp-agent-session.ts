@@ -28,6 +28,7 @@ export interface AcpSessionOpenInput {
   readonly observability: AgentObservabilityServices
   readonly permissionPolicy?: AcpPermissionPolicy
   readonly process: Readonly<SandboxProcess>
+  readonly sessionMeta?: Readonly<Record<string, unknown>>
   readonly signal: AbortSignal
   readonly structuredOutput?: AcpStructuredOutputController
   readonly structuredOutputInstruction?: string
@@ -138,6 +139,7 @@ export async function openAcpSession(input: Readonly<AcpSessionOpenInput>): Prom
 
     const session = await connection.agent
       .buildSession({
+        ...(input.sessionMeta === undefined ? {} : { _meta: { ...input.sessionMeta } }),
         cwd: input.cwd,
         mcpServers: [...(input.mcpServers ?? [])],
       })
