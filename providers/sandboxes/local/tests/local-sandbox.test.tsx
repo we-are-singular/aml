@@ -1,4 +1,4 @@
-import { access, mkdtemp, mkdir, readFile, rm, symlink, writeFile } from "node:fs/promises"
+import { access, mkdtemp, mkdir, readFile, realpath, rm, symlink, writeFile } from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
 
@@ -269,7 +269,8 @@ describe("localSandbox()", () => {
 })
 
 async function createWorkspace(): Promise<string> {
-  const workspace = await mkdtemp(path.join(os.tmpdir(), "aml-local-sandbox-"))
+  // Sandboxes report physical paths; macOS resolves its temporary directory through /private.
+  const workspace = await realpath(await mkdtemp(path.join(os.tmpdir(), "aml-local-sandbox-")))
   temporaryDirectories.push(workspace)
   await mkdir(path.join(workspace, "repository", "src"), { recursive: true })
   await writeFile(path.join(workspace, "repository", "fixture.txt"), "fixture")
