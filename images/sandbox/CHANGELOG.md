@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.6.0
+
+Base image refresh and release-tooling dependency patch.
+
+The Sandbox image is rebuilt on a freshly pinned Debian Bookworm runtime base and pins its release toolchain's transitive basic-ftp client to a patched version. Neither change alters the embedded Agent runtimes, image behavior, or documented workflows.
+
+- **Refreshed Debian Bookworm runtime base.** The sandbox Dockerfile pins its runtime stage to a newer `debian:bookworm-slim` digest, moving it off the previous pin. Because every variant image (`full`, `codex`, `copilot`, `glm`, `opencode`, and `pi`) builds from that stage, each is rebuilt on the current base packages. The Node.js build stage and the installed Agent/tooling versions are untouched, so existing deployments see no runtime or interface change.
+- **Patched transitive `basic-ftp` in the release toolchain.** The image package now declares an npm `overrides` entry pinning the transitive `basic-ftp` FTP client to patched 6.2.3, replacing the 5.3.1 resolved through `get-uri` and the proxy-agent chain. That dependency belongs to the image's dev/release tooling and is excluded from the published image (`npm ci --omit=dev`), so the shipped runtime is unchanged while the stale transitive client is patched for builds and releases.
+
+### Commits
+
+- `fix(sandbox): override basic-ftp to patched 6.2.3` (0595c98)
+- `build(sandbox): refresh debian bookworm base image` (e63f4b5)
+
 ## 0.5.2
 
 OpenCode runtime bump and patched transitive locks.
