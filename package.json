@@ -59,7 +59,7 @@
   "overrides": {
     "@hono/node-server": "2.1.5",
     "basic-ftp": "6.2.3",
-    "postcss-nested": "7.0.2"
+    "postcss-nested": "8.0.1"
   },
   "engines": {
     "node": ">=26.0.0",
