@@ -23,7 +23,7 @@ The unqualified version and `latest` tags remain aliases for `full`. Pin a versi
 | Full     | `X.Y.Z`, `X.Y.Z-full` | `latest`, `full` | Every Agent listed below                              |
 | Claude   | `X.Y.Z-claude`        | `claude`         | Claude Agent ACP `0.91.0`, Claude Agent SDK `0.3.300` |
 | Codex    | `X.Y.Z-codex`         | `codex`          | Codex `0.162.1`, Codex ACP `2.2.2`                    |
-| Copilot  | `X.Y.Z-copilot`       | `copilot`        | GitHub Copilot CLI `1.0.80`                           |
+| Copilot  | `X.Y.Z-copilot`       | `copilot`        | GitHub Copilot CLI `1.0.98`                           |
 | GLM      | `X.Y.Z-glm`           | `glm`            | GLM ACP Agent `1.5.0`                                 |
 | OpenCode | `X.Y.Z-opencode`      | `opencode`       | OpenCode `1.18.30`                                    |
 | Pi       | `X.Y.Z-pi`            | `pi`             | Pi `1.2.0`, Pi ACP `0.0.33`, Pi MCP Adapter `5.3.0`   |

@@ -26,7 +26,7 @@
     "@aml-jsx/cli": "0.3.3",
     "@aml-jsx/sdk": "0.8.1",
     "@earendil-works/pi-coding-agent": "1.2.0",
-    "@github/copilot": "1.0.80",
+    "@github/copilot": "1.0.98",
     "@openai/codex": "0.162.1",
     "glm-acp-agent": "1.5.0",
     "opencode-ai": "1.18.30",
