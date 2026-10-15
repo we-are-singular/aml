@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, rm } from "node:fs/promises"
+import { mkdir, mkdtemp, realpath, rm } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import process from "node:process"
@@ -33,11 +33,13 @@ describe("<Script>", () => {
 
     try {
       await mkdir(packageDirectory, { recursive: true })
+      // The child reports its physical cwd, such as /private/var on macOS.
+      const physicalPackageDirectory = await realpath(packageDirectory)
       await expect(
         new AmlRuntime({ cwd: directory }).evaluate(
           <Script command={process.execPath} args={["-e", "process.stdout.write(process.cwd())"]} cwd="packages/cli" />
         )
-      ).resolves.toBe(packageDirectory)
+      ).resolves.toBe(physicalPackageDirectory)
     } finally {
       await rm(directory, { force: true, recursive: true })
     }
