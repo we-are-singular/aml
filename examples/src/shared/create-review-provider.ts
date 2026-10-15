@@ -16,7 +16,7 @@ export function createReviewProvider(name: string, directory: string): AgentProv
   if (name === "opencode") {
     return opencodeAgent({
       directory,
-      model: process.env.AML_OPENCODE_MODEL ?? "opencode-go/deepseek-v4-flash",
+      model: process.env.AML_OPENCODE_MODEL ?? "opencode-go/deepseek-v4.1-flash",
     })
   }
 

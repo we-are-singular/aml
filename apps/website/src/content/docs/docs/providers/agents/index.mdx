@@ -142,7 +142,7 @@ const answer = await runtime.evaluate(
 import { Agent, AmlRuntime, codexAgent, opencodeAgent } from "@aml-jsx/sdk"
 
 const codex = codexAgent({ model: "gpt-5.6-luna", reasoningEffort: "low" })
-const opencode = opencodeAgent({ model: "opencode-go/deepseek-v4-flash" })
+const opencode = opencodeAgent({ model: "opencode-go/deepseek-v4.1-flash" })
 
 const answer = await new AmlRuntime().evaluate(
   <Agent name="review-coordinator" provider={codex} system="Synthesize the two specialist reviews.">

@@ -113,7 +113,7 @@ const Codex = codexAgent({})
 const Copilot = copilotAgent({ model: "gpt-5-mini" })
 const Glm = glmAgent({ model: "glm-5.3" })
 const OpenCode = opencodeAgent({})
-const Pi = piAgent({ model: "opencode-go/deepseek-v4-flash" })
+const Pi = piAgent({ model: "opencode-go/deepseek-v4.1-flash" })
 const Modal = modalSandbox({ image: "node:26" })
 ```
 

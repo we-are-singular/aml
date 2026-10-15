@@ -131,7 +131,7 @@ if (!apiKey) throw new Error("OPENCODE_API_KEY is required")
 const provider = piAgent({
   command: "pi-acp",
   piCommand: "pi",
-  model: "opencode-go/deepseek-v4-flash",
+  model: "opencode-go/deepseek-v4.1-flash",
   env: {
     OPENCODE_API_KEY: apiKey,
   },
@@ -168,7 +168,7 @@ const releaseName = defineTool({
 
 const provider = piAgent({
   mcpAdapterPath: createRequire(import.meta.url).resolve("pi-mcp-adapter"),
-  model: "opencode-go/deepseek-v4-flash",
+  model: "opencode-go/deepseek-v4.1-flash",
 })
 
 const result = await new AmlRuntime({ agentProvider: provider }).evaluate(

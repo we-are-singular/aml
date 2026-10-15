@@ -78,7 +78,7 @@ import { Agent, AmlRuntime, piAgent } from "@aml-jsx/sdk"
 
 const Pi = piAgent({
   env: { OPENCODE_API_KEY: process.env.OPENCODE_API_KEY ?? "" },
-  model: "opencode-go/deepseek-v4-flash",
+  model: "opencode-go/deepseek-v4.1-flash",
 })
 
 const result = await new AmlRuntime().evaluate(<Agent provider={Pi}>Say hello.</Agent>)

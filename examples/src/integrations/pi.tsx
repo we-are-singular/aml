@@ -21,7 +21,7 @@ const ExampleProvider = piAgent({
   ...(process.env.OPENCODE_API_KEY === undefined ? {} : { env: { OPENCODE_API_KEY: process.env.OPENCODE_API_KEY } }),
   // vite-node provides import.meta.url but not import.meta.resolve.
   mcpAdapterPath: createRequire(import.meta.url).resolve("pi-mcp-adapter"),
-  model: process.env.AML_PI_MODEL ?? "opencode-go/deepseek-v4-flash",
+  model: process.env.AML_PI_MODEL ?? "opencode-go/deepseek-v4.1-flash",
 })
 
 /**

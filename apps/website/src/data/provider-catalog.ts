@@ -279,7 +279,7 @@ export const agentOptions: readonly AgentOption[] = [
     id: "opencode",
     label: "OpenCode",
     fn: "opencodeAgent",
-    construction: 'opencodeAgent({ model: "opencode-go/deepseek-v4-flash" })',
+    construction: 'opencodeAgent({ model: "opencode-go/deepseek-v4.1-flash" })',
     icon: providerVisuals.opencode.icon,
   },
   {
@@ -314,7 +314,7 @@ export const agentOptions: readonly AgentOption[] = [
     id: "pi",
     label: "Pi",
     fn: "piAgent",
-    construction: 'piAgent({ model: "opencode-go/deepseek-v4-flash" })',
+    construction: 'piAgent({ model: "opencode-go/deepseek-v4.1-flash" })',
     icon: providerVisuals.pi.icon,
   },
 ]
