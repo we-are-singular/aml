@@ -85,7 +85,7 @@ Install the ACP bridge and native Pi executable in the environment where AML wil
 ```sh title="Terminal"
 npm install --global \
   pi-acp@0.0.33 \
-  @earendil-works/pi-coding-agent@0.84.2
+  @earendil-works/pi-coding-agent@1.2.0
 
 pi --version
 command -v pi-acp
@@ -109,7 +109,7 @@ const mcpAdapterPath = createRequire(import.meta.url).resolve("pi-mcp-adapter")
 const provider = piAgent({ mcpAdapterPath })
 ```
 
-The AML repository currently exercises `pi-acp@0.0.33`, `@earendil-works/pi-coding-agent@0.84.2`, and `pi-mcp-adapter@2.26.0`. Treat that set as a reproducible verification baseline, not an open-ended compatibility promise.
+The AML repository currently exercises `pi-acp@0.0.33`, `@earendil-works/pi-coding-agent@1.2.0`, and `pi-mcp-adapter@5.3.0`. Treat that set as a reproducible verification baseline, not an open-ended compatibility promise.
 
 For container execution, the [Pi image variant](/docs/sandbox-images/#choose-a-variant) includes this Pi, `pi-acp`, and `pi-mcp-adapter` baseline. The default full image includes the complete chain too. Local Sandbox still requires it on the host.
 
@@ -179,7 +179,7 @@ const result = await new AmlRuntime({ agentProvider: provider }).evaluate(
 )
 ```
 
-The wrapper adds `mcp` to Pi's allowed tool list and writes an `agent/mcp.json` configuration. MCP servers are lazy and use exact server names. The adapter path may also be discovered from the `pi-mcp-adapter` executable, but an explicit path avoids differences between development and deployment layouts.
+The wrapper adds `mcp` to Pi's allowed tool list and writes the adapter's own `agent/mcp-adapter.json` configuration. MCP servers are lazy and use exact server names. The profile does not write Pi's `agent/mcp.json`: from Pi 0.99, the adapter replaces Pi's built-in MCP extension and imports that file in Pi's format, which drops adapter settings such as `lifecycle` and `toolPrefix`. The adapter path may also be discovered from the `pi-mcp-adapter` executable, but an explicit path avoids differences between development and deployment layouts.
 
 ## Options and precedence
 
