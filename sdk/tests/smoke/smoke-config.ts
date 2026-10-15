@@ -1,6 +1,7 @@
 import path from "node:path"
 
 import {
+  claudeAgent,
   codexAgent,
   copilotAgent,
   daytonaSandbox,
@@ -26,7 +27,7 @@ export function loadSmokeEnvironment(): void {
 const SMOKE_AGENT_PATH = `/tmp/aml-agents/bin:/opt/aml-agent-sandbox/node_modules/.bin:${process.env.PATH ?? "/usr/local/bin:/usr/bin:/bin"}`
 const DEFAULT_SMOKE_SANDBOX_IMAGE = "ghcr.io/we-are-singular/aml-agent-sandbox:dev"
 const ALL_AGENTS_PRESENT =
-  "test -f input.txt && command -v codex-acp && command -v codex && command -v copilot && command -v glm-acp-agent && command -v opencode && command -v pi-acp && command -v pi && command -v pi-mcp-adapter"
+  "test -f input.txt && command -v claude-agent-acp && command -v codex-acp && command -v codex && command -v copilot && command -v glm-acp-agent && command -v opencode && command -v pi-acp && command -v pi && command -v pi-mcp-adapter"
 
 export interface SmokeAgentInstance {
   readonly provider: AgentProvider
@@ -43,6 +44,14 @@ interface SmokeAgentRegistration {
  * every Sandbox registered below.
  */
 export const SMOKE_AGENTS = {
+  claude: {
+    create() {
+      return { provider: claudeAgent({ ...requiredClaudeCredentials(), env: { PATH: SMOKE_AGENT_PATH } }) }
+    },
+    get model() {
+      return process.env.AML_CLAUDE_MODEL ?? "haiku"
+    },
+  },
   codex: {
     create() {
       const apiKey = requiredOpenAiApiKey("Codex")
@@ -355,6 +364,21 @@ function requiredZaiApiKey(): string {
   const apiKey = process.env.AML_ZAI_API_KEY ?? process.env.Z_AI_API_KEY
   if (apiKey === undefined) throw new Error("GLM smoke requires AML_ZAI_API_KEY or Z_AI_API_KEY")
   return apiKey
+}
+
+/** Resolves one explicit Claude credential, preferring an Anthropic API key over a Claude Code OAuth token. */
+export function requiredClaudeCredentials(
+  environment: Readonly<NodeJS.ProcessEnv> = process.env
+): Readonly<{ apiKey: string } | { oauthToken: string }> {
+  const apiKey = environment.AML_CLAUDE_API_KEY ?? environment.ANTHROPIC_API_KEY
+  if (apiKey !== undefined) return { apiKey }
+
+  const oauthToken = environment.CLAUDE_CODE_OAUTH_TOKEN
+  if (oauthToken !== undefined) return { oauthToken }
+
+  throw new Error(
+    "Claude smoke requires ANTHROPIC_API_KEY or CLAUDE_CODE_OAUTH_TOKEN; AML_CLAUDE_API_KEY may override the API key"
+  )
 }
 
 export function requiredCopilotGithubToken(environment: Readonly<NodeJS.ProcessEnv> = process.env): string {
