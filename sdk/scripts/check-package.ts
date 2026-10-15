@@ -704,8 +704,8 @@ const packOutput = execFileSync("npm", ["pack", "--dry-run", "--ignore-scripts",
   cwd: packageDirectory,
   encoding: "utf8",
 })
-// npm pack --json returns an array of one element; npm 12 changes this shape.
-const [packResult] = JSON.parse(packOutput) as PackResult[]
+// npm 11 returns an array; npm 12 keys package metadata by package name.
+const [packResult] = Object.values(JSON.parse(packOutput) as PackResult[] | Record<string, PackResult>)
 const packedFiles = new Set(packResult?.files.map(file => file.path))
 
 for (const expectedFile of [
