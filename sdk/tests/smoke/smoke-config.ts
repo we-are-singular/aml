@@ -135,6 +135,8 @@ export const SMOKE_SANDBOXES = {
       if (apiKey === undefined) throw new Error("Daytona smoke requires DAYTONA_API_KEY")
       return daytonaSandbox({
         config: { apiKey },
+        // A cold image snapshot can outlast the SDK's default 60-second limit.
+        createOptions: { timeout: 180 },
         image: resolveSmokeSandboxImage(),
       })
     },
