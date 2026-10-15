@@ -34,7 +34,7 @@
     "pi-mcp-adapter": "5.3.1"
   },
   "devDependencies": {
-    "release-it": "^21.0.0"
+    "release-it": "^21.1.1"
   },
   "allowScripts": {
     "opencode-ai@1.19.0": true
