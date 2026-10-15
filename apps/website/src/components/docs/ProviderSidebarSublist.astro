@@ -29,6 +29,7 @@ function nextRestorePointIndex(): number {
 }
 
 const providerByHref = new Map<string, ProviderVisualName>([
+  [withBase("docs/providers/agents/claude/"), "claude"],
   [withBase("docs/providers/agents/codex/"), "codex"],
   [withBase("docs/providers/agents/copilot/"), "copilot"],
   [withBase("docs/providers/agents/glm/"), "glm"],
@@ -199,6 +200,7 @@ function containsCurrentPage(entries: SidebarEntry[]): boolean {
 
     :global([data-theme="dark"])
       a:is(
+        [data-provider="claude"],
         [data-provider="codex"],
         [data-provider="copilot"],
         [data-provider="glm"],

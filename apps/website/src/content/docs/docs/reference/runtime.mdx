@@ -43,7 +43,7 @@ Choose the provider defaults and safety budgets at construction time. The input 
 | `maxTurnsPerAgent`    |            `16` | Follow-ups and authored `<Agent />` inputs must be bounded.                                                                     |
 | `maxDepth`            |            `16` | Recursive semantic JSX needs a depth budget.                                                                                    |
 
-`toolPrefix` becomes the invocation-owned MCP server name used to qualify JavaScript Tools. For example, `toolPrefix: "review"` exposes `review_get_pull_request` in OpenCode and `review-get_pull_request` in Copilot. AML throws when the prefix conflicts with another MCP server granted to the same Agent rather than silently changing the configured name.
+`toolPrefix` becomes the invocation-owned MCP server name used to qualify JavaScript Tools. For example, `toolPrefix: "review"` exposes `review_get_pull_request` in OpenCode, `review-get_pull_request` in Copilot, and `mcp__review__get_pull_request` in Claude. AML throws when the prefix conflicts with another MCP server granted to the same Agent rather than silently changing the configured name.
 
 ## Evaluation options and cancellation
 

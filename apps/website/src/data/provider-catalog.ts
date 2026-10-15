@@ -27,10 +27,12 @@ const symbol = (name: Extract<ProviderIcon, { type: "symbol" }>["name"]): Provid
 /**
  * Canonical provider visuals shared by the marketing site and documentation.
  * The AI brand marks are vendored from `@lobehub/icons-static-svg` so the static
- * build does not depend on a third-party CDN at runtime. The GLM mark is the
- * Z.ai brand icon vendored from the ACP registry's glm-acp-agent entry.
+ * build does not depend on a third-party CDN at runtime. The Claude mark is the
+ * vendored Claude Code icon. The GLM mark is the Z.ai brand icon vendored from
+ * the ACP registry's glm-acp-agent entry.
  */
 export const providerVisuals = {
+  claude: { label: "Claude", icon: asset("providers/claude-code.svg") },
   codex: { label: "Codex", icon: asset("providers/codex.svg") },
   copilot: { label: "GitHub Copilot", icon: asset("providers/github-copilot.svg") },
   glm: { label: "GLM", icon: asset("providers/glm.svg") },
@@ -146,11 +148,11 @@ export const integrationGroups: readonly IntegrationGroup[] = [
     toneClass: "text-agent",
     integrations: [
       { label: "OpenCode", icon: providerVisuals.opencode.icon, href: "docs/providers/agents/opencode/" },
+      { label: "Claude", icon: providerVisuals.claude.icon, href: "docs/providers/agents/claude/" },
       { label: "Codex", icon: providerVisuals.codex.icon, href: "docs/providers/agents/codex/" },
       { label: "GitHub Copilot", icon: providerVisuals.copilot.icon, href: "docs/providers/agents/copilot/" },
       { label: "GLM", icon: providerVisuals.glm.icon, href: "docs/providers/agents/glm/" },
       { label: "Pi", icon: providerVisuals.pi.icon, href: "docs/providers/agents/pi/" },
-      { label: "Claude Code", icon: asset("providers/claude-code.svg"), status: "roadmap" },
       { label: "Cursor", icon: asset("providers/cursor.svg"), status: "roadmap" },
       { label: "Hermes Agent", icon: asset("providers/hermes-agent.svg"), status: "roadmap" },
       { label: "Gemini CLI", icon: asset("providers/gemini-cli.svg"), status: "roadmap" },
@@ -279,6 +281,13 @@ export const agentOptions: readonly AgentOption[] = [
     fn: "opencodeAgent",
     construction: 'opencodeAgent({ model: "opencode-go/deepseek-v4-flash" })',
     icon: providerVisuals.opencode.icon,
+  },
+  {
+    id: "claude",
+    label: "Claude",
+    fn: "claudeAgent",
+    construction: 'claudeAgent({ model: "sonnet" })',
+    icon: providerVisuals.claude.icon,
   },
   {
     id: "codex",
