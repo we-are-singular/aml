@@ -59,11 +59,11 @@ Every acquisition receives an invocation-private Claude configuration directory 
 Install the repository baseline and verify the command from the environment where AML will launch it:
 
 ```sh title="Terminal"
-npm install --global @agentclientprotocol/claude-agent-acp@0.90.0
+npm install --global @agentclientprotocol/claude-agent-acp@0.91.0
 claude-agent-acp --version
 ```
 
-The repository baseline is adapter `0.90.0` with Claude Agent SDK `0.3.296`. This is a repeatable repository baseline, not a guarantee that every newer adapter is compatible. Re-run the live provider path when it changes.
+The repository baseline is adapter `0.91.0` with Claude Agent SDK `0.3.300`. This is a repeatable repository baseline, not a guarantee that every newer adapter is compatible. Re-run the live provider path when it changes.
 
 The adapter requires Node.js 22 or newer; AML itself requires Node.js 26 on the application host. The adapter has no `--help` flag. Besides `--version`, it accepts `--hide-claude-auth`, which makes it refuse sessions and turns that a claude.ai subscription would pay for, and `--cli`, which passes through to the bundled `claude` executable. Add `--hide-claude-auth` through `args` when a deployment must bill only an API account.
 
@@ -236,7 +236,7 @@ Deterministic tests run a fake adapter process over stdio and exercise the MCP b
 npm run test --workspace=@aml-jsx/agent-claude
 ```
 
-The opt-in live test launches `npx -y @agentclientprotocol/claude-agent-acp@0.90.0` and requires `ANTHROPIC_API_KEY` or `CLAUDE_CODE_OAUTH_TOKEN`:
+The opt-in live test launches `npx -y @agentclientprotocol/claude-agent-acp@0.91.0` and requires `ANTHROPIC_API_KEY` or `CLAUDE_CODE_OAUTH_TOKEN`:
 
 ```sh title="Terminal"
 AML_CLAUDE_ACP_LIVE=1 npm run test:integration --workspace=@aml-jsx/agent-claude
