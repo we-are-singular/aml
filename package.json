@@ -33,7 +33,7 @@
   },
   "devDependencies": {
     "@agentclientprotocol/claude-agent-acp": "0.91.0",
-    "@agentclientprotocol/codex-acp": "1.4.0",
+    "@agentclientprotocol/codex-acp": "2.2.2",
     "@commitlint/cli": "^21.2.1",
     "@commitlint/config-conventional": "^21.2.0",
     "@earendil-works/pi-coding-agent": "1.2.0",

@@ -49,7 +49,7 @@ liveTest(
     const codexHome = await mkdtemp(path.join(os.tmpdir(), "aml-codex-acp-home-"))
     await cp(path.join(os.homedir(), ".codex", "auth.json"), path.join(codexHome, "auth.json"))
     const provider = codexAgent({
-      args: ["-y", "@agentclientprotocol/codex-acp@1.4.0"],
+      args: ["-y", "@agentclientprotocol/codex-acp@2.2.2"],
       command: "npx",
       env: { CODEX_HOME: codexHome },
       workingDirectory: workspace,
