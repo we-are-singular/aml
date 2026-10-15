@@ -39,7 +39,7 @@
     "@earendil-works/pi-coding-agent": "1.2.0",
     "@github/copilot": "1.0.98",
     "@openai/codex": "0.162.1",
-    "@types/node": "^26.1.1",
+    "@types/node": "^26.6.5",
     "glm-acp-agent": "1.15.0",
     "husky": "^9.1.7",
     "lint-staged": "^17.2.0",
