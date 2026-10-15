@@ -57,7 +57,8 @@ export async function materializeSandboxFiles(
     }
 
     const mode = file.executable === true ? "700" : "600"
-    const chmod = await runtime.exec("chmod", [mode, "--", destination], { signal })
+    // POSIX places "--" before every operand; BSD chmod reads a later "--" as a path.
+    const chmod = await runtime.exec("chmod", ["--", mode, destination], { signal })
 
     if (chmod.exitCode !== 0) {
       throw new Error(`Could not set Sandbox file permissions: ${chmod.stderr.trim()}`)
