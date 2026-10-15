@@ -79,8 +79,8 @@ try {
     runNpm(["pack", "--ignore-scripts", "--json", "--pack-destination", temporaryDirectory], packageDirectory),
     "npm pack"
   )
-  // npm pack --json returns an array of one element; npm 12 changes this shape.
-  const [packResult] = JSON.parse(packOutput) as PackResult[]
+  // npm 11 returns an array; npm 12 keys package metadata by package name.
+  const [packResult] = Object.values(JSON.parse(packOutput) as PackResult[] | Record<string, PackResult>)
 
   if (packResult === undefined) {
     throw new Error("npm pack did not return package metadata")
