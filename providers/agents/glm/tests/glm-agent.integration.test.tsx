@@ -18,7 +18,7 @@ liveTest(
     const workspace = await mkdtemp(path.join(os.tmpdir(), "aml-glm-acp-"))
     const provider = glmAgent({
       apiKey,
-      args: ["-y", "glm-acp-agent@1.5.0"],
+      args: ["-y", "glm-acp-agent@1.15.0"],
       command: "npx",
       workingDirectory: workspace,
     })
