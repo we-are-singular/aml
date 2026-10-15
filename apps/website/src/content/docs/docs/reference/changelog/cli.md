@@ -10,6 +10,21 @@ This page tracks `@aml-jsx/cli`. Entries are newest first. See [GitHub Releases]
 
 <!-- changelog:entries -->
 
+## CLI v0.3.4 — Hardened argument parsing with cac 7.1.0
+
+Released 2026-10-16.
+
+The CLI upgrades its command-line parsing dependency `cac` from 7.0.0 to 7.1.0. The upgrade closes a prototype-pollution path in dotted option handling and brings the parser's latest robustness fixes; the `aml` command surface is unchanged.
+
+### Highlights
+
+- **Prototype-safe option parsing.** `cac` 7.1.0 no longer expands a dotted flag segment named `__proto__`, `constructor`, or `prototype` into the parsed options object, so a crafted argument such as `--__proto__.x` cannot reach `Object.prototype` during parsing. Previously the write landed on the prototype before the CLI rejected the unknown option. The CLI still defines and validates the same `aml run` options; this is defense-in-depth for its argument-parsing dependency. Covers: build(cli): update cac to 7.1.0 (6abbb7d). [CLI reference](/docs/cli/) · [CLI changelog](/docs/reference/changelog/cli)
+- **Updated CLI argument parser.** The upgrade also carries cac's current handling fixes: dotted-option transforms apply only to keys actually present in the parsed options, alias tables no longer inherit from `Object.prototype`, and `process.argv` is read when parsing starts rather than when the module is imported. These are internal to how the `aml` command line is parsed, so no command, flag, or output format changes for operators. [CLI reference](/docs/cli/)
+
+### Commits
+
+- build(cli): update cac to 7.1.0 (6abbb7d)
+
 ## CLI v0.3.3 — Version-only release — no user-facing changes
 
 Released 2026-08-31.
