@@ -21,7 +21,7 @@ The unqualified version and `latest` tags remain aliases for `full`. Pin a versi
 | Variant  | Immutable tag         | Moving tag       | Included Agent versions                               |
 | -------- | --------------------- | ---------------- | ----------------------------------------------------- |
 | Full     | `X.Y.Z`, `X.Y.Z-full` | `latest`, `full` | Every Agent listed below                              |
-| Claude   | `X.Y.Z-claude`        | `claude`         | Claude Agent ACP `0.90.0`, Claude Agent SDK `0.3.296` |
+| Claude   | `X.Y.Z-claude`        | `claude`         | Claude Agent ACP `0.91.0`, Claude Agent SDK `0.3.300` |
 | Codex    | `X.Y.Z-codex`         | `codex`          | Codex `0.147.0`, Codex ACP `1.4.0`                    |
 | Copilot  | `X.Y.Z-copilot`       | `copilot`        | GitHub Copilot CLI `1.0.80`                           |
 | GLM      | `X.Y.Z-glm`           | `glm`            | GLM ACP Agent `1.5.0`                                 |

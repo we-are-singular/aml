@@ -197,7 +197,7 @@ function liveProvider(workspace: string): ReturnType<typeof claudeAgent> {
 
   return claudeAgent({
     ...(apiKey === undefined ? { oauthToken: oauthToken! } : { apiKey }),
-    args: ["-y", "@agentclientprotocol/claude-agent-acp@0.90.0"],
+    args: ["-y", "@agentclientprotocol/claude-agent-acp@0.91.0"],
     command: "npx",
     model: process.env.AML_CLAUDE_MODEL ?? "haiku",
     workingDirectory: workspace,
