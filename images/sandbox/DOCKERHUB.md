@@ -13,6 +13,7 @@ Use `latest` when your application can select different Agents. Use an Agent-spe
 | Image    | Moving tag         | Versioned tag           |
 | -------- | ------------------ | ----------------------- |
 | Full     | `latest` or `full` | `X.Y.Z` or `X.Y.Z-full` |
+| Claude   | `claude`           | `X.Y.Z-claude`          |
 | Codex    | `codex`            | `X.Y.Z-codex`           |
 | Copilot  | `copilot`          | `X.Y.Z-copilot`         |
 | GLM      | `glm`              | `X.Y.Z-glm`             |
@@ -52,7 +53,7 @@ const runtime = new AmlRuntime({
 })
 ```
 
-An OpenCode image does not contain Codex, Copilot, GLM, or Pi. Pairing it with another Agent provider fails because that Agent's executable is absent.
+An OpenCode image does not contain Claude, Codex, Copilot, GLM, or Pi. Pairing it with another Agent provider fails because that Agent's executable is absent.
 
 ## What's inside
 

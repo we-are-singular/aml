@@ -21,6 +21,7 @@
     "verify:release": "node scripts/verify-release.mjs"
   },
   "dependencies": {
+    "@agentclientprotocol/claude-agent-acp": "0.90.0",
     "@agentclientprotocol/codex-acp": "1.4.0",
     "@aml-jsx/cli": "0.3.3",
     "@aml-jsx/sdk": "0.8.1",

@@ -1,7 +1,7 @@
 ARG AML_AGENT_SANDBOX_IMAGE=aml-agent-sandbox:dev
 FROM ${AML_AGENT_SANDBOX_IMAGE}
 
-ARG AML_AGENT_SANDBOX_COMMANDS="codex-acp codex copilot glm-acp-agent opencode pi-acp pi pi-mcp-adapter"
+ARG AML_AGENT_SANDBOX_COMMANDS="claude-agent-acp codex-acp codex copilot glm-acp-agent opencode pi-acp pi pi-mcp-adapter"
 ARG AML_AGENT_SANDBOX_EXCLUDED_COMMANDS=""
 
 # A downstream image must be able to use AML and its advertised Agents during

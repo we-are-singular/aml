@@ -6,7 +6,7 @@ import { spawnSync } from "node:child_process"
 import process from "node:process"
 import { fileURLToPath, pathToFileURL } from "node:url"
 
-import { getVariant, immutableTags, movingTags, variantNames } from "./variants.mjs"
+import { getVariant, imageLicenses, immutableTags, movingTags, variantNames } from "./variants.mjs"
 
 const imageDirectory = resolve(dirname(fileURLToPath(import.meta.url)), "..")
 const repositoryRoot = resolve(imageDirectory, "../..")
@@ -107,7 +107,7 @@ function buildVariant(name, references, revision, temporaryDirectory) {
       "--build-arg",
       `IMAGE_VARIANT=${name}`,
       "--build-arg",
-      `IMAGE_LICENSES=${variant.agents.includes("copilot") ? "MIT AND LicenseRef-GitHub-Copilot-CLI" : "MIT"}`,
+      `IMAGE_LICENSES=${imageLicenses(name)}`,
       "--build-arg",
       `IMAGE_VERSION=${version}`,
       "--build-arg",
