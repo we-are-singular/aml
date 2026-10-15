@@ -6,7 +6,7 @@ Provider implementations live under private `providers/<kind>/<name>` workspaces
 
 ## Recommended order
 
-1. Prove the full Codex, GitHub Copilot, GLM, OpenCode, and Pi matrix through the currently supported Sandbox `spawn()` implementations.
+1. Prove the full Claude, Codex, GitHub Copilot, GLM, OpenCode, and Pi matrix through the currently supported Sandbox `spawn()` implementations.
 2. Revisit AgentOS only when it can join that same ACP process boundary.
 3. Add further coding agents only through compatible ACP implementations.
 4. Design volume-mounted Workspaces with compatible Sandbox providers deliberately.
@@ -25,12 +25,21 @@ Model SDKs remain possible custom providers, but they are not a second built-in 
 | Provider       | Public export     | Kind           | Native coding tools |
 | -------------- | ----------------- | -------------- | ------------------- |
 | OpenCode       | `opencodeAgent()` | Coding harness | Yes                 |
+| Claude         | `claudeAgent()`   | Coding harness | Yes                 |
 | Codex          | `codexAgent()`    | Coding harness | Yes                 |
 | GitHub Copilot | `copilotAgent()`  | Coding harness | Yes                 |
 | GLM            | `glmAgent()`      | ACP adapter    | Small fixed set     |
 | Pi             | `piAgent()`       | Coding harness | Yes                 |
 
 These public factories are thin ACP profiles over the shared session engine.
+
+Claude launches the maintained [claude-agent-acp](https://github.com/agentclientprotocol/claude-agent-acp) adapter
+because Claude Code's own `claude -p` CLI is not an ACP server. The adapter drives Claude Code through Anthropic's
+Claude Agent SDK, which is not open source; its use is subject to Anthropic's legal agreements. AML owns the launch
+profile, the permission-to-`disallowedTools` mapping, invocation-private `CLAUDE_CONFIG_DIR` and `HOME`, the MCP bridge,
+structured output, FollowUps, cancellation, traces, and cleanup. The adapter owns the ACP server, session options,
+permission-request presentation, and model alias resolution. The Claude Agent SDK and Claude Code own the model loop,
+tools, loading of settings, `CLAUDE.md`, and skills, plus authentication and telemetry.
 
 GLM is the exception in ownership: `glmAgent()` launches the registry-listed community adapter
 [glm-acp-agent](https://github.com/stefandevo/glm-acp-agent), not a Z.ai-published process. It exists because Z.ai's
@@ -45,7 +54,6 @@ free tiers. Revisit an official path when Z.ai ships ACP or documents the ZCode 
 | -------- | -------------------------------------------------------------------------------------------------------- | ----------------------- | --------------------------------------------------------------------------------------------------------------------- |
 | P0       | [Hermes](https://github.com/NousResearch/hermes-agent/blob/main/website/docs/user-guide/features/acp.md) | `@aml-jsx/agent-hermes` | Native stdio ACP mode with sessions, tools, diffs, terminal operations, approvals, and streamed content.              |
 | P0       | [Amp](https://agentclientprotocol.com/get-started/registry)                                              | `@aml-jsx/agent-amp`    | Registry-distributed ACP wrapper for Amp and a useful proof for another opinionated coding harness.                   |
-| P1       | [Claude Agent](https://agentclientprotocol.com/get-started/registry)                                     | `@aml-jsx/agent-claude` | Maintained ACP wrapper for Claude Code; important parity for a major coding agent.                                    |
 | P1       | [Cursor](https://agentclientprotocol.com/get-started/registry)                                           | `@aml-jsx/agent-cursor` | Registry-distributed Cursor Agent; tests a vendor-owned ACP implementation rather than an AML-maintained integration. |
 | P1       | [Gemini CLI](https://agentclientprotocol.com/get-started/registry)                                       | `@aml-jsx/agent-gemini` | Native ACP support from another major coding-agent family.                                                            |
 | P1       | [Z.ai ZCode](https://zcode.z.ai/en/docs)                                                                 | `@aml-jsx/agent-zcode`  | Official GLM Coding Plan harness; blocked on any official ACP surface. Track via the GLM note above.                  |

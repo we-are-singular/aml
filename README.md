@@ -127,7 +127,7 @@ console.log(await runtime.evaluate(<Review />))
 
 `defineTool()` returns a typed callable. An active function component can call `ReadSource({ path })` as application work, while `<Tool use={ReadSource} />` explicitly grants that same Tool to one model session.
 
-The workflow stays the same when the provider changes. Replace `OpenCode` with a Codex, GitHub Copilot, GLM, or Pi provider without rewriting the AML tree:
+The workflow stays the same when the provider changes. Replace `OpenCode` with a Claude, Codex, GitHub Copilot, GLM, or Pi provider without rewriting the AML tree:
 
 ```tsx
 import { piAgent } from "@aml-jsx/sdk"
@@ -138,7 +138,7 @@ const Pi = piAgent({
 })
 ```
 
-Codex, GitHub Copilot, GLM, OpenCode, and Pi use compatible ACP Agent executables. Their normal public factories are thin profiles over one shared session engine, so changing the provider does not select a different local-versus-Sandbox lifecycle. GLM uses the community-maintained `glm-acp-agent` adapter, not Z.ai's ZCode harness. The selected host, image, snapshot, or package set must contain the compatible executable; AML does not install Agents implicitly.
+Claude, Codex, GitHub Copilot, GLM, OpenCode, and Pi use compatible ACP Agent executables. Their normal public factories are thin profiles over one shared session engine, so changing the provider does not select a different local-versus-Sandbox lifecycle. Claude uses the maintained `claude-agent-acp` adapter built on Anthropic's Claude Agent SDK. GLM uses the community-maintained `glm-acp-agent` adapter, not Z.ai's ZCode harness. The selected host, image, snapshot, or package set must contain the compatible executable; AML does not install Agents implicitly.
 
 ## Coding agents
 
@@ -256,6 +256,7 @@ The public SDK includes the runtime, built-in integrations, and testing utilitie
 | Role      | Source                                           | Public export           | Notes                                                                                                                                                                                                |
 | --------- | ------------------------------------------------ | ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Agent     | [OpenCode adapter](./providers/agents/opencode)  | `opencodeAgent()`       | OpenCode ACP profile with model/system mapping and native capability metadata.                                                                                                                       |
+| Agent     | [Claude adapter](./providers/agents/claude)      | `claudeAgent()`         | Claude Code profile using the maintained `claude-agent-acp` adapter and invocation-private Claude state.                                                                                             |
 | Agent     | [Codex adapter](./providers/agents/codex)        | `codexAgent()`          | Codex ACP profile using the maintained Codex ACP adapter.                                                                                                                                            |
 | Agent     | [Copilot adapter](./providers/agents/copilot)    | `copilotAgent()`        | GitHub Copilot CLI profile using its native ACP server and invocation-private Copilot state.                                                                                                         |
 | Agent     | [GLM adapter](./providers/agents/glm)            | `glmAgent()`            | Community `glm-acp-agent` profile for Z.ai Coding Plan models; this is not the ZCode harness.                                                                                                        |
@@ -269,16 +270,16 @@ The public SDK includes the runtime, built-in integrations, and testing utilitie
 | Workspace | [S3 adapter](./providers/workspaces/s3)          | `s3Workspace()`         | Restores and publishes immutable archive or folder revisions through S3-compatible storage. R2 has repository smoke evidence; other backends require deployment-specific compatibility verification. |
 | Testing   | [Testing entry](./sdk/src/testing.ts)            | `@aml-jsx/sdk/testing`  | Supplies deterministic Agent, Sandbox, and Workspace providers plus reusable conformance suites.                                                                                                     |
 
-Docker, Daytona, and Modal default to the full `wearesingular/aml-agent-sandbox:latest` image. Stable Docker Hub releases also publish matching `codex`, `copilot`, `glm`, `opencode`, and `pi` variants, while `ghcr.io/we-are-singular/aml-agent-sandbox:dev` remains the mutable full image built from `main`. See [AML Agent Sandbox images](https://agent-markup-language.com/docs/sandbox-images/) for contents, registry links, tags, selection, pinning, and extension.
+Docker, Daytona, and Modal default to the full `wearesingular/aml-agent-sandbox:latest` image. Stable Docker Hub releases also publish matching `claude`, `codex`, `copilot`, `glm`, `opencode`, and `pi` variants, while `ghcr.io/we-are-singular/aml-agent-sandbox:dev` remains the mutable full image built from `main`. See [AML Agent Sandbox images](https://agent-markup-language.com/docs/sandbox-images/) for contents, registry links, tags, selection, pinning, and extension.
 
 The credentialed smoke runner exercises the complete built-in Agent × Sandbox matrix:
 
-| Sandbox \ Agent | Codex | Copilot | GLM | OpenCode | Pi  |
-| --------------- | ----- | ------- | --- | -------- | --- |
-| Local           | Yes   | Yes     | Yes | Yes      | Yes |
-| Docker          | Yes   | Yes     | Yes | Yes      | Yes |
-| Daytona         | Yes   | Yes     | Yes | Yes      | Yes |
-| Modal           | Yes   | Yes     | Yes | Yes      | Yes |
+| Sandbox \ Agent | Claude | Codex | Copilot | GLM | OpenCode | Pi  |
+| --------------- | ------ | ----- | ------- | --- | -------- | --- |
+| Local           | Yes    | Yes   | Yes     | Yes | Yes      | Yes |
+| Docker          | Yes    | Yes   | Yes     | Yes | Yes      | Yes |
+| Daytona         | Yes    | Yes   | Yes     | Yes | Yes      | Yes |
+| Modal           | Yes    | Yes   | Yes     | Yes | Yes      | Yes |
 
 Every cell launches its Agent through the same shared ACP engine and `SandboxRuntime.spawn()`. Sandbox runtimes also expose portable stat, complete-file read, and atomic replacement write operations used by File, Include, and Agent staging. These proofs use read-write Workspaces where a provider cannot enforce read-only access. The selected host, image, or snapshot must contain the required executable. Sandbox providers do not install Agents implicitly.
 
@@ -409,7 +410,7 @@ Requirements:
 - Node.js 26 or newer
 - npm 11 or newer
 - Docker for Docker integration tests, examples, and the local MinIO integration
-- Configured Codex, GitHub Copilot, GLM, OpenCode, or Pi-supported model-provider credentials only for live Agent examples
+- Configured Claude, Codex, GitHub Copilot, GLM, OpenCode, or Pi-supported model-provider credentials only for live Agent examples
 
 Install dependencies:
 
@@ -445,6 +446,7 @@ Package-specific integration suites are available through their workspace script
 
 ```sh
 npm run test:integration --workspace=@aml-jsx/agent-opencode
+npm run test:integration --workspace=@aml-jsx/agent-claude
 npm run test:integration --workspace=@aml-jsx/agent-codex
 npm run test:integration --workspace=@aml-jsx/agent-glm
 npm run test:integration --workspace=@aml-jsx/agent-pi
@@ -460,7 +462,7 @@ Matrix smoke files use a dedicated Vitest configuration and stay outside default
 
 The manual kitchen-sink smoke defaults to `--agent opencode --sandbox modal --workspace r2 --mcp context7`. It accepts any registered Agent or Sandbox, plus `local | r2` Workspaces and `context7 | none` MCP selection. The workflow exercises all fourteen stable primitives, then reacquires the saved Workspace and verifies the persisted files. Run `npm run smoke:kitchen-sink -- --help` for the current selections. Context7 supports anonymous testing; `CONTEXT7_API_KEY` raises its rate limit when configured.
 
-The smoke runners load the repository's untracked `.env`. Codex uses `OPENAI_API_KEY` or `AML_CODEX_API_KEY` and defaults to `gpt-5.6-luna` with low reasoning effort. OpenCode and Pi use `OPENCODE_API_KEY` and default to `opencode-go/deepseek-v4-flash`. `AML_CODEX_MODEL`, `AML_OPENCODE_MODEL`, and `AML_PI_MODEL` may override those models. Copilot uses `COPILOT_GITHUB_TOKEN`, `GH_TOKEN`, or `GITHUB_TOKEN` in that order and defaults to `gpt-5-mini`; `AML_COPILOT_GITHUB_TOKEN` and `AML_COPILOT_MODEL` are optional smoke-only overrides. GLM uses `Z_AI_API_KEY` or `AML_ZAI_API_KEY` and defaults to `glm-5.3`; `AML_GLM_MODEL` may override its model. Daytona uses `DAYTONA_API_KEY`. Modal uses the repository-local `MODAL_API_KEY` and `MODAL_API_SECRET` names as `tokenId` and `tokenSecret`; Modal's own ambient credential names remain `MODAL_TOKEN_ID` and `MODAL_TOKEN_SECRET`. The R2 Workspace accepts `R2_BUCKET`, `R2_ENDPOINT`, `R2_ACCESS_KEY_ID`, and `R2_SECRET_ACCESS_KEY`, with the existing `AML_S3_*` aliases. These environment names configure only the repository's smoke CLI. Applications configure providers through their native factory options and runtime environment.
+The smoke runners load the repository's untracked `.env`. Claude uses `AML_CLAUDE_API_KEY` or `ANTHROPIC_API_KEY`, otherwise `CLAUDE_CODE_OAUTH_TOKEN`, and defaults to `haiku`; `AML_CLAUDE_MODEL` may override its model. Codex uses `OPENAI_API_KEY` or `AML_CODEX_API_KEY` and defaults to `gpt-5.6-luna` with low reasoning effort. OpenCode and Pi use `OPENCODE_API_KEY` and default to `opencode-go/deepseek-v4-flash`. `AML_CODEX_MODEL`, `AML_OPENCODE_MODEL`, and `AML_PI_MODEL` may override those models. Copilot uses `COPILOT_GITHUB_TOKEN`, `GH_TOKEN`, or `GITHUB_TOKEN` in that order and defaults to `gpt-5-mini`; `AML_COPILOT_GITHUB_TOKEN` and `AML_COPILOT_MODEL` are optional smoke-only overrides. GLM uses `Z_AI_API_KEY` or `AML_ZAI_API_KEY` and defaults to `glm-5.3`; `AML_GLM_MODEL` may override its model. Daytona uses `DAYTONA_API_KEY`. Modal uses the repository-local `MODAL_API_KEY` and `MODAL_API_SECRET` names as `tokenId` and `tokenSecret`; Modal's own ambient credential names remain `MODAL_TOKEN_ID` and `MODAL_TOKEN_SECRET`. The R2 Workspace accepts `R2_BUCKET`, `R2_ENDPOINT`, `R2_ACCESS_KEY_ID`, and `R2_SECRET_ACCESS_KEY`, with the existing `AML_S3_*` aliases. These environment names configure only the repository's smoke CLI. Applications configure providers through their native factory options and runtime environment.
 
 The full matrix and the default kitchen sink are manual release gates. Run both before every package release, and always before a major-version release:
 

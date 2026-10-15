@@ -86,7 +86,7 @@ AML is developed as an npm workspace monorepo and distributed as one public pack
 @aml-jsx/sdk
 ```
 
-`@aml-jsx/sdk` owns the JSX runtime, evaluator, primitives, public provider interfaces, provider definition helpers, conformance contracts, and the concrete integrations included in the current release. The package root exports the built-in Agent factories `opencodeAgent()`, `codexAgent()`, `copilotAgent()`, `glmAgent()`, and `piAgent()`; the Sandbox factories `localSandbox()`, `dockerSandbox()`, `daytonaSandbox()`, and `modalSandbox()`; and the durable `localWorkspace()`, `filesystemWorkspace()`, and `s3Workspace()` factories.
+`@aml-jsx/sdk` owns the JSX runtime, evaluator, primitives, public provider interfaces, provider definition helpers, conformance contracts, and the concrete integrations included in the current release. The package root exports the built-in Agent factories `opencodeAgent()`, `claudeAgent()`, `codexAgent()`, `copilotAgent()`, `glmAgent()`, and `piAgent()`; the Sandbox factories `localSandbox()`, `dockerSandbox()`, `daytonaSandbox()`, and `modalSandbox()`; and the durable `localWorkspace()`, `filesystemWorkspace()`, and `s3Workspace()` factories.
 
 The SDK exports both `@aml-jsx/sdk/jsx-runtime` and `@aml-jsx/sdk/jsx-dev-runtime` for TypeScript and Vite's automatic production and development JSX transforms.
 
@@ -1386,7 +1386,7 @@ The selected built-in Agent profile must be launchable through the effective San
 
 The model API may remain remote while the coding-agent process, native filesystem operations, and command execution occur in the current Sandbox. Model location and execution-environment location are separate concerns.
 
-The built-in Codex, GitHub Copilot, GLM, OpenCode, and Pi profiles implement `supportsSandbox()` against the same process contract. Compatibility means the Sandbox can spawn that profile's ACP executable and enforce the effective root and access view; it does not imply that every provider-native operation or optional ACP capability is available. Unsupported capabilities must reject before the first prompt rather than fall back to the AML host.
+The built-in Claude, Codex, GitHub Copilot, GLM, OpenCode, and Pi profiles implement `supportsSandbox()` against the same process contract. Compatibility means the Sandbox can spawn that profile's ACP executable and enforce the effective root and access view; it does not imply that every provider-native operation or optional ACP capability is available. Unsupported capabilities must reject before the first prompt rather than fall back to the AML host.
 
 Trusted `defineTool()` functions run in the AML process unless they explicitly use Sandbox-scoped capabilities. JSX placement alone cannot confine arbitrary JavaScript.
 
@@ -2018,6 +2018,7 @@ For built-in coding-agent providers, this lifecycle is implemented once by the s
 - model and system-instruction mappings not standardized by ACP
 - native permission mappings and their enforcement limits
 - provider-specific configuration that remains behind the profile boundary
+- optional vendor-defined ACP `_meta` for `session/new` (`AcpAgentLaunch.sessionMeta`), used only for documented adapter extensions; the engine forwards the object unchanged and never merges it with other settings
 
 The engine owns process launch, stream pumping, ACP initialization, `session/new`, sequential `session/prompt` calls, updates, cancellation, final response collection, and cleanup. Profiles must not fork that lifecycle or bypass it with a vendor SDK, one-shot CLI command, embedded Agent loop, or provider-specific server.
 
@@ -2068,7 +2069,7 @@ Applications may construct multiple differently configured providers from the sa
 An Agent selects a configured provider through its `provider` prop or the runtime default:
 
 ```tsx
-const fast = claudeAgent({ model: "anthropic/claude-haiku-4-5" });
+const fast = claudeAgent({ model: "haiku" });
 const deep = codexAgent({ workingDirectory: process.cwd() });
 
 <Agent provider={fast}>Classify the request.</Agent>
@@ -2299,9 +2300,10 @@ Prompts, System and Include contents, Skill metadata and paths, Tool input/outpu
 
 ### 16.3 Agent adapter requirements
 
-Every built-in coding-agent adapter is a profile over the shared ACP session engine. Codex uses the maintained Codex ACP adapter, GitHub Copilot and OpenCode use their native ACP Agents, GLM uses the registry-listed community `glm-acp-agent` adapter, and Pi uses the maintained Pi ACP adapter. Public factories retain the ordinary product names:
+Every built-in coding-agent adapter is a profile over the shared ACP session engine. Claude uses the maintained Claude Agent ACP adapter built on Anthropic's Claude Agent SDK, Codex uses the maintained Codex ACP adapter, GitHub Copilot and OpenCode use their native ACP Agents, GLM uses the registry-listed community `glm-acp-agent` adapter, and Pi uses the maintained Pi ACP adapter. Public factories retain the ordinary product names:
 
 ```ts
+function claudeAgent(options?: ClaudeAgentOptions): AgentProvider
 function codexAgent(options?: CodexAgentOptions): AgentProvider
 function copilotAgent(options?: CopilotAgentOptions): AgentProvider
 function glmAgent(options?: GlmAgentOptions): AgentProvider
@@ -2331,12 +2333,13 @@ Every profile must:
 - keep credentials, configuration, protocol messages, session identifiers, and provider-native events behind the adapter boundary
 - support both the trusted local process launcher and every advertised `SandboxRuntime.spawn()` implementation through the same engine
 
-Codex, GitHub Copilot, GLM, OpenCode, and Pi may expose different profile options and native capabilities, but they must not own separate prompting, streaming, Tool bridging, structured-output, FollowUp, or cleanup algorithms. A provider-specific deviation requires a change to this specification and the shared engine, not a parallel lifecycle.
+Claude, Codex, GitHub Copilot, GLM, OpenCode, and Pi may expose different profile options and native capabilities, but they must not own separate prompting, streaming, Tool bridging, structured-output, FollowUp, or cleanup algorithms. A provider-specific deviation requires a change to this specification and the shared engine, not a parallel lifecycle.
 
 ### 16.4 Built-in ACP profile mappings
 
-All five built-in coding Agents use the lifecycle above. Their remaining differences are launch and configuration mappings:
+All six built-in coding Agents use the lifecycle above. Their remaining differences are launch and configuration mappings:
 
+- Claude launches `claude-agent-acp`, the maintained ACP adapter built on Anthropic's Claude Agent SDK, because Claude Code's own CLI is not an ACP server. It writes the effective model to `ANTHROPIC_MODEL` and an explicit API key or OAuth token to `ANTHROPIC_API_KEY` or `CLAUDE_CODE_OAUTH_TOKEN`; the adapter's ACP `authenticate` method is never called. `CLAUDE_CONFIG_DIR` and `HOME` point at invocation-private state, or `CLAUDE_CONFIG_DIR` points at the staged `.agents` root when Skills are present, so the operator's `~/.claude` is never read. Non-empty AML System content is appended to Claude Code's preset system prompt through `session/new` `_meta.systemPrompt.append`. Narrowed filesystem, shell, and network requests become Claude Agent SDK `disallowedTools` (`Edit`, `Write`, and `NotebookEdit`; `Bash`; `WebFetch` and `WebSearch`) in `_meta.claudeCode.options`. Permission requests are answered `allow_once` so the adapter never persists rules into project settings. Project `CLAUDE.md`, `.claude` settings, skills, hooks, and managed policy still apply. A read-only filesystem request with shell allowed leaves `Bash` able to write, so the enclosing Sandbox remains the hard execution boundary.
 - Codex launches `codex-acp`. It maps read-only versus read-write filesystem access to the adapter's Agent mode. The adapter does not expose exact shell or network switches, so an enclosing Sandbox remains responsible for those restrictions.
 - GitHub Copilot launches `copilot --acp`. It uses an invocation-private `COPILOT_HOME`, disables automatic login discovery plus ambient instructions and MCP configuration, and maps narrowed filesystem, shell, and network requests to Copilot deny rules and tool exclusions. The enclosing Sandbox remains the hard execution boundary.
 - OpenCode launches `opencode acp --pure`. It maps filesystem writes, shell, and its native web tools to the portable Agent permission request through an invocation-private OpenCode configuration. Because ACP has no system-message field and an OpenCode Agent `prompt` replaces OpenCode's model-specific base prompt, non-empty AML System content is prepended to the first turn inside literal `<SYSTEM>` tags; empty content adds no prelude.

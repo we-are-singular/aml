@@ -2,13 +2,18 @@
 
 ## Built-in agent providers
 
-The package exports five bundled Agent factories from `@aml-jsx/sdk`:
+The package exports six bundled Agent factories from `@aml-jsx/sdk`:
 
 ```tsx
-import { codexAgent, copilotAgent, glmAgent, opencodeAgent, piAgent } from "@aml-jsx/sdk"
+import { claudeAgent, codexAgent, copilotAgent, glmAgent, opencodeAgent, piAgent } from "@aml-jsx/sdk"
 
 const OpenCode = opencodeAgent({
   directory: process.cwd(),
+})
+
+const Claude = claudeAgent({
+  model: "sonnet",
+  workingDirectory: process.cwd(),
 })
 
 const Codex = codexAgent({
@@ -32,7 +37,7 @@ const Pi = piAgent({
 
 Only set options needed by the application. Let credentials flow through the selected runtime environment unless the surrounding project deliberately injects them. Do not copy interactive user configuration into an automated provider invocation.
 
-Codex, GitHub Copilot, GLM, OpenCode, and Pi are thin profiles over one ACP session engine. GLM launches the community glm-acp-agent adapter and authenticates with a Z.AI Coding Plan API key through `apiKey` or `Z_AI_API_KEY`; it is not the Z.ai ZCode harness. Preserve provider-native configuration where a profile exposes it instead of inventing a portable credential object. Copilot always receives an invocation-private `COPILOT_HOME`; it does not load the user's interactive Copilot configuration. The selected host, image, snapshot, or Sandbox package set must contain the compatible ACP Agent executable.
+Claude, Codex, GitHub Copilot, GLM, OpenCode, and Pi are thin profiles over one ACP session engine. Claude launches the maintained claude-agent-acp adapter and authenticates through `apiKey` or `ANTHROPIC_API_KEY`, or through `oauthToken` or `CLAUDE_CODE_OAUTH_TOKEN` created with `claude setup-token`. It always receives an invocation-private `CLAUDE_CONFIG_DIR` and `HOME`, so it never imports `~/.claude` or an interactive login, while project `CLAUDE.md` and `.claude` settings still apply. GLM launches the community glm-acp-agent adapter and authenticates with a Z.AI Coding Plan API key through `apiKey` or `Z_AI_API_KEY`; it is not the Z.ai ZCode harness. Preserve provider-native configuration where a profile exposes it instead of inventing a portable credential object. Copilot always receives an invocation-private `COPILOT_HOME`; it does not load the user's interactive Copilot configuration. The selected host, image, snapshot, or Sandbox package set must contain the compatible ACP Agent executable.
 
 The shared engine owns FollowUps, JavaScript Tool and structured-output MCP bridges, cancellation, streaming, and cleanup. Profiles map Agent filesystem, shell, and network permission requests to their native controls. Inside a Sandbox, the Sandbox—not ACP permissions—is the security boundary for model-controlled operations.
 
