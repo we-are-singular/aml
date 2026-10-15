@@ -382,7 +382,7 @@ Named Blocks are prompt structure only. They do not change message priority, pro
 An `<Agent>` is one Agent-session boundary. It may contain one initial input and multiple sequential provider turns through `<FollowUp>`.
 
 ```tsx
-<Agent model="opencode-go/deepseek-v4-flash" provider={openCode} system="You are a support operations lead.">
+<Agent model="opencode-go/deepseek-v4.1-flash" provider={openCode} system="You are a support operations lead.">
   <System>Prefer concrete operational evidence.</System>
   <Tool use={searchSupport} />
   Investigate customer 42.

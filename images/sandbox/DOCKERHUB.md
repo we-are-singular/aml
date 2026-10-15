@@ -44,7 +44,7 @@ if (!apiKey) throw new Error("OPENCODE_API_KEY is required")
 
 const runtime = new AmlRuntime({
   agentProvider: opencodeAgent({
-    model: "opencode-go/deepseek-v4-flash",
+    model: "opencode-go/deepseek-v4.1-flash",
     env: { OPENCODE_API_KEY: apiKey },
   }),
   sandboxProvider: dockerSandbox({

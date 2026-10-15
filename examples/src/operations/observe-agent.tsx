@@ -29,7 +29,7 @@ const ReadIncidentPacket = defineTool({
 })
 
 const provider = opencodeAgent({
-  model: process.env.AML_OPENCODE_MODEL ?? "opencode-go/deepseek-v4-flash",
+  model: process.env.AML_OPENCODE_MODEL ?? "opencode-go/deepseek-v4.1-flash",
 })
 
 /**

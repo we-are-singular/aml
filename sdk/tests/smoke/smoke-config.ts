@@ -93,12 +93,12 @@ export const SMOKE_AGENTS = {
       return {
         provider: opencodeAgent({
           env: { OPENCODE_API_KEY: apiKey, PATH: SMOKE_AGENT_PATH },
-          model: process.env.AML_OPENCODE_MODEL ?? "opencode-go/deepseek-v4-flash",
+          model: process.env.AML_OPENCODE_MODEL ?? "opencode-go/deepseek-v4.1-flash",
         }),
       }
     },
     get model() {
-      return process.env.AML_OPENCODE_MODEL ?? "opencode-go/deepseek-v4-flash"
+      return process.env.AML_OPENCODE_MODEL ?? "opencode-go/deepseek-v4.1-flash"
     },
   },
   pi: {
@@ -107,12 +107,12 @@ export const SMOKE_AGENTS = {
       return {
         provider: piAgent({
           env: { OPENCODE_API_KEY: apiKey, PATH: SMOKE_AGENT_PATH },
-          model: process.env.AML_PI_MODEL ?? "opencode-go/deepseek-v4-flash",
+          model: process.env.AML_PI_MODEL ?? "opencode-go/deepseek-v4.1-flash",
         }),
       }
     },
     get model() {
-      return process.env.AML_PI_MODEL ?? "opencode-go/deepseek-v4-flash"
+      return process.env.AML_PI_MODEL ?? "opencode-go/deepseek-v4.1-flash"
     },
   },
 } satisfies Record<string, SmokeAgentRegistration>
