@@ -56,7 +56,9 @@
     "zod": "^4.4.3"
   },
   "overrides": {
-    "@hono/node-server": "2.0.12"
+    "@hono/node-server": "2.0.12",
+    "basic-ftp": "6.2.3",
+    "postcss-nested": "7.0.2"
   },
   "engines": {
     "node": ">=26.0.0",
