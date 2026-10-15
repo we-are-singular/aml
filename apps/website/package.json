@@ -22,7 +22,7 @@
     "@astrojs/starlight": "^0.41.7",
     "@mdx-js/mdx": "^3.1.1",
     "@tailwindcss/vite": "^4.1.11",
-    "astro": "^7.2.8",
+    "astro": "^7.4.0",
     "tailwindcss": "^4.1.11",
     "tar": "7.5.22",
     "typescript": "^7.0.2",
