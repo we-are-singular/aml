@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.6.1
+
+Embedded AML SDK 0.9.0.
+
+The Sandbox image now embeds AML SDK 0.9.0, replacing 0.8.1. Image-hosted workflows gain the built-in Claude Agent provider, ACP failure diagnostics that survive to the caller, structured-output repair that runs only after a normal completion, and per-prompt usage in run summaries. The image's installed Agent runtimes, image contract, and documented workflows are unchanged.
+
+- **Claude Agent provider available to image-hosted workflows.** The embedded SDK exports the built-in `claudeAgent()` provider, so workflows inside the image can launch the maintained `claude-agent-acp` adapter through the shared ACP lifecycle alongside Codex, Copilot, GLM, OpenCode, and Pi; the image already installs `@agentclientprotocol/claude-agent-acp` 0.91.0. SDK 0.9.0 also adds `AcpAgentLaunch.sessionMeta`, letting custom ACP profiles forward vendor-defined `_meta` unchanged with `session/new`. See [Claude Agent](/docs/providers/agents/claude/), [Provider authoring](/docs/reference/provider-authoring/), and [Compatibility](/docs/compatibility/).
+- **ACP failures now preserve received output.** The exported `AcpAgentError` retains the ACP `sessionId` and every prompt attempt in execution order, including text and messages received before a failure and the `stopReason` once a prompt completed, while the original protocol or submission error stays as its cause. The structured-output repair prompt now runs only after a normal `end_turn`, so refusal, cancellation, and exhausted limits never trigger another prompt, and mismatched session-configuration values list the advertised values. See [Error handling](/docs/errors/), [Observability](/docs/observability/), and [Runtime reference](/docs/reference/runtime/).
+- **Usage from every completed ACP prompt.** Run summaries produced inside the image preserve each completed ACP prompt's provider usage exactly once, including a structured-output repair prompt, and keep completed samples even when a later repair fails or is cancelled. Providers without prompt usage fall back to the turn's usage attribute, and missing usage adds no entry. See [Observability](/docs/observability/).
+- **Refreshed SDK dependency baselines.** Embedding SDK 0.9.0 also advances the clients bundled inside the image: ACP SDK 1.3.0 to 1.8.0, MCP SDK to 1.32.1, AWS S3 client to 3.1152.0, Daytona to 0.224.1, Modal to 0.11.0, and OpenCode SDK to 1.19.0, plus routine library bumps for execa, globby, hookable, p-limit, typebox, and yaml. See [Sandbox images](/docs/sandbox-images/) and [SDK changelog](/docs/reference/changelog/sdk/).
+
+### Commits
+
+- `build(sandbox): embed sdk 0.9.0` (5e0dadb)
+
 ## 0.6.0
 
 Base image refresh and release-tooling dependency patch.
