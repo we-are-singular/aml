@@ -792,6 +792,7 @@ export class AmlRuntime {
             props: frame.props,
             sandbox: frame.sandbox,
             skills: frame.plan.skills.values(),
+            staging: frame.plan.staging,
             systemFragments: frame.plan.systemFragments,
             tools: frame.plan.tools.values(),
             trace: frame.trace,

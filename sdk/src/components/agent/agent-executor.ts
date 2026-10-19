@@ -10,6 +10,7 @@ import { agentDiagnosticIdentity } from "./agent-diagnostic-identity.js"
 import { AgentExecutionResult } from "./agent-execution-result.js"
 import { ModelSchema } from "./model-schema.js"
 import type { AgentProps } from "./agent.js"
+import type { AgentFileStaging } from "./agent-file-staging.js"
 import type { AgentProvider } from "./agent-provider.js"
 import { AgentRequestPlan } from "./agent-request-plan.js"
 import { AgentCancellationScope } from "./agent-timeout.js"
@@ -129,6 +130,7 @@ export class AgentExecutor {
     readonly props: Readonly<AgentProps>
     readonly sandbox: Readonly<SandboxSession> | undefined
     readonly skills: readonly AgentSkill[]
+    readonly staging: AgentFileStaging
     readonly systemFragments: readonly string[]
     readonly tools: readonly AgentTool[]
     readonly trace: AmlTraceIdentity
@@ -195,6 +197,7 @@ export class AgentExecutor {
         signal: cancellationScope.signal,
         skillDiscovery: provider.skillDiscovery,
         skills: input.skills,
+        staging: input.staging,
         systemFragments: input.systemFragments,
         tools: input.tools,
         toolPrefix: this.#toolPrefix,

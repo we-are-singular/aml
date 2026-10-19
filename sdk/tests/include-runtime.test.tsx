@@ -234,6 +234,8 @@ describe("<Include>", () => {
         async respond(request) {
           const match = /Read it at `([^`]+)`\./.exec(request.prompt)
           stagedPath = match?.[1] ?? ""
+          expect(request).not.toHaveProperty("stagedFiles")
+          expect(Object.getOwnPropertySymbols(request)).toEqual([])
           expect(request.prompt).toBe(
             [
               `## Contents of \`${stagedPath}\``,

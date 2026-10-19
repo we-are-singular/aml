@@ -7,6 +7,7 @@ import type { AgentSkill } from "../skill/agent-skill.js"
 import type { AgentTool } from "../tool/agent-tool.js"
 import { instrumentAgentTools } from "../tool/instrument-agent-tools.js"
 import type { AgentProps } from "./agent.js"
+import type { AgentFileStaging } from "./agent-file-staging.js"
 import type { AgentExecutionContext } from "./agent-execution-context.js"
 import { agentDiagnosticIdentity } from "./agent-diagnostic-identity.js"
 import { attachAgentObservabilityServices, agentObservabilityServices } from "./agent-observability-services.js"
@@ -57,6 +58,7 @@ export class AgentRequestPlan {
     readonly signal?: AbortSignal
     readonly skillDiscovery: "native" | undefined
     readonly skills: readonly AgentSkill[]
+    readonly staging: AgentFileStaging
     readonly systemFragments: readonly string[]
     readonly tools: readonly AgentTool[]
     readonly toolPrefix: string
@@ -125,6 +127,7 @@ export class AgentRequestPlan {
       toolPrefix: input.toolPrefix,
       trace: input.trace,
     })
+    input.staging.attachTo(request)
     const context: AgentExecutionContext = Object.freeze({
       events: input.context.events,
       ...(input.sandbox === undefined ? {} : { sandbox: input.sandbox }),
