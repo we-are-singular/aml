@@ -7,6 +7,15 @@ import { resolvePortablePath } from "../../core/resolve-portable-path.js"
 import { HostFilesystem } from "../file/host-filesystem.js"
 import type { SandboxSession } from "../sandbox/sandbox-provider.js"
 import type { SandboxFileStaging } from "../sandbox/sandbox-runtime.js"
+import type { AgentRequest } from "./agent-request.js"
+
+// The private association survives multiple bundled SDK copies without adding
+// staging mechanics to the public AgentRequest or requiring provider support.
+const AML_AGENT_STAGED_FILES = Symbol.for("@aml-jsx/sdk/agent-staged-files")
+
+interface AgentFileStagingGlobal {
+  [AML_AGENT_STAGED_FILES]?: WeakMap<object, readonly string[]>
+}
 
 interface AgentFileStagingResource {
   readonly root: string
@@ -28,6 +37,7 @@ export interface AgentStagedFile {
  * usable and cleanup cannot accidentally publish transient authoring inputs.
  */
 export class AgentFileStaging {
+  readonly #files = new Set<string>()
   #releasePromise: Promise<void> | undefined
   #resource: Promise<Readonly<AgentFileStagingResource>> | undefined
   readonly #sandbox: Readonly<SandboxSession> | undefined
@@ -37,6 +47,28 @@ export class AgentFileStaging {
   constructor(sandbox: Readonly<SandboxSession> | undefined, signal: AbortSignal) {
     this.#sandbox = sandbox
     this.#signal = signal
+  }
+
+  /** Privately associates this invocation's staged files with its provider request. */
+  attachTo(request: Readonly<AgentRequest>): void {
+    if (this.#files.size === 0) return
+
+    const amlGlobal = globalThis as typeof globalThis & AgentFileStagingGlobal
+    let registry = amlGlobal[AML_AGENT_STAGED_FILES]
+
+    if (registry === undefined) {
+      registry = new WeakMap<object, readonly string[]>()
+      Object.defineProperty(amlGlobal, AML_AGENT_STAGED_FILES, {
+        configurable: false,
+        enumerable: false,
+        value: registry,
+        writable: false,
+      })
+    } else if (!(registry instanceof WeakMap)) {
+      throw new TypeError("AML Agent file staging registry has an invalid global value")
+    }
+
+    registry.set(request, Object.freeze([...this.#files]))
   }
 
   /** Writes bytes under one portable relative path and returns its concrete location. */
@@ -58,6 +90,7 @@ export class AgentFileStaging {
     this.#signal.throwIfAborted()
 
     const stagedPath = this.#concretePath(resource.root, portablePath)
+    this.#files.add(stagedPath)
 
     return Object.freeze({
       directory: this.#sandbox === undefined ? path.dirname(stagedPath) : path.posix.dirname(stagedPath),
