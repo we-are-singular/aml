@@ -6,12 +6,24 @@ import {
   type AgentProvider,
 } from "@aml-jsx/sdk"
 import type { Config } from "@opencode-ai/sdk/v2"
+import path from "node:path"
 
 import {
   captureOpenCodeAgentOptions,
   type CapturedOpenCodeAgentOptions,
   type OpenCodeAgentOptions,
 } from "./opencode-agent-options.js"
+import type { OpenCodeConfig } from "./opencode-config.js"
+
+type OpenCodePermissions = Exclude<NonNullable<OpenCodeConfig["permission"]>, string>
+
+// Only OpenCode needs these native directory exceptions. The runtime owns the
+// private request association; other providers keep their existing behavior.
+const AML_AGENT_STAGED_FILES = Symbol.for("@aml-jsx/sdk/agent-staged-files")
+
+interface OpenCodeStagingGlobal {
+  [AML_AGENT_STAGED_FILES]?: WeakMap<object, readonly string[]>
+}
 
 /** Agent provider returned by {@link opencodeAgent}. */
 export interface OpenCodeAgentProvider extends AgentProvider {
@@ -39,29 +51,23 @@ class OpenCodeAcpProfile implements AcpAgentProfile<"opencode"> {
   createLaunch(context: Readonly<AcpAgentLaunchContext>): Readonly<AcpAgentLaunch> {
     const configuration: NonNullable<AcpAgentLaunch["configuration"]>[number][] = []
     const initialPromptSections: string[] = []
-    const deniedTools: Record<string, false> = {}
-    const permission: Record<string, "allow" | "deny"> = { "*": "allow" }
+    const permission: Record<string, "deny"> = {}
     const inheritedPermission: Record<string, "deny"> = {}
 
     // OpenCode exposes more granular controls than ACP. Translate the portable
     // request here while the outer Sandbox remains the hard boundary.
     if (context.request.permissions.filesystem === "read-only") {
-      deniedTools.edit = false
-      deniedTools.write = false
       permission.edit = "deny"
       permission.write = "deny"
       inheritedPermission.edit = "deny"
     }
 
     if (!context.request.permissions.shell) {
-      deniedTools.bash = false
       permission.bash = "deny"
       inheritedPermission.bash = "deny"
     }
 
     if (!context.request.permissions.network) {
-      deniedTools.webfetch = false
-      deniedTools.websearch = false
       permission.webfetch = "deny"
       permission.websearch = "deny"
       inheritedPermission.webfetch = "deny"
@@ -82,20 +88,30 @@ class OpenCodeAcpProfile implements AcpAgentProfile<"opencode"> {
     }
 
     const configuredAgents = configTable(this.#options.config.agent)
-    const configuredAmlAgent = configTable(configuredAgents.aml)
-    const configuredAmlTools = configTable(configuredAmlAgent.tools) as Readonly<Record<string, boolean>>
-    // Preserve native Tool choices from both OpenCode config layers, then let
-    // AML's portable permission denials remain the final authority.
-    const tools: Record<string, boolean> = {
-      "*": true,
-      ...this.#options.config.tools,
-      ...configuredAmlTools,
-      ...deniedTools,
+    const configuredAmlAgent = { ...this.#options.config.agent?.aml }
+    // A custom prompt replaces OpenCode's model-specific coding prompt.
+    // AML System text instead travels in the initial ACP user turn.
+    delete configuredAmlAgent.prompt
+    const agentPermission = nativePermissions(configuredAmlAgent.tools, configuredAmlAgent.permission)
+    const stagedFiles =
+      (globalThis as typeof globalThis & OpenCodeStagingGlobal)[AML_AGENT_STAGED_FILES]?.get(context.request) ?? []
+    const stagedDirectories = new Set([
+      ...stagedFiles.map(file => path.posix.dirname(file.replaceAll("\\", "/"))),
+      ...context.request.skills.map(skill => skill.directory.replaceAll("\\", "/")),
+    ])
+
+    if (stagedDirectories.size > 0) {
+      // OpenCode asks for the containing directory's glob, even for one read.
+      // Includes have unique directories; skills grant only their staged package.
+      const external = agentPermission.external_directory
+      delete agentPermission.external_directory
+      agentPermission.external_directory = {
+        ...(typeof external === "string" ? { "*": external } : external),
+        ...Object.fromEntries(
+          [...stagedDirectories].map(directory => [path.posix.join(directory, "*"), "allow" as const])
+        ),
+      }
     }
-    const configuredPermission =
-      typeof this.#options.config.permission === "string"
-        ? { "*": this.#options.config.permission }
-        : (this.#options.config.permission ?? {})
     const configuredSkills = configTable(this.#options.config.skills)
     const configuredSkillPaths = Array.isArray(configuredSkills.paths)
       ? configuredSkills.paths.filter((entry): entry is string => typeof entry === "string")
@@ -111,15 +127,19 @@ class OpenCodeAcpProfile implements AcpAgentProfile<"opencode"> {
       agent: {
         ...configuredAgents,
         aml: {
+          ...configuredAmlAgent,
           mode: "primary",
-          permission,
-          tools,
+          permission: nativePermissions(undefined, agentPermission, permission),
+          tools: {},
         },
       },
       default_agent: "aml",
       // OpenCode merges top-level permissions into every native agent profile,
       // so task subagents receive the same portable AML restrictions.
-      permission: { ...configuredPermission, ...inheritedPermission },
+      permission: nativePermissions(this.#options.config.tools, this.#options.config.permission, inheritedPermission),
+      // Translate legacy tools ourselves so OpenCode cannot reinsert a wildcard
+      // after native rules or alias a write setting over an AML edit denial.
+      tools: {},
       ...(context.request.skills.length === 0
         ? {}
         : {
@@ -179,4 +199,34 @@ function configTable(value: unknown): Readonly<Record<string, unknown>> {
   return typeof value === "object" && value !== null && !Array.isArray(value)
     ? (value as Readonly<Record<string, unknown>>)
     : {}
+}
+
+/** Resolves one native config layer while keeping portable denials last. */
+function nativePermissions(
+  tools: OpenCodeConfig["tools"],
+  permission: OpenCodeConfig["permission"],
+  denied: Readonly<Record<string, "deny">> = {}
+): OpenCodePermissions {
+  const rules: OpenCodePermissions = {}
+
+  for (const [tool, enabled] of Object.entries(tools ?? {})) {
+    const name = tool === "write" || tool === "patch" ? "edit" : tool
+    rules[name] = enabled ? "allow" : "deny"
+  }
+
+  for (const [name, rule] of Object.entries(
+    typeof permission === "string" ? { "*": permission } : (permission ?? {})
+  )) {
+    // OpenCode uses the last matching rule. Overwriting an object key would
+    // retain its old position before a later wildcard, so reinsert it instead.
+    delete rules[name]
+    rules[name] = rule
+  }
+
+  for (const [name, rule] of Object.entries(denied)) {
+    delete rules[name]
+    rules[name] = rule
+  }
+
+  return rules
 }

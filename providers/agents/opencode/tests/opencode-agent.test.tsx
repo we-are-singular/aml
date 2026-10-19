@@ -87,8 +87,8 @@ describe("opencodeAgent()", () => {
       agent: {
         aml: {
           mode: "primary",
-          permission: { "*": "allow" },
-          tools: { "*": true },
+          permission: {},
+          tools: {},
         },
       },
       default_agent: "aml",
@@ -366,29 +366,21 @@ describe("opencodeAgent()", () => {
       agent: {
         aml: {
           permission: {
-            "*": "allow",
             bash: "deny",
             edit: "deny",
             webfetch: "deny",
             websearch: "deny",
             write: "deny",
+            question: "deny",
           },
-          tools: {
-            "*": true,
-            bash: false,
-            edit: false,
-            question: false,
-            task: false,
-            webfetch: false,
-            websearch: false,
-            write: false,
-          },
+          tools: {},
         },
       },
       permission: {
         bash: "deny",
         edit: "deny",
         question: "deny",
+        task: "deny",
         webfetch: "deny",
         websearch: "deny",
       },
@@ -396,6 +388,72 @@ describe("opencodeAgent()", () => {
     expect(config).not.toHaveProperty("agent.aml.permission.task")
     expect(config).not.toHaveProperty("instructions")
     expect((config.agent as { aml: unknown }).aml).not.toHaveProperty("prompt")
+  })
+
+  it("preserves native global and aml profile rules with portable denials ordered last", async () => {
+    let config: OpenCodeSdkConfig | undefined
+    const sandboxProvider = new DeterministicSandboxProvider({
+      exec: command => ({ exitCode: 0, stderr: "", stdout: command === "pwd" ? "/sandbox/repository\n" : "" }),
+      spawn(_command, _args, _request, options) {
+        config = JSON.parse(options.env?.OPENCODE_CONFIG_CONTENT ?? "")
+        return completedProcess()
+      },
+    })
+    const provider = opencodeAgent({
+      config: {
+        agent: {
+          aml: {
+            permission: { bash: "allow", "*": "allow", external_directory: { "/private/*": "deny" } },
+            steps: 7,
+            tools: { "*": true, write: true },
+          },
+          helper: { mode: "subagent", permission: { read: "ask" } },
+        },
+        permission: { edit: "allow", "*": "allow", external_directory: { "*": "deny", "/skills/review/*": "allow" } },
+        tools: { "*": true, task: false },
+      },
+    })
+
+    await expect(
+      new AmlRuntime({ agentProvider: provider }).evaluate(
+        <Sandbox provider={sandboxProvider}>
+          <Agent permissions={{ filesystem: "read-only", network: false, shell: false }}>Prompt</Agent>
+        </Sandbox>
+      )
+    ).rejects.toThrow()
+
+    expect(config?.tools).toEqual({})
+    expect(config?.agent?.helper).toEqual({ mode: "subagent", permission: { read: "ask" } })
+    expect(config?.permission).toEqual({
+      "*": "allow",
+      task: "deny",
+      external_directory: { "*": "deny", "/skills/review/*": "allow" },
+      edit: "deny",
+      bash: "deny",
+      webfetch: "deny",
+      websearch: "deny",
+    })
+    expect(config?.agent?.aml).toMatchObject({
+      steps: 7,
+      tools: {},
+      permission: {
+        "*": "allow",
+        external_directory: { "/private/*": "deny" },
+        edit: "deny",
+        write: "deny",
+        bash: "deny",
+        webfetch: "deny",
+        websearch: "deny",
+      },
+    })
+    expect(Object.keys(config?.agent?.aml?.permission ?? {}).slice(-5)).toEqual([
+      "edit",
+      "write",
+      "bash",
+      "webfetch",
+      "websearch",
+    ])
+    expect(Object.keys(config?.permission ?? {}).slice(-4)).toEqual(["edit", "bash", "webfetch", "websearch"])
   })
 
   it("validates process configuration without external work", () => {
