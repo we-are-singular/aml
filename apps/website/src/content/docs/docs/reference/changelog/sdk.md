@@ -10,6 +10,27 @@ This page tracks `@aml-jsx/sdk`. Entries are newest first. See [GitHub Releases]
 
 <!-- changelog:entries -->
 
+## SDK v0.9.1 — OpenCode native permissions and staged input access
+
+Released 2026-10-20.
+
+This release preserves caller-supplied OpenCode permissions while keeping AML denials authoritative, makes invocation-staged Includes and Skill packages readable under native external-directory denial, and adds CI coverage for the real OpenCode permission path. The Sandbox image moves through v0.6.0 to v0.6.1, which embeds SDK 0.9.0.
+
+### Highlights
+
+- **OpenCode native policy now survives translation** `opencodeAgent()` folds top-level and `agent.aml` `tools` and `permission` settings into OpenCode's permission rules, covering scalar permission strings, granular rules, `external_directory` maps, and legacy `write`/`patch` aliases. Other native `agent.aml` fields are retained, `prompt` stays unset so OpenCode's coding prompt is preserved, and AML's portable denials are applied last under OpenCode's last-rule-wins behavior; empty native `tools` maps prevent a wildcard or alias from overriding an AML `edit` denial. The real permission integration suite now runs in CI against the pinned binary and a local model instead of being gated behind `AML_OPENCODE_SMOKE`. [OpenCode Agent](/docs/providers/agents/opencode/)
+- **Staged Includes and Skills stay readable under external deny** Staged inputs are privately associated with their AgentRequest through a non-enumerable `Symbol.for` registry, adding no public `AgentRequest` field. The OpenCode provider uses that association to allow only the invocation-private directory holding each staged `<Include />` and each staged `<Skill />` package under `permission.external_directory: "deny"`. Unrelated paths stay denied, including files outside a staged Skill package, while JavaScript Tools and structured output continue to work in the same run. [Include reference](/docs/reference/primitives/include/) · [Skill reference](/docs/reference/primitives/skill/)
+- **Sandbox image refreshes through v0.6.1** Sandbox v0.6.0 rebuilds every variant on a refreshed Debian Bookworm runtime base and pins transitive `basic-ftp` to 6.2.3 for the release toolchain without changing embedded Agent runtimes or documented workflows. v0.6.1 embeds SDK 0.9.0, bringing the Claude Agent provider, ACP failure diagnostics, and per-prompt usage summaries into image-hosted workflows. The SDK fixes in this entry are not yet part of the published image. [Sandbox changelog](/docs/reference/changelog/sandbox/) · [Sandbox images](/docs/sandbox-images/)
+
+### Commits
+
+- test(agent-opencode): run native permission regressions in ci (1ec24a4)
+- fix(agent-opencode): preserve native permission configuration (d2854a4)
+- fix(sdk): associate staged inputs with agent requests (32f8af6)
+- release(sandbox): v0.6.1 (e07ed9b)
+- build(sandbox): embed sdk 0.9.0 (5e0dadb)
+- release(sandbox): v0.6.0 (c263d88)
+
 ## SDK v0.9.0 — Claude Agent provider, durable ACP diagnostics, and per-prompt usage
 
 Released 2026-10-16.
