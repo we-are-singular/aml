@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.6.2
+
+Embedded SDK 0.9.1.
+
+The Sandbox image now embeds AML SDK 0.9.1 in place of 0.9.0. Image-hosted OpenCode workflows keep their native permission configuration while AML denials remain authoritative, and staged Includes and Skill packages stay readable when native external-directory access is denied. The image's installed Agent runtimes, image contract, and documented workflows are otherwise unchanged.
+
+- **OpenCode native permissions are preserved.** The embedded SDK folds top-level and `agent.aml` `tools` and `permission` settings into OpenCode's permission rules, including scalar permission strings, granular rules, `external_directory` maps, and the legacy `write`/`patch` aliases. Other native `agent.aml` fields are retained and OpenCode's coding prompt stays intact, while AML's portable denials are applied last under OpenCode's last-rule-wins behavior. Empty native `tools` maps prevent a wildcard or alias from overriding an AML `edit` denial. See [OpenCode Agent](/docs/providers/agents/opencode/).
+- **Staged Includes and Skills remain readable under external deny.** Staged inputs are associated with their `AgentRequest` through a non-enumerable `Symbol.for` registry, adding no public `AgentRequest` field. The OpenCode provider uses that association to allow only the invocation-private directory holding each staged `<Include />` and each staged `<Skill />` package when `permission.external_directory` is `deny`. Unrelated paths remain denied, including files outside a staged Skill package, while JavaScript Tools and structured output continue to work in the same run. See [Include reference](/docs/reference/primitives/include/) and [Skill reference](/docs/reference/primitives/skill/).
+- **Release scope and history.** The embedded SDK release also adds CI coverage for the real OpenCode permission path against the pinned binary. This entry contains no other dependency changes, so the image's installed Agent runtimes and image contract remain unchanged. See [SDK changelog](/docs/reference/changelog/sdk/) and [Sandbox images](/docs/sandbox-images/).
+
+### Commits
+
+- `build(sandbox): embed sdk 0.9.1` (2ffd83f)
+
 ## 0.6.1
 
 Embedded AML SDK 0.9.0.
