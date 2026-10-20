@@ -13,6 +13,9 @@ import { opencodeAgent, type OpenCodeAgentOptions, type OpenCodeConfig } from ".
 // Run real native tools and ACP in CI using the pinned binary and a local model.
 const command =
   process.env.AML_OPENCODE_COMMAND ?? path.resolve(import.meta.dirname, "../../../../node_modules/.bin/opencode")
+// Native startup competes with the other workspace tests on shared CI runners.
+// Leave 15 seconds before each test's deadline for cancellation and cleanup.
+const evaluationTimeoutMs = 60_000
 const fixtures: OpenCodeFixture[] = []
 
 afterEach(async () => {
@@ -51,7 +54,7 @@ for (const layer of ["global", "agent"] as const) {
       await expect(
         new AmlRuntime({ agentProvider: fixture.provider(native) }).evaluate(
           <Agent permissions={{ filesystem: "read-only", shell: false, network: false }}>Inspect the fixture.</Agent>,
-          { signal: AbortSignal.timeout(20_000) }
+          { signal: AbortSignal.timeout(evaluationTimeoutMs) }
         )
       ).resolves.toBe("recovered")
 
@@ -61,7 +64,7 @@ for (const layer of ["global", "agent"] as const) {
       for (const denied of ["bash", "edit", "write", "task", "webfetch", "websearch"]) {
         expect(offered).not.toContain(denied)
       }
-    }, 30_000)
+    }, 75_000)
   }
 }
 
@@ -95,10 +98,10 @@ it("honors native scalar, granular and legacy tool rules without widening portab
       }),
     }).evaluate(
       <Agent permissions={{ filesystem: "read-only", shell: false, network: false }}>Inspect the fixture.</Agent>,
-      { signal: AbortSignal.timeout(20_000) }
+      { signal: AbortSignal.timeout(evaluationTimeoutMs) }
     )
   ).resolves.toBe("narrow rules preserved")
-}, 30_000)
+}, 75_000)
 
 it("reads only invocation-staged Includes and skills under external deny, retaining JS Tools and structured output", async () => {
   const fixture = await OpenCodeFixture.create()
@@ -163,11 +166,11 @@ it("reads only invocation-staged Includes and skills under external deny, retain
         <Tool use={checkProof} />
         Inspect the fixture and submit the proof.
       </Agent>,
-      { signal: AbortSignal.timeout(25_000) }
+      { signal: AbortSignal.timeout(evaluationTimeoutMs) }
     )
   ).resolves.toBe('{"proof":"complete"}')
   expect(invoked).toEqual(["JS_PROOF"])
-}, 35_000)
+}, 75_000)
 
 for (const layer of ["global", "agent"] as const) {
   for (const { tools, enabled } of [
@@ -189,11 +192,11 @@ for (const layer of ["global", "agent"] as const) {
 
       await expect(
         new AmlRuntime({ agentProvider: fixture.provider(native) }).evaluate(<Agent>Inspect the fixture.</Agent>, {
-          signal: AbortSignal.timeout(20_000),
+          signal: AbortSignal.timeout(evaluationTimeoutMs),
         })
       ).resolves.toBe("native aliases preserved")
       expect(fixture.requests).toHaveLength(1)
-    }, 30_000)
+    }, 75_000)
   }
 }
 
@@ -239,11 +242,11 @@ for (const continueOnDeny of [false, true]) {
     })
     await expect(
       new AmlRuntime({ agentProvider: rejectingProvider }).evaluate(<Agent>Inspect the fixture.</Agent>, {
-        signal: AbortSignal.timeout(20_000),
+        signal: AbortSignal.timeout(evaluationTimeoutMs),
       })
     ).resolves.toBe(continueOnDeny ? "recovered after rejection" : "")
     expect(fixture.requests).toHaveLength(continueOnDeny ? 3 : 1)
-  }, 30_000)
+  }, 75_000)
 }
 
 interface ModelRequest {
