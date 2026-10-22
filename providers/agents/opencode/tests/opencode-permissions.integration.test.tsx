@@ -1,11 +1,11 @@
 import { execFileSync } from "node:child_process"
-import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises"
+import { mkdtemp, mkdir, realpath, rm, writeFile } from "node:fs/promises"
 import { createServer, type Server } from "node:http"
 import os from "node:os"
 import path from "node:path"
 
 import { Agent, AmlRuntime, defineAcpAgentProvider, defineTool, Include, Skill, Tool } from "@aml-jsx/sdk"
-import { afterEach, expect, it } from "vitest"
+import { afterEach, expect, it, vi } from "vitest"
 import { z } from "zod"
 
 import { opencodeAgent, type OpenCodeAgentOptions, type OpenCodeConfig } from "../src/index.js"
@@ -19,6 +19,7 @@ const evaluationTimeoutMs = 60_000
 const fixtures: OpenCodeFixture[] = []
 
 afterEach(async () => {
+  vi.unstubAllEnvs()
   await Promise.all(fixtures.splice(0).map(fixture => fixture.close()))
 })
 
@@ -249,6 +250,25 @@ for (const continueOnDeny of [false, true]) {
   }, 75_000)
 }
 
+it("creates the fixture checkout without reinitializing a hook's repository", async () => {
+  const hook = await realpath(await mkdtemp(path.join(os.tmpdir(), "aml-opencode-hook-")))
+  const git = (...args: string[]) => execFileSync("git", args, { cwd: hook, encoding: "utf8" }).trim()
+  try {
+    for (const name of Object.keys(process.env)) if (name.startsWith("GIT_")) vi.stubEnv(name, undefined)
+    git("init", "-q", "main")
+    git("-C", "main", "worktree", "add", "-q", "--orphan", "../worktree")
+    // Git exports a worktree's gitdir to its hooks; its config is shared with the main checkout.
+    vi.stubEnv("GIT_DIR", path.join(hook, "main", ".git", "worktrees", "worktree"))
+
+    const fixture = await OpenCodeFixture.create()
+
+    expect(git("-C", "main", "config", "--get", "core.bare")).toBe("false")
+    expect(git("-C", fixture.repository, "rev-parse", "--absolute-git-dir")).toBe(path.join(fixture.repository, ".git"))
+  } finally {
+    await rm(hook, { force: true, recursive: true })
+  }
+})
+
 interface ModelRequest {
   messages: { role: string; content: string }[]
   tools: { function: { name: string } }[]
@@ -315,13 +335,20 @@ class OpenCodeFixture {
   }
 
   static async create(): Promise<OpenCodeFixture> {
-    const fixture = new OpenCodeFixture(await mkdtemp(path.join(os.tmpdir(), "aml-opencode-permissions-")))
+    // OpenCode runs in the physical cwd and treats symlinked spellings of it as
+    // external directories; macOS resolves its temporary directory through /private.
+    const fixture = new OpenCodeFixture(
+      await realpath(await mkdtemp(path.join(os.tmpdir(), "aml-opencode-permissions-")))
+    )
     fixtures.push(fixture)
     await mkdir(fixture.repository)
     await mkdir(path.join(fixture.root, "outside"))
     await writeFile(path.join(fixture.repository, "proof.txt"), "INSIDE_PROOF")
     await writeFile(path.join(fixture.repository, "blocked.txt"), "BLOCKED_PROOF")
     await writeFile(path.join(fixture.root, "outside", "proof.txt"), "OUTSIDE_PROOF")
+    // Git hooks export GIT_DIR. Inherited, it makes git init reinitialize the
+    // developer's repository and OpenCode resolve that repository as its project.
+    for (const name of Object.keys(process.env)) if (name.startsWith("GIT_")) vi.stubEnv(name, undefined)
     execFileSync("git", ["init", "-q", fixture.repository])
     await new Promise<void>(resolve => fixture.#server.listen(0, "127.0.0.1", resolve))
     const address = fixture.#server.address()
