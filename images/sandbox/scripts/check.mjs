@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs"
 import { dirname, join, resolve } from "node:path"
 import process from "node:process"
 import { spawnSync } from "node:child_process"
@@ -7,6 +8,8 @@ import { agentVariants, getVariant, variantNames } from "./variants.mjs"
 
 const imageDirectory = resolve(dirname(fileURLToPath(import.meta.url)), "..")
 const allAgentCommands = Object.values(agentVariants).flatMap(variant => variant.commands)
+// The image's pinned Node build stage must match the release that local tooling and CI pin.
+const nodeVersion = `v${readFileSync(resolve(imageDirectory, "../../.nvmrc"), "utf8").trim()}`
 
 function main() {
   const argument = process.argv[2] ?? "full"
@@ -34,6 +37,8 @@ function main() {
       `AML_AGENT_SANDBOX_COMMANDS=${commands}`,
       "--env",
       `AML_AGENT_SANDBOX_EXCLUDED_COMMANDS=${excludedCommands}`,
+      "--env",
+      `AML_AGENT_SANDBOX_NODE_VERSION=${nodeVersion}`,
       "--volume",
       `${join(imageDirectory, "fixtures/clean-workspace")}:/fixture:ro`,
       "--volume",
