@@ -250,6 +250,25 @@ for (const continueOnDeny of [false, true]) {
   }, 75_000)
 }
 
+it("creates the fixture checkout without reinitializing a hook's repository", async () => {
+  const hook = await realpath(await mkdtemp(path.join(os.tmpdir(), "aml-opencode-hook-")))
+  const git = (...args: string[]) => execFileSync("git", args, { cwd: hook, encoding: "utf8" }).trim()
+  try {
+    for (const name of Object.keys(process.env)) if (name.startsWith("GIT_")) vi.stubEnv(name, undefined)
+    git("init", "-q", "main")
+    git("-C", "main", "worktree", "add", "-q", "--orphan", "../worktree")
+    // Git exports a worktree's gitdir to its hooks; its config is shared with the main checkout.
+    vi.stubEnv("GIT_DIR", path.join(hook, "main", ".git", "worktrees", "worktree"))
+
+    const fixture = await OpenCodeFixture.create()
+
+    expect(git("-C", "main", "config", "--get", "core.bare")).toBe("false")
+    expect(git("-C", fixture.repository, "rev-parse", "--absolute-git-dir")).toBe(path.join(fixture.repository, ".git"))
+  } finally {
+    await rm(hook, { force: true, recursive: true })
+  }
+})
+
 interface ModelRequest {
   messages: { role: string; content: string }[]
   tools: { function: { name: string } }[]
