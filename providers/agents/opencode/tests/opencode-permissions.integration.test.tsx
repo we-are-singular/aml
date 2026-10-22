@@ -5,7 +5,7 @@ import os from "node:os"
 import path from "node:path"
 
 import { Agent, AmlRuntime, defineAcpAgentProvider, defineTool, Include, Skill, Tool } from "@aml-jsx/sdk"
-import { afterEach, expect, it } from "vitest"
+import { afterEach, expect, it, vi } from "vitest"
 import { z } from "zod"
 
 import { opencodeAgent, type OpenCodeAgentOptions, type OpenCodeConfig } from "../src/index.js"
@@ -19,6 +19,7 @@ const evaluationTimeoutMs = 60_000
 const fixtures: OpenCodeFixture[] = []
 
 afterEach(async () => {
+  vi.unstubAllEnvs()
   await Promise.all(fixtures.splice(0).map(fixture => fixture.close()))
 })
 
@@ -326,6 +327,9 @@ class OpenCodeFixture {
     await writeFile(path.join(fixture.repository, "proof.txt"), "INSIDE_PROOF")
     await writeFile(path.join(fixture.repository, "blocked.txt"), "BLOCKED_PROOF")
     await writeFile(path.join(fixture.root, "outside", "proof.txt"), "OUTSIDE_PROOF")
+    // Git hooks export GIT_DIR. Inherited, it makes git init reinitialize the
+    // developer's repository and OpenCode resolve that repository as its project.
+    for (const name of Object.keys(process.env)) if (name.startsWith("GIT_")) vi.stubEnv(name, undefined)
     execFileSync("git", ["init", "-q", fixture.repository])
     await new Promise<void>(resolve => fixture.#server.listen(0, "127.0.0.1", resolve))
     const address = fixture.#server.address()
