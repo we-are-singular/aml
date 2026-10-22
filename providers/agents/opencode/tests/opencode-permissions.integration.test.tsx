@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process"
-import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises"
+import { mkdtemp, mkdir, realpath, rm, writeFile } from "node:fs/promises"
 import { createServer, type Server } from "node:http"
 import os from "node:os"
 import path from "node:path"
@@ -315,7 +315,11 @@ class OpenCodeFixture {
   }
 
   static async create(): Promise<OpenCodeFixture> {
-    const fixture = new OpenCodeFixture(await mkdtemp(path.join(os.tmpdir(), "aml-opencode-permissions-")))
+    // OpenCode runs in the physical cwd and treats symlinked spellings of it as
+    // external directories; macOS resolves its temporary directory through /private.
+    const fixture = new OpenCodeFixture(
+      await realpath(await mkdtemp(path.join(os.tmpdir(), "aml-opencode-permissions-")))
+    )
     fixtures.push(fixture)
     await mkdir(fixture.repository)
     await mkdir(path.join(fixture.root, "outside"))
