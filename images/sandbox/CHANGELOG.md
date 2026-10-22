@@ -1,5 +1,21 @@
 # Changelog
 
+## Next release
+
+Node.js 26.12.1 security runtime.
+
+The Sandbox image moves from Node.js 26.12.0 to 26.12.1, so every variant ships the runtime from the [October 21, 2026 Node.js security release](https://nodejs.org/en/blog/vulnerability/october-2026-security-releases). The `hono` package bundled with the embedded SDK is also patched. The image's Agent runtimes, image contract, and documented workflows are unchanged.
+
+- **Patched Node.js runtime.** The Dockerfile's build stage is pinned to the `node:26-bookworm-slim` digest for 26.12.1. The runtime stage copies Node.js from that stage, so every variant (`full`, `claude`, `codex`, `copilot`, `glm`, `opencode`, and `pi`) gets the patched runtime. The release fixes four high-severity issues: an out-of-bounds write in the Brotli decoder that allows remote code execution (CVE-2026-111497), two TLS certificate hostname-verification bypasses (CVE-2026-105483, CVE-2026-106069), and `dns.resolve` cutting names off at a NUL character (CVE-2026-105482).
+- **Patched `hono`.** The image lockfile moves `hono` from 4.13.7 to 4.13.13 for GHSA-5r4p-p66f-jhc7, where `serveStatic` decodes request paths twice and lets requests bypass middleware on static paths. `@modelcontextprotocol/sdk` brings `hono` into the image through the embedded SDK.
+- **Smoke check asserts the Node.js version.** The image smoke check now fails unless the image's `node --version` matches the release pinned in the repository's `.nvmrc`. A base-image digest that drifts from that release can no longer pass CI or publication.
+
+### Commits
+
+- `build(root): update node 26 runtime to 26.12.1`
+- `fix(root): update hono for ghsa-5r4p-p66f-jhc7`
+- `test(sandbox): assert the image node version`
+
 ## 0.6.2
 
 Embedded SDK 0.9.1.

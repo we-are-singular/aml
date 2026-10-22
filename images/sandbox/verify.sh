@@ -10,6 +10,12 @@ for command_name in sh tar mkdir rm git node npm python aml ${AML_AGENT_SANDBOX_
   command -v "$command_name" >/dev/null
 done
 
+node_version="$(node --version)"
+if [ -n "${AML_AGENT_SANDBOX_NODE_VERSION:-}" ] && [ "$node_version" != "$AML_AGENT_SANDBOX_NODE_VERSION" ]; then
+  printf 'unexpected Node.js version: %s (expected %s)\n' "$node_version" "$AML_AGENT_SANDBOX_NODE_VERSION" >&2
+  exit 1
+fi
+
 for command_name in ${AML_AGENT_SANDBOX_EXCLUDED_COMMANDS:-}; do
   if command -v "$command_name" >/dev/null; then
     printf 'unexpected Agent command: %s\n' "$command_name" >&2
