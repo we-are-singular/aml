@@ -4,13 +4,13 @@
 
 Node.js and OpenCode security runtime updates.
 
-Sandbox images include Node.js 26.12.1, OpenCode 1.19.4, patched Hono, and updates to npm, Copilot, and Pi's MCP adapter.
+Sandbox images include Node.js 26.12.1, OpenCode 1.19.4, patched Hono, and updates to npm and Pi's MCP adapter.
 
 - **Patched Node.js runtime.** Every variant uses Node.js 26.12.1. The [October 21 security release](https://nodejs.org/en/blog/vulnerability/october-2026-security-releases) fixes the Brotli decoder remote-code-execution vulnerability (CVE-2026-111497), TLS hostname-verification bypasses (CVE-2026-105483, CVE-2026-106069), and DNS name truncation at NUL characters (CVE-2026-105482).
 - **Patched Hono.** Hono 4.13.13 fixes a static-file path decoding issue that could bypass middleware checks (CVE-2026-111757).
 - **Patched HTTP parsing and validation.** The image uses body-parser 2.4.0 and Zod 4.6.7, fixing compressed-request denial of service (CVE-2026-111181) and excessive memory consumption during validation (CVE-2023-54404).
 - **Patched OpenCode runtime.** OpenCode moves from 1.19.0 to 1.19.4 in the full and OpenCode variants. Its bundled Bun runtime advances to 1.4.4 with security fixes for Brotli, TLS, HTTP, WebSocket, and `fetch`, plus refreshed root certificates. See the [OpenCode 1.19.4 release notes](https://github.com/anomalyco/opencode/releases/tag/v1.19.4).
-- **Updated supporting tools.** Every variant uses npm 12.2.1 with its bundled `ip-address` patched to 10.7.4, fixing CVE-2026-111997. The full and Copilot variants use Copilot 1.0.103, and the full and Pi variants use Pi MCP Adapter 5.3.2.
+- **Updated supporting tools.** Every variant uses npm 12.2.1 with its bundled `ip-address` patched to 10.7.4, fixing CVE-2026-111997. The full and Pi variants use Pi MCP Adapter 5.3.2.
 
 ### Commits
 

@@ -144,8 +144,8 @@ class CopilotAcpProfile implements AcpAgentProfile<"copilot"> {
         ...(authTokenEnvironmentVariable === undefined ? [] : [`--auth-token-env=${authTokenEnvironmentVariable}`]),
         "--no-auto-login",
         "--no-color",
-        // Copilot 1.0.103 replaced remote-export flags with account-history sync.
-        "--sync-session=off",
+        "--no-remote",
+        "--no-remote-export",
         `--model=${model}`,
         ...(this.#options.reasoningEffort === undefined ? [] : [`--reasoning-effort=${this.#options.reasoningEffort}`]),
         ...permissionArgs,
