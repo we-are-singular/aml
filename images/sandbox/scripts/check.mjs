@@ -10,6 +10,8 @@ const imageDirectory = resolve(dirname(fileURLToPath(import.meta.url)), "..")
 const allAgentCommands = Object.values(agentVariants).flatMap(variant => variant.commands)
 // The image's pinned Node build stage must match the release that local tooling and CI pin.
 const nodeVersion = `v${readFileSync(resolve(imageDirectory, "../../.nvmrc"), "utf8").trim()}`
+const { packageManager } = JSON.parse(readFileSync(resolve(imageDirectory, "../../package.json"), "utf8"))
+const npmVersion = packageManager.slice(4)
 
 function main() {
   const argument = process.argv[2] ?? "full"
@@ -39,6 +41,8 @@ function main() {
       `AML_AGENT_SANDBOX_EXCLUDED_COMMANDS=${excludedCommands}`,
       "--env",
       `AML_AGENT_SANDBOX_NODE_VERSION=${nodeVersion}`,
+      "--env",
+      `AML_AGENT_SANDBOX_NPM_VERSION=${npmVersion}`,
       "--volume",
       `${join(imageDirectory, "fixtures/clean-workspace")}:/fixture:ro`,
       "--volume",
