@@ -37,7 +37,13 @@
     "release-it": "^21.1.1"
   },
   "overrides": {
-    "basic-ftp": "6.2.3"
+    "basic-ftp": "6.2.3",
+    "glm-acp-agent": {
+      "zod": "4.6.7"
+    },
+    "pi-acp": {
+      "zod": "4.6.7"
+    }
   },
   "allowScripts": {
     "opencode-ai@1.19.4": true
