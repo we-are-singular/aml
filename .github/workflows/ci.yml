@@ -46,6 +46,7 @@ jobs:
               - 'providers/**/vite.config.ts'
               - 'providers/**/tsconfig.json'
               - 'providers/**/tsconfig.build.json'
+              - 'images/sandbox/scripts/install-npm.mjs'
               - 'config/**'
               - 'package.json'
               - 'package-lock.json'
