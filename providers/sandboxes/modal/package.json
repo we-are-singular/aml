@@ -21,6 +21,6 @@
   },
   "dependencies": {
     "@aml-jsx/sdk": "*",
-    "modal": "0.11.0"
+    "modal": "0.11.1"
   }
 }
