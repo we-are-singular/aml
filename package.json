@@ -29,7 +29,8 @@
     "release:sdk": "npm run release --workspace=@aml-jsx/sdk --",
     "smoke": "vite-node sdk/tests/smoke/run-smoke.ts",
     "smoke:kitchen-sink": "vite-node sdk/tests/smoke/kitchen-sink.smoke.tsx",
-    "test": "turbo test"
+    "test": "turbo test && npm run test:agent-startup",
+    "test:agent-startup": "node images/sandbox/fixtures/clean-workspace/check-acp-startup.mjs glm-acp-agent pi-acp"
   },
   "devDependencies": {
     "@agentclientprotocol/claude-agent-acp": "0.91.0",
