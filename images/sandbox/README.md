@@ -23,10 +23,10 @@ The unqualified version and `latest` tags remain aliases for `full`. Pin a versi
 | Full     | `X.Y.Z`, `X.Y.Z-full` | `latest`, `full` | Every Agent listed below                              |
 | Claude   | `X.Y.Z-claude`        | `claude`         | Claude Agent ACP `0.91.0`, Claude Agent SDK `0.3.300` |
 | Codex    | `X.Y.Z-codex`         | `codex`          | Codex `0.162.1`, Codex ACP `2.2.2`                    |
-| Copilot  | `X.Y.Z-copilot`       | `copilot`        | GitHub Copilot CLI `1.0.98`                           |
+| Copilot  | `X.Y.Z-copilot`       | `copilot`        | GitHub Copilot CLI `1.0.103`                          |
 | GLM      | `X.Y.Z-glm`           | `glm`            | GLM ACP Agent `1.15.0`                                |
-| OpenCode | `X.Y.Z-opencode`      | `opencode`       | OpenCode `1.19.0`                                     |
-| Pi       | `X.Y.Z-pi`            | `pi`             | Pi `1.2.0`, Pi ACP `0.0.34`, Pi MCP Adapter `5.3.1`   |
+| OpenCode | `X.Y.Z-opencode`      | `opencode`       | OpenCode `1.19.4`                                     |
+| Pi       | `X.Y.Z-pi`            | `pi`             | Pi `1.2.0`, Pi ACP `0.0.34`, Pi MCP Adapter `5.3.2`   |
 
 Every variant is built from the same Dockerfile. All variants contain AML, Node.js and npm, Python and pip, Git, jq, and the same runtime layout; a single-Agent variant installs only that Agent's ACP adapter and native runtime. These are clean builds, not deletions layered on top of `full`, and no Agent is installed when a Sandbox starts.
 

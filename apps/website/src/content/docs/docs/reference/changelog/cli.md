@@ -10,6 +10,12 @@ This page tracks `@aml-jsx/cli`. Entries are newest first. See [GitHub Releases]
 
 <!-- changelog:entries -->
 
+## Next release
+
+Vite dependency patch update.
+
+The CLI raises its Vite dependency baseline from 8.3.4 to 8.3.5, carrying upstream build, asset, and dependency fixes into fresh CLI installations.
+
 ## CLI v0.3.4 — Hardened argument parsing with cac 7.1.0
 
 Released 2026-10-16.
