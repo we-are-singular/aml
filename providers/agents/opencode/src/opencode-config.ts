@@ -388,6 +388,27 @@ interface OpenCodeModelVariantsConfig {
   [name: string]: OpenCodeModelVariantConfig
 }
 
+/** One native reasoning control used to derive a model's selectable variants. */
+type OpenCodeModelReasoningOption =
+  | {
+      /** Selects a named reasoning-effort control. */
+      type: "effort"
+      /** Effort values offered by this model, such as low and high. */
+      values: string[]
+    }
+  | {
+      /** Selects an on-or-off reasoning control. */
+      type: "toggle"
+    }
+  | {
+      /** Selects a reasoning-token budget control. */
+      type: "budget_tokens"
+      /** Minimum reasoning-token budget accepted by this model. */
+      min?: number
+      /** Maximum reasoning-token budget accepted by this model. */
+      max?: number
+    }
+
 /** One model added to or overridden within an OpenCode provider. */
 interface OpenCodeProviderModelConfig {
   /** Provider-native model identifier. */
@@ -407,6 +428,9 @@ interface OpenCodeProviderModelConfig {
 
   /** Whether the model supports reasoning output. */
   reasoning?: boolean
+
+  /** Reasoning controls OpenCode uses to build this model's variants. */
+  reasoning_options?: OpenCodeModelReasoningOption[]
 
   /** Whether callers may configure sampling temperature. */
   temperature?: boolean

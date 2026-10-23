@@ -45,7 +45,14 @@ describe("opencodeAgent()", () => {
       custom: {
         models: {
           disabled: { interleaved: false },
-          named: { interleaved: "reasoning_text" },
+          named: {
+            interleaved: "reasoning_text",
+            reasoning_options: [
+              { type: "effort", values: ["low", "high"] },
+              { type: "toggle" },
+              { type: "budget_tokens", min: 1024, max: 8192 },
+            ],
+          },
           custom: { interleaved: { field: "custom_reasoning" } },
         },
         options: { chunkTimeout: false },
