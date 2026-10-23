@@ -4,7 +4,8 @@ FROM node:26-bookworm-slim@sha256:28147155d47dc31abe0a46e0d12b59b2fb3d0a2dcc5dc6
 
 ARG IMAGE_VARIANT
 
-RUN npm install --global npm@12.2.0 --no-audit --no-fund
+COPY scripts/install-npm.mjs /tmp/install-npm.mjs
+RUN node /tmp/install-npm.mjs && rm /tmp/install-npm.mjs
 
 WORKDIR /opt/aml-agent-sandbox
 COPY package.json package-lock.json ./
