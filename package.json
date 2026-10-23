@@ -65,7 +65,7 @@
     "node": ">=26.0.0",
     "npm": ">=11.0.0"
   },
-  "packageManager": "npm@12.2.0",
+  "packageManager": "npm@12.2.1",
   "allowScripts": {
     "opencode-ai@1.19.4": true
   }
