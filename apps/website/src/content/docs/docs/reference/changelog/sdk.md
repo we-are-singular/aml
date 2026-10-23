@@ -10,6 +10,14 @@ This page tracks `@aml-jsx/sdk`. Entries are newest first. See [GitHub Releases]
 
 <!-- changelog:entries -->
 
+## Next release
+
+Provider dependency patch updates.
+
+`OpenCodeConfig` now accepts model `reasoning_options`, including effort, toggle, and token-budget controls. Provider dependencies advance to OpenCode SDK 1.19.4 and Modal 0.11.1. OpenCode executable 1.19.4 includes the bundled Bun security fixes.
+
+The Copilot provider supports CLI 1.0.103 and disables account-history sync for each invocation.
+
 ## SDK v0.9.1 — OpenCode native permissions and staged input access
 
 Released 2026-10-20.
