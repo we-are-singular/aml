@@ -20,8 +20,15 @@ env:
   LOCAL_IMAGE: aml-agent-sandbox:ci
 
 jobs:
+  security:
+    name: Security audit
+    permissions:
+      contents: read
+    uses: ./.github/workflows/security-audit.yml
+
   publish:
     name: Build and publish / linux-amd64
+    needs: security
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -50,10 +57,6 @@ jobs:
         env:
           AML_AGENT_SANDBOX_IMAGE: ${{ env.LOCAL_IMAGE }}
         run: npm run check
-
-      - name: Audit image dependencies
-        working-directory: images/sandbox
-        run: node ../../scripts/check-npm-audit.mjs --omit=dev
 
       # Registry credentials are introduced only after the build and smoke check.
       - name: Log in to GHCR

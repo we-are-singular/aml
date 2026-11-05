@@ -55,6 +55,10 @@ jobs:
               - '.nvmrc'
               - '.github/workflows/ci.yml'
 
+  security:
+    name: Security audit
+    uses: ./.github/workflows/security-audit.yml
+
   quality:
     name: Quality / Ubuntu
     runs-on: ubuntu-latest
@@ -80,12 +84,6 @@ jobs:
 
       - name: Install dependencies
         run: npm ci --prefer-offline --include=optional
-
-      # Fails on every advisory except reviewed entries in scripts/npm-audit-allowlist.json.
-      - name: Check for npm audit advisories
-        run: |
-          node scripts/check-npm-audit.mjs
-          node scripts/check-npm-audit.mjs --omit=dev
 
       - name: Check formatting
         run: npm run format:check
@@ -160,18 +158,20 @@ jobs:
 
   gate:
     name: CI
-    needs: [changes, quality, portability]
+    needs: [changes, security, quality, portability]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 5
     env:
       CHANGES_RESULT: ${{ needs.changes.result }}
+      SECURITY_RESULT: ${{ needs.security.result }}
       QUALITY_RESULT: ${{ needs.quality.result }}
       PORTABILITY_RESULT: ${{ needs.portability.result }}
     steps:
       - name: Verify applicable checks
         run: |
           test "$CHANGES_RESULT" = success
+          test "$SECURITY_RESULT" = success
           test "$QUALITY_RESULT" = success
           test "$PORTABILITY_RESULT" = success || test "$PORTABILITY_RESULT" = skipped
 
