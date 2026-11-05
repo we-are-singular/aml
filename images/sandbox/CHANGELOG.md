@@ -4,13 +4,15 @@
 
 Node.js and OpenCode security runtime updates.
 
-Sandbox images include Node.js 26.12.1, OpenCode 1.19.4, patched Hono, and updates to npm and Pi's MCP adapter.
+Sandbox images include Node.js 26.13.0 LTS, OpenCode 1.19.4, patched Hono, and updates to npm and Pi.
 
-- **Patched Node.js runtime.** Every variant uses Node.js 26.12.1. The [October 21 security release](https://nodejs.org/en/blog/vulnerability/october-2026-security-releases) fixes the Brotli decoder remote-code-execution vulnerability (CVE-2026-111497), TLS hostname-verification bypasses (CVE-2026-105483, CVE-2026-106069), and DNS name truncation at NUL characters (CVE-2026-105482).
+- **Patched Node.js runtime.** Every variant uses Node.js 26.13.0 LTS, retaining the fixes from 26.12.1. The [October 21 security release](https://nodejs.org/en/blog/vulnerability/october-2026-security-releases) fixes the Brotli decoder remote-code-execution vulnerability (CVE-2026-111497), TLS hostname-verification bypasses (CVE-2026-105483, CVE-2026-106069), and DNS name truncation at NUL characters (CVE-2026-105482).
 - **Patched Hono.** Hono 4.13.13 fixes a static-file path decoding issue that could bypass middleware checks (CVE-2026-111757).
 - **Patched HTTP parsing and validation.** The image uses body-parser 2.4.0 and Zod 4.6.7, fixing compressed-request denial of service (CVE-2026-111181) and excessive memory consumption during validation (CVE-2023-54404).
 - **Patched OpenCode runtime.** OpenCode moves from 1.19.0 to 1.19.4 in the full and OpenCode variants. Its bundled Bun runtime advances to 1.4.4 with security fixes for Brotli, TLS, HTTP, WebSocket, and `fetch`, plus refreshed root certificates. See the [OpenCode 1.19.4 release notes](https://github.com/anomalyco/opencode/releases/tag/v1.19.4).
-- **Updated supporting tools.** Every variant uses npm 12.2.1 with its bundled `ip-address` patched to 10.7.4, fixing CVE-2026-111997. The full and Pi variants use Pi MCP Adapter 5.3.2.
+- **Updated supporting tools.** Every variant uses npm 12.2.2, which bundles patched `ip-address` 10.7.5 and fixes CVE-2026-111997 without a separate package replacement. The full and Pi variants use Pi MCP Adapter 5.3.2.
+- **Patched npm utilities and Debian base.** npm's separately bundled `glob` and `minimatch` use 14.0.2 and 11.0.3, addressing traversal cancellation and pattern-expansion denial of service. The pinned Debian Bookworm base is refreshed to include available security updates.
+- **Patched November dependencies.** The locked runtime uses `fast-uri` 3.1.9, `follow-redirects` 1.16.2, and `@hono/node-server` 2.1.5. Pi advances to 1.5.0 with patched `minimatch` and `undici`; the GLM and Pi MCP adapters use `undici` 6.29.1. These updates address URI parsing, credential forwarding, static-file middleware bypass, and denial-of-service vulnerabilities.
 
 ### Commits
 
