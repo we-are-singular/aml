@@ -1,6 +1,6 @@
 ARG IMAGE_VARIANT=full
 
-FROM node:26-bookworm-slim@sha256:28147155d47dc31abe0a46e0d12b59b2fb3d0a2dcc5dc65fce76a074180b16fe AS build
+FROM node:26.13.0-bookworm-slim@sha256:add5c17c14752c54d2f3d519ec46a3815684d41c33f198bcb09fb998f7dcbf68 AS build
 
 ARG IMAGE_VARIANT
 
@@ -33,7 +33,7 @@ RUN install -d image-licenses \
         cp node_modules/@github/copilot/LICENSE.md image-licenses/GitHub-Copilot-CLI-LICENSE.md; \
     fi
 
-FROM debian:bookworm-slim@sha256:7c7b2c966bc9ee8cedfeef67e0e279108992c77681fa595db4a9d65c06ccc587
+FROM debian:bookworm-slim@sha256:734a72b3d6142a71993b4bc580ca01d8ca687f77a2c422d96a961d3376b179bc
 
 ARG IMAGE_VERSION=dev
 ARG IMAGE_VARIANT=full

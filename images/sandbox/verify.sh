@@ -18,7 +18,8 @@ fi
 
 # npm carries its own dependency tree, outside the image package lockfile.
 test "$(npm --version)" = "$AML_AGENT_SANDBOX_NPM_VERSION"
-node -e 'const assert = require("node:assert/strict"); const root = "/usr/local/lib/node_modules/npm/node_modules/ip-address"; assert.equal(require(`${root}/package.json`).version, "10.7.4"); assert.equal(require(root).Address6.isValid("::1"), true)'
+node -e 'const assert = require("node:assert/strict"); const root = "/usr/local/lib/node_modules/npm/node_modules/ip-address"; assert.equal(require(`${root}/package.json`).version, "10.7.5"); assert.equal(require(root).Address6.isValid("::1"), true)'
+node -e 'const assert = require("node:assert/strict"); const root = "/usr/local/lib/node_modules/npm/node_modules"; for (const [name, version] of Object.entries({ glob: "14.0.2", minimatch: "11.0.3" })) assert.equal(require(`${root}/${name}/package.json`).version, version); assert.ok(require(`${root}/glob`).globSync("*/package.json", { cwd: root }).includes("glob/package.json")); assert.equal(require(`${root}/minimatch`).minimatch("package.json", "*.json"), true)'
 
 node /fixture/check-acp-startup.mjs ${AML_AGENT_SANDBOX_COMMANDS:-glm-acp-agent pi-acp}
 
