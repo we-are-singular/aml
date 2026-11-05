@@ -1,0 +1,54 @@
+name: Security Audit
+
+on:
+  schedule:
+    - cron: "23 7 * * *"
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - ".github/workflows/security-audit.yml"
+      - ".nvmrc"
+      - "scripts/check-npm-audit.mjs"
+      - "scripts/npm-audit-allowlist.json"
+      - "package.json"
+      - "package-lock.json"
+      - "images/sandbox/package.json"
+      - "images/sandbox/package-lock.json"
+      - "images/sandbox/scripts/install-npm.mjs"
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    name: ${{ matrix.project }} / ${{ matrix.scope }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        project: [root, sandbox]
+        scope: [all, production]
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v7
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+
+      - name: Set up npm
+        run: node images/sandbox/scripts/install-npm.mjs
+
+      # Audit the committed trees without running dependency installation scripts.
+      - name: Audit locked dependencies
+        env:
+          AUDIT_PROJECT: ${{ matrix.project }}
+          AUDIT_SCOPE: ${{ matrix.scope }}
+        run: |
+          audit_script="$GITHUB_WORKSPACE/scripts/check-npm-audit.mjs"
+          if [ "$AUDIT_PROJECT" = sandbox ]; then cd images/sandbox; fi
+          audit_args=(--package-lock-only)
+          if [ "$AUDIT_SCOPE" = production ]; then audit_args+=(--omit=dev); fi
+          node "$audit_script" "${audit_args[@]}"
