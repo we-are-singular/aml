@@ -10,11 +10,20 @@ This page tracks `@aml-jsx/cli`. Entries are newest first. See [GitHub Releases]
 
 <!-- changelog:entries -->
 
-## Next release
+## CLI v0.3.5 — Vite 8.3.5 dependency patch
 
-Vite dependency patch update.
+Released 2026-11-10.
 
-The CLI raises its Vite dependency baseline from 8.3.4 to 8.3.5, carrying upstream build, asset, and dependency fixes into fresh CLI installations.
+The CLI raises its Vite dependency baseline from 8.3.4 to 8.3.5. Fresh CLI installations resolve the patched Vite release and its updated transitive build dependencies; the `aml` command surface is unchanged. Changes since the `cli-v0.3.4` tag are covered below.
+
+### Highlights
+
+- **Updated Vite transform engine.** The CLI's `vite` dependency range moves from ^8.3.4 to ^8.3.5. Because `aml run` loads TypeScript, TSX, and JavaScript workflows through Vite and `vite-node`, fresh installs now resolve Vite 8.3.5 and carry its upstream build, asset, and dependency fixes into source execution. Commands, flags, environment loading, and output formats stay the same. Covers: build(cli): update shared vite dependency to 8.3.5 (f6afcea). [CLI source execution](/docs/cli/#source-execution) · [CLI changelog](/docs/reference/changelog/cli)
+- **Refreshed transitive build dependencies.** The matching workspace and website manifests move to ^8.3.5 as well, so the shared lockfile resolves postcss ^8.5.30 (from ^8.5.29) and rolldown ~1.2.14 (from ~1.2.12), and accepts `@vitejs/devtools` ^0.7.1 or ^0.8.0. These changes affect how AML workflows are transformed and served during source execution, not the `aml` CLI interface. [CLI source execution](/docs/cli/#source-execution) · [Run the package](/docs/cli/#run-the-package)
+
+### Commits
+
+- build(cli): update shared vite dependency to 8.3.5 (f6afcea)
 
 ## CLI v0.3.4 — Hardened argument parsing with cac 7.1.0
 
