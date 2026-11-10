@@ -10,11 +10,35 @@ This page tracks `@aml-jsx/sdk`. Entries are newest first. See [GitHub Releases]
 
 <!-- changelog:entries -->
 
-## Next release
+## SDK v0.9.2 — Provider dependency patches and OpenCode reasoning options
 
-Provider dependency patch updates.
+Released 2026-11-10.
 
-`OpenCodeConfig` now accepts model `reasoning_options`, including effort, toggle, and token-budget controls. Provider dependencies advance to OpenCode SDK 1.19.4 and Modal 0.11.1. OpenCode executable 1.19.4 includes the bundled Bun security fixes.
+This release adds model-level reasoning controls to `OpenCodeConfig` and advances the bundled provider clients: OpenCode to 1.19.4, Modal to 0.11.1, and the Pi MCP adapter to 5.3.2. The OpenCode executable carries the bundled Bun security fixes, the Copilot provider stays on its verified 1.0.98 baseline, and the Sandbox image v0.6.2 embeds SDK 0.9.1, so these SDK changes are not yet in a published image.
+
+### Highlights
+
+- **OpenCode model reasoning controls** Model entries in `OpenCodeConfig` now accept `reasoning_options`, which OpenCode uses to derive a model's selectable reasoning variants. The field supports named effort levels (`{ type: "effort", values }`), on-or-off reasoning (`{ type: "toggle" }`), and a token budget (`{ type: "budget_tokens", min?, max? }`). The value passes through AML's captured JSON-compatible config, and models that omit it keep their existing behavior. [OpenCode Agent](/docs/providers/agents/opencode/)
+- **Provider dependency patch updates** OpenCode runtime and SDK advance to 1.19.4 in both `opencode-ai` and `@opencode-ai/sdk`, the Modal client advances to 0.11.1, and the Pi MCP adapter advances to 5.3.2. OpenCode 1.19.4 bundles the Bun security fixes. The Copilot provider remains on its verified CLI 1.0.98 baseline with the `--no-remote` and `--no-remote-export` launch flags; the 1.0.103 flag change was reverted to preserve compatibility with the published SDK. [OpenCode Agent](/docs/providers/agents/opencode/) · [Modal Sandbox](/docs/providers/sandboxes/modal/) · [Pi Agent](/docs/providers/agents/pi/)
+- **Sandbox image update and hardening** Sandbox image v0.6.2 embeds SDK 0.9.1, bringing the OpenCode native permission and staged-input fixes to image-hosted workflows. The image's next release also patches bundled agent dependencies, including Pi 1.5.0 and `@hono/node-server` 2.1.5, replaces npm's separately bundled `ip-address`, and makes CI fail when the installed Node.js or npm release diverges from the repository pins. [Sandbox changelog](/docs/reference/changelog/sandbox/) · [Sandbox images](/docs/sandbox-images/)
+
+### Commits
+
+- fix(sandbox): patch bundled agent dependencies (3ee9315)
+- test(sandbox): verify patched adapters and npm version (382da67)
+- fix(agent-copilot): preserve published sdk compatibility (397ea91)
+- docs(sandbox): record http parsing and validation fixes (2a6da17)
+- fix(sandbox): patch npm bundled ip-address to 10.7.4 (26efb2b)
+- build(sandbox-modal): update client to 0.11.1 (a0cca72)
+- build(agent-pi): update mcp adapter to 5.3.2 (ec048d5)
+- fix(agent-copilot): update cli and session sync flags (3f36ae9)
+- fix(agent-opencode): update runtime and sdk to 1.19.4 (1753f88)
+- test(agent-opencode): fix macOS temp paths and hook git leaks in permission tests (#66) (85bfd9e)
+- docs(sandbox): seed next release notes for node 26.12.1 (adff312)
+- test(sandbox): assert the image node version (a0bae2f)
+- test(agent-opencode): allow slower native startup in ci (c072812)
+- release(sandbox): v0.6.2 (74b19bb)
+- build(sandbox): embed sdk 0.9.1 (2ffd83f)
 
 ## SDK v0.9.1 — OpenCode native permissions and staged input access
 
