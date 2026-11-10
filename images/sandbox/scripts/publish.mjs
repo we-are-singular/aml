@@ -14,7 +14,8 @@ const dockerHubImage = "docker.io/wearesingular/aml-agent-sandbox"
 const version = process.argv[2]
 const resumesFromSigning = process.argv[3] === "--resume-signing"
 
-async function main() {
+/** Publishes, checks, and signs every variant before updating the moving tags. */
+export async function main() {
   if (version === "--check") {
     requireCommand("docker", ["buildx", "version"])
     requireCommand("cosign", ["version"])
@@ -35,14 +36,21 @@ async function main() {
   }
 
   const revision = output("git", ["rev-parse", "HEAD"], repositoryRoot)
+  const skipsSmoke = process.env.AML_SANDBOX_NO_SMOKE === "1"
   const temporaryDirectory = mkdtempSync(join(tmpdir(), "aml-agent-sandbox-release-"))
 
   try {
     const images = resumesFromSigning ? publishedImages(version) : []
 
     if (!resumesFromSigning) {
-      // Publish immutable tags first so every live smoke runs against the exact
-      // registry artifact that the stable aliases will eventually select.
+      if (skipsSmoke) {
+        process.stdout.write(
+          "Skipping credentialed Agent smoke tests (--no-smoke); offline image checks remain enabled.\n"
+        )
+      }
+
+      // Publish immutable tags first so checks exercise the exact registry
+      // artifacts that the stable aliases will eventually select.
       for (const name of variantNames) {
         const references = immutableTags(version, name).map(tag => `${dockerHubImage}:${tag}`)
         const digest = buildVariant(name, references, revision, temporaryDirectory)
@@ -53,12 +61,14 @@ async function main() {
       for (const image of images) {
         const immutableReference = `${dockerHubImage}@${image.digest}`
         run("node", ["scripts/check.mjs", image.name, immutableReference], imageDirectory)
-        run(
-          "npm",
-          ["run", "smoke", "--", "--sandbox", "docker", ...(image.name === "full" ? [] : ["--agent", image.name])],
-          repositoryRoot,
-          { ...process.env, AML_SMOKE_SANDBOX_IMAGE: immutableReference }
-        )
+        if (!skipsSmoke) {
+          run(
+            "npm",
+            ["run", "smoke", "--", "--sandbox", "docker", ...(image.name === "full" ? [] : ["--agent", image.name])],
+            repositoryRoot,
+            { ...process.env, AML_SMOKE_SANDBOX_IMAGE: immutableReference }
+          )
+        }
       }
     }
 
@@ -71,8 +81,8 @@ async function main() {
       )
     }
 
-    // Moving aliases change only after every immutable variant passes its real
-    // Agent smoke, so a partial release does not replace working channels.
+    // Moving aliases change only after every variant passes the selected checks
+    // and is signed, so a partial release does not replace working channels.
     for (const image of images) {
       for (const tag of movingTags(image.name)) {
         const reference = `${dockerHubImage}:${tag}`

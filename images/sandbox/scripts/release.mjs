@@ -6,23 +6,26 @@ import process from "node:process"
 import { pathToFileURL, URL } from "node:url"
 
 const releaseArguments = process.argv.slice(2)
-const skipsPublishing = releaseArguments.some(argument => ["--dry-run", "--help", "--version"].includes(argument))
-const resumesFromSigning = releaseArguments.includes("--recover-signing")
-const recoversRelease = releaseArguments.includes("--recover") || resumesFromSigning
+const skipsSmoke = releaseArguments.includes("--no-smoke")
+const releaseItArguments = releaseArguments.filter(argument => argument !== "--no-smoke")
+const skipsPublishing = releaseItArguments.some(argument => ["--dry-run", "--help", "--version"].includes(argument))
+const resumesFromSigning = releaseItArguments.includes("--recover-signing")
+const recoversRelease = releaseItArguments.includes("--recover") || resumesFromSigning
 const publisherBuilder = "aml-agent-sandbox-publisher"
 
+/** Runs the interactive release or recovers publication with the selected options. */
 export function main() {
   try {
-    if (recoversRelease && releaseArguments.length !== 1) {
+    if (recoversRelease && releaseItArguments.length !== 1) {
       throw new Error(`Release recovery cannot be combined with other arguments`)
     }
 
     if (skipsPublishing) {
       const previewEnvironment = { ...process.env }
-      if (releaseArguments.includes("--dry-run")) {
+      if (releaseItArguments.includes("--dry-run")) {
         previewEnvironment.GITHUB_TOKEN = output("gh", ["auth", "token"], process.env)
       }
-      process.exitCode = run("release-it", releaseArguments, previewEnvironment)
+      process.exitCode = run("release-it", releaseItArguments, previewEnvironment)
     } else {
       process.exitCode = release()
     }
@@ -67,7 +70,7 @@ function release() {
       return 0
     }
 
-    const status = run("release-it", releaseArguments, releaseEnvironment)
+    const status = run("release-it", releaseItArguments, releaseEnvironment)
     if (status === 0) syncDescription()
     return status
   } finally {
@@ -136,6 +139,8 @@ function createReleaseEnvironment(environment) {
   const dockerConfig = mkdtempSync(join(tmpdir(), "aml-sandbox-auth-"))
   const releaseEnvironment = {
     ...environment,
+    // Release It invokes publication through a hook, which inherits this environment.
+    AML_SANDBOX_NO_SMOKE: skipsSmoke ? "1" : "0",
     BUILDX_CONFIG: environment.BUILDX_CONFIG ?? join(callerDockerConfig, "buildx"),
     DOCKER_CONFIG: dockerConfig,
   }

@@ -157,6 +157,14 @@ npm run release:sandbox
 
 The command checks that Docker Buildx and Cosign are installed. Docker Hub's browser login then uses a temporary Docker configuration while the caller's Buildx configuration and selected builder remain available. The temporary credentials are deleted when the command exits. Release It prompts for the version, builds and checks every variant, and creates one `sandbox-vX.Y.Z` release commit and tag. Publication pushes the immutable variant tags with SBOM and provenance attestations, runs each Agent's real Docker smoke against the exact pushed digest, signs every digest, and only then updates the moving tags and publishes [`DOCKERHUB.md`](./DOCKERHUB.md) as the Docker Hub repository overview. The active `gh` account authorizes the source tag's GitHub Release.
 
+When model credentials are unavailable, skip the credentialed Agent smoke tests with:
+
+```sh
+npm run release:sandbox -- --no-smoke
+```
+
+This keeps dependency audits, builds, offline image checks, SBOM and provenance attestations, and signing enabled. Authenticated Agent behavior remains unverified for that release. The option also works with `--recover`; live smoke tests run by default.
+
 Docker Hub's metadata API requires a username and personal access token rather than the browser-based registry login used for image publication. Authenticate once in the caller's normal Docker configuration with `docker login --username <username>`, using a read/write personal access token as the password. The release reuses that credential only for the overview update while keeping image publication credentials temporary. To resynchronize only the overview, run `npm run sync:description --prefix images/sandbox`.
 
 Before authentication, the release inspects the selected Buildx driver. An existing attestation-capable builder is used as configured. When the selected builder uses the incompatible `docker` driver, the release creates or reuses the `aml-agent-sandbox-publisher` `docker-container` builder for its child processes without changing the caller's global builder selection.

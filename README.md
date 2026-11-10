@@ -495,6 +495,8 @@ npm run release:sandbox
 updates the selected package and lockfile, pushes the release, and creates the matching GitHub release. SDK and CLI
 releases publish to npm and use `vX.Y.Z` and `cli-vX.Y.Z` tags. Stable Sandbox releases publish full and single-Agent variants to Docker Hub under one `sandbox-vX.Y.Z` source tag. Publication runs each Agent's real Docker smoke against its pushed variant before signing its digest and updating moving tags. npm prompts for OTP or passkey approval when required. Stable image publication uses a temporary Docker Hub browser login and a local Cosign installation. The active GitHub CLI account creates the source release. GitHub Actions separately publishes the full GHCR `dev` image after relevant changes reach `main`.
 
+For Sandbox image releases without model credentials, use `npm run release:sandbox -- --no-smoke` to skip the credentialed Agent smoke tests. Dependency audits, image builds, offline image checks, attestations, and signing still run. The option also works with `--recover`; authenticated Agent behavior is unverified when live smoke tests are skipped.
+
 Release notes follow those package lanes instead of including every repository commit. CLI notes include commits scoped
 to `cli`. SDK notes include commits scoped to `sdk` or an SDK-owned runtime, primitive, Agent, Sandbox, Workspace, or
 provider area. Website, examples, root maintenance, and unscoped commits stay out of package release notes.
