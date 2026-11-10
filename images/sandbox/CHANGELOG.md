@@ -2,10 +2,11 @@
 
 ## Next release
 
-Node.js and OpenCode security runtime updates.
+Embedded SDK 0.9.2 and security runtime updates.
 
-Sandbox images include Node.js 26.13.0 LTS, OpenCode 1.19.4, patched Hono, and updates to npm and Pi.
+Sandbox images include AML SDK 0.9.2, Node.js 26.13.0 LTS, OpenCode 1.19.4, patched Hono, and updates to npm and Pi.
 
+- **Embedded SDK 0.9.2.** Every variant updates from SDK 0.9.1 to 0.9.2, adding OpenCode model `reasoning_options` types and updating the OpenCode SDK to 1.19.4 and Modal client to 0.11.1.
 - **Patched Node.js runtime.** Every variant uses Node.js 26.13.0 LTS, retaining the fixes from 26.12.1. The [October 21 security release](https://nodejs.org/en/blog/vulnerability/october-2026-security-releases) fixes the Brotli decoder remote-code-execution vulnerability (CVE-2026-111497), TLS hostname-verification bypasses (CVE-2026-105483, CVE-2026-106069), and DNS name truncation at NUL characters (CVE-2026-105482).
 - **Patched Hono.** Hono 4.13.13 fixes a static-file path decoding issue that could bypass middleware checks (CVE-2026-111757).
 - **Patched HTTP parsing and validation.** The image uses body-parser 2.4.0 and Zod 4.6.7, fixing compressed-request denial of service (CVE-2026-111181) and excessive memory consumption during validation (CVE-2023-54404).
