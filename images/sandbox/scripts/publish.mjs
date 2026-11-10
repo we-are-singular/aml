@@ -1,9 +1,11 @@
-import { closeSync, createReadStream, createWriteStream, mkdtempSync, openSync, readFileSync, rmSync } from "node:fs"
+import { once } from "node:events"
+import { closeSync, mkdtempSync, openSync, readFileSync, rmSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { dirname, join, resolve } from "node:path"
 import { createInterface } from "node:readline/promises"
 import { spawnSync } from "node:child_process"
 import process from "node:process"
+import { ReadStream, WriteStream } from "node:tty"
 import { fileURLToPath, pathToFileURL } from "node:url"
 
 import { getVariant, imageLicenses, immutableTags, movingTags, variantNames } from "./variants.mjs"
@@ -160,7 +162,7 @@ async function waitForSigningConfirmation(imageCount) {
     )
   } finally {
     prompt.close()
-    terminal.close()
+    await terminal.close()
   }
 }
 
@@ -179,15 +181,23 @@ export function signingTerminal(
   }
 }
 
+/** Owns the controlling descriptor until both duplicated TTY handles have closed. */
 function openControllingTerminal() {
   const descriptor = openSync("/dev/tty", "r+")
-  const input = createReadStream("/dev/tty", { autoClose: false, fd: descriptor })
-  const output = createWriteStream("/dev/tty", { autoClose: false, fd: descriptor })
+  const input = new ReadStream(descriptor)
+  const output = new WriteStream(descriptor)
   return {
-    close() {
+    async close() {
+      // TTY streams own duplicated handles. Close them before releasing the
+      // original descriptor, and before Cosign starts reading the terminal.
+      const closed = Promise.all([once(input, "close"), once(output, "close")])
       input.destroy()
       output.destroy()
-      closeSync(descriptor)
+      try {
+        await closed
+      } finally {
+        closeSync(descriptor)
+      }
     },
     input,
     output,
