@@ -1,6 +1,6 @@
 {
   "name": "@aml-jsx/agent-sandbox-image",
-  "version": "0.6.2",
+  "version": "0.6.3",
   "private": true,
   "description": "AML's portable, tested runtime image for ACP coding Agents",
   "license": "MIT",
@@ -23,7 +23,7 @@
   "dependencies": {
     "@agentclientprotocol/claude-agent-acp": "0.91.0",
     "@agentclientprotocol/codex-acp": "2.2.2",
-    "@aml-jsx/cli": "0.3.4",
+    "@aml-jsx/cli": "0.3.5",
     "@aml-jsx/sdk": "0.9.2",
     "@earendil-works/pi-coding-agent": "1.5.0",
     "@github/copilot": "1.0.98",

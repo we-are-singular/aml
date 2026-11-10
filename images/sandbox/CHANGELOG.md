@@ -1,25 +1,32 @@
 # Changelog
 
-## Next release
+## 0.6.3
 
 Embedded SDK 0.9.2 and security runtime updates.
 
-Sandbox images include AML SDK 0.9.2, Node.js 26.13.0 LTS, OpenCode 1.19.4, patched Hono, and updates to npm and Pi.
+Sandbox images include AML SDK 0.9.2, Node.js 26.13.0 LTS, OpenCode 1.19.4, patched Hono, and updates to npm and Pi. Sandbox releases can skip only credentialed Agent smoke tests when credentials are unavailable, and image checks now catch version and adapter drift before publication.
 
-- **Embedded SDK 0.9.2.** Every variant updates from SDK 0.9.1 to 0.9.2, adding OpenCode model `reasoning_options` types and updating the OpenCode SDK to 1.19.4 and Modal client to 0.11.1.
+- **Embedded SDK 0.9.2.** Every variant updates from SDK 0.9.1 to 0.9.2, adding OpenCode model `reasoning_options` types and updating the OpenCode SDK to 1.19.4 and Modal client to 0.11.1. See [SDK changelog](/docs/reference/changelog/sdk/), [OpenCode Agent](/docs/providers/agents/opencode/), and [Modal Sandbox](/docs/providers/sandboxes/modal/).
 - **Patched Node.js runtime.** Every variant uses Node.js 26.13.0 LTS, retaining the fixes from 26.12.1. The [October 21 security release](https://nodejs.org/en/blog/vulnerability/october-2026-security-releases) fixes the Brotli decoder remote-code-execution vulnerability (CVE-2026-111497), TLS hostname-verification bypasses (CVE-2026-105483, CVE-2026-106069), and DNS name truncation at NUL characters (CVE-2026-105482).
 - **Patched Hono.** Hono 4.13.13 fixes a static-file path decoding issue that could bypass middleware checks (CVE-2026-111757).
 - **Patched HTTP parsing and validation.** The image uses body-parser 2.4.0 and Zod 4.6.7, fixing compressed-request denial of service (CVE-2026-111181) and excessive memory consumption during validation (CVE-2023-54404).
 - **Patched OpenCode runtime.** OpenCode moves from 1.19.0 to 1.19.4 in the full and OpenCode variants. Its bundled Bun runtime advances to 1.4.4 with security fixes for Brotli, TLS, HTTP, WebSocket, and `fetch`, plus refreshed root certificates. See the [OpenCode 1.19.4 release notes](https://github.com/anomalyco/opencode/releases/tag/v1.19.4).
-- **Updated supporting tools.** Every variant uses npm 12.2.2, which bundles patched `ip-address` 10.7.5 and fixes CVE-2026-111997 without a separate package replacement. The full and Pi variants use Pi MCP Adapter 5.3.2.
+- **Updated supporting tools.** Every variant uses npm 12.2.2, which bundles patched `ip-address` 10.7.5 and fixes CVE-2026-111997 without a separate package replacement. Pi advances to 1.5.0, and the Pi variant uses Pi MCP Adapter 5.3.2. See [Sandbox images](/docs/sandbox-images/) and [Pi Agent](/docs/providers/agents/pi/).
 - **Patched npm utilities and Debian base.** npm's separately bundled `glob` and `minimatch` use 14.0.2 and 11.0.3, addressing traversal cancellation and pattern-expansion denial of service. The pinned Debian Bookworm base is refreshed to include available security updates.
 - **Patched November dependencies.** The locked runtime uses `fast-uri` 3.1.9, `follow-redirects` 1.16.2, and `@hono/node-server` 2.1.5. Pi advances to 1.5.0 with patched `minimatch` and `undici`; the GLM and Pi MCP adapters use `undici` 6.29.1. These updates address URI parsing, credential forwarding, static-file middleware bypass, and denial-of-service vulnerabilities.
+- **No-smoke release option.** Run `npm run release:sandbox -- --no-smoke` to skip only the credentialed live Agent smoke tests when model credentials are unavailable. Dependency audits, image builds, offline image checks, SBOM and provenance attestations, and signing still run, including with `--recover`. Live smoke tests run by default, and authenticated Agent behavior remains unverified for a release that skips them.
+- **Stronger release verification.** Image checks compare `node --version` with the release pinned in `.nvmrc`, compare `npm --version` with the root `packageManager`, verify npm's bundled `ip-address`, and initialize the installed GLM and Pi adapters offline. CI runs the same adapter startup probe, so a drifted base image or adapter dependency fails before publication. See [Sandbox images](/docs/sandbox-images/).
 
 ### Commits
 
-- `build(root): update node 26 runtime to 26.12.1`
-- `fix(root): update hono for ghsa-5r4p-p66f-jhc7`
-- `test(sandbox): assert the image node version`
+- `feat(sandbox): add no-smoke release option` (3f831cc)
+- `build(sandbox): embed sdk 0.9.2` (a624e87)
+- `fix(sandbox): patch bundled agent dependencies` (3ee9315)
+- `test(sandbox): verify patched adapters and npm version` (382da67)
+- `docs(sandbox): record http parsing and validation fixes` (2a6da17)
+- `fix(sandbox): patch npm bundled ip-address to 10.7.4` (26efb2b)
+- `docs(sandbox): seed next release notes for node 26.12.1` (adff312)
+- `test(sandbox): assert the image node version` (a0bae2f)
 
 ## 0.6.2
 
