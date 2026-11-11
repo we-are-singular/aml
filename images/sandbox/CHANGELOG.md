@@ -1,5 +1,20 @@
 # Changelog
 
+## Next release
+
+Node.js 26.13.1 security runtime.
+
+The Sandbox image moves from Node.js 26.13.0 to 26.13.1 LTS, so every variant ships the runtime from the [November 11, 2026 Node.js security release](https://nodejs.org/en/blog/vulnerability/november-2026-security-releases). The image's Agent runtimes, image contract, and documented workflows are unchanged.
+
+- **Patched Node.js runtime.** The Dockerfile's build stage is pinned to the `node:26.13.1-bookworm-slim` digest. The runtime stage copies Node.js from that stage, so every variant (`full`, `claude`, `codex`, `copilot`, `glm`, `opencode`, and `pi`) gets the patched runtime, including any code an Agent runs inside the image.
+- **HTTP/2, HTTPS, and TLS server fixes.** The release fixes remotely triggerable crashes, memory disclosure, and memory exhaustion in HTTP/2 servers (CVE-2026-123863, CVE-2026-123865, CVE-2026-123866, CVE-2026-123874, CVE-2026-123828, CVE-2026-123868, CVE-2026-123875), an HTTPS server heap disclosure when a handler flushes headers before the request body ends (CVE-2026-123864), a TLS server crash in deferred handshake callbacks (CVE-2026-126051), and per-host client-certificate bypasses through TLS 1.2 renegotiation and CA-only SNI contexts (CVE-2026-123872, CVE-2026-123867).
+- **HTTP client fixes.** `https.Agent` no longer reuses a TLS session between requests with different CA policies (CVE-2026-123877), and `ERR_PROXY_INVALID_CONFIG` messages no longer include proxy credentials (CVE-2026-123871). The `undici` bundled for `fetch` moves from 8.12.2 to 8.12.4, and `llhttp` from 9.4.3 to 9.4.4.
+- **Other runtime fixes.** Calling `params()` on a `zlib` stream that is then destroyed no longer throws an uncatchable assertion (CVE-2026-123862). Two Permission Model fixes (CVE-2026-123829, CVE-2026-106071) are included, though the image does not enable the Permission Model.
+
+### Commits
+
+- `build(root): update node 26 runtime to 26.13.1`
+
 ## 0.6.3
 
 Embedded SDK 0.9.2 and security runtime updates.
